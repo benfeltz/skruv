@@ -82,14 +82,17 @@ function horizontalPanelConnectors(dowelZ, camZ) {
   ]);
 }
 
-// Nailed at the corners and edge midpoints, from behind.
+// Nailed from behind into the sides' back edges and the top, fixed and bottom panels.
+// The panel sits flush with the carcass top, so its rows are the horizontal panels'
+// heights shifted into its own frame — the bottom panel's plinth makes them asymmetric.
 function backPanelConnectors(size) {
   const [w, h, d] = size;
   const x = w / 2 - PANEL_THICKNESS / 2;
-  const y = h / 2 - PANEL_THICKNESS / 2;
+  const centreY = CARCASS_HEIGHT / 2 - h / 2;
+  const [bottom, middle, top] = [BOTTOM_Y, FIXED_Y, TOP_Y].map((y) => y - centreY);
   const points = [
-    [-x, -y], [x, -y], [-x, y], [x, y],
-    [-x, 0], [x, 0], [0, -y], [0, y],
+    [-x, bottom], [x, bottom], [-x, top], [x, top],
+    [-x, middle], [x, middle], [0, bottom], [0, top],
   ];
   return points.map(([px, py]) => connector(CONNECTOR.NAIL_HOLE, [px, py, -d / 2], NEG_Z));
 }

@@ -86,4 +86,25 @@ describe('connectors', () => {
     expect(countHoles(CONNECTOR.SHELF_PIN_HOLE)).toBe(DESIGN_MANIFEST.shelfPin);
     expect(countHoles(CONNECTOR.NAIL_HOLE)).toBe(DESIGN_MANIFEST.nail);
   });
+
+  // The back panel sits flush with the carcass top. A nail on its vertical centre line
+  // misses the full-height sides, so it must land in a horizontal panel's thickness.
+  it('lands every centre-line back-panel nail in a horizontal panel', () => {
+    const { sidePanel, backPanel } = PART_TYPES;
+    const thickness = PART_TYPES.topBottomPanel.size[1];
+    const backCentreY = sidePanel.size[1] / 2 - backPanel.size[1] / 2;
+    const panelCentres = [
+      ...new Set(
+        sidePanel.connectors.filter((c) => c.type === CONNECTOR.DOWEL_HOLE).map((c) => c.position[1]),
+      ),
+    ];
+    const centreNails = backPanel.connectors.filter(
+      (c) => c.type === CONNECTOR.NAIL_HOLE && c.position[0] === 0,
+    );
+    expect(centreNails.length).toBeGreaterThan(0);
+    for (const nail of centreNails) {
+      const y = nail.position[1] + backCentreY;
+      expect(panelCentres.some((centre) => Math.abs(y - centre) <= thickness / 2)).toBe(true);
+    }
+  });
 });
