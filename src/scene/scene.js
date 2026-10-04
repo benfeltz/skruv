@@ -37,7 +37,21 @@ export function createScene(container) {
     camera.updateProjectionMatrix();
   }
 
+  // A DPR change (window dragged to another monitor, browser zoom) need not change the
+  // container's CSS size, so watch it separately; the query matches one DPR, so re-arm.
+  function watchPixelRatio() {
+    matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener(
+      'change',
+      () => {
+        resize();
+        watchPixelRatio();
+      },
+      { once: true },
+    );
+  }
+
   new ResizeObserver(resize).observe(container);
+  watchPixelRatio();
   resize();
 
   return { renderer, scene, camera };
