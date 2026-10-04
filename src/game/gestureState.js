@@ -14,6 +14,19 @@ export const OWNER = Object.freeze({
 const OWNER_FOR_HIT = { part: OWNER.DRAG_PART, ring: OWNER.GIZMO_RING };
 
 /**
+ * What a press lands on, from the nearest gizmo-ring and part raycast hits (each null or
+ * `{ distance, ... }`). The rings draw on top but are fat, invisible-banded targets, so a
+ * ring only wins when it is nearer than the part, or the part is the selected one the
+ * rings belong to — a neighbouring part in front of a band stays draggable.
+ */
+export function resolveHit(ringHit, partHit, selectedPart) {
+  if (ringHit && (!partHit || partHit.part === selectedPart || ringHit.distance <= partHit.distance)) {
+    return { kind: 'ring', ...ringHit };
+  }
+  return partHit ? { kind: 'part', ...partHit } : null;
+}
+
+/**
  * Feed `down`/`move`/`up`/`cancel` with pointer records. Each returns an effect for the
  * router or null:
  *   { type: 'dragStart', owner, hit, x, y }  part/ring pointer passed the tap distance

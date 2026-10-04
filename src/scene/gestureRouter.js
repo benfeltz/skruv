@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GESTURE, ROOM, SNAP } from '../constants.js';
 import { PART_TYPES } from '../game/catalog.js';
 import { clampToRoom, intersectDragPlane } from '../game/dragMath.js';
-import { createGestureState, OWNER } from '../game/gestureState.js';
+import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
 
 /**
@@ -16,8 +16,8 @@ import { applyTransform, findSnap } from '../game/snapMath.js';
  * hands it back.
  *
  * `parts` is the registry `[{ id, type, mesh, body }]`. Optional hooks:
- *   rings  — `{ hitTest(raycaster), start(hit, pointer), move(pointer), end(), cancel() }`;
- *            a ring hit outranks a part hit (the gizmo draws on top).
+ *   rings  — `{ selected, hitTest(raycaster), start(hit, pointer), move(pointer), end(),
+ *            cancel() }`; which of ring and part a press lands on is `resolveHit`'s call.
  *   onTap  — called with the tapped part, or null for empty space.
  *   ghost  — `{ show(mesh, pose), hide() }` snap preview (src/scene/ghost.js).
  */
@@ -40,10 +40,12 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   function hitTest(event) {
     aim(event);
-    const ring = rings?.hitTest(raycaster);
-    if (ring) return { kind: 'ring', ...ring };
+    const ring = rings?.hitTest(raycaster) ?? null;
     const [first] = raycaster.intersectObjects(meshes, false);
-    return first ? { kind: 'part', part: partByMesh.get(first.object), point: first.point.toArray() } : null;
+    const part = first
+      ? { part: partByMesh.get(first.object), point: first.point.toArray(), distance: first.distance }
+      : null;
+    return resolveHit(ring, part, rings?.selected);
   }
 
   const pointer = (event, hit = null) => ({

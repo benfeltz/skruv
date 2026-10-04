@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createGestureState, OWNER } from '../src/game/gestureState.js';
+import { createGestureState, OWNER, resolveHit } from '../src/game/gestureState.js';
 
 const T = { tapMaxDistance: 10, tapMaxMs: 300 };
 const PART = { kind: 'part', id: 'sidePanel-1' };
@@ -159,5 +159,29 @@ describe('cancel', () => {
     g.cancel(at(1, 0, 0, 10));
     g.down(at(2, 0, 0, 20));
     expect(g.owner).toBe(OWNER.CAMERA);
+  });
+});
+
+describe('resolveHit', () => {
+  const selected = { id: 'sidePanel-1' };
+  const neighbour = { id: 'fixedShelf-1' };
+  const ring = { axis: 'x', distance: 2 };
+
+  it('gives a press on a neighbouring part in front of a ring band to the part', () => {
+    expect(resolveHit(ring, { part: neighbour, distance: 1.5 }, selected)).toEqual({ kind: 'part', part: neighbour, distance: 1.5 });
+  });
+
+  it('gives the ring a press where it is nearer than the part behind it', () => {
+    expect(resolveHit(ring, { part: neighbour, distance: 3 }, selected)).toEqual({ kind: 'ring', ...ring });
+  });
+
+  it('gives the ring a press on the selected part itself, whatever the distance', () => {
+    expect(resolveHit(ring, { part: selected, distance: 1 }, selected)).toEqual({ kind: 'ring', ...ring });
+  });
+
+  it('falls back to whichever was hit, or null for empty space', () => {
+    expect(resolveHit(ring, null, selected)).toEqual({ kind: 'ring', ...ring });
+    expect(resolveHit(null, { part: neighbour, distance: 1 }, null)).toMatchObject({ kind: 'part', part: neighbour });
+    expect(resolveHit(null, null, null)).toBeNull();
   });
 });

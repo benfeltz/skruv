@@ -72,7 +72,7 @@ export function createGizmo({ camera, domElement, physics, isFree }) {
   function hitTest(raycaster) {
     if (!part) return null;
     const [first] = raycaster.intersectObjects(hitBands, false);
-    return first ? { axis: first.object.userData.axis } : null;
+    return first ? { axis: first.object.userData.axis, distance: first.distance } : null;
   }
 
   function screenCentre() {
