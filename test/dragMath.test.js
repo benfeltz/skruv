@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { GESTURE, ROOM } from '../src/constants.js';
-import { arcDelta, clampToRoom, intersectDragPlane, quantizeAngle } from '../src/game/dragMath.js';
+import {
+  arcDelta,
+  clampToRoom,
+  intersectDragPlane,
+  quantizeAngle,
+  rotatedHalfExtents,
+} from '../src/game/dragMath.js';
 
 const DEG = Math.PI / 180;
 
@@ -86,5 +92,29 @@ describe('arcDelta', () => {
 
   it('wraps across the ±180° seam to the short way round', () => {
     expect(arcDelta([0, 0], [-10, -1], [-10, 1])).toBeCloseTo(2 * Math.atan2(1, 10));
+  });
+});
+
+describe('rotatedHalfExtents', () => {
+  const side = [0.008, 1.01, 0.14];
+  const expectVec = (actual, expected) => actual.forEach((v, i) => expect(v).toBeCloseTo(expected[i], 9));
+
+  it('is the half-sizes themselves when unrotated', () => {
+    expectVec(rotatedHalfExtents(side, [0, 0, 0, 1]), side);
+  });
+
+  it('swaps the extents a quarter turn exchanges', () => {
+    const quarterY = [0, Math.SQRT1_2, 0, Math.SQRT1_2];
+    expectVec(rotatedHalfExtents([1.01, 0.008, 0.14], quarterY), [0.14, 0.008, 1.01]);
+    const quarterX = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+    expectVec(rotatedHalfExtents(side, quarterX), [0.008, 0.14, 1.01]);
+  });
+
+  it('grows to the bounding box of a box turned off-axis', () => {
+    const eighthY = [0, Math.sin(Math.PI / 8), 0, Math.cos(Math.PI / 8)];
+    const [x, y, z] = rotatedHalfExtents([1, 0.5, 0], eighthY);
+    expect(x).toBeCloseTo(Math.SQRT1_2);
+    expect(y).toBeCloseTo(0.5);
+    expect(z).toBeCloseTo(Math.SQRT1_2);
   });
 });

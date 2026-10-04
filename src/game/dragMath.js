@@ -47,3 +47,16 @@ export function arcDelta([cx, cy], [fx, fy], [tx, ty]) {
   if (delta <= -Math.PI) delta += 2 * Math.PI;
   return delta;
 }
+
+/**
+ * World-axis half-extents [x, y, z] of a box with half-sizes `half` turned by quaternion
+ * [x, y, z, w] — the half-size of its world-aligned bounding box.
+ */
+export function rotatedHalfExtents([hx, hy, hz], [x, y, z, w]) {
+  const rows = [
+    [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+    [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+    [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+  ];
+  return rows.map(([a, b, c]) => Math.abs(a) * hx + Math.abs(b) * hy + Math.abs(c) * hz);
+}

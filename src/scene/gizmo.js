@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { COLORS, GESTURE, GIZMO } from '../constants.js';
-import { arcDelta, quantizeAngle } from '../game/dragMath.js';
+import { COLORS, GESTURE, GIZMO, ROOM } from '../constants.js';
+import { arcDelta, clampToRoom, quantizeAngle, rotatedHalfExtents } from '../game/dragMath.js';
 
 const AXES = {
   x: { vector: new THREE.Vector3(1, 0, 0), color: COLORS.gizmoX, turn: [0, Math.PI / 2, 0] },
@@ -13,7 +13,8 @@ const RING_SEGMENTS = [12, 64];
  * Rotate gizmo: three world-axis rings around the selected part, drawn on top. It renders
  * and hit-tests; the angle math (pointer arc, detents) is src/game/dragMath.js. Rotation
  * goes through physics `grab`/`move`/`release`, lifting the part so its new lowest point
- * clears the floor, and drops it back under physics when the ring is let go.
+ * clears the floor and clamping its turned footprint inside the walls (a kinematic body
+ * passes through them), and drops it back under physics when the ring is let go.
  *
  * Plugs into src/scene/gestureRouter.js as its `rings` hook. `isFree()` reads the
  * free-rotate toggle; detents (GESTURE.detentStep) are the default.
@@ -43,7 +44,6 @@ export function createGizmo({ camera, domElement, physics, isFree }) {
 
   let part = null;
   let turning = null;
-  const rotation = new THREE.Matrix4();
   const quaternion = new THREE.Quaternion();
   const step = new THREE.Quaternion();
   const toCamera = new THREE.Vector3();
@@ -81,12 +81,9 @@ export function createGizmo({ camera, domElement, physics, isFree }) {
     return [rect.left + ((projected.x + 1) / 2) * rect.width, rect.top + ((1 - projected.y) / 2) * rect.height];
   }
 
-  // Half the part's height along world y at orientation `q`, from its box half-sizes.
-  function halfHeight(q) {
-    const { parameters } = part.mesh.geometry;
-    const half = [parameters.width / 2, parameters.height / 2, parameters.depth / 2];
-    const e = rotation.makeRotationFromQuaternion(q).elements;
-    return Math.abs(e[1]) * half[0] + Math.abs(e[5]) * half[1] + Math.abs(e[9]) * half[2];
+  function halfSizes() {
+    const { width, height, depth } = part.mesh.geometry.parameters;
+    return [width / 2, height / 2, depth / 2];
   }
 
   function start({ axis }, { x, y }) {
@@ -114,9 +111,11 @@ export function createGizmo({ camera, domElement, physics, isFree }) {
     const angle = quantizeAngle(turning.sign * turning.swept, isFree() ? 0 : GESTURE.detentStep);
     step.setFromAxisAngle(turning.axis, angle);
     quaternion.multiplyQuaternions(step, turning.startRotation);
+    const rotation = quaternion.toArray();
+    const [hx, hy, hz] = rotatedHalfExtents(halfSizes(), rotation);
     const [px, py, pz] = turning.startPosition;
-    const lifted = Math.max(py, halfHeight(quaternion)) + GESTURE.hoverLift;
-    physics.move(part.body, [px, lifted, pz], quaternion.toArray());
+    const lifted = [px, Math.max(py, hy) + GESTURE.hoverLift, pz];
+    physics.move(part.body, clampToRoom(lifted, [hx, hz], ROOM, GESTURE.wallMargin), rotation);
   }
 
   function end() {
