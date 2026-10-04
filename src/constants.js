@@ -62,6 +62,11 @@ export const PHYSICS = {
   // Damping bleeds off residual jitter so resting parts reach Rapier's sleep threshold.
   linearDamping: 0.1,
   angularDamping: 0.3,
+  // Wood on wood: grippy, and no bounce (the design clamps restitution).
+  friction: 0.6,
+  restitution: 0,
+  // Room colliders are slabs this thick, laid just outside the visible surfaces.
+  roomColliderThickness: 0.5,
 };
 
 export const RENDER = {
