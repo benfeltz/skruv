@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COLORS, ROOM, TEST_BOX } from '../constants.js';
+import { COLORS, ROOM } from '../constants.js';
 
 /** Floor plus four inward-facing walls, centred on the origin, floor at y = 0. */
 export function createRoom() {
@@ -32,16 +32,4 @@ export function createRoom() {
   }
 
   return room;
-}
-
-/** Placeholder box resting on the floor — proves lighting and shadows until parts arrive. */
-export function createTestBox() {
-  const box = new THREE.Mesh(
-    new THREE.BoxGeometry(TEST_BOX.size, TEST_BOX.size, TEST_BOX.size),
-    new THREE.MeshStandardMaterial({ color: COLORS.testBox }),
-  );
-  box.position.y = TEST_BOX.size / 2;
-  box.castShadow = true;
-  box.receiveShadow = true;
-  return box;
 }

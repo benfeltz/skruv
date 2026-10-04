@@ -12,10 +12,15 @@ export const COLORS = {
   background: 0x1b1d22,
   floor: 0xc9b79c,
   wall: 0xe8e4dc,
-  testBox: 0x3b6ea8,
   skyLight: 0xffffff,
   groundLight: 0x8a7a66,
   sunLight: 0xffffff,
+  // Parts — keyed by the catalog's `color` field.
+  partPanel: 0xf1eee6,
+  partHardboard: 0x9c8466,
+  partDowel: 0xd8b27a,
+  partMetal: 0xa7adb3,
+  partWrench: 0x2f3136,
 };
 
 export const LIGHTS = {
@@ -24,6 +29,9 @@ export const LIGHTS = {
   sunPosition: [-4, 7, 2],
   shadowMapSize: 1024,
   shadowExtent: 6,
+  // Offsets shadow lookups along the normal so millimetre-thin parts don't self-shadow
+  // into stripes (acne); small enough that contact shadows stay attached.
+  shadowNormalBias: 0.02,
 };
 
 export const CAMERA = {
@@ -49,8 +57,29 @@ export const CAMERA_LIMITS = {
   dampingFactor: 0.1,
 };
 
-export const TEST_BOX = {
-  size: 0.6,
+// Temporary floor layout for the full manifest (src/game/devLayout.js) until PR 5's unbox.
+export const DEV_LAYOUT = {
+  // Parts pack into rows no wider than this, centred on the room origin.
+  rowWidth: 4,
+  gap: 0.08,
+  // Dropped from just above the floor so settling is visible without parts bouncing about.
+  dropHeight: 0.05,
+};
+
+export const PHYSICS = {
+  gravity: [0, -9.81, 0],
+  // Fixed simulation step; the render loop banks frame time and runs whole steps.
+  timestep: 1 / 60,
+  // Pairs with RENDER.maxFrameDelta: a clamped 1/15 s frame needs exactly 4 steps.
+  maxStepsPerFrame: 4,
+  // Damping bleeds off residual jitter so resting parts reach Rapier's sleep threshold.
+  linearDamping: 0.1,
+  angularDamping: 0.3,
+  // Wood on wood: grippy, and no bounce (the design clamps restitution).
+  friction: 0.6,
+  restitution: 0,
+  // Room colliders are slabs this thick, laid just outside the visible surfaces.
+  roomColliderThickness: 0.5,
 };
 
 export const RENDER = {
