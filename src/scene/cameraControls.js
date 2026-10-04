@@ -1,10 +1,11 @@
 import { MOUSE, TOUCH } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { CAMERA, CAMERA_LIMITS } from '../constants.js';
+import { CAMERA, CAMERA_LIMITS, ROOM } from '../constants.js';
+import { maxOrbitDistance } from './cameraLimits.js';
 
 /**
  * Touch camera: one finger orbits, two fingers pan + pinch-zoom; limits keep the camera
- * inside the room and above the floor.
+ * inside the walls, below their tops and above the floor (see cameraLimits.js).
  *
  * `enable()`/`disable()` is the seam the gesture router drives to hand touches to part
  * manipulation — callers never reach into OrbitControls directly.
@@ -19,7 +20,7 @@ export function createCameraControls(camera, domElement) {
   controls.dampingFactor = CAMERA_LIMITS.dampingFactor;
 
   controls.minDistance = CAMERA_LIMITS.minDistance;
-  controls.maxDistance = CAMERA_LIMITS.maxDistance;
+  controls.maxDistance = maxOrbitDistance(ROOM, CAMERA_LIMITS);
   controls.minPolarAngle = CAMERA_LIMITS.minPolarAngle;
   controls.maxPolarAngle = CAMERA_LIMITS.maxPolarAngle;
   controls.cursor.set(...CAMERA_LIMITS.pivot);

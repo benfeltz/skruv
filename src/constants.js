@@ -4,7 +4,8 @@
 export const ROOM = {
   width: 10,
   depth: 10,
-  height: 4,
+  // No ceiling — walls are tall enough that the orbit limits keep the camera below them.
+  height: 5,
 };
 
 export const COLORS = {
@@ -33,21 +34,17 @@ export const CAMERA = {
   startTarget: [0, 0.6, 0],
 };
 
-// Orbit limits. The camera can never reach a wall because
-// |camera.xz| <= |target.xz| + distance <= maxTargetRadius + maxDistance,
-// and maxDistance is derived to keep that sum inside the walls by wallMargin.
-// It can never reach the floor because the pivot keeps target.y >= pivot.y - maxTargetRadius
-// and maxPolarAngle keeps the camera above the target.
-const CAMERA_WALL_MARGIN = 0.4;
-const CAMERA_MAX_TARGET_RADIUS = 1;
-
+// Orbit limits. maxDistance is derived from these and ROOM by
+// src/scene/cameraLimits.js so the camera stays wallMargin inside the walls and below
+// their tops; the pivot and maxPolarAngle keep it above the floor.
 export const CAMERA_LIMITS = {
   // Centre of the sphere the orbit target may be panned within.
-  pivot: [0, 1.2, 0],
-  maxTargetRadius: CAMERA_MAX_TARGET_RADIUS,
+  pivot: [0, 1, 0],
+  maxTargetRadius: 0.8,
+  wallMargin: 0.4,
   minDistance: 1,
-  maxDistance: Math.min(ROOM.width, ROOM.depth) / 2 - CAMERA_WALL_MARGIN - CAMERA_MAX_TARGET_RADIUS,
-  minPolarAngle: 0.05,
+  // Stops short of straight down so the wall tops bound height without crushing zoom-out.
+  minPolarAngle: (40 * Math.PI) / 180,
   maxPolarAngle: (80 * Math.PI) / 180,
   dampingFactor: 0.1,
 };
