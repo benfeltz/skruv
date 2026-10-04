@@ -4,9 +4,11 @@ import { createPartMesh } from './game/partMesh.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
 import { createGestureRouter } from './scene/gestureRouter.js';
+import { createGizmo } from './scene/gizmo.js';
 import { createLoop } from './scene/loop.js';
 import { createRoom } from './scene/room.js';
 import { createScene } from './scene/scene.js';
+import { createToggleButton } from './ui/toggleButton.js';
 
 const { renderer, scene, camera } = createScene(document.getElementById('app'));
 scene.add(createRoom());
@@ -29,10 +31,32 @@ for (const { id, type, position, rotation } of createDevLayout()) {
   parts.push({ id, type, mesh, body });
 }
 
-createGestureRouter({ domElement: renderer.domElement, camera, cameraControls, physics, parts });
+// 90° detents are the default; the toggle frees rotation.
+const freeRotate = createToggleButton({ label: 'Free rotate' });
+document.body.append(freeRotate.element);
+
+const gizmo = createGizmo({
+  camera,
+  domElement: renderer.domElement,
+  physics,
+  isFree: () => freeRotate.pressed,
+});
+scene.add(gizmo.object);
+
+createGestureRouter({
+  domElement: renderer.domElement,
+  camera,
+  cameraControls,
+  physics,
+  parts,
+  rings: gizmo,
+  // Tap a part to select it; tap empty space to deselect.
+  onTap: (part) => (part ? gizmo.show(part) : gizmo.hide()),
+});
 
 createLoop((delta) => {
   cameraControls.update(delta);
   physics.step(delta);
+  gizmo.update();
   renderer.render(scene, camera);
 }).start();

@@ -21,6 +21,14 @@ export const COLORS = {
   partDowel: 0xd8b27a,
   partMetal: 0xa7adb3,
   partWrench: 0x2f3136,
+  // Rotate gizmo rings, one per world axis, x/y/z in the usual red/green/blue.
+  gizmoX: 0xe5534b,
+  gizmoY: 0x6cc04a,
+  gizmoZ: 0x4a8fe5,
+  // DOM overlays (src/ui).
+  uiSurface: 0x2a2d34,
+  uiText: 0xf1eee6,
+  uiAccent: 0xe0a64a,
 };
 
 export const LIGHTS = {
@@ -102,4 +110,15 @@ export const GESTURE = {
   wallMargin: 0.05,
   // Rotate-gizmo detent — the default; the free-rotate toggle turns it off.
   detentStep: Math.PI / 2,
+};
+
+// Rotate gizmo (src/scene/gizmo.js): rings sized from the selected part's bounding sphere.
+export const GIZMO = {
+  radiusPadding: 1.15,
+  // Hardware is millimetres long; rings never shrink below a fingertip-sized target.
+  minRadius: 0.08,
+  // Tube thickness as a fraction of ring radius: drawn, and the fatter invisible hit band.
+  tube: 0.025,
+  hitTube: 0.12,
+  opacity: 0.85,
 };
