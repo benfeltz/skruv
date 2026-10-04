@@ -3,6 +3,7 @@ import { createDevLayout } from './game/devLayout.js';
 import { createPartMesh } from './game/partMesh.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
+import { createGestureRouter } from './scene/gestureRouter.js';
 import { createLoop } from './scene/loop.js';
 import { createRoom } from './scene/room.js';
 import { createScene } from './scene/scene.js';
@@ -13,17 +14,22 @@ scene.add(createRoom());
 const cameraControls = createCameraControls(camera, renderer.domElement);
 const physics = await createPhysicsWorld();
 
-for (const { type, position, rotation } of createDevLayout()) {
+// One record per physical part — what gestures pick, drag and snap.
+const parts = [];
+for (const { id, type, position, rotation } of createDevLayout()) {
   const part = PART_TYPES[type];
   const mesh = createPartMesh(part);
-  physics.register(mesh, {
+  const body = physics.register(mesh, {
     halfExtents: part.size.map((d) => d / 2),
     mass: part.mass,
     position,
     rotation,
   });
   scene.add(mesh);
+  parts.push({ id, type, mesh, body });
 }
+
+createGestureRouter({ domElement: renderer.domElement, camera, cameraControls, physics, parts });
 
 createLoop((delta) => {
   cameraControls.update(delta);
