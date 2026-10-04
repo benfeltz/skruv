@@ -11,8 +11,9 @@ export function createLoop(onFrame) {
   function tick(time) {
     const delta = lastTime === null ? 0 : (time - lastTime) / MS_PER_SECOND;
     lastTime = time;
-    onFrame(clampDelta(delta, RENDER.maxFrameDelta));
+    // Schedule before calling out, so stop()/start() inside onFrame act on the live frame id.
     frameId = requestAnimationFrame(tick);
+    onFrame(clampDelta(delta, RENDER.maxFrameDelta));
   }
 
   return {
