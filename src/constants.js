@@ -16,6 +16,12 @@ export const COLORS = {
   skyLight: 0xffffff,
   groundLight: 0x8a7a66,
   sunLight: 0xffffff,
+  // Parts — keyed by the catalog's `color` field.
+  partPanel: 0xf1eee6,
+  partHardboard: 0x9c8466,
+  partDowel: 0xd8b27a,
+  partMetal: 0xa7adb3,
+  partWrench: 0x2f3136,
 };
 
 export const LIGHTS = {
