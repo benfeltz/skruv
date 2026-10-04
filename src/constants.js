@@ -29,8 +29,27 @@ export const CAMERA = {
   fov: 50,
   near: 0.1,
   far: 100,
-  startPosition: [2.5, 2, 3],
+  startPosition: [2, 1.8, 2.4],
   startTarget: [0, 0.6, 0],
+};
+
+// Orbit limits. The camera can never reach a wall because
+// |camera.xz| <= |target.xz| + distance <= maxTargetRadius + maxDistance,
+// and maxDistance is derived to keep that sum inside the walls by wallMargin.
+// It can never reach the floor because the pivot keeps target.y >= pivot.y - maxTargetRadius
+// and maxPolarAngle keeps the camera above the target.
+const CAMERA_WALL_MARGIN = 0.4;
+const CAMERA_MAX_TARGET_RADIUS = 1;
+
+export const CAMERA_LIMITS = {
+  // Centre of the sphere the orbit target may be panned within.
+  pivot: [0, 1.2, 0],
+  maxTargetRadius: CAMERA_MAX_TARGET_RADIUS,
+  minDistance: 1,
+  maxDistance: Math.min(ROOM.width, ROOM.depth) / 2 - CAMERA_WALL_MARGIN - CAMERA_MAX_TARGET_RADIUS,
+  minPolarAngle: 0.05,
+  maxPolarAngle: (80 * Math.PI) / 180,
+  dampingFactor: 0.1,
 };
 
 export const TEST_BOX = {
