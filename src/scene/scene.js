@@ -6,7 +6,7 @@ import { clampPixelRatio } from './clamp.js';
 export function createScene(container) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
