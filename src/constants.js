@@ -29,6 +29,8 @@ export const COLORS = {
   uiSurface: 0x2a2d34,
   uiText: 0xf1eee6,
   uiAccent: 0xe0a64a,
+  // Snap preview (src/scene/ghost.js).
+  ghost: 0xe0a64a,
 };
 
 export const LIGHTS = {
@@ -121,4 +123,13 @@ export const GIZMO = {
   tube: 0.025,
   hitTube: 0.12,
   opacity: 0.85,
+};
+
+// Connector snapping (src/game/snapMath.js). Generous first, per the Design doc: a snap
+// that fires too eagerly is a nuisance, one that never fires reads as broken. Tighten
+// from playtest feedback.
+export const SNAP = {
+  maxDistance: 0.08,
+  maxAngle: (40 * Math.PI) / 180,
+  ghostOpacity: 0.45,
 };

@@ -1,7 +1,9 @@
 import * as THREE from 'three';
-import { GESTURE, ROOM } from '../constants.js';
+import { GESTURE, ROOM, SNAP } from '../constants.js';
+import { PART_TYPES } from '../game/catalog.js';
 import { clampToRoom, intersectDragPlane } from '../game/dragMath.js';
 import { createGestureState, OWNER } from '../game/gestureState.js';
+import { applyTransform, findSnap } from '../game/snapMath.js';
 
 /**
  * Thin DOM adapter between pointer events and part manipulation. It raycasts, feeds
@@ -17,14 +19,16 @@ import { createGestureState, OWNER } from '../game/gestureState.js';
  *   rings  — `{ hitTest(raycaster), start(hit, pointer), move(pointer), end(), cancel() }`;
  *            a ring hit outranks a part hit (the gizmo draws on top).
  *   onTap  — called with the tapped part, or null for empty space.
+ *   ghost  — `{ show(mesh, pose), hide() }` snap preview (src/scene/ghost.js).
  */
-export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, rings, onTap }) {
+export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, rings, onTap, ghost }) {
   const state = createGestureState();
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const meshes = parts.map((part) => part.mesh);
   const partByMesh = new Map(parts.map((part) => [part.mesh, part]));
   const footprint = new THREE.Box3();
+  const scratch = new THREE.Vector3();
 
   let drag = null;
 
@@ -55,6 +59,27 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     else cameraControls.disable();
   }
 
+  // World-space connector records for snapMath, for `part` posed at position/quaternion.
+  function worldConnectors(part, position, quaternion) {
+    return PART_TYPES[part.type].connectors.map(({ type, position: local, axis }) => ({
+      type,
+      position: scratch.fromArray(local).applyQuaternion(quaternion).add(position).toArray(),
+      axis: scratch.fromArray(axis).applyQuaternion(quaternion).toArray(),
+    }));
+  }
+
+  function snapCandidate(target) {
+    const { part } = drag;
+    const rotation = part.mesh.quaternion;
+    const dragged = worldConnectors(part, scratch.clone().fromArray(target), rotation);
+    if (dragged.length === 0) return null;
+    const others = parts.flatMap((other) =>
+      other === part ? [] : worldConnectors(other, other.mesh.position, other.mesh.quaternion),
+    );
+    const snap = findSnap(dragged, others, SNAP);
+    return snap && applyTransform(snap.transform, { position: target, rotation: rotation.toArray() });
+  }
+
   // --- part drag: kinematic body on a floor-parallel plane at the grab point's height ---
 
   function beginDrag(part, [px, py, pz], event) {
@@ -66,6 +91,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       height: mesh.position.y + GESTURE.hoverLift,
       offset: [mesh.position.x - px, mesh.position.z - pz],
       half: [(footprint.max.x - footprint.min.x) / 2, (footprint.max.z - footprint.min.z) / 2],
+      snapped: null,
     };
     physics.grab(body);
     updateDrag(event);
@@ -77,12 +103,37 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const point = intersectDragPlane(origin.toArray(), direction.toArray(), drag.planeY);
     // Aimed above the horizon: hold the last pose rather than fling the part away.
     if (!point) return;
-    const target = [point[0] + drag.offset[0], drag.height, point[2] + drag.offset[1]];
-    physics.move(drag.part.body, clampToRoom(target, drag.half, ROOM, GESTURE.wallMargin));
+    const target = clampToRoom(
+      [point[0] + drag.offset[0], drag.height, point[2] + drag.offset[1]],
+      drag.half,
+      ROOM,
+      GESTURE.wallMargin,
+    );
+    physics.move(drag.part.body, target);
+    drag.snapped = snapCandidate(target);
+    if (drag.snapped) ghost?.show(drag.part.mesh, drag.snapped);
+    else ghost?.hide();
   }
 
   function endDrag() {
+    const { part, snapped } = drag;
+    if (snapped) {
+      // Seated parts stay kinematic ("placed") until regrabbed, or an unfastened panel
+      // would fall straight over. TEMPORARY: remove once PR 4's fastener joints hold them.
+      physics.move(part.body, snapped.position, snapped.rotation);
+    } else {
+      physics.release(part.body);
+    }
+    stopDrag();
+  }
+
+  function cancelDrag() {
     physics.release(drag.part.body);
+    stopDrag();
+  }
+
+  function stopDrag() {
+    ghost?.hide();
     drag = null;
   }
 
@@ -98,7 +149,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       if (effect.type === 'dragStart') beginDrag(effect.hit.part, effect.hit.point, event);
       else if (!drag) return;
       else if (effect.type === 'dragMove') updateDrag(event);
-      else endDrag(); // dragEnd and dragCancel both drop the part under physics
+      else if (effect.type === 'dragEnd') endDrag();
+      else cancelDrag(); // interrupted: drop it under physics, never snap
       return;
     }
     if (effect.owner === OWNER.GIZMO_RING && rings) {

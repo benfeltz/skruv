@@ -3,6 +3,7 @@ import { createDevLayout } from './game/devLayout.js';
 import { createPartMesh } from './game/partMesh.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
+import { createGhost } from './scene/ghost.js';
 import { createGestureRouter } from './scene/gestureRouter.js';
 import { createGizmo } from './scene/gizmo.js';
 import { createLoop } from './scene/loop.js';
@@ -43,6 +44,9 @@ const gizmo = createGizmo({
 });
 scene.add(gizmo.object);
 
+const ghost = createGhost();
+scene.add(ghost.object);
+
 createGestureRouter({
   domElement: renderer.domElement,
   camera,
@@ -52,6 +56,7 @@ createGestureRouter({
   rings: gizmo,
   // Tap a part to select it; tap empty space to deselect.
   onTap: (part) => (part ? gizmo.show(part) : gizmo.hide()),
+  ghost,
 });
 
 createLoop((delta) => {
