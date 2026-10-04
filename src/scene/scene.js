@@ -24,6 +24,7 @@ export function createScene(container) {
   sun.position.set(...LIGHTS.sunPosition);
   sun.castShadow = true;
   sun.shadow.mapSize.set(LIGHTS.shadowMapSize, LIGHTS.shadowMapSize);
+  sun.shadow.normalBias = LIGHTS.shadowNormalBias;
   const extent = LIGHTS.shadowExtent;
   Object.assign(sun.shadow.camera, { left: -extent, right: extent, top: extent, bottom: -extent });
   scene.add(sun);

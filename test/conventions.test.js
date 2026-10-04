@@ -24,6 +24,7 @@ describe('pure-logic modules', () => {
     'src/scene/loop.js',
     'src/physics/stepping.js',
     'src/game/catalog.js',
+    'src/game/devLayout.js',
   ];
 
   it.each(pureModules)('%s imports neither Three nor Rapier', (path) => {
@@ -35,6 +36,7 @@ describe('pure-logic modules', () => {
     'src/scene/cameraLimits.js',
     'src/physics/stepping.js',
     'src/game/catalog.js',
+    'src/game/devLayout.js',
   ])(
     '%s touches no DOM globals',
     (path) => {
