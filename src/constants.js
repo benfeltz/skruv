@@ -88,3 +88,18 @@ export const RENDER = {
   // A backgrounded tab resumes with a huge rAF gap; cap it so nothing jumps.
   maxFrameDelta: 1 / 15,
 };
+
+// Pointer gestures: who owns a touch (src/game/gestureState.js) and how a dragged part
+// moves (src/game/dragMath.js). Distances in CSS pixels where noted, else metres.
+export const GESTURE = {
+  // A press that moves no further than this (CSS px) and lifts within tapMaxMs is a tap;
+  // moving further starts a drag. Generous enough for a fingertip's wobble.
+  tapMaxDistance: 10,
+  tapMaxMs: 350,
+  // A grabbed part rides this far above where it was picked up, so it clears neighbours.
+  hoverLift: 0.03,
+  // Dragged parts stay this far inside the walls.
+  wallMargin: 0.05,
+  // Rotate-gizmo detent — the default; the free-rotate toggle turns it off.
+  detentStep: Math.PI / 2,
+};
