@@ -131,5 +131,8 @@ export const GIZMO = {
 export const SNAP = {
   maxDistance: 0.08,
   maxAngle: (40 * Math.PI) / 180,
+  // A seated pose may graze the floor or a wall by this much; any deeper and the snap is
+  // refused (the part would be held kinematic inside a static collider).
+  roomTolerance: 0.002,
   ghostOpacity: 0.45,
 };

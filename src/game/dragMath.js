@@ -60,3 +60,15 @@ export function rotatedHalfExtents([hx, hy, hz], [x, y, z, w]) {
   ];
   return rows.map(([a, b, c]) => Math.abs(a) * hx + Math.abs(b) * hy + Math.abs(c) * hz);
 }
+
+/**
+ * True when a box centred at `position` with world half-extents [x, y, z] lies above the
+ * floor and inside the walls of a room centred on the origin, give or take `tolerance`.
+ */
+export function fitsInRoom([x, y, z], [hx, hy, hz], room, tolerance = 0) {
+  return (
+    y - hy >= -tolerance &&
+    Math.abs(x) + hx <= room.width / 2 + tolerance &&
+    Math.abs(z) + hz <= room.depth / 2 + tolerance
+  );
+}

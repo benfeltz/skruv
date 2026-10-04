@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GESTURE, ROOM, SNAP } from '../constants.js';
 import { PART_TYPES } from '../game/catalog.js';
-import { clampToRoom, intersectDragPlane } from '../game/dragMath.js';
+import { clampToRoom, fitsInRoom, intersectDragPlane, rotatedHalfExtents } from '../game/dragMath.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
 
@@ -79,7 +79,12 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       other === part ? [] : worldConnectors(other, other.mesh.position, other.mesh.quaternion),
     );
     const snap = findSnap(dragged, others, SNAP);
-    return snap && applyTransform(snap.transform, { position: target, rotation: rotation.toArray() });
+    if (!snap) return null;
+    // The alignment can swing a long part's far end by up to SNAP.maxAngle; refuse a seat
+    // that would hold it through the floor or a wall.
+    const pose = applyTransform(snap.transform, { position: target, rotation: rotation.toArray() });
+    const half = rotatedHalfExtents(PART_TYPES[part.type].size.map((d) => d / 2), pose.rotation);
+    return fitsInRoom(pose.position, half, ROOM, SNAP.roomTolerance) ? pose : null;
   }
 
   // --- part drag: kinematic body on a floor-parallel plane at the grab point's height ---

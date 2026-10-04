@@ -3,6 +3,7 @@ import { GESTURE, ROOM } from '../src/constants.js';
 import {
   arcDelta,
   clampToRoom,
+  fitsInRoom,
   intersectDragPlane,
   quantizeAngle,
   rotatedHalfExtents,
@@ -116,5 +117,24 @@ describe('rotatedHalfExtents', () => {
     expect(x).toBeCloseTo(Math.SQRT1_2);
     expect(y).toBeCloseTo(0.5);
     expect(z).toBeCloseTo(Math.SQRT1_2);
+  });
+});
+
+describe('fitsInRoom', () => {
+  const halfW = ROOM.width / 2;
+
+  it('accepts a part resting on the floor well inside the walls', () => {
+    expect(fitsInRoom([1, 0.008, -1], [0.4, 0.008, 0.14], ROOM)).toBe(true);
+  });
+
+  it('refuses a pose sunk into the floor beyond the tolerance', () => {
+    expect(fitsInRoom([0, 0.5, 0], [0.1, 0.6, 0.1], ROOM, 0.002)).toBe(false);
+    expect(fitsInRoom([0, 0.599, 0], [0.1, 0.6, 0.1], ROOM, 0.002)).toBe(true);
+  });
+
+  it('refuses a pose reaching through a wall', () => {
+    expect(fitsInRoom([halfW - 0.5, 1, 0], [1.01, 0.14, 0.008], ROOM)).toBe(false);
+    expect(fitsInRoom([0, 1, -(ROOM.depth / 2) + 0.5], [0.008, 0.14, 1.01], ROOM)).toBe(false);
+    expect(fitsInRoom([halfW - 1.01, 1.02, 0], [1.01, 1.01, 0.008], ROOM)).toBe(true);
   });
 });
