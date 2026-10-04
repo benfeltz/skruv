@@ -26,6 +26,7 @@ describe('pure-logic modules', () => {
     'src/game/catalog.js',
     'src/game/devLayout.js',
     'src/game/gestureState.js',
+    'src/game/dragMath.js',
   ];
 
   it.each(pureModules)('%s imports neither Three nor Rapier', (path) => {
@@ -39,6 +40,7 @@ describe('pure-logic modules', () => {
     'src/game/catalog.js',
     'src/game/devLayout.js',
     'src/game/gestureState.js',
+    'src/game/dragMath.js',
   ])(
     '%s touches no DOM globals',
     (path) => {
