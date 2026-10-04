@@ -53,6 +53,17 @@ export const TEST_BOX = {
   size: 0.6,
 };
 
+export const PHYSICS = {
+  gravity: [0, -9.81, 0],
+  // Fixed simulation step; the render loop banks frame time and runs whole steps.
+  timestep: 1 / 60,
+  // Pairs with RENDER.maxFrameDelta: a clamped 1/15 s frame needs exactly 4 steps.
+  maxStepsPerFrame: 4,
+  // Damping bleeds off residual jitter so resting parts reach Rapier's sleep threshold.
+  linearDamping: 0.1,
+  angularDamping: 0.3,
+};
+
 export const RENDER = {
   // Above 2 the fill-rate cost on phones outweighs the visible sharpness gain.
   maxPixelRatio: 2,
