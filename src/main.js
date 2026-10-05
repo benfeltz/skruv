@@ -1,5 +1,7 @@
-import { PICK, RESET, ROOM } from './constants.js';
+import { PICK, RESET, ROOM, TUNE } from './constants.js';
 import { createAssembly } from './game/assembly.js';
+import { ANY, createBus, recoveryEvent, resetEvent, sessionEvent } from './game/events.js';
+import { createSessionBuffer } from './game/sessionBuffer.js';
 import { PART_TYPES } from './game/catalog.js';
 import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
@@ -23,6 +25,21 @@ import { createBookletPages } from './scene/bookletPages.js';
 import { createBookletSheet } from './ui/booklet.js';
 import { createResetButton } from './ui/resetButton.js';
 import { createToggleButton } from './ui/toggleButton.js';
+
+// The session's event stream, and the buffer that keeps it for export. Observers only:
+// nothing in the game reads it back.
+const events = createBus({ now: () => performance.now() });
+const session = createSessionBuffer({
+  size: TUNE.sessionBufferSize,
+  // randomUUID needs a secure context; a phone on the LAN dev server isn't one.
+  session: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`,
+  startedAt: new Date().toISOString(),
+});
+events.on(ANY, session.push);
+if (import.meta.env.DEV) events.on(ANY, (event) => console.debug('[skruv]', event.type, event));
+events.emit(sessionEvent('start'));
+// Backgrounded and back: a session that ends hidden is an abandon.
+document.addEventListener('visibilitychange', () => events.emit(sessionEvent(document.visibilityState)));
 
 const { renderer, scene, camera } = createScene(document.getElementById('app'));
 scene.add(createRoom());
@@ -126,6 +143,7 @@ const router = createGestureRouter({
   ghost,
   sprue,
   dropGuide,
+  events,
 });
 // The display shelf's physics joints, made by the same reconcile every tap and turn runs.
 router.sync();
@@ -134,6 +152,7 @@ router.sync();
 // as packed, lid on. The display shelf is never touched.
 const packedPose = new Map([[flatpack.lid.id, lidRest()], ...packed.map((p) => [p.id, p])]);
 function repack() {
+  events.emit(resetEvent());
   router.unseatAll(playerParts.map((part) => part.id));
   select(null);
   for (const { id, body } of [...playerParts, flatpack.lid]) {
@@ -155,6 +174,7 @@ function sweep(delta) {
     return hasEscaped([x, y, z], ROOM, RESET.escapeMargin) && assembly.compoundOf(id).size === 1;
   });
   if (escaped.length === 0) return;
+  events.emit(recoveryEvent(escaped.map(({ id }) => id)));
   const spots = respawnSpots(escaped.map((part) => part.type));
   escaped.forEach(({ body }, i) => physics.place(body, spots[i].position, spots[i].rotation));
 }
