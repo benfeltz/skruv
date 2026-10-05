@@ -35,6 +35,8 @@ export const COLORS = {
   // Hole markings (src/game/decals.js) and the flash when a fastener seats in one.
   decal: 0x3a3029,
   decalFlash: 0xe0a64a,
+  // Sprue handle on a selected small part (src/scene/sprue.js): model-kit plastic grey.
+  sprue: 0x8f9a93,
 };
 
 export const LIGHTS = {
@@ -143,6 +145,17 @@ export const PICK = {
   proxyMinSize: 0.04,
   // The finger's angular radius from the camera (radians): ~20 CSS px on a phone.
   fingerRadius: 0.025,
+};
+
+// Sprue handle (src/scene/sprue.js) on a selected small part. The ball stands far enough
+// above the part to clear its gizmo rings (the screwdriver's are the widest, ~0.12 m), so a
+// press on it is never a ring's.
+export const SPRUE = {
+  length: 0.15,
+  stickRadius: 0.003,
+  ballRadius: 0.012,
+  // The invisible hit sphere round the ball: a fingertip-sized target.
+  hitRadius: 0.03,
 };
 
 // Connector snapping (src/game/snapMath.js). Generous first, per the Design doc: a snap

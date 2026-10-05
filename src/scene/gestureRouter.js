@@ -6,14 +6,14 @@ import { createCrank, tightenSign } from '../game/crankMath.js';
 import { clampLift, clampToRoom, fitsInRoom, intersectDragPlane, pullAlong, rotatedHalfExtents } from '../game/dragMath.js';
 import { isFastened, KIND } from '../game/fasteners.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
-import { preferHit, rayBoxGap } from '../game/pickMath.js';
+import { isSmallPart, preferHit, rayBoxGap } from '../game/pickMath.js';
 import { applyTransform, COMPATIBLE, findSnap } from '../game/snapMath.js';
 
 // Hardware (fastener or tool) has a fastener end; panels have only holes, or nothing.
 const isHardware = (type) => PART_TYPES[type].connectors.some((c) => c.type in COMPATIBLE);
 
 // Fasteners and tools, never panels — the parts that get a fat hit proxy.
-const isSmall = (type) => Math.max(...PART_TYPES[type].size) < PICK.smallPartMax;
+const isSmall = (type) => isSmallPart(PART_TYPES[type].size, PICK);
 
 // A pull is judged along a short stretch of the joint's axis projected to the screen.
 const PULL_AXIS_PROBE = 0.05;
@@ -43,9 +43,12 @@ const PULL_AXIS_PROBE = 0.05;
  *            cancel() }`; which of ring and part a press lands on is `resolveHit`'s call.
  *   onTap  — called with the tapped part, or null for empty space.
  *   ghost  — `{ show(mesh, pose), hide() }` snap preview (src/scene/ghost.js).
+ *   sprue  — `{ selected, hitTest(raycaster) }` handle on a selected small part
+ *            (src/scene/sprue.js); a press on it nearer than anything else is a press on
+ *            its part, so dragging it is the part's own drag.
  * Call `update()` once per frame after the physics step: it draws fastener progress.
  */
-export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost }) {
+export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue }) {
   const state = createGestureState();
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -87,7 +90,12 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const partHit = first
       ? { part: partByMesh.get(first.object), point: first.point.toArray(), distance: first.distance }
       : null;
-    return resolveHit(ring, preferHit(partHit, proxyHits(), PICK), rings?.selected);
+    const picked = preferHit(partHit, proxyHits(), PICK);
+    const handle = sprue?.hitTest(raycaster) ?? null;
+    if (handle && sprue.selected && [ring, picked].every((hit) => !hit || handle.distance <= hit.distance)) {
+      return resolveHit(null, { part: sprue.selected, ...handle }, rings?.selected);
+    }
+    return resolveHit(ring, picked, rings?.selected);
   }
 
   // The nearest proxy hit per small part, with how far the ray passes from the real part.

@@ -6,6 +6,9 @@
 
 const SEARCH_STEPS = 60;
 
+/** A part this size (catalog [x, y, z]) is small — hardware or a tool, never a panel. */
+export const isSmallPart = (size, { smallPartMax }) => Math.max(...size) < smallPartMax;
+
 /** Distance from point `p` to an origin-centred box of half-extents `half`. */
 function pointBoxGap(p, half) {
   const outside = p.map((v, i) => Math.max(0, Math.abs(v) - half[i]));

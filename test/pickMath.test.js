@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PICK } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/catalog.js';
-import { preferHit, rayBoxGap } from '../src/game/pickMath.js';
+import { isSmallPart, preferHit, rayBoxGap } from '../src/game/pickMath.js';
 
 const panel = { id: 'sidePanel-1' };
 const dowel = { id: 'dowel-1' };
@@ -89,6 +89,12 @@ describe('PICK sizing', () => {
     }
     for (const type of ['sidePanel', 'topBottomPanel', 'fixedShelf', 'adjustableShelf', 'backPanel']) {
       expect(longest(type)).toBeGreaterThanOrEqual(PICK.smallPartMax);
+    }
+  });
+
+  it('is the same cut-off the router and the sprue use', () => {
+    for (const [type, { size }] of Object.entries(PART_TYPES)) {
+      expect(isSmallPart(size, PICK)).toBe(longest(type) < PICK.smallPartMax);
     }
   });
 
