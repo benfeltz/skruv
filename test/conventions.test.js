@@ -25,6 +25,9 @@ describe('pure-logic modules', () => {
     'src/physics/stepping.js',
     'src/game/catalog.js',
     'src/game/devLayout.js',
+    'src/game/gestureState.js',
+    'src/game/dragMath.js',
+    'src/game/snapMath.js',
   ];
 
   it.each(pureModules)('%s imports neither Three nor Rapier', (path) => {
@@ -37,6 +40,9 @@ describe('pure-logic modules', () => {
     'src/physics/stepping.js',
     'src/game/catalog.js',
     'src/game/devLayout.js',
+    'src/game/gestureState.js',
+    'src/game/dragMath.js',
+    'src/game/snapMath.js',
   ])(
     '%s touches no DOM globals',
     (path) => {

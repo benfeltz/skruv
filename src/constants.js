@@ -21,6 +21,16 @@ export const COLORS = {
   partDowel: 0xd8b27a,
   partMetal: 0xa7adb3,
   partWrench: 0x2f3136,
+  // Rotate gizmo rings, one per world axis, x/y/z in the usual red/green/blue.
+  gizmoX: 0xe5534b,
+  gizmoY: 0x6cc04a,
+  gizmoZ: 0x4a8fe5,
+  // DOM overlays (src/ui).
+  uiSurface: 0x2a2d34,
+  uiText: 0xf1eee6,
+  uiAccent: 0xe0a64a,
+  // Snap preview (src/scene/ghost.js).
+  ghost: 0xe0a64a,
 };
 
 export const LIGHTS = {
@@ -87,4 +97,42 @@ export const RENDER = {
   maxPixelRatio: 2,
   // A backgrounded tab resumes with a huge rAF gap; cap it so nothing jumps.
   maxFrameDelta: 1 / 15,
+};
+
+// Pointer gestures: who owns a touch (src/game/gestureState.js) and how a dragged part
+// moves (src/game/dragMath.js). Distances in CSS pixels where noted, else metres.
+export const GESTURE = {
+  // A press that moves no further than this (CSS px) and lifts within tapMaxMs is a tap;
+  // moving further starts a drag. Generous enough for a fingertip's wobble.
+  tapMaxDistance: 10,
+  tapMaxMs: 350,
+  // A grabbed part rides this far above where it was picked up, so it clears neighbours.
+  hoverLift: 0.03,
+  // Dragged parts stay this far inside the walls.
+  wallMargin: 0.05,
+  // Rotate-gizmo detent — the default; the free-rotate toggle turns it off.
+  detentStep: Math.PI / 2,
+};
+
+// Rotate gizmo (src/scene/gizmo.js): rings sized from the selected part's bounding sphere.
+export const GIZMO = {
+  radiusPadding: 1.15,
+  // Hardware is millimetres long; rings never shrink below a fingertip-sized target.
+  minRadius: 0.08,
+  // Tube thickness as a fraction of ring radius: drawn, and the fatter invisible hit band.
+  tube: 0.025,
+  hitTube: 0.12,
+  opacity: 0.85,
+};
+
+// Connector snapping (src/game/snapMath.js). Generous first, per the Design doc: a snap
+// that fires too eagerly is a nuisance, one that never fires reads as broken. Tighten
+// from playtest feedback.
+export const SNAP = {
+  maxDistance: 0.08,
+  maxAngle: (40 * Math.PI) / 180,
+  // A seated pose may graze the floor or a wall by this much; any deeper and the snap is
+  // refused (the part would be held kinematic inside a static collider).
+  roomTolerance: 0.002,
+  ghostOpacity: 0.45,
 };

@@ -4,6 +4,7 @@ import { createAccumulator } from './stepping.js';
 
 const toVector = ([x, y, z]) => ({ x, y, z });
 const toRotation = ([x, y, z, w]) => ({ x, y, z, w });
+const ZERO = { x: 0, y: 0, z: 0 };
 
 /** Static slabs just outside the visible floor and walls, so surfaces line up exactly. */
 function addRoomColliders(world) {
@@ -32,6 +33,8 @@ function addRoomColliders(world) {
  * The only module that imports Rapier. Resolves once the WASM is initialised, with the
  * static room in place. `register` glues a mesh to a new dynamic cuboid body; `step`
  * advances the simulation by whole fixed steps and copies body poses onto their meshes.
+ * `grab`/`move`/`release` hand a registered body between the simulation and direct
+ * control (part manipulation).
  */
 export async function createPhysicsWorld() {
   await RAPIER.init();
@@ -71,7 +74,9 @@ export async function createPhysicsWorld() {
     if (steps === 0) return;
     for (let i = 0; i < steps; i++) world.step();
     for (const { body, mesh } of bodies) {
-      if (body.isSleeping()) continue;
+      // Kinematic bodies are synced even if Rapier has put them to sleep: a held or placed
+      // part must always show the pose `move` gave it.
+      if (body.isSleeping() && !body.isKinematic()) continue;
       const { x, y, z } = body.translation();
       mesh.position.set(x, y, z);
       const r = body.rotation();
@@ -79,5 +84,24 @@ export async function createPhysicsWorld() {
     }
   }
 
-  return { register, step };
+  /** Takes a body out of the simulation: it follows `move` and pushes dynamic bodies aside. */
+  function grab(body) {
+    body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+  }
+
+  /** Sets a grabbed body's pose for the next step; `rotation` ([x, y, z, w]) is optional. */
+  function move(body, position, rotation) {
+    body.setNextKinematicTranslation(toVector(position));
+    if (rotation) body.setNextKinematicRotation(toRotation(rotation));
+    body.wakeUp();
+  }
+
+  /** Hands a grabbed body back to the simulation at rest, so it drops rather than flies. */
+  function release(body) {
+    body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+    body.setLinvel(ZERO, true);
+    body.setAngvel(ZERO, true);
+  }
+
+  return { register, step, grab, move, release };
 }
