@@ -99,9 +99,9 @@ export function createGizmo({ camera, domElement, physics, isFree }) {
       swept: 0,
       startRotation: part.mesh.quaternion.clone(),
       startPosition: part.mesh.position.toArray(),
+      grabbed: false,
     };
     rings.forEach((ring, i) => (ring.material.opacity = hitBands[i].userData.axis === axis ? 1 : GIZMO.opacity / 3));
-    physics.grab(part.body);
   }
 
   function move({ x, y }) {
@@ -109,6 +109,13 @@ export function createGizmo({ camera, domElement, physics, isFree }) {
     turning.swept += arcDelta(turning.centre, turning.last, [x, y]);
     turning.last = [x, y];
     const angle = quantizeAngle(turning.sign * turning.swept, isFree() ? 0 : GESTURE.detentStep);
+    // The body is only taken over once the turn actually reaches a detent, so a brush of a
+    // ring that rotates nothing never lifts or unseats the part (a seated part stays put).
+    if (!turning.grabbed) {
+      if (angle === 0) return;
+      physics.grab(part.body);
+      turning.grabbed = true;
+    }
     step.setFromAxisAngle(turning.axis, angle);
     quaternion.multiplyQuaternions(step, turning.startRotation);
     const rotation = quaternion.toArray();
@@ -120,9 +127,10 @@ export function createGizmo({ camera, domElement, physics, isFree }) {
 
   function end() {
     if (!turning) return;
+    const { grabbed } = turning;
     turning = null;
     rings.forEach((ring) => (ring.material.opacity = GIZMO.opacity));
-    physics.release(part.body);
+    if (grabbed) physics.release(part.body);
   }
 
   const cancel = end;
