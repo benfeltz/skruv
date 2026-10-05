@@ -1,7 +1,8 @@
-import { PICK, RESET, ROOM, TUNE } from './constants.js';
+import { PICK, RENDER, RESET, ROOM, TUNE } from './constants.js';
 import { createAssembly } from './game/assembly.js';
-import { ANY, createBus, recoveryEvent, resetEvent, sessionEvent } from './game/events.js';
+import { ANY, createBus, recoveryEvent, resetEvent, sessionEvent, tuneEvent } from './game/events.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
+import { createTunables, LIVE_KNOBS } from './game/tunables.js';
 import { PART_TYPES } from './game/catalog.js';
 import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
@@ -9,6 +10,7 @@ import { createPackedWorldLayout, lidRest, respawnSpots } from './game/packedLay
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
+import { clampPixelRatio } from './scene/clamp.js';
 import { createGhost } from './scene/ghost.js';
 import { createCompoundPhysics } from './scene/compoundPhysics.js';
 import { createDisplayShelf } from './scene/displayShelf.js';
@@ -46,6 +48,16 @@ scene.add(createRoom());
 
 const cameraControls = createCameraControls(camera, renderer.domElement);
 const physics = await createPhysicsWorld();
+
+// Live tuning: a knob set writes through to the constants every module reads; values baked
+// into engine objects at creation are re-applied here.
+const tunables = createTunables();
+tunables.subscribe((key, value) => {
+  events.emit(tuneEvent(key, value));
+  const { group } = LIVE_KNOBS[key];
+  if (group === 'physics' || group === 'joint') physics.retune();
+  if (key === 'render.maxPixelRatio') renderer.setPixelRatio(clampPixelRatio(window.devicePixelRatio, RENDER.maxPixelRatio));
+});
 
 // The game opens on the closed flatpack: every part packed flat inside, settling at once
 // and resting until the lid comes off and a hand disturbs it.

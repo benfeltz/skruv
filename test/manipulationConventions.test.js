@@ -77,10 +77,11 @@ describe('physics boundary', () => {
     expect(world).toMatch(/function release\(body\)/);
   });
 
-  it('adds join/unjoin (1.4) and exposes exactly that API', () => {
+  it('adds join/unjoin (1.4), retune (1.6) and exposes exactly that API', () => {
     expect(world).toMatch(/function join\(bodyA, bodyB, \{ anchorA, anchorB, rotation \}, mode\)/);
     expect(world).toMatch(/function unjoin\(joint\)/);
-    expect(world).toMatch(/return \{ register, addStatic, step, grab, move, release, place, join, unjoin \};/);
+    expect(world).toMatch(/function retune\(\)/);
+    expect(world).toMatch(/return \{ register, addStatic, step, grab, move, release, place, join, unjoin, retune \};/);
   });
 
   it('adds static slabs for the flatpack (1.5) and nothing else', () => {

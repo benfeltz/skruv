@@ -37,6 +37,7 @@ describe('pure-logic modules', () => {
     'src/game/buildSteps.js',
     'src/game/events.js',
     'src/game/sessionBuffer.js',
+    'src/game/tunables.js',
   ];
 
   it.each(pureModules)('%s imports neither Three nor Rapier', (path) => {
@@ -61,6 +62,7 @@ describe('pure-logic modules', () => {
     'src/game/buildSteps.js',
     'src/game/events.js',
     'src/game/sessionBuffer.js',
+    'src/game/tunables.js',
   ])(
     '%s touches no DOM globals',
     (path) => {
