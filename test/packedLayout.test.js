@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { BOX, CAMERA_LIMITS, ROOM } from '../src/constants.js';
+import { BOX, CAMERA_LIMITS, RESET, ROOM } from '../src/constants.js';
 import { CONNECTOR, MANIFEST, PART_TYPES } from '../src/game/catalog.js';
-import { boxPlacement, createPackedLayout, createPackedWorldLayout, lidRest } from '../src/game/packedLayout.js';
+import { boxPlacement, createPackedLayout, createPackedWorldLayout, lidRest, respawnSpot } from '../src/game/packedLayout.js';
+import { hasEscaped } from '../src/game/dragMath.js';
 import { COMPATIBLE, rotateVector } from '../src/game/snapMath.js';
 
 const layout = createPackedLayout();
@@ -138,5 +139,29 @@ describe('the box in the room', () => {
 
   it('keeps the lid and the panels out of the manifest checks: the lid is no furniture', () => {
     expect(MANIFEST.some((p) => p.type === 'boxLid')).toBe(false);
+  });
+});
+
+describe('respawnSpot (1.5 recovery)', () => {
+  const spots = Array.from({ length: 40 }, (_, n) => respawnSpot(n).position);
+  const { position, rotation } = boxPlacement();
+  const local = (p) => rotateVector([-rotation[0], -rotation[1], -rotation[2], rotation[3]], p.map((v, i) => v - position[i]));
+
+  it('sets parts down beside the box, outside its walls, above the floor, inside the room', () => {
+    for (const spot of spots) {
+      const [x, y, z] = local(spot);
+      expect(x).toBeGreaterThan(width / 2 + BOX.wall);
+      expect(Math.abs(z)).toBeLessThanOrEqual(length / 2);
+      expect(y).toBeCloseTo(RESET.respawn.height, 9);
+      expect(hasEscaped(spot, ROOM, RESET.escapeMargin)).toBe(false);
+    }
+  });
+
+  it('spaces consecutive recoveries apart along the box, wrapping when the row is full', () => {
+    for (let n = 1; n < 10; n++) {
+      expect(Math.hypot(...spots[n].map((v, i) => v - spots[n - 1][i]))).toBeCloseTo(RESET.respawn.spacing, 9);
+    }
+    const slots = Math.floor(length / RESET.respawn.spacing);
+    expect(spots[slots]).toEqual(spots[0]);
   });
 });

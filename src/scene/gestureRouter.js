@@ -710,6 +710,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     // gesture — the display shelf seated pre-fastened — through the same reconcile a tap
     // or turn runs.
     sync: reconcile,
+    // The repack's teardown: lets go of any gesture in progress, then takes apart every
+    // joint touching `ids` through the same unseat and reconcile a part pulled free goes
+    // through — fastened or not, so the physics joints go with them.
+    unseatAll(ids) {
+      onInterrupted();
+      const set = new Set(ids);
+      for (const joint of assembly.all()) if (set.has(joint.hardware) || set.has(joint.host)) unseat(joint);
+      reconcile();
+    },
     dispose() {
       onInterrupted();
       domElement.removeEventListener('pointerdown', onPointerDown, { capture: true });

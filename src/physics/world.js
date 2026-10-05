@@ -121,6 +121,15 @@ export async function createPhysicsWorld() {
     body.setAngvel(ZERO, true);
   }
 
+  /** Sets a body down at a pose, at rest and under the simulation — a repack or a respawn. */
+  function place(body, position, rotation) {
+    body.setBodyType(RAPIER.RigidBodyType.Dynamic, false);
+    body.setTranslation(toVector(position), false);
+    body.setRotation(toRotation(rotation), false);
+    body.setLinvel(ZERO, false);
+    body.setAngvel(ZERO, true);
+  }
+
   const joints = new Map(); // handle → { mode, bodyB }
   const embedded = new Map(); // body → embedding joints holding it
 
@@ -182,5 +191,5 @@ export async function createPhysicsWorld() {
     world.removeImpulseJoint(joint, true);
   }
 
-  return { register, addStatic, step, grab, move, release, join, unjoin };
+  return { register, addStatic, step, grab, move, release, place, join, unjoin };
 }

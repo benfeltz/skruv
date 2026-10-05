@@ -176,6 +176,20 @@ export const DISPLAY = {
   idPrefix: 'display/',
 };
 
+// Repack and recovery (src/ui/resetButton.js, src/main.js).
+export const RESET = {
+  // The repack button arms on a first tap and repacks only on a second within this many
+  // ms — cheap insurance against a fat finger wiping a build.
+  confirmMs: 2500,
+  // Every this many seconds, any loose player part found outside the room (by more than
+  // `escapeMargin` m) is set down again beside the box.
+  sweepInterval: 2,
+  escapeMargin: 0.05,
+  // Where: this far out from the box's long side, this high (it drops into place), and
+  // spread along the box this far apart so two never land on each other.
+  respawn: { offset: 0.35, height: 0.25, spacing: 0.15 },
+};
+
 // Packing inside the box (src/game/packedLayout.js).
 export const PACK = {
   // Between neighbouring panels in a layer, and between a panel and the wall.

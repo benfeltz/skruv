@@ -10,7 +10,7 @@
 // cardboard spacers yet). Box-local frame: origin on the floor at the box's centre, its
 // length along z, height along y.
 
-import { BOX, PACK } from '../constants.js';
+import { BOX, PACK, RESET } from '../constants.js';
 import { MANIFEST, PART_TYPES } from './catalog.js';
 import { placeLayout } from './assembledLayout.js';
 import { COMPATIBLE, multiplyQuaternions } from './snapMath.js';
@@ -142,6 +142,19 @@ export function boxPlacement(box = BOX) {
 /** The lid's pose closed on the walls' top edges, in the room. */
 export function lidRest(box = BOX) {
   const local = { position: [0, box.floor + box.inner[1] + box.lidThickness / 2, 0], rotation: IDENTITY };
+  const [pose] = placeLayout([local], boxPlacement(box));
+  return { position: pose.position, rotation: pose.rotation };
+}
+
+/**
+ * Where the `n`th recovered part is set down: in a row beside the box's long side, above
+ * the floor so it drops into place, wrapping back along the box. `{ position, rotation }`.
+ */
+export function respawnSpot(n, box = BOX, respawn = RESET.respawn) {
+  const [width, , length] = box.inner;
+  const slots = Math.max(1, Math.floor(length / respawn.spacing));
+  const along = -length / 2 + respawn.spacing / 2 + (n % slots) * respawn.spacing;
+  const local = { position: [width / 2 + box.wall + respawn.offset, respawn.height, along], rotation: IDENTITY };
   const [pose] = placeLayout([local], boxPlacement(box));
   return { position: pose.position, rotation: pose.rotation };
 }

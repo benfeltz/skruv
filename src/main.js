@@ -1,8 +1,9 @@
-import { PICK } from './constants.js';
+import { PICK, RESET, ROOM } from './constants.js';
 import { createAssembly } from './game/assembly.js';
 import { PART_TYPES } from './game/catalog.js';
 import { createPartMesh } from './game/partMesh.js';
-import { createPackedWorldLayout } from './game/packedLayout.js';
+import { hasEscaped } from './game/dragMath.js';
+import { createPackedWorldLayout, lidRest, respawnSpot } from './game/packedLayout.js';
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
@@ -20,6 +21,7 @@ import { createScene } from './scene/scene.js';
 import { createSprue } from './scene/sprue.js';
 import { createBookletPages } from './scene/bookletPages.js';
 import { createBookletSheet } from './ui/booklet.js';
+import { createResetButton } from './ui/resetButton.js';
 import { createToggleButton } from './ui/toggleButton.js';
 
 const { renderer, scene, camera } = createScene(document.getElementById('app'));
@@ -35,7 +37,8 @@ scene.add(flatpack.object, flatpack.lid.mesh);
 
 // One record per physical part — what gestures pick, drag and snap. The lid is one too.
 const parts = [flatpack.lid];
-for (const { id, type, position, rotation } of createPackedWorldLayout()) {
+const packed = createPackedWorldLayout();
+for (const { id, type, position, rotation } of packed) {
   const part = PART_TYPES[type];
   const mesh = createPartMesh(part);
   const body = physics.register(mesh, {
@@ -127,9 +130,39 @@ const router = createGestureRouter({
 // The display shelf's physics joints, made by the same reconcile every tap and turn runs.
 router.sync();
 
+// Repack: the player's parts come apart by the normal teardown and go back into the box
+// as packed, lid on. The display shelf is never touched.
+const packedPose = new Map([[flatpack.lid.id, lidRest()], ...packed.map((p) => [p.id, p])]);
+function repack() {
+  router.unseatAll(playerParts.map((part) => part.id));
+  select(null);
+  for (const { id, body } of [...playerParts, flatpack.lid]) {
+    const { position, rotation } = packedPose.get(id);
+    physics.place(body, position, rotation);
+  }
+}
+document.body.append(createResetButton({ onReset: repack }).element);
+
+// Recovery: a loose player part that has left the room (through a slab, off a wall) is set
+// down again beside the box. Bonded parts go back only with a repack.
+let sweepIn = RESET.sweepInterval;
+let recovered = 0;
+function sweep(delta) {
+  sweepIn -= delta;
+  if (sweepIn > 0) return;
+  sweepIn = RESET.sweepInterval;
+  for (const { id, body } of [...playerParts, flatpack.lid]) {
+    const { x, y, z } = body.translation();
+    if (!hasEscaped([x, y, z], ROOM, RESET.escapeMargin) || assembly.compoundOf(id).size > 1) continue;
+    const { position, rotation } = respawnSpot(recovered++);
+    physics.place(body, position, rotation);
+  }
+}
+
 createLoop((delta) => {
   cameraControls.update(delta);
   physics.step(delta);
+  sweep(delta);
   router.update(delta);
   gizmo.update();
   sprue.update();
