@@ -50,19 +50,6 @@ export function createBookletPages(renderer) {
   const views = createViewRenderer(renderer);
 
   const partById = new Map(layout.parts.map((p) => [p.id, p]));
-  const steps = pages.filter((p) => p.kind === 'step');
-  // What is in place once step `n` is done: panels brought in and hardware seated so far.
-  const builtBy = (n) => {
-    const ids = new Set();
-    for (const step of steps.filter((s) => s.number <= n)) {
-      for (const id of step.parts) ids.add(id);
-      for (const i of step.joints) {
-        ids.add(layout.joints[i].hardware);
-        ids.add(layout.joints[i].host);
-      }
-    }
-    return ids;
-  };
   const boldOf = (step) => {
     const ids = new Set(step.parts);
     for (const i of [...step.joints, ...step.turns]) {
@@ -227,7 +214,7 @@ export function createBookletPages(renderer) {
 
     const frame = [m, m + 2 * r + 80, pageW - 2 * m, pageH - (2 * m + 2 * r + 80)];
     if (page.pose === 'parts') drawView(ctx, looseParts(page), frame);
-    else drawView(ctx, itemsFor(builtBy(page.number), page.tip ? new Set() : boldOf(page)), frame, ORIENTATION[page.pose]);
+    else drawView(ctx, itemsFor(new Set(page.shown), page.tip ? new Set() : boldOf(page)), frame, ORIENTATION[page.pose]);
     if (page.turns.length) turnArrow(ctx, frame[0] + frame[2] - 80, frame[1] + 70, 46);
     if (page.tip) {
       // Two people tip it up together: an arc over the drawing, a figure at each side.

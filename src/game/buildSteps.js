@@ -63,6 +63,10 @@ const STEPS = [
  *   types    — the part types the page is about (its panels, the hardware it seats or
  *              turns, the panels that hardware goes into, the tool) — what the per-page
  *              highlight pulses in the room, an aid only
+ *   shown    — ids of everything in place once the page is done, as its drawing shows the
+ *              carcass: a panel only once a built page brings it in or seats it, and
+ *              hardware only once its panel is there (a side fitted with bolts on a
+ *              loose-parts page waits off the drawing until a later step puts it on)
  *   tool     — the tool in hand ('allenWrench', 'screwdriver') or null
  *   pose     — 'parts' (loose), 'lying' (carcass on its left side), 'faceDown' (on its
  *              front, back up) or 'upright'
@@ -84,7 +88,7 @@ export function createBuildSteps(layout = createAssembledLayout()) {
   const select = (test) => (test ? layout.joints.flatMap((j, i) => (test(j, ctx) ? [i] : [])) : []);
 
   const counted = new Set();
-  return STEPS.map((step, n) => {
+  const pages = STEPS.map((step, n) => {
     const joints = select(step.seats);
     const fresh = [...new Set(joints.map((i) => layout.joints[i].hardware))].filter((id) => !counted.has(id));
     for (const id of fresh) counted.add(id);
@@ -103,6 +107,25 @@ export function createBuildSteps(layout = createAssembledLayout()) {
       tip: step.tip ?? false,
     };
   });
+  for (const page of pages) page.shown = shownBy(pages, page.number, layout);
+  return pages;
+}
+
+// What is in place once page `n` is done. Loose-parts pages prepare pieces off to the side;
+// a panel joins the carcass when a built page brings it in or seats something in it, or
+// seats hardware that already sits in it (the horizontals, via their dowels, when the side
+// goes on). Hardware shows once the panel it is in has joined.
+function shownBy(pages, n, layout) {
+  const done = pages.filter((p) => p.number <= n);
+  const built = done.filter((p) => p.pose !== 'parts');
+  const seatedBy = (ps) => ps.flatMap((p) => p.joints.map((i) => layout.joints[i]));
+  const panels = new Set(built.flatMap((p) => p.parts));
+  for (const joint of seatedBy(built)) {
+    panels.add(joint.host);
+    for (const earlier of seatedBy(done)) if (earlier.hardware === joint.hardware) panels.add(earlier.host);
+  }
+  const hardware = seatedBy(done).filter((j) => panels.has(j.host)).map((j) => j.hardware);
+  return [...new Set([...panels, ...hardware])];
 }
 
 // One bubble per hardware type: how many pieces of it the page adds.
