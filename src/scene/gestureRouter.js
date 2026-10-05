@@ -303,9 +303,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   // The lift raises the part and its drag plane together, so it stays under the finger.
-  function liftDrag(dy) {
+  function liftDrag(dy, rate) {
     const cy = drag.centre[1];
-    const height = clampLift(drag.height + dy * GESTURE.liftRate + cy, drag.halfHeight, ROOM, GESTURE.ceilingMargin) - cy;
+    const height = clampLift(drag.height + dy * rate + cy, drag.halfHeight, ROOM, GESTURE.ceilingMargin) - cy;
     drag.planeY += height - drag.height;
     drag.height = height;
     if (drag.pointer) updateDrag(drag.pointer);
@@ -492,6 +492,19 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // --- effects from the state machine ---
 
+  // A live drag's move or lift. The primary pointer as the state machine reports it: a
+  // Shift-lift's vertical travel is spent, so letting go of Shift never makes anything jump.
+  function moveDrag(effect, event) {
+    const at = effect.x === undefined ? null : { clientX: effect.x, clientY: effect.y };
+    if (drag.mode === 'crank' || drag.mode === 'pull') {
+      // Nothing to lift: the primary pointer's move is a crank or a pull either way.
+      if (at) (drag.mode === 'crank' ? crankTo : pullTo)(at);
+    } else if (effect.type === 'lift') {
+      if (at) drag.pointer = at;
+      liftDrag(effect.dy, liftRate(effect, event));
+    } else if (effect.type === 'dragMove') updateDrag(at);
+  }
+
   function apply(effect, event) {
     if (!effect) return;
     if (effect.type === 'tap') {
@@ -505,12 +518,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       else if (!drag) return;
       else if (effect.type === 'dragEnd') endDrag();
       else if (effect.type === 'dragCancel') cancelDrag(); // interrupted: never snap
-      else if (drag.mode === 'crank') {
-        if (effect.type === 'dragMove') crankTo(event);
-      } else if (drag.mode === 'pull') {
-        if (effect.type === 'dragMove') pullTo(event);
-      } else if (effect.type === 'lift') liftDrag(effect.dy);
-      else if (effect.type === 'dragMove') updateDrag(event);
+      else moveDrag(effect, event);
       return;
     }
     if (effect.owner === OWNER.GIZMO_RING && rings) {
@@ -524,6 +532,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       else rings.cancel();
     }
   }
+
+  // A second finger keeps its phone rate; Shift-drag and the wheel are the desktop's, tuned
+  // for trackpad deltas.
+  const liftRate = (effect, event) =>
+    effect.x === undefined && event?.type !== 'wheel' ? GESTURE.liftRate : GESTURE.desktopLiftRate;
 
   // Capture phase, so this runs before OrbitControls' own pointerdown on the same element
   // and a part touch has already disabled the camera when OrbitControls sees it.
@@ -556,7 +569,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     apply(state.wheel({ dy: event.deltaY }), event);
   }
 
+  // Shift held = desktop lift. Window-level, so it counts wherever focus sits; a key let go
+  // while the window was blurred is cleared by onInterrupted.
+  function onKey(event) {
+    if (event.key === 'Shift') state.modifier(event.type === 'keydown');
+  }
+
   function onInterrupted() {
+    state.modifier(false);
     apply(state.cancelAll());
     syncCamera();
   }
@@ -573,6 +593,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   domElement.addEventListener('wheel', onWheel, { passive: true });
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('blur', onInterrupted);
+  window.addEventListener('keydown', onKey);
+  window.addEventListener('keyup', onKey);
 
   return {
     update,
@@ -586,6 +608,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       domElement.removeEventListener('wheel', onWheel);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('blur', onInterrupted);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKey);
     },
   };
 }
