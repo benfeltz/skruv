@@ -16,6 +16,7 @@ const DESIGN_MANIFEST = {
   shelfPin: 8,
   nail: 8,
   allenWrench: 1,
+  screwdriver: 1,
 };
 
 const EPSILON = 1e-9;
@@ -33,8 +34,8 @@ describe('manifest', () => {
     expect(MANIFEST_QUANTITIES).toEqual(DESIGN_MANIFEST);
   });
 
-  it('expands to one instance per physical part, 53 in all', () => {
-    expect(MANIFEST).toHaveLength(53);
+  it('expands to one instance per physical part, 54 in all', () => {
+    expect(MANIFEST).toHaveLength(54);
     for (const [type, quantity] of Object.entries(DESIGN_MANIFEST)) {
       expect(MANIFEST.filter((p) => p.type === type)).toHaveLength(quantity);
     }
@@ -85,6 +86,17 @@ describe('connectors', () => {
     expect(countHoles(CONNECTOR.CAM_LOCK_RECESS)).toBe(DESIGN_MANIFEST.camLock);
     expect(countHoles(CONNECTOR.SHELF_PIN_HOLE)).toBe(DESIGN_MANIFEST.shelfPin);
     expect(countHoles(CONNECTOR.NAIL_HOLE)).toBe(DESIGN_MANIFEST.nail);
+  });
+
+  it('gives every cam lock a screwdriver slot opposite its body end', () => {
+    const [body, slot] = PART_TYPES.camLock.connectors;
+    expect(body.type).toBe(CONNECTOR.CAM_LOCK_BODY);
+    expect(slot.type).toBe(CONNECTOR.CAM_SLOT);
+    body.axis.forEach((v, i) => expect(slot.axis[i] + v).toBe(0));
+  });
+
+  it('ships a screwdriver whose only connector is its tip', () => {
+    expect(PART_TYPES.screwdriver.connectors.map((c) => c.type)).toEqual([CONNECTOR.SCREWDRIVER_TIP]);
   });
 
   // The back panel sits flush with the carcass top. A nail on its vertical centre line

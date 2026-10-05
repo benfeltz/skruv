@@ -5,8 +5,8 @@
 // Units: metres and kilograms. Sizes are [x, y, z] in the part's assembled orientation:
 // carcass front faces +z, sides stand along y. Connector positions are part-local
 // (origin at the part's centre); `axis` is the unit outward normal of a hole's mouth, or
-// the direction a fastener's end points. Which connector mates with which is PR 4's
-// concern and deliberately absent here.
+// the direction a fastener's end points. Which instance mates with which is the assembly
+// graph's concern (src/game/assembly.js) and deliberately absent here.
 
 export const CONNECTOR = Object.freeze({
   DOWEL_HOLE: 'dowelHole',
@@ -21,6 +21,8 @@ export const CONNECTOR = Object.freeze({
   PIN_TIP: 'pinTip',
   NAIL_TIP: 'nailTip',
   WRENCH_TIP: 'wrenchTip',
+  CAM_SLOT: 'camSlot',
+  SCREWDRIVER_TIP: 'screwdriverTip',
 });
 
 const PANEL_THICKNESS = 0.016;
@@ -113,6 +115,8 @@ const SHELF_PIN_SIZE = [0.005, 0.016, 0.005];
 const NAIL_SIZE = [0.002, 0.02, 0.002];
 // The L-shaped key as its bounding box; the short arm's tip is the working end.
 const ALLEN_WRENCH_SIZE = [0.07, 0.004, 0.025];
+// Handle and shaft as one bounding box; the blade tip is the bottom end.
+const SCREWDRIVER_SIZE = [0.022, 0.2, 0.022];
 
 export const PART_TYPES = Object.freeze({
   sidePanel: {
@@ -162,7 +166,8 @@ export const PART_TYPES = Object.freeze({
     size: CAM_LOCK_SIZE,
     mass: 0.005,
     color: 'partMetal',
-    connectors: rodConnectors(CAM_LOCK_SIZE, CONNECTOR.CAM_LOCK_BODY),
+    // Body end drops into the recess; the slot on the opposite face takes the screwdriver.
+    connectors: rodConnectors(CAM_LOCK_SIZE, CONNECTOR.CAM_LOCK_BODY, CONNECTOR.CAM_SLOT),
   },
   shelfPin: {
     size: SHELF_PIN_SIZE,
@@ -188,6 +193,12 @@ export const PART_TYPES = Object.freeze({
       ),
     ],
   },
+  screwdriver: {
+    size: SCREWDRIVER_SIZE,
+    mass: 0.08,
+    color: 'partScrewdriver',
+    connectors: rodConnectors(SCREWDRIVER_SIZE, CONNECTOR.SCREWDRIVER_TIP),
+  },
 });
 
 /** Quantities in the flatpack, per the Design doc's manifest table. */
@@ -203,6 +214,7 @@ export const MANIFEST_QUANTITIES = Object.freeze({
   shelfPin: 8,
   nail: 8,
   allenWrench: 1,
+  screwdriver: 1,
 });
 
 /** One entry per physical part in the box: `{ id, type }`, ids like `dowel-3`. */

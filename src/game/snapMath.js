@@ -4,7 +4,7 @@
 // as [x, y, z, w].
 //
 // Compatibility here is type-level only (a dowel end fits a dowel hole). Which instance
-// mates with which — the assembly graph — is PR 4's and deliberately absent.
+// mates with which is the assembly graph's (src/game/assembly.js), not this module's.
 
 import { CONNECTOR } from './catalog.js';
 
@@ -16,6 +16,7 @@ export const COMPATIBLE = Object.freeze({
   [CONNECTOR.PIN_TIP]: CONNECTOR.SHELF_PIN_HOLE,
   [CONNECTOR.NAIL_TIP]: CONNECTOR.NAIL_HOLE,
   [CONNECTOR.WRENCH_TIP]: CONNECTOR.BOLT_HEAD,
+  [CONNECTOR.SCREWDRIVER_TIP]: CONNECTOR.CAM_SLOT,
 });
 
 export const areCompatible = (a, b) => COMPATIBLE[a] === b || COMPATIBLE[b] === a;

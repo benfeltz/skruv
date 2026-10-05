@@ -21,6 +21,7 @@ export const COLORS = {
   partDowel: 0xd8b27a,
   partMetal: 0xa7adb3,
   partWrench: 0x2f3136,
+  partScrewdriver: 0xd9a21b,
   // Rotate gizmo rings, one per world axis, x/y/z in the usual red/green/blue.
   gizmoX: 0xe5534b,
   gizmoY: 0x6cc04a,
