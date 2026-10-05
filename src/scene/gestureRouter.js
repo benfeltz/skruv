@@ -1,15 +1,20 @@
 import * as THREE from 'three';
-import { FASTENER, GESTURE, ROOM, SNAP } from '../constants.js';
+import { COLORS, DROP, FASTENER, GESTURE, PICK, ROOM, SNAP } from '../constants.js';
 import { capture, connectorInWorld } from '../game/assembly.js';
 import { CONNECTOR, PART_TYPES } from '../game/catalog.js';
+import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
-import { clampLift, clampToRoom, fitsInRoom, intersectDragPlane, pullAlong, rotatedHalfExtents } from '../game/dragMath.js';
+import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rotatedHalfExtents } from '../game/dragMath.js';
 import { isFastened, KIND } from '../game/fasteners.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
-import { applyTransform, COMPATIBLE, findSnap } from '../game/snapMath.js';
+import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
+import { applyTransform, areCompatible, COMPATIBLE, findSnap } from '../game/snapMath.js';
 
 // Hardware (fastener or tool) has a fastener end; panels have only holes, or nothing.
 const isHardware = (type) => PART_TYPES[type].connectors.some((c) => c.type in COMPATIBLE);
+
+// Fasteners and tools, never panels — the parts that get a fat hit proxy.
+const isSmall = (type) => isSmallPart(PART_TYPES[type].size, PICK);
 
 // A pull is judged along a short stretch of the joint's axis projected to the screen.
 const PULL_AXIS_PROBE = 0.05;
@@ -39,9 +44,16 @@ const PULL_AXIS_PROBE = 0.05;
  *            cancel() }`; which of ring and part a press lands on is `resolveHit`'s call.
  *   onTap  — called with the tapped part, or null for empty space.
  *   ghost  — `{ show(mesh, pose), hide() }` snap preview (src/scene/ghost.js).
- * Call `update()` once per frame after the physics step: it draws fastener progress.
+ *   dropGuide — `{ show(from, to), hide() }` line from a dragged part down to where it
+ *            would land (src/scene/dropGuide.js); a free hole there that takes the part
+ *            glows, as does the seat the ghost shows.
+ *   sprue  — `{ selected, hitTest(raycaster) }` handle on a selected small part
+ *            (src/scene/sprue.js); a press on it nearer than anything else is a press on
+ *            its part, so dragging it is the part's own drag.
+ * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
+ * eases a dragged part toward the seat on offer (seat assist) and fades the seat flash.
  */
-export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost }) {
+export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide }) {
   const state = createGestureState();
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -49,7 +61,12 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const panelMeshes = parts.filter((part) => !isHardware(part.type)).map((part) => part.mesh);
   const partByMesh = new Map(parts.map((part) => [part.mesh, part]));
   const partById = new Map(parts.map((part) => [part.id, part]));
+  const proxies = parts.filter((part) => isSmall(part.type)).map(addHitProxy);
+  const partByProxy = new Map(proxies.map((proxy) => [proxy, partByMesh.get(proxy.parent)]));
+  const localRay = new THREE.Ray();
+  const toLocal = new THREE.Matrix4();
   const footprint = new THREE.Box3();
+  const bounds = new THREE.Box3();
   const scratch = new THREE.Vector3();
   const offset = new THREE.Vector3();
   const twist = new THREE.Quaternion();
@@ -64,6 +81,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const bonds = new Map();
   // tool id → its pose relative to the fastener it turns, so it turns along.
   const toolGrips = new Map();
+  // decal mesh → ms of glow left, after a fastener seated in its hole.
+  const flashes = new Map();
+  // The hole marking lit under the drop line (or at the seat on offer), if any.
+  let glowing = null;
+  const down = new THREE.Vector3(0, -1, 0);
 
   function aim({ clientX, clientY }) {
     const rect = domElement.getBoundingClientRect();
@@ -75,10 +97,31 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     aim(event);
     const ring = rings?.hitTest(raycaster) ?? null;
     const [first] = raycaster.intersectObjects(meshes, false);
-    const part = first
+    const partHit = first
       ? { part: partByMesh.get(first.object), point: first.point.toArray(), distance: first.distance }
       : null;
-    return resolveHit(ring, part, rings?.selected);
+    const picked = preferHit(partHit, proxyHits(), PICK);
+    const handle = sprue?.hitTest(raycaster) ?? null;
+    if (handle && sprue.selected && [ring, picked].every((hit) => !hit || handle.distance <= hit.distance)) {
+      return resolveHit(null, { part: sprue.selected, ...handle }, rings?.selected);
+    }
+    return resolveHit(ring, picked, rings?.selected);
+  }
+
+  // The nearest proxy hit per small part, with how far the ray passes from the real part
+  // and how far along it the real part is (so one sunk in a panel stays hidden behind it).
+  function proxyHits() {
+    const nearest = new Map();
+    for (const { object, point, distance } of raycaster.intersectObjects(proxies, false)) {
+      const part = partByProxy.get(object);
+      if (nearest.has(part)) continue;
+      toLocal.copy(part.mesh.matrixWorld).invert();
+      localRay.copy(raycaster.ray).applyMatrix4(toLocal);
+      const half = PART_TYPES[part.type].size.map((d) => d / 2);
+      const { miss, depth } = rayBoxReach(localRay.origin.toArray(), localRay.direction.normalize().toArray(), half);
+      nearest.set(part, { part, point: point.toArray(), distance, miss, depth });
+    }
+    return [...nearest.values()];
   }
 
   const pointer = (event, hit = null) => ({
@@ -137,7 +180,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   function snapCandidate(target) {
     const { part } = drag;
-    const rotation = part.mesh.quaternion;
+    // The rotation the part was picked up at — the mesh's may be easing toward a seat.
+    const rotation = twist.fromArray(drag.rotation);
     const isTaken = occupied();
     const free = (connectors) => connectors.filter((c) => !isTaken(c));
     const dragged = free(worldConnectors(part, scratch.clone().fromArray(target), rotation));
@@ -149,7 +193,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (!snap) return null;
     // The alignment can swing a long part's far end by up to SNAP.maxAngle; refuse a seat
     // that would hold it through the floor or a wall.
-    const pose = applyTransform(snap.transform, { position: target, rotation: rotation.toArray() });
+    const pose = applyTransform(snap.transform, { position: target, rotation: drag.rotation });
     const half = rotatedHalfExtents(PART_TYPES[part.type].size.map((d) => d / 2), pose.rotation);
     return fitsInRoom(pose.position, half, ROOM, SNAP.roomTolerance) ? { ...pose, snap } : null;
   }
@@ -220,6 +264,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     }
   }
 
+  // World box of a part's own geometry — hit proxies and decals riding on it don't count.
+  function boxOf(mesh, box) {
+    mesh.updateWorldMatrix(true, false);
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+    return box.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrixWorld);
+  }
+
   // --- part drag: kinematic body on a floor-parallel plane at the grab point's height ---
 
   function beginDrag(part, point, event) {
@@ -242,9 +293,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const { mesh, body } = part;
     // Clamps keep everything that moves inside the room: a compound's whole bounding box,
     // carried at its offset from the grabbed part.
-    footprint.setFromObject(mesh);
+    boxOf(mesh, footprint);
     if (mode === 'compound') {
-      for (const id of assembly.compoundOf(part.id)) footprint.expandByObject(partById.get(id).mesh);
+      for (const id of assembly.compoundOf(part.id)) footprint.union(boxOf(partById.get(id).mesh, bounds));
     }
     const centre = footprint.getCenter(offset).sub(mesh.position).toArray();
     drag = {
@@ -256,6 +307,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       half: [(footprint.max.x - footprint.min.x) / 2, (footprint.max.z - footprint.min.z) / 2],
       halfHeight: (footprint.max.y - footprint.min.y) / 2,
       centre,
+      rotation: mesh.quaternion.toArray(),
+      // Where the part is held: the finger's pose, or easing from it toward a seat on offer.
+      held: null,
       snapped: null,
       pointer: null,
     };
@@ -264,9 +318,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   // The lift raises the part and its drag plane together, so it stays under the finger.
-  function liftDrag(dy) {
+  function liftDrag(dy, rate) {
     const cy = drag.centre[1];
-    const height = clampLift(drag.height + dy * GESTURE.liftRate + cy, drag.halfHeight, ROOM, GESTURE.ceilingMargin) - cy;
+    const height = clampLift(drag.height + dy * rate + cy, drag.halfHeight, ROOM, GESTURE.ceilingMargin) - cy;
     drag.planeY += height - drag.height;
     drag.height = height;
     if (drag.pointer) updateDrag(drag.pointer);
@@ -287,11 +341,22 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       GESTURE.wallMargin,
     );
     const target = [bx - cx, drag.height, bz - cz];
-    physics.move(drag.part.body, target);
     // A compound carries its joints along; only a free part looks for a seat.
     drag.snapped = drag.mode === 'move' ? snapCandidate(target) : null;
     if (drag.snapped) ghost?.show(drag.part.mesh, drag.snapped);
     else ghost?.hide();
+    // No seat on offer: the part is exactly where the finger puts it, no pull at all. With
+    // one, update() eases it in from wherever it is held.
+    if (drag.snapped && drag.held) return;
+    drag.held = { position: target, rotation: drag.rotation };
+    physics.move(drag.part.body, target, drag.mode === 'move' ? drag.rotation : undefined);
+  }
+
+  // Seat assist: only while a seat is on offer, the held part glides toward it.
+  function assist(delta) {
+    if (!drag?.snapped || !drag.held) return;
+    drag.held = easeToward(drag.held, drag.snapped, SNAP.assistStrength, delta);
+    physics.move(drag.part.body, drag.held.position, drag.held.rotation);
   }
 
   function endDrag() {
@@ -305,6 +370,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       physics.move(part.body, snapped.position, snapped.rotation);
       placed.add(part);
       if (joint.kind === KIND.TOOL) gripTool(joint, snapped);
+      flash(from, to);
     } else {
       physics.release(part.body);
     }
@@ -320,7 +386,80 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   function stopDrag() {
     ghost?.hide();
+    dropGuide?.hide();
     drag = null;
+  }
+
+  // The hole a fastener just seated in glows; whichever side of the pair is the socket
+  // carries its decal (a tool on a bolt head has none).
+  function flash(...connectors) {
+    for (const { part, index } of connectors) {
+      const decal = part.mesh.userData.decals?.get(index);
+      if (!decal) continue;
+      decal.material.emissive.setHex(COLORS.decalFlash);
+      decal.material.emissiveIntensity = 1;
+      flashes.set(decal, SNAP.flashMs);
+    }
+  }
+
+  function fadeFlashes(delta) {
+    for (const [decal, left] of flashes) {
+      const remaining = left - delta * 1000;
+      decal.material.emissiveIntensity = Math.max(0, remaining / SNAP.flashMs);
+      if (remaining > 0) flashes.set(decal, remaining);
+      else {
+        flashes.delete(decal);
+        // A hole still under the drop line (or the seat on offer) goes back to its glow.
+        if (decal === glowing) {
+          decal.material.emissiveIntensity = DROP.glowIntensity;
+        } else {
+          decal.material.emissive.setHex(COLORS.unlit);
+          decal.material.emissiveIntensity = 1;
+        }
+      }
+    }
+  }
+
+  // --- drop guide: where a dragged part lands, and the hole it would drop onto ---
+
+  function guideDrop() {
+    if (!drag || (drag.mode !== 'move' && drag.mode !== 'compound')) return glow(null);
+    const { part, centre, halfHeight } = drag;
+    const { position } = part.mesh;
+    const from = [position.x + centre[0], position.y + centre[1] - halfHeight, position.z + centre[2]];
+    const carried = new Set(drag.mode === 'compound' ? assembly.compoundOf(part.id) : []);
+    carried.add(part.id);
+    raycaster.set(scratch.fromArray(from), down);
+    const hit = raycaster.intersectObjects(meshes, false).find(({ object }) => !carried.has(partByMesh.get(object).id));
+    const to = hit ? hit.point.toArray() : [from[0], 0, from[2]];
+    dropGuide?.show(from, to);
+    if (drag.snapped) {
+      const { from: a, to: b } = drag.snapped.snap;
+      return glow(decalOf(a) ?? decalOf(b));
+    }
+    const host = hit && drag.mode === 'move' ? partByMesh.get(hit.object) : null;
+    glow(host ? decalOf(socketUnder(to, freeSocketsFor(part, host), DROP.holeReach)) : null);
+  }
+
+  const decalOf = (connector) => connector?.part.mesh.userData.decals?.get(connector.index) ?? null;
+
+  // The holes on `host` still empty that take one of `part`'s fastener ends.
+  function freeSocketsFor(part, host) {
+    const ends = PART_TYPES[part.type].connectors.map((c) => c.type);
+    const isTaken = occupied();
+    return worldConnectors(host, host.mesh.position, host.mesh.quaternion).filter(
+      (c) => ends.some((end) => areCompatible(end, c.type)) && !isTaken(c),
+    );
+  }
+
+  // Lights one hole marking at a time; a hole mid-flash keeps its flash.
+  function glow(decal) {
+    if (decal === glowing) return;
+    if (glowing && !flashes.has(glowing)) glowing.material.emissive.setHex(COLORS.unlit);
+    glowing = decal;
+    if (!decal || flashes.has(decal)) return;
+    decal.material.emissive.setHex(COLORS.decalFlash);
+    decal.material.emissiveIntensity = DROP.glowIntensity;
   }
 
   // --- pull: a part pushed into fastened seats comes back out along their axis ---
@@ -338,7 +477,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     drag = { mode: 'pull', part, start: [event.clientX, event.clientY], joints };
   }
 
-  function pullTo(event) {
+  // The pull is judged on the real pointer `event`; once free, the drag carries on from
+  // `pointer` — where the state machine reports it — so a later Shift-lift never jumps.
+  function pullTo(event, pointer = event) {
     const { part, start, joints } = drag;
     const at = [event.clientX, event.clientY];
     const pulled = joints.filter(({ id, axis }) => pullAlong(start, at, axis) >= FASTENER.pullDistance && assembly.apply(id, { type: 'pull' }));
@@ -348,10 +489,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     // Pulled free: it leaves its seats and carries on as a normal drag from here.
     for (const joint of assembly.jointsOf(part.id)) unseat(joint);
     reconcile();
-    aim(event);
+    aim(pointer);
     const { origin, direction } = raycaster.ray;
     const grab = intersectDragPlane(origin.toArray(), direction.toArray(), part.mesh.position.y) ?? part.mesh.position.toArray();
-    beginMove(part, grab, event, 'move');
+    beginMove(part, grab, pointer, 'move');
   }
 
   // --- crank: an engaged tool's drag turns its fastener ---
@@ -428,7 +569,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // --- per frame: fastener progress drawn on top of the simulated poses ---
 
-  function update() {
+  function update(delta = 0) {
+    assist(delta);
+    fadeFlashes(delta);
+    guideDrop();
     for (const joint of assembly.all()) {
       if (joint.kind !== KIND.BOLT && joint.kind !== KIND.CAM) continue;
       const { mesh, body } = partById.get(joint.hardware);
@@ -453,6 +597,22 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // --- effects from the state machine ---
 
+  // A live drag's move or lift. The primary pointer as the state machine reports it: a
+  // Shift-lift's vertical travel is spent, so letting go of Shift never makes anything jump.
+  function moveDrag(effect, event) {
+    const at = effect.x === undefined ? null : { clientX: effect.x, clientY: effect.y };
+    if (drag.mode === 'crank' || drag.mode === 'pull') {
+      // Nothing to lift: the primary pointer's move is a crank or a pull either way, judged
+      // on the real pointer — a crank sweeps round the head where the cursor actually is.
+      if (!at) return;
+      if (drag.mode === 'crank') crankTo(event);
+      else pullTo(event, at);
+    } else if (effect.type === 'lift') {
+      if (at) drag.pointer = at;
+      liftDrag(effect.dy, liftRate(effect, event));
+    } else if (effect.type === 'dragMove') updateDrag(at);
+  }
+
   function apply(effect, event) {
     if (!effect) return;
     if (effect.type === 'tap') {
@@ -466,12 +626,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       else if (!drag) return;
       else if (effect.type === 'dragEnd') endDrag();
       else if (effect.type === 'dragCancel') cancelDrag(); // interrupted: never snap
-      else if (drag.mode === 'crank') {
-        if (effect.type === 'dragMove') crankTo(event);
-      } else if (drag.mode === 'pull') {
-        if (effect.type === 'dragMove') pullTo(event);
-      } else if (effect.type === 'lift') liftDrag(effect.dy);
-      else if (effect.type === 'dragMove') updateDrag(event);
+      else moveDrag(effect, event);
       return;
     }
     if (effect.owner === OWNER.GIZMO_RING && rings) {
@@ -485,6 +640,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       else rings.cancel();
     }
   }
+
+  // A second finger keeps its phone rate; Shift-drag and the wheel are the desktop's, tuned
+  // for trackpad deltas.
+  const liftRate = (effect, event) =>
+    effect.x === undefined && event?.type !== 'wheel' ? GESTURE.liftRate : GESTURE.desktopLiftRate;
 
   // Capture phase, so this runs before OrbitControls' own pointerdown on the same element
   // and a part touch has already disabled the camera when OrbitControls sees it.
@@ -517,7 +677,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     apply(state.wheel({ dy: event.deltaY }), event);
   }
 
+  // Shift held = desktop lift. Window-level, so it counts wherever focus sits; a key let go
+  // while the window was blurred is cleared by onInterrupted.
+  function onKey(event) {
+    if (event.key === 'Shift') state.modifier(event.type === 'keydown');
+  }
+
   function onInterrupted() {
+    state.modifier(false);
     apply(state.cancelAll());
     syncCamera();
   }
@@ -534,6 +701,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   domElement.addEventListener('wheel', onWheel, { passive: true });
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('blur', onInterrupted);
+  window.addEventListener('keydown', onKey);
+  window.addEventListener('keyup', onKey);
 
   return {
     update,
@@ -547,6 +716,21 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       domElement.removeEventListener('wheel', onWheel);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('blur', onInterrupted);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKey);
     },
   };
+}
+
+// An invisible box round a small part, never thinner than PICK.proxyMinSize, that widens its
+// touch target. Raycasts ignore visibility; it casts and receives no shadow and is never
+// registered with physics — it only rides on the part's mesh.
+function addHitProxy(part) {
+  const size = PART_TYPES[part.type].size.map((d) => Math.max(d, PICK.proxyMinSize));
+  const proxy = new THREE.Mesh(new THREE.BoxGeometry(...size));
+  proxy.visible = false;
+  proxy.castShadow = false;
+  proxy.receiveShadow = false;
+  part.mesh.add(proxy);
+  return proxy;
 }

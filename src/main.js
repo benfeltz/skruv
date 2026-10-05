@@ -1,16 +1,20 @@
+import { PICK } from './constants.js';
 import { createAssembly } from './game/assembly.js';
 import { PART_TYPES } from './game/catalog.js';
 import { createDevLayout } from './game/devLayout.js';
 import { createPartMesh } from './game/partMesh.js';
+import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
 import { createGhost } from './scene/ghost.js';
 import { createCompoundPhysics } from './scene/compoundPhysics.js';
+import { createDropGuide } from './scene/dropGuide.js';
 import { createGestureRouter } from './scene/gestureRouter.js';
 import { createGizmo } from './scene/gizmo.js';
 import { createLoop } from './scene/loop.js';
 import { createRoom } from './scene/room.js';
 import { createScene } from './scene/scene.js';
+import { createSprue } from './scene/sprue.js';
 import { createToggleButton } from './ui/toggleButton.js';
 
 const { renderer, scene, camera } = createScene(document.getElementById('app'));
@@ -55,6 +59,25 @@ scene.add(gizmo.object);
 const ghost = createGhost();
 scene.add(ghost.object);
 
+// While a part is dragged: where it would land, and the hole it would drop onto.
+const dropGuide = createDropGuide();
+scene.add(dropGuide.object);
+
+// A model-kit handle on a selected fastener or tool, to drag millimetre hardware by.
+const sprue = createSprue();
+scene.add(sprue.object);
+
+function select(part) {
+  if (!part) {
+    gizmo.hide();
+    sprue.hide();
+    return;
+  }
+  gizmo.show(part);
+  if (isSmallPart(PART_TYPES[part.type].size, PICK)) sprue.show(part);
+  else sprue.hide();
+}
+
 const router = createGestureRouter({
   domElement: renderer.domElement,
   camera,
@@ -65,14 +88,17 @@ const router = createGestureRouter({
   rings: gizmo,
   // Tap a part to select it (unless the tap pushed a fastener home); tap empty space to
   // deselect.
-  onTap: (part) => (part ? gizmo.show(part) : gizmo.hide()),
+  onTap: select,
   ghost,
+  sprue,
+  dropGuide,
 });
 
 createLoop((delta) => {
   cameraControls.update(delta);
   physics.step(delta);
-  router.update();
+  router.update(delta);
   gizmo.update();
+  sprue.update();
   renderer.render(scene, camera);
 }).start();

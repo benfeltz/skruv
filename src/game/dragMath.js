@@ -92,3 +92,30 @@ export function fitsInRoom([x, y, z], [hx, hy, hz], room, tolerance = 0) {
     Math.abs(z) + hz <= room.depth / 2 + tolerance
   );
 }
+
+/** Spherical interpolation from quaternion `a` to `b` ([x, y, z, w]) by fraction `t`. */
+function slerp(a, b, t) {
+  let cos = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
+  // q and −q are the same rotation; go the short way round.
+  const to = cos < 0 ? b.map((v) => -v) : b;
+  cos = Math.abs(cos);
+  if (cos > 1 - 1e-9) return a.map((v, i) => v + (to[i] - v) * t);
+  const angle = Math.acos(cos);
+  const sin = Math.sin(angle);
+  const wa = Math.sin((1 - t) * angle) / sin;
+  const wb = Math.sin(t * angle) / sin;
+  return a.map((v, i) => v * wa + to[i] * wb);
+}
+
+/**
+ * Seat assist: `pose` ({ position, rotation }) eased toward `target` by an exponential
+ * pull of `strength` (1/s) over `delta` seconds — framerate-independent, so two half steps
+ * land where one full step does. Strength 0 (or no time) leaves the pose where it is.
+ */
+export function easeToward(pose, target, strength, delta) {
+  const t = 1 - Math.exp(-strength * delta);
+  return {
+    position: pose.position.map((v, i) => v + (target.position[i] - v) * t),
+    rotation: slerp(pose.rotation, target.rotation, t),
+  };
+}

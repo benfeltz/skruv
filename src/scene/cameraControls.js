@@ -1,11 +1,13 @@
-import { MOUSE, TOUCH } from 'three';
+import { MOUSE, TOUCH, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CAMERA, CAMERA_LIMITS, ROOM } from '../constants.js';
-import { maxOrbitDistance } from './cameraLimits.js';
+import { clampCamera, clampTargetAlongView, panSpeedAt, seatOnFloor } from './cameraLimits.js';
 
 /**
- * Touch camera: one finger orbits, two fingers pan + pinch-zoom; limits keep the camera
- * inside the walls, below their tops and above the floor (see cameraLimits.js).
+ * Touch camera: one finger orbits, two fingers pan + pinch-zoom toward the fingers (so a
+ * pinch on a dowel closes in on that dowel). The orbit target roams the whole floor; after
+ * every update the target and camera are clamped (cameraLimits.js) — camera inside the
+ * walls horizontally, above the floor, free to rise over the wall tops.
  *
  * `enable()`/`disable()` is the seam the gesture router drives to hand touches to part
  * manipulation — callers never reach into OrbitControls directly.
@@ -20,11 +22,41 @@ export function createCameraControls(camera, domElement) {
   controls.dampingFactor = CAMERA_LIMITS.dampingFactor;
 
   controls.minDistance = CAMERA_LIMITS.minDistance;
-  controls.maxDistance = maxOrbitDistance(ROOM, CAMERA_LIMITS);
+  controls.maxDistance = CAMERA_LIMITS.maxDistance;
   controls.minPolarAngle = CAMERA_LIMITS.minPolarAngle;
   controls.maxPolarAngle = CAMERA_LIMITS.maxPolarAngle;
-  controls.cursor.set(...CAMERA_LIMITS.pivot);
-  controls.maxTargetRadius = CAMERA_LIMITS.maxTargetRadius;
+  controls.zoomToCursor = true;
+
+  // Where OrbitControls has the camera, unclamped — its orbit and zoom kept whole. The
+  // wall clamp only moves the camera as drawn, so orbiting toward a wall slides along it
+  // and the chosen distance comes back once the camera swings clear; the clamp never
+  // leaks into OrbitControls' own state.
+  const free = camera.position.clone();
+
+  function confine() {
+    free.copy(camera.position);
+    controls.target.set(...clampTargetAlongView(controls.target.toArray(), free.toArray(), ROOM, CAMERA_LIMITS));
+    camera.position.set(...clampCamera(free.toArray(), ROOM, CAMERA_LIMITS));
+    camera.lookAt(controls.target);
+  }
+
+  function unconfine() {
+    camera.position.copy(free);
+    camera.lookAt(controls.target);
+  }
+
+  // Every update runs from the unclamped pose and ends clamped — the per-frame one AND the
+  // ones OrbitControls fires from inside its own wheel/pointer handlers, which would
+  // otherwise read the clamped pose or have their zoom and pan thrown away.
+  const orbitUpdate = controls.update.bind(controls);
+  controls.update = (deltaSeconds) => {
+    unconfine();
+    // Orbit and zoom about the floor spot in view, not a point hanging in the air.
+    controls.target.set(...seatOnFloor(free.toArray(), controls.target.toArray(), CAMERA_LIMITS));
+    const changed = orbitUpdate(deltaSeconds);
+    confine();
+    return changed;
+  };
 
   controls.target.set(...CAMERA.startTarget);
   controls.update();
@@ -32,6 +64,7 @@ export function createCameraControls(camera, domElement) {
   return {
     /** Call once per frame — applies damping. */
     update(deltaSeconds) {
+      controls.panSpeed = panSpeedAt(free.distanceTo(controls.target), CAMERA_LIMITS);
       controls.update(deltaSeconds);
     },
     enable() {

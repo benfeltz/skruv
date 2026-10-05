@@ -201,16 +201,19 @@ export const PART_TYPES = Object.freeze({
   },
 });
 
-/** Quantities in the flatpack, per the Design doc's manifest table. */
+/**
+ * Quantities in the flatpack, per the Design doc's manifest table — plus spares, as in the
+ * real bag: two dowels and two cam locks more than the holes take.
+ */
 export const MANIFEST_QUANTITIES = Object.freeze({
   sidePanel: 2,
   topBottomPanel: 2,
   fixedShelf: 1,
   adjustableShelf: 2,
   backPanel: 1,
-  dowel: 12,
+  dowel: 14,
   camLockBolt: 8,
-  camLock: 8,
+  camLock: 10,
   shelfPin: 8,
   nail: 8,
   allenWrench: 1,

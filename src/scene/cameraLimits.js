@@ -1,29 +1,70 @@
 // Pure orbit-limit geometry — no Three, no DOM — so Vitest covers it headlessly.
 //
-// The orbit target is confined to a sphere of `maxTargetRadius` around `pivot`; the camera
-// sits `distance` from the target at a polar angle in [minPolarAngle, maxPolarAngle].
-// Worst cases:
-//   horizontal  |camera.xz| <= |pivot.xz| + maxTargetRadius + distance
-//   height       camera.y   <= pivot.y + maxTargetRadius + distance * cos(minPolarAngle)
+// The orbit target may go anywhere over the floor — down to the parts lying on it, out to
+// `targetMargin` inside the walls — so a pinch can bring the camera right up to any dowel
+// and its hole. The camera itself is clamped every frame: `wallMargin` inside the walls
+// horizontally, `floorClearance` above the floor, unbounded above (zoomed out it rises over
+// the wall tops — the dollhouse view).
 
-/** Largest orbit distance that keeps the camera `wallMargin` inside the walls and below their tops. */
-export function maxOrbitDistance(room, limits) {
-  const [pivotX, pivotY, pivotZ] = limits.pivot;
-  const { maxTargetRadius, wallMargin, minPolarAngle } = limits;
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-  const horizontalReach = Math.min(
-    room.width / 2 - Math.abs(pivotX),
-    room.depth / 2 - Math.abs(pivotZ),
-  );
-  const byWalls = horizontalReach - wallMargin - maxTargetRadius;
-  const byWallTops =
-    (room.height - wallMargin - (pivotY + maxTargetRadius)) / Math.cos(minPolarAngle);
-
-  return Math.min(byWalls, byWallTops);
+/** The orbit target, held over the floor and inside the walls. */
+export function clampTarget([x, y, z], room, limits) {
+  const reachX = room.width / 2 - limits.targetMargin;
+  const reachZ = room.depth / 2 - limits.targetMargin;
+  const [low, high] = limits.targetHeight;
+  return [clamp(x, -reachX, reachX), clamp(y, low, high), clamp(z, -reachZ, reachZ)];
 }
 
-/** Lowest the camera can get: target at its lowest, camera at minDistance and maxPolarAngle. */
-export function minCameraHeight(limits) {
-  const [, pivotY] = limits.pivot;
-  return pivotY - limits.maxTargetRadius + limits.minDistance * Math.cos(limits.maxPolarAngle);
+/** The camera, held inside the walls horizontally and above the floor. */
+export function clampCamera([x, y, z], room, limits) {
+  const reachX = room.width / 2 - limits.wallMargin;
+  const reachZ = room.depth / 2 - limits.wallMargin;
+  return [clamp(x, -reachX, reachX), Math.max(limits.floorClearance, y), clamp(z, -reachZ, reachZ)];
+}
+
+/**
+ * Pan speed multiplier at `distance` from the orbit target. OrbitControls pans in
+ * proportion to that distance, which crawls once zoomed in on hardware; closer than
+ * `panReference` the pan is boosted by panReference / distance, up to `maxPanBoost`.
+ */
+export function panSpeedAt(distance, { panReference, maxPanBoost }) {
+  if (!(distance > 0)) return maxPanBoost;
+  return Math.min(maxPanBoost, Math.max(1, panReference / distance));
+}
+
+/**
+ * The orbit target clamped like `clampTarget`, but out of its height range it slides back
+ * along the line of sight from `eye` to the bound it crossed — so the view direction holds
+ * and a zoom toward the fingers near the floor neither tilts the view nor drifts it.
+ */
+export function clampTargetAlongView(target, eye, room, limits) {
+  const [low, high] = limits.targetHeight;
+  const y = target[1];
+  const bound = y < low ? low : y > high ? high : null;
+  // Only when the eye is on the near side of the bound is there a crossing to slide to.
+  if (bound !== null && (eye[1] - bound) * (y - bound) < 0) {
+    const t = (eye[1] - bound) / (eye[1] - y);
+    return clampTarget(eye.map((v, i) => v + (target[i] - v) * t), room, limits);
+  }
+  return clampTarget(target, room, limits);
+}
+
+/**
+ * The orbit target moved along the line of sight from `eye` to where it meets the floor
+ * (the bottom of `targetHeight`), when that is within `maxDistance`. The view is unchanged,
+ * but the camera then orbits and zooms about the spot it is looking at — so a zoom closes
+ * all the way in on parts lying there instead of stalling at a point hanging in the air.
+ * Looking level or upward, or at floor out of reach, the target stays where it is.
+ */
+export function seatOnFloor(eye, target, limits) {
+  const toward = target.map((v, i) => v - eye[i]);
+  const length = Math.hypot(...toward);
+  const floor = limits.targetHeight[0];
+  if (!(length > 0) || eye[1] <= floor) return target;
+  const down = -toward[1] / length;
+  if (down <= 1e-6) return target;
+  const reach = (eye[1] - floor) / down;
+  if (reach > limits.maxDistance) return target;
+  return eye.map((v, i) => v + (toward[i] / length) * reach);
 }

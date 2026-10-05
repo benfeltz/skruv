@@ -4,8 +4,10 @@
 export const ROOM = {
   width: 10,
   depth: 10,
-  // No ceiling — walls are tall enough that the orbit limits keep the camera below them.
-  height: 5,
+  // No ceiling. A real room's height — well clear of the 2.02 m bookcase standing — and
+  // low enough that zooming out lifts the camera over the walls (dollhouse view), where
+  // their inward faces vanish from outside.
+  height: 3,
 };
 
 export const COLORS = {
@@ -32,6 +34,15 @@ export const COLORS = {
   uiAccent: 0xe0a64a,
   // Snap preview (src/scene/ghost.js).
   ghost: 0xe0a64a,
+  // Hole markings (src/game/decals.js) and the flash when a fastener seats in one.
+  decal: 0x3a3029,
+  decalFlash: 0xe0a64a,
+  // Drop line under a dragged part, and the glow on the hole it would drop onto.
+  dropGuide: 0xe0a64a,
+  // Emissive off: what a decal glows when it isn't flashing.
+  unlit: 0x000000,
+  // Sprue handle on a selected small part (src/scene/sprue.js): model-kit plastic grey.
+  sprue: 0x8f9a93,
 };
 
 export const LIGHTS = {
@@ -47,22 +58,34 @@ export const LIGHTS = {
 
 export const CAMERA = {
   fov: 50,
-  near: 0.1,
+  // Close enough to zoom in on millimetre hardware without clipping it.
+  near: 0.02,
   far: 100,
   startPosition: [2, 1.8, 2.4],
   startTarget: [0, 0.6, 0],
 };
 
-// Orbit limits. maxDistance is derived from these and ROOM by
-// src/scene/cameraLimits.js so the camera stays wallMargin inside the walls and below
-// their tops; the pivot and maxPolarAngle keep it above the floor.
+// Orbit limits (src/scene/cameraLimits.js, applied by src/scene/cameraControls.js). The
+// orbit target roams the whole floor so the camera can get right up to any part; the
+// camera is clamped inside the walls and above the floor every frame, and may rise over
+// the wall tops when zoomed out (dollhouse view).
 export const CAMERA_LIMITS = {
-  // Centre of the sphere the orbit target may be panned within.
-  pivot: [0, 1, 0],
-  maxTargetRadius: 0.8,
+  // The target stays this far inside the walls, between these heights: down to the parts
+  // lying on the floor, up to just over the standing bookcase.
+  targetMargin: 0.6,
+  targetHeight: [0, 2.2],
   wallMargin: 0.4,
-  minDistance: 1,
-  // Stops short of straight down so the wall tops bound height without crushing zoom-out.
+  // The camera never dips nearer the floor than this.
+  floorClearance: 0.05,
+  // Close enough that a dowel and the hole it goes in fill much of a phone screen.
+  minDistance: 0.15,
+  // Far enough to take in the whole room from over the walls.
+  maxDistance: 6,
+  // Panning slows with zoom; closer than panReference (m) it is sped back up, by at most
+  // maxPanBoost, so moving around a close-up doesn't crawl.
+  panReference: 1.2,
+  maxPanBoost: 5,
+  // Stops short of straight down: the build is always seen at an angle, never as a plan.
   minPolarAngle: (40 * Math.PI) / 180,
   maxPolarAngle: (80 * Math.PI) / 180,
   dampingFactor: 0.1,
@@ -113,8 +136,11 @@ export const GESTURE = {
   wallMargin: 0.05,
   // Rotate-gizmo detent — the default; the free-rotate toggle turns it off.
   detentStep: Math.PI / 2,
-  // Lift channel (second finger, or the wheel on desktop): metres per CSS px of travel.
+  // Lift channel (second finger on a phone): metres per CSS px of travel.
   liftRate: 0.004,
+  // Desktop lift (Shift-held drag, or the wheel): gentler, since trackpad scrolls and mouse
+  // sweeps run to hundreds of px where a phone's second finger travels tens.
+  desktopLiftRate: 0.0025,
   // A lifted part's top stays this far below the walls' tops.
   ceilingMargin: 0.1,
 };
@@ -130,6 +156,43 @@ export const GIZMO = {
   opacity: 0.85,
 };
 
+// Drop guide (src/scene/dropGuide.js): a line from a dragged part straight down to where it
+// would land, a ring there, and the hole marking under it lit when it is a free hole that
+// takes the part.
+export const DROP = {
+  ringRadius: 0.012,
+  ringWidth: 0.003,
+  opacity: 0.7,
+  // A landing spot this close to a hole's centre is "over the hole" (a dowel hole's
+  // marking is 5 mm across, so a little slack beyond it).
+  holeReach: 0.012,
+  // Glow of a hole under the drop line, or the seat the ghost shows; the seat flash is 1.
+  glowIntensity: 0.6,
+};
+
+// Fat-finger picking (src/game/pickMath.js, src/scene/gestureRouter.js). Hardware is
+// millimetres across; an invisible proxy box never thinner than proxyMinSize surrounds each
+// small part, and the preference rule decides when a press on it means the part.
+export const PICK = {
+  // A part whose longest side is under this is "small": every fastener and both tools,
+  // never a panel (the narrowest is ~0.77 m long).
+  smallPartMax: 0.25,
+  proxyMinSize: 0.04,
+  // The finger's angular radius from the camera (radians): ~20 CSS px on a phone.
+  fingerRadius: 0.025,
+};
+
+// Sprue handle (src/scene/sprue.js) on a selected small part. The ball stands far enough
+// above the part to clear its gizmo rings (the screwdriver's are the widest, ~0.12 m), so a
+// press on it is never a ring's.
+export const SPRUE = {
+  length: 0.15,
+  stickRadius: 0.003,
+  ballRadius: 0.012,
+  // The invisible hit sphere round the ball: a fingertip-sized target.
+  hitRadius: 0.03,
+};
+
 // Connector snapping (src/game/snapMath.js). Generous first, per the Design doc: a snap
 // that fires too eagerly is a nuisance, one that never fires reads as broken. Tighten
 // from playtest feedback.
@@ -140,6 +203,29 @@ export const SNAP = {
   // refused (the part would be held kinematic inside a static collider).
   roomTolerance: 0.002,
   ghostOpacity: 0.45,
+  // Seat assist: while a seat is on offer, the held part eases toward it this fast (1/s —
+  // about 90% of the way in a quarter second). Zero pull whenever no seat is on offer.
+  assistStrength: 9,
+  // How long the hole's decal glows after a fastener seats in it.
+  flashMs: 450,
+};
+
+// Hole markings (src/game/decals.js, drawn by src/game/partMesh.js). Radii are keyed by
+// the catalog's socket connector type and sized a touch wider than what fills them, so a
+// seated fastener still shows a rim.
+export const DECAL = {
+  radius: {
+    dowelHole: 0.005,
+    camBoltHole: 0.0045,
+    shelfPinHole: 0.0035,
+    nailHole: 0.0022,
+    camLockRecess: 0.009,
+  },
+  // A recess is drawn as a ring: inner radius as a fraction of the outer.
+  recessInner: 0.55,
+  // Laid this far proud of the face, so it never z-fights the panel.
+  surfaceOffset: 0.0004,
+  segments: 24,
 };
 
 // Fasteners (src/game/fasteners.js, src/game/assembly.js) and the joints that follow them

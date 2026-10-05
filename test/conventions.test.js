@@ -31,6 +31,8 @@ describe('pure-logic modules', () => {
     'src/game/fasteners.js',
     'src/game/assembly.js',
     'src/game/crankMath.js',
+    'src/game/decals.js',
+    'src/game/pickMath.js',
   ];
 
   it.each(pureModules)('%s imports neither Three nor Rapier', (path) => {
@@ -49,6 +51,8 @@ describe('pure-logic modules', () => {
     'src/game/fasteners.js',
     'src/game/assembly.js',
     'src/game/crankMath.js',
+    'src/game/decals.js',
+    'src/game/pickMath.js',
   ])(
     '%s touches no DOM globals',
     (path) => {
@@ -63,5 +67,99 @@ describe('CLAUDE.md', () => {
     for (const command of ['npm run dev', 'npm run build', 'npx vitest run', 'npx vitest run <path>']) {
       expect(doc).toContain(command);
     }
+  });
+});
+
+describe('hit proxies (1.4.1)', () => {
+  const router = read('src/scene/gestureRouter.js');
+  const proxy = router.slice(router.indexOf('function addHitProxy('));
+
+  it('are invisible and shadowless', () => {
+    expect(proxy).toMatch(/proxy\.visible = false;/);
+    expect(proxy).toMatch(/proxy\.castShadow = false;/);
+    expect(proxy).toMatch(/proxy\.receiveShadow = false;/);
+  });
+
+  it('are never registered with physics', () => {
+    expect(proxy).not.toMatch(/physics\./);
+    expect(read('src/main.js')).not.toMatch(/register\([^)]*proxy/i);
+  });
+
+  it('leave the pick decision to the pure preference rule', () => {
+    expect(router).toMatch(/preferHit\(/);
+    expect(router).toMatch(/from '\.\.\/game\/pickMath\.js'/);
+  });
+});
+
+describe('seat assist and flash (1.4.1)', () => {
+  const router = read('src/scene/gestureRouter.js');
+  const assist = router.slice(router.indexOf('function assist('), router.indexOf('}', router.indexOf('function assist(')));
+
+  it('pulls only while a seat is on offer — never in free space', () => {
+    expect(assist).toMatch(/if \(!drag\?\.snapped \|\| !drag\.held\) return;/);
+    expect(assist).toMatch(/easeToward\([^)]*SNAP\.assistStrength, delta\)/);
+  });
+
+  it('plays no audio anywhere (dropped for 0.0.1)', () => {
+    for (const path of ['src/main.js', 'src/scene/gestureRouter.js', 'src/scene/sprue.js', 'src/game/partMesh.js']) {
+      expect(read(path)).not.toMatch(/\bAudio(Context|Listener)?\b|PositionalAudio|\.play\(/);
+    }
+  });
+});
+
+describe('Shift-lift never skews a crank or a pull (1.4.1 review)', () => {
+  const router = read('src/scene/gestureRouter.js');
+  const moveDrag = router.slice(router.indexOf('function moveDrag('), router.indexOf('function apply('));
+
+  it('cranks and pulls on the real pointer, not the lift-adjusted one', () => {
+    expect(moveDrag).toMatch(/crankTo\(event\)/);
+    expect(moveDrag).toMatch(/pullTo\(event, at\)/);
+    expect(moveDrag).not.toMatch(/crankTo\(at\)|pullTo\(at\)/);
+  });
+});
+
+describe('drop guide (1.4.1, Ben)', () => {
+  const router = read('src/scene/gestureRouter.js');
+
+  it('renders only — where it lands and which hole lights are the router raycast and decals.js', () => {
+    const guide = read('src/scene/dropGuide.js');
+    const imports = guide.match(/^import .*$/gm).join('\n');
+    expect(imports).not.toMatch(/physics|\/game\//);
+    expect(guide).not.toMatch(/\.intersectObjects?\(|physics\./);
+    expect(router).toMatch(/socketUnder\(to, freeSocketsFor\(part, host\), DROP\.holeReach\)/);
+  });
+
+  it('lights only empty holes that take the dragged part', () => {
+    const free = router.slice(router.indexOf('function freeSocketsFor('), router.indexOf('function glow('));
+    expect(free).toMatch(/areCompatible\(end, c\.type\)/);
+    expect(free).toMatch(/!isTaken\(c\)/);
+  });
+
+  it('goes away when the drag ends, however it ends', () => {
+    const stop = router.slice(router.indexOf('function stopDrag()'), router.indexOf('}', router.indexOf('function stopDrag()')));
+    expect(stop).toMatch(/dropGuide\?\.hide\(\)/);
+  });
+});
+
+describe('seat flash hands back to the drop glow (1.4.1 review)', () => {
+  const router = read('src/scene/gestureRouter.js');
+  const fade = router.slice(router.indexOf('function fadeFlashes('), router.indexOf('// --- pull'));
+
+  it('restores the glow, not dark, when a flash ends on the hole still lit', () => {
+    expect(fade).toMatch(/if \(decal === glowing\) \{\s*decal\.material\.emissiveIntensity = DROP\.glowIntensity;/);
+  });
+});
+
+describe('the wall clamp never shrinks the orbit (1.4.1 review)', () => {
+  const controls = read('src/scene/cameraControls.js');
+  const update = controls.slice(controls.indexOf('update(deltaSeconds) {'), controls.indexOf('enable() {'));
+
+  it('runs every OrbitControls update — per frame and event-fired — from its unclamped pose, clamping after', () => {
+    // OrbitControls calls this.update() inside its wheel/pointer handlers; wrapping the
+    // instance method covers those too (wrapping only the per-frame call dropped zoom).
+    expect(controls).toMatch(/const orbitUpdate = controls\.update\.bind\(controls\);\s*controls\.update = \(deltaSeconds\) => \{\s*unconfine\(\);[\s\S]*?seatOnFloor\(free\.toArray\(\)[^\n]*\n\s*const changed = orbitUpdate\(deltaSeconds\);\s*confine\(\);/);
+    expect(controls).toMatch(/function unconfine\(\) \{\s*camera\.position\.copy\(free\);/);
+    expect(controls).toMatch(/free\.copy\(camera\.position\);[\s\S]*clampCamera\(free\.toArray\(\)/);
+    expect(update).not.toMatch(/unconfine\(\)/);
   });
 });
