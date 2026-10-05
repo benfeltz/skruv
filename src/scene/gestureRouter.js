@@ -420,7 +420,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     drag = { mode: 'pull', part, start: [event.clientX, event.clientY], joints };
   }
 
-  function pullTo(event) {
+  // The pull is judged on the real pointer `event`; once free, the drag carries on from
+  // `pointer` — where the state machine reports it — so a later Shift-lift never jumps.
+  function pullTo(event, pointer = event) {
     const { part, start, joints } = drag;
     const at = [event.clientX, event.clientY];
     const pulled = joints.filter(({ id, axis }) => pullAlong(start, at, axis) >= FASTENER.pullDistance && assembly.apply(id, { type: 'pull' }));
@@ -430,10 +432,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     // Pulled free: it leaves its seats and carries on as a normal drag from here.
     for (const joint of assembly.jointsOf(part.id)) unseat(joint);
     reconcile();
-    aim(event);
+    aim(pointer);
     const { origin, direction } = raycaster.ray;
     const grab = intersectDragPlane(origin.toArray(), direction.toArray(), part.mesh.position.y) ?? part.mesh.position.toArray();
-    beginMove(part, grab, event, 'move');
+    beginMove(part, grab, pointer, 'move');
   }
 
   // --- crank: an engaged tool's drag turns its fastener ---
@@ -542,8 +544,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function moveDrag(effect, event) {
     const at = effect.x === undefined ? null : { clientX: effect.x, clientY: effect.y };
     if (drag.mode === 'crank' || drag.mode === 'pull') {
-      // Nothing to lift: the primary pointer's move is a crank or a pull either way.
-      if (at) (drag.mode === 'crank' ? crankTo : pullTo)(at);
+      // Nothing to lift: the primary pointer's move is a crank or a pull either way, judged
+      // on the real pointer — a crank sweeps round the head where the cursor actually is.
+      if (!at) return;
+      if (drag.mode === 'crank') crankTo(event);
+      else pullTo(event, at);
     } else if (effect.type === 'lift') {
       if (at) drag.pointer = at;
       liftDrag(effect.dy, liftRate(effect, event));
