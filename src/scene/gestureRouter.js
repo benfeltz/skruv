@@ -227,7 +227,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   function beginMove(part, [px, py, pz], event, mode) {
     const { mesh, body } = part;
+    // Clamps keep everything that moves inside the room: a compound's whole bounding box,
+    // carried at its offset from the grabbed part.
     footprint.setFromObject(mesh);
+    if (mode === 'compound') {
+      for (const id of assembly.compoundOf(part.id)) footprint.expandByObject(partById.get(id).mesh);
+    }
+    const centre = footprint.getCenter(offset).sub(mesh.position).toArray();
     drag = {
       mode,
       part,
@@ -236,6 +242,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       offset: [mesh.position.x - px, mesh.position.z - pz],
       half: [(footprint.max.x - footprint.min.x) / 2, (footprint.max.z - footprint.min.z) / 2],
       halfHeight: (footprint.max.y - footprint.min.y) / 2,
+      centre,
       snapped: null,
       pointer: null,
     };
@@ -245,7 +252,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // The lift raises the part and its drag plane together, so it stays under the finger.
   function liftDrag(dy) {
-    const height = clampLift(drag.height + dy * GESTURE.liftRate, drag.halfHeight, ROOM, GESTURE.ceilingMargin);
+    const cy = drag.centre[1];
+    const height = clampLift(drag.height + dy * GESTURE.liftRate + cy, drag.halfHeight, ROOM, GESTURE.ceilingMargin) - cy;
     drag.planeY += height - drag.height;
     drag.height = height;
     if (drag.pointer) updateDrag(drag.pointer);
@@ -258,12 +266,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const point = intersectDragPlane(origin.toArray(), direction.toArray(), drag.planeY);
     // Aimed above the horizon: hold the last pose rather than fling the part away.
     if (!point) return;
-    const target = clampToRoom(
-      [point[0] + drag.offset[0], drag.height, point[2] + drag.offset[1]],
+    const [cx, , cz] = drag.centre;
+    const [bx, , bz] = clampToRoom(
+      [point[0] + drag.offset[0] + cx, drag.height, point[2] + drag.offset[1] + cz],
       drag.half,
       ROOM,
       GESTURE.wallMargin,
     );
+    const target = [bx - cx, drag.height, bz - cz];
     physics.move(drag.part.body, target);
     // A compound carries its joints along; only a free part looks for a seat.
     drag.snapped = drag.mode === 'move' ? snapCandidate(target) : null;
