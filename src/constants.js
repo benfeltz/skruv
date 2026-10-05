@@ -113,6 +113,10 @@ export const GESTURE = {
   wallMargin: 0.05,
   // Rotate-gizmo detent — the default; the free-rotate toggle turns it off.
   detentStep: Math.PI / 2,
+  // Lift channel (second finger, or the wheel on desktop): metres per CSS px of travel.
+  liftRate: 0.004,
+  // A lifted part's top stays this far below the walls' tops.
+  ceilingMargin: 0.1,
 };
 
 // Rotate gizmo (src/scene/gizmo.js): rings sized from the selected part's bounding sphere.

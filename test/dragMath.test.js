@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GESTURE, ROOM } from '../src/constants.js';
 import {
   arcDelta,
+  clampLift,
   clampToRoom,
   fitsInRoom,
   intersectDragPlane,
@@ -136,5 +137,25 @@ describe('fitsInRoom', () => {
     expect(fitsInRoom([halfW - 0.5, 1, 0], [1.01, 0.14, 0.008], ROOM)).toBe(false);
     expect(fitsInRoom([0, 1, -(ROOM.depth / 2) + 0.5], [0.008, 0.14, 1.01], ROOM)).toBe(false);
     expect(fitsInRoom([halfW - 1.01, 1.02, 0], [1.01, 1.01, 0.008], ROOM)).toBe(true);
+  });
+});
+
+describe('clampLift', () => {
+  const margin = GESTURE.ceilingMargin;
+
+  it('leaves a height inside the range alone', () => {
+    expect(clampLift(1.2, 0.1, ROOM, margin)).toBe(1.2);
+  });
+
+  it('keeps the part on or above the floor', () => {
+    expect(clampLift(-3, 0.1, ROOM, margin)).toBe(0.1);
+  });
+
+  it('keeps the top margin below the walls', () => {
+    expect(clampLift(99, 1.01, ROOM, margin)).toBeCloseTo(ROOM.height - margin - 1.01);
+  });
+
+  it('sits a part taller than the room on the floor', () => {
+    expect(clampLift(2, ROOM.height, ROOM, margin)).toBe(ROOM.height);
   });
 });

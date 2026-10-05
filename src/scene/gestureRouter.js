@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GESTURE, ROOM, SNAP } from '../constants.js';
 import { PART_TYPES } from '../game/catalog.js';
-import { clampToRoom, fitsInRoom, intersectDragPlane, rotatedHalfExtents } from '../game/dragMath.js';
+import { clampLift, clampToRoom, fitsInRoom, intersectDragPlane, rotatedHalfExtents } from '../game/dragMath.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
 
@@ -99,13 +99,24 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       height: mesh.position.y + GESTURE.hoverLift,
       offset: [mesh.position.x - px, mesh.position.z - pz],
       half: [(footprint.max.x - footprint.min.x) / 2, (footprint.max.z - footprint.min.z) / 2],
+      halfHeight: (footprint.max.y - footprint.min.y) / 2,
       snapped: null,
+      pointer: null,
     };
     physics.grab(body);
     updateDrag(event);
   }
 
+  // The lift raises the part and its drag plane together, so it stays under the finger.
+  function liftDrag(dy) {
+    const height = clampLift(drag.height + dy * GESTURE.liftRate, drag.halfHeight, ROOM, GESTURE.ceilingMargin);
+    drag.planeY += height - drag.height;
+    drag.height = height;
+    if (drag.pointer) updateDrag(drag.pointer);
+  }
+
   function updateDrag(event) {
+    drag.pointer = { clientX: event.clientX, clientY: event.clientY };
     aim(event);
     const { origin, direction } = raycaster.ray;
     const point = intersectDragPlane(origin.toArray(), direction.toArray(), drag.planeY);
@@ -156,6 +167,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (effect.owner === OWNER.DRAG_PART) {
       if (effect.type === 'dragStart') beginDrag(effect.hit.part, effect.hit.point, event);
       else if (!drag) return;
+      else if (effect.type === 'lift') liftDrag(effect.dy);
       else if (effect.type === 'dragMove') updateDrag(event);
       else if (effect.type === 'dragEnd') endDrag();
       else cancelDrag(); // interrupted: drop it under physics, never snap
@@ -195,6 +207,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     syncCamera();
   }
 
+  // Desktop lift; OrbitControls is disabled mid-drag, so the wheel never also zooms.
+  function onWheel(event) {
+    apply(state.wheel({ dy: event.deltaY }), event);
+  }
+
   function onInterrupted() {
     apply(state.cancelAll());
     syncCamera();
@@ -209,6 +226,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   domElement.addEventListener('pointerup', onPointerUp);
   domElement.addEventListener('pointercancel', onPointerCancel);
   domElement.addEventListener('lostpointercapture', onPointerCancel);
+  domElement.addEventListener('wheel', onWheel, { passive: true });
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('blur', onInterrupted);
 
@@ -220,6 +238,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       domElement.removeEventListener('pointerup', onPointerUp);
       domElement.removeEventListener('pointercancel', onPointerCancel);
       domElement.removeEventListener('lostpointercapture', onPointerCancel);
+      domElement.removeEventListener('wheel', onWheel);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('blur', onInterrupted);
     },

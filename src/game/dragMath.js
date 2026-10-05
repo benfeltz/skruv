@@ -25,6 +25,15 @@ export function clampToRoom([x, y, z], [halfX, halfZ], room, margin) {
 }
 
 /**
+ * Clamps a lifted part's centre height so its bottom stays on or above the floor and its
+ * top stays `margin` below the walls' tops. A part taller than that range sits on the floor.
+ */
+export function clampLift(y, halfHeight, room, margin) {
+  const ceiling = Math.max(halfHeight, room.height - margin - halfHeight);
+  return Math.min(ceiling, Math.max(halfHeight, y));
+}
+
+/**
  * Nearest detent to `angle` for detents every `step` radians; exact halfway points round
  * away from zero, so ±45° goes to ±90° symmetrically. A falsy step (free rotation)
  * returns the angle unchanged.
