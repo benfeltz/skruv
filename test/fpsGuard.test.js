@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createFpsGuard } from '../src/scene/fpsGuard.js';
 
-const config = () => ({ fpsSampleSeconds: 1, fpsFloor: 40, fpsWindow: 3, fpsRecover: 55, fpsHelpRatio: 1.25 });
+const config = () => ({ fpsSampleSeconds: 1, fpsFloor: 40, fpsWindow: 3, fpsRecover: 55, fpsHelpRatio: 1.25, fpsMaxGap: 1 });
 
 /**
  * Runs `seconds` of a device: a rendered frame takes 1/`renderFps` s, a skipped one
@@ -93,6 +93,22 @@ describe('createFpsGuard', () => {
     run(guard, { renderFps: 60 }, 1);
     run(guard, { renderFps: 30 }, 3);
     expect(guard.skipping).toBe(true);
+  });
+
+  // Review 1.6: fed clamped deltas (1/15 s at most) it reported 15 fps for a 10 fps phone.
+  it('reports a slow device at its true rate, and times its sample in real seconds', () => {
+    const guard = createFpsGuard(config());
+    const { samples } = run(guard, { renderFps: 8 }, 5);
+    expect(samples[0].fps).toBeCloseTo(8, 0);
+    expect(samples).toHaveLength(5);
+  });
+
+  it('drops a backgrounded gap instead of reading it as load', () => {
+    const guard = createFpsGuard(config());
+    run(guard, { renderFps: 60 }, 0.5);
+    expect(guard.frame(30)).toEqual({ render: true, sample: null });
+    const { samples } = run(guard, { renderFps: 60 }, 5);
+    expect(samples.every((s) => s.fps > 55 && !s.skipping)).toBe(true);
   });
 
   it('never engages with a floor of 0, and a floor set to 0 releases it', () => {

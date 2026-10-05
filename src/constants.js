@@ -380,6 +380,9 @@ export const TUNE = {
   fpsWindow: 3,
   fpsRecover: 55,
   fpsHelpRatio: 1.25,
+  // A frame gap longer than this many seconds is a backgrounded tab, not load: the sample
+  // in progress is dropped rather than read as a frame rate near zero.
+  fpsMaxGap: 1,
 };
 
 // Android haptics (navigator.vibrate; iOS Safari has none), in ms: a tick when a part

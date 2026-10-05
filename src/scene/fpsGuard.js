@@ -18,7 +18,9 @@ const EPSILON = 1e-9;
  *   - if rendered frames cost no more than skipped ones (by `fpsHelpRatio`), skipping buys
  *     nothing — the loop is capped (iOS Low Power Mode's 30 Hz, a throttled tab), not
  *     loaded. It lets go at once and stays off until the rate is back at the floor.
- * Reads `config` (TUNE by default) at use time, so its knobs tune live. Pure.
+ * `delta` must be the true frame time, not the game's clamped step. A gap over `fpsMaxGap`
+ * (a backgrounded tab) drops the sample in progress. Reads `config` (TUNE by default) at
+ * use time, so its knobs tune live. Pure.
  */
 export function createFpsGuard(config = TUNE) {
   let frames = 0;
@@ -65,7 +67,19 @@ export function createFpsGuard(config = TUNE) {
     held = 0;
   }
 
+  function resetSample() {
+    frames = 0;
+    elapsed = 0;
+    renderedTime = renderedCount = skippedTime = skippedCount = 0;
+  }
+
   function frame(delta) {
+    if (delta > config.fpsMaxGap) {
+      resetSample();
+      odd = !odd;
+      lastRendered = !skipping || odd;
+      return { render: lastRendered, sample: null };
+    }
     frames++;
     elapsed += delta;
     if (skipping) {
@@ -83,9 +97,7 @@ export function createFpsGuard(config = TUNE) {
       if (skipping) release(elapsed);
       else engage(fps, elapsed);
       sample = { fps, skipping };
-      frames = 0;
-      elapsed = 0;
-      renderedTime = renderedCount = skippedTime = skippedCount = 0;
+      resetSample();
     }
     odd = !odd;
     const render = !skipping || odd;

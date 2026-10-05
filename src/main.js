@@ -206,7 +206,7 @@ events.on(EVENT.FASTEN, ({ kind }) => {
 // Under sustained load the room renders every other frame; everything else runs every frame.
 const fps = createFpsGuard();
 
-createLoop((delta) => {
+createLoop((delta, rawDelta) => {
   cameraControls.update(delta);
   physics.step(delta);
   sweep(delta);
@@ -214,7 +214,8 @@ createLoop((delta) => {
   gizmo.update();
   sprue.update();
   highlight.update(delta);
-  const { render, sample } = fps.frame(delta);
+  // Measured on the true delta: the clamped one would floor every slow device at 15 fps.
+  const { render, sample } = fps.frame(rawDelta);
   if (sample) events.emit(fpsEvent(Math.round(sample.fps * 10) / 10, sample.skipping));
   if (render) renderer.render(scene, camera);
 }).start();

@@ -318,3 +318,9 @@ describe('telemetry pairs every grab with a release of its mode (1.6 review)', (
     expect(pull).toMatch(/events\?\.emit\(releaseEvent\(part\.id, 'pull'\)\);\s*beginMove\(part, grab, pointer, 'move'\);\s*events\?\.emit\(grabEvent\(part\.id, 'move'\)\);/);
   });
 });
+
+describe('the fps guard measures true frame time (1.6 review)', () => {
+  it('is fed the loop raw delta, never the clamped game step', () => {
+    expect(read('src/main.js')).toMatch(/createLoop\(\(delta, rawDelta\) => \{[\s\S]*fps\.frame\(rawDelta\)/);
+  });
+});

@@ -3,7 +3,10 @@ import { clampDelta } from './clamp.js';
 
 const MS_PER_SECOND = 1000;
 
-/** rAF loop calling `onFrame(deltaSeconds)` with the delta clamped. */
+/**
+ * rAF loop calling `onFrame(deltaSeconds, rawDeltaSeconds)`: the delta clamped (what the
+ * game steps by), and the true one (what a frame-rate measurement needs).
+ */
 export function createLoop(onFrame) {
   let frameId = null;
   let lastTime = null;
@@ -13,7 +16,7 @@ export function createLoop(onFrame) {
     lastTime = time;
     // Schedule before calling out, so stop()/start() inside onFrame act on the live frame id.
     frameId = requestAnimationFrame(tick);
-    onFrame(clampDelta(delta, RENDER.maxFrameDelta));
+    onFrame(clampDelta(delta, RENDER.maxFrameDelta), delta);
   }
 
   return {
