@@ -9,18 +9,22 @@ const DESIGN_MANIFEST = {
   topBottomPanel: 2,
   fixedShelf: 1,
   adjustableShelf: 2,
+  plinth: 1,
   backPanel: 1,
-  dowel: 14,
+  dowel: 16,
   camLockBolt: 8,
   camLock: 10,
   shelfPin: 8,
-  nail: 8,
+  backFitting: 8,
   allenWrench: 1,
   screwdriver: 1,
 };
 
 // Loose spares in the bag (1.4.1): extras beyond what the holes take.
 const SPARES = { dowel: 2, camLock: 2 };
+// Holes drilled but never filled (1.5): each side's plinth hole at its rear edge — the
+// side is reversible, so both edges are drilled and the plinth takes the front pair.
+const UNFILLED = { dowelHole: 2 };
 
 const EPSILON = 1e-9;
 const types = Object.entries(PART_TYPES);
@@ -37,15 +41,15 @@ describe('manifest', () => {
     expect(MANIFEST_QUANTITIES).toEqual(DESIGN_MANIFEST);
   });
 
-  it('expands to one instance per physical part, 58 in all', () => {
-    expect(MANIFEST).toHaveLength(58);
+  it('expands to one instance per physical part, 61 in all', () => {
+    expect(MANIFEST).toHaveLength(61);
     for (const [type, quantity] of Object.entries(DESIGN_MANIFEST)) {
       expect(MANIFEST.filter((p) => p.type === type)).toHaveLength(quantity);
     }
   });
 
   it('ships two spare dowels and two spare cam locks, but no spare bolts', () => {
-    expect(countHoles(CONNECTOR.DOWEL_HOLE) / 2 + SPARES.dowel).toBe(MANIFEST_QUANTITIES.dowel);
+    expect((countHoles(CONNECTOR.DOWEL_HOLE) - UNFILLED.dowelHole) / 2 + SPARES.dowel).toBe(MANIFEST_QUANTITIES.dowel);
     expect(countHoles(CONNECTOR.CAM_LOCK_RECESS) + SPARES.camLock).toBe(MANIFEST_QUANTITIES.camLock);
     expect(MANIFEST_QUANTITIES.camLockBolt).toBe(countHoles(CONNECTOR.CAM_BOLT_HOLE));
   });
@@ -90,11 +94,11 @@ describe('connectors', () => {
 
   // Hole counts only — which hole takes which fastener is PR 4's mating table.
   it('has enough holes for every fastener in the box, spares aside', () => {
-    expect(countHoles(CONNECTOR.DOWEL_HOLE)).toBe(2 * (DESIGN_MANIFEST.dowel - SPARES.dowel));
+    expect(countHoles(CONNECTOR.DOWEL_HOLE) - UNFILLED.dowelHole).toBe(2 * (DESIGN_MANIFEST.dowel - SPARES.dowel));
     expect(countHoles(CONNECTOR.CAM_BOLT_HOLE)).toBe(DESIGN_MANIFEST.camLockBolt);
     expect(countHoles(CONNECTOR.CAM_LOCK_RECESS)).toBe(DESIGN_MANIFEST.camLock - SPARES.camLock);
     expect(countHoles(CONNECTOR.SHELF_PIN_HOLE)).toBe(DESIGN_MANIFEST.shelfPin);
-    expect(countHoles(CONNECTOR.NAIL_HOLE)).toBe(DESIGN_MANIFEST.nail);
+    expect(countHoles(CONNECTOR.BACK_FITTING_HOLE)).toBe(DESIGN_MANIFEST.backFitting);
   });
 
   it('gives every cam lock a screwdriver slot opposite its body end', () => {
@@ -108,9 +112,9 @@ describe('connectors', () => {
     expect(PART_TYPES.screwdriver.connectors.map((c) => c.type)).toEqual([CONNECTOR.SCREWDRIVER_TIP]);
   });
 
-  // The back panel sits flush with the carcass top. A nail on its vertical centre line
+  // The back panel sits flush with the carcass top. A fitting on its vertical centre line
   // misses the full-height sides, so it must land in a horizontal panel's thickness.
-  it('lands every centre-line back-panel nail in a horizontal panel', () => {
+  it('lands every centre-line back fitting in a horizontal panel', () => {
     const { sidePanel, backPanel } = PART_TYPES;
     const thickness = PART_TYPES.topBottomPanel.size[1];
     const backCentreY = sidePanel.size[1] / 2 - backPanel.size[1] / 2;
@@ -119,13 +123,68 @@ describe('connectors', () => {
         sidePanel.connectors.filter((c) => c.type === CONNECTOR.DOWEL_HOLE).map((c) => c.position[1]),
       ),
     ];
-    const centreNails = backPanel.connectors.filter(
-      (c) => c.type === CONNECTOR.NAIL_HOLE && c.position[0] === 0,
+    const centreFittings = backPanel.connectors.filter(
+      (c) => c.type === CONNECTOR.BACK_FITTING_HOLE && c.position[0] === 0,
     );
-    expect(centreNails.length).toBeGreaterThan(0);
-    for (const nail of centreNails) {
-      const y = nail.position[1] + backCentreY;
+    expect(centreFittings.length).toBeGreaterThan(0);
+    for (const fitting of centreFittings) {
+      const y = fitting.position[1] + backCentreY;
       expect(panelCentres.some((centre) => Math.abs(y - centre) <= thickness / 2)).toBe(true);
     }
+  });
+});
+
+describe('real-manual truth pass (1.5)', () => {
+  it('ships no nails: no nail part, no nail connector types', () => {
+    expect(PART_TYPES).not.toHaveProperty('nail');
+    expect(MANIFEST_QUANTITIES).not.toHaveProperty('nail');
+    for (const type of Object.values(CONNECTOR)) expect(type).not.toMatch(/nail/i);
+  });
+
+  it('fixes the back with push-pin fittings: a tip that goes in a back-panel hole', () => {
+    expect(PART_TYPES.backFitting.connectors.map((c) => c.type)).toEqual([CONNECTOR.BACK_FITTING_TIP]);
+    const holes = PART_TYPES.backPanel.connectors;
+    expect(holes.every((c) => c.type === CONNECTOR.BACK_FITTING_HOLE)).toBe(true);
+    // Every hole opens on the back face, facing away from the carcass.
+    for (const hole of holes) {
+      expect(hole.axis).toEqual([0, 0, -1]);
+      expect(hole.position[2]).toBeCloseTo(-PART_TYPES.backPanel.size[2] / 2, 9);
+    }
+  });
+
+  it('puts a back fitting at the edge of the panel over a side panel\'s back edge', () => {
+    const { sidePanel, backPanel, topBottomPanel } = PART_TYPES;
+    const sideCentreX = topBottomPanel.size[0] / 2 + sidePanel.size[0] / 2;
+    const edgeFittings = backPanel.connectors.filter((c) => c.position[0] !== 0);
+    expect(edgeFittings.length).toBeGreaterThan(0);
+    for (const fitting of edgeFittings) {
+      expect(Math.abs(Math.abs(fitting.position[0]) - sideCentreX)).toBeLessThanOrEqual(sidePanel.size[0] / 2);
+    }
+  });
+
+  it('adds a plinth strip with a dowel hole in each end, and matching holes low in each side', () => {
+    const { plinth, sidePanel, topBottomPanel } = PART_TYPES;
+    expect(MANIFEST_QUANTITIES.plinth).toBe(1);
+    expect(plinth.size[0]).toBe(topBottomPanel.size[0]);
+    const ends = plinth.connectors.filter((c) => c.type === CONNECTOR.DOWEL_HOLE);
+    expect(ends.map((c) => c.position[0]).sort()).toEqual([-plinth.size[0] / 2, plinth.size[0] / 2]);
+    // The side's plinth holes are its last two connectors, below the bottom panel's holes,
+    // one at each edge so the side is reversible about its long axis.
+    const pair = sidePanel.connectors.slice(-2);
+    const bottomPanelY = Math.min(
+      ...sidePanel.connectors.slice(0, -2).filter((c) => c.type === CONNECTOR.DOWEL_HOLE).map((c) => c.position[1]),
+    );
+    for (const hole of pair) {
+      expect(hole.type).toBe(CONNECTOR.DOWEL_HOLE);
+      expect(hole.position[1]).toBeLessThan(bottomPanelY - topBottomPanel.size[1] / 2);
+      expect(hole.position[1] - plinth.size[1] / 2).toBeCloseTo(-sidePanel.size[1] / 2, 9);
+    }
+    expect(pair[0].position[2]).toBeCloseTo(-pair[1].position[2], 9);
+  });
+
+  it('gives every part type a stable, unique five-digit part number', () => {
+    const numbers = Object.values(PART_TYPES).map((p) => p.partNumber);
+    for (const n of numbers) expect(n).toMatch(/^\d{5}$/);
+    expect(new Set(numbers).size).toBe(numbers.length);
   });
 });

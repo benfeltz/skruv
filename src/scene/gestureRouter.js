@@ -32,7 +32,7 @@ const PULL_AXIS_PROBE = 0.05;
  * Fastening translates gestures into assembly events (src/game/assembly.js); which joint
  * does what is the graph's and the fastener machines' call:
  *   snap      seats the pair; the dragged part is held where it seated
- *   tap       pushes home the dowels/pins/nails touching the tapped part (else selects it);
+ *   tap       pushes home the dowels/pins/back fittings touching the tapped part (else selects it);
  *             tapping an engaged tool takes it off
  *   drag      an engaged tool cranks its fastener; a part pushed into fastened seats pulls
  *             back out along their axis, and once nothing holds it, moves on as a normal
@@ -550,14 +550,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     pruneStale();
     const engagement = assembly.crankTarget(part.id);
     if (engagement) return unseat(engagement.tool);
-    if (assembly.tap(part.id, behindNail).length > 0) return reconcile();
+    if (assembly.tap(part.id, behindFitting).length > 0) return reconcile();
     // A part held at its seat is the router's: turning it would drop it off the seat.
     if (!placed.has(part)) onTap?.(part);
   }
 
-  // A nail driven home lands in whichever panel lies behind its hole.
-  function behindNail(joint) {
-    if (joint.kind !== KIND.NAIL) return {};
+  // A back fitting pressed home lands in whichever panel lies behind its hole.
+  function behindFitting(joint) {
+    if (joint.kind !== KIND.FITTING) return {};
     const hole = connectorWorld(joint.host, joint.hostConnector);
     raycaster.set(scratch.fromArray(hole.position), offset.fromArray(hole.axis).negate());
     raycaster.far = PART_TYPES[partById.get(joint.hardware).type].size[1];

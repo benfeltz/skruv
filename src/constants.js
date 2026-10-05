@@ -10,6 +10,15 @@ export const ROOM = {
   height: 3,
 };
 
+// The product and the company on the box and the booklet. A parody of flatpack furniture
+// in general — never any real maker's name, marks or document numbers.
+export const BRAND = {
+  product: 'JOHNNY',
+  maker: 'SKRUV',
+  // Printed on the booklet's back cover, where a real manual carries its document code.
+  documentCode: 'SK-0000451-1',
+};
+
 export const COLORS = {
   background: 0x1b1d22,
   floor: 0xc9b79c,
@@ -24,6 +33,7 @@ export const COLORS = {
   partMetal: 0xa7adb3,
   partWrench: 0x2f3136,
   partScrewdriver: 0xd9a21b,
+  partFitting: 0x5d5853,
   // Rotate gizmo rings, one per world axis, x/y/z in the usual red/green/blue.
   gizmoX: 0xe5534b,
   gizmoY: 0x6cc04a,
@@ -218,7 +228,7 @@ export const DECAL = {
     dowelHole: 0.005,
     camBoltHole: 0.0045,
     shelfPinHole: 0.0035,
-    nailHole: 0.0022,
+    backFittingHole: 0.0045,
     camLockRecess: 0.009,
   },
   // A recess is drawn as a ring: inner radius as a fraction of the outer.
@@ -231,10 +241,8 @@ export const DECAL = {
 // Fasteners (src/game/fasteners.js, src/game/assembly.js) and the joints that follow them
 // (src/physics/world.js). Distances in metres unless marked CSS px; angles in radians.
 export const FASTENER = {
-  // A dowel, pin or nail comes back out when dragged this far (CSS px) along its axis.
+  // A dowel, pin or back fitting comes back out when dragged this far (CSS px) along its axis.
   pullDistance: 40,
-  // Hammer taps from a seated nail to a driven one.
-  tapsToDrive: 3,
   // Wrench crank from a seated cam bolt to a screwed one: two full turns.
   screwRadians: 4 * Math.PI,
   // Screwdriver turn from an open cam lock to a locked one.
@@ -242,7 +250,7 @@ export const FASTENER = {
   // A cam catches any screwed bolt head this close to its recess (Design: instance-agnostic).
   captureRadius: 0.015,
   // How deep each fastener sits in its hole once fully home, along its axis.
-  sinkDepth: { dowel: 0.015, pin: 0.008, nail: 0.018, bolt: 0.011, cam: 0.012 },
+  sinkDepth: { dowel: 0.015, pin: 0.008, fitting: 0.012, bolt: 0.011, cam: 0.012 },
   // Crank motion this close (CSS px) to the fastener's on-screen centre is ignored — the
   // angle swings wildly there.
   crankDeadzone: 12,

@@ -25,14 +25,14 @@ describe('every fastener is bidirectional (decision 2)', () => {
   const forward = {
     [KIND.DOWEL]: [{ type: 'tap' }],
     [KIND.PIN]: [{ type: 'tap' }],
-    [KIND.NAIL]: Array(FASTENER.tapsToDrive).fill({ type: 'tap' }),
+    [KIND.FITTING]: [{ type: 'tap' }],
     [KIND.BOLT]: [{ type: 'crank', radians: FASTENER.screwRadians }],
     [KIND.CAM]: [{ type: 'crank', radians: FASTENER.quarterTurn }],
   };
   const reverse = {
     [KIND.DOWEL]: [{ type: 'pull' }],
     [KIND.PIN]: [{ type: 'pull' }],
-    [KIND.NAIL]: [{ type: 'pull' }],
+    [KIND.FITTING]: [{ type: 'pull' }],
     [KIND.BOLT]: [{ type: 'crank', radians: -FASTENER.screwRadians }],
     [KIND.CAM]: [{ type: 'crank', radians: -FASTENER.quarterTurn }],
   };

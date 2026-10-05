@@ -68,12 +68,12 @@ describe('every fastener and tool pickable on the dev layout (AC1)', () => {
 
   it('covers every hardware type in the manifest', () => {
     expect(new Set(small.map((p) => p.type))).toEqual(
-      new Set(['dowel', 'camLockBolt', 'camLock', 'shelfPin', 'nail', 'allenWrench', 'screwdriver']),
+      new Set(['dowel', 'camLockBolt', 'camLock', 'shelfPin', 'backFitting', 'allenWrench', 'screwdriver']),
     );
   });
 
   // A phone camera ~1.4 m away, aimed a few millimetres off the part — where a fingertip
-  // centred on a 2 mm nail actually lands.
+  // centred on a 5 mm shelf pin actually lands.
   it.each(small.map((p) => [p.id, p]))('picks %s with a fingertip a few mm off it', (_, part) => {
     const eye = add(part.position, [0, 1, 1]);
     for (const offset of [[0.006, 0, 0], [0, 0, -0.006], [-0.004, 0, 0.004]]) {
@@ -181,11 +181,11 @@ describe('picking among neighbouring hardware — real layouts (1.4.1 review, ro
       ],
     },
     {
-      name: 'a pin and a nail standing 2 cm apart',
-      parts: [standing('shelfPin-1', 'shelfPin', [0, 0]), standing('nail-1', 'nail', [0.02, 0])],
+      name: 'a shelf pin and a back fitting standing 2 cm apart',
+      parts: [standing('shelfPin-1', 'shelfPin', [0, 0]), standing('backFitting-1', 'backFitting', [0.02, 0])],
       presses: [
-        ['the nail, behind the pin', 'nail-1', [-1, 0.5, 0], 'nail-1'],
-        ['the pin, behind the nail', 'shelfPin-1', [1, 0.5, 0], 'shelfPin-1'],
+        ['the fitting, behind the pin', 'backFitting-1', [-1, 0.5, 0], 'backFitting-1'],
+        ['the pin, behind the fitting', 'shelfPin-1', [1, 0.5, 0], 'shelfPin-1'],
       ],
     },
   ];
@@ -208,7 +208,7 @@ describe('hole decals on every socket in the box (AC3)', () => {
     CONNECTOR.CAM_BOLT_HOLE,
     CONNECTOR.CAM_LOCK_RECESS,
     CONNECTOR.SHELF_PIN_HOLE,
-    CONNECTOR.NAIL_HOLE,
+    CONNECTOR.BACK_FITTING_HOLE,
   ]);
 
   it('marks every socket connector of every part instance once', () => {

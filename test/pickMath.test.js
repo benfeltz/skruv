@@ -90,10 +90,10 @@ describe('PICK sizing', () => {
   const longest = (type) => Math.max(...PART_TYPES[type].size);
 
   it('counts every fastener and tool as small, and no panel', () => {
-    for (const type of ['dowel', 'camLockBolt', 'camLock', 'shelfPin', 'nail', 'allenWrench', 'screwdriver']) {
+    for (const type of ['dowel', 'camLockBolt', 'camLock', 'shelfPin', 'backFitting', 'allenWrench', 'screwdriver']) {
       expect(longest(type)).toBeLessThan(PICK.smallPartMax);
     }
-    for (const type of ['sidePanel', 'topBottomPanel', 'fixedShelf', 'adjustableShelf', 'backPanel']) {
+    for (const type of ['sidePanel', 'topBottomPanel', 'fixedShelf', 'adjustableShelf', 'plinth', 'backPanel']) {
       expect(longest(type)).toBeGreaterThanOrEqual(PICK.smallPartMax);
     }
   });

@@ -60,7 +60,7 @@ export async function createPhysicsWorld() {
         .setRotation(toRotation(rotation))
         .setLinearDamping(PHYSICS.linearDamping)
         .setAngularDamping(PHYSICS.angularDamping)
-        // Hardware is millimetres thin; CCD keeps a fast nail from tunnelling the floor.
+        // Hardware is millimetres thin; CCD keeps a fast pin from tunnelling the floor.
         .setCcdEnabled(true),
     );
     world.createCollider(

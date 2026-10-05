@@ -7,6 +7,7 @@ import {
   createFastener,
   isEngaged,
   isFastened,
+  isTapKind,
   KIND,
   kindOf,
   STATE,
@@ -30,7 +31,7 @@ describe('kindOf', () => {
   });
 });
 
-describe.each([KIND.DOWEL, KIND.PIN])('%s: seated ⇄ pressed', (kind) => {
+describe.each([KIND.DOWEL, KIND.PIN, KIND.FITTING])('%s: seated ⇄ pressed', (kind) => {
   it('presses on a tap and comes back out on a pull', () => {
     const pressed = transition(createFastener(kind), TAP);
     expect(pressed.state).toBe(STATE.PRESSED);
@@ -48,25 +49,25 @@ describe.each([KIND.DOWEL, KIND.PIN])('%s: seated ⇄ pressed', (kind) => {
   });
 });
 
-describe('nail: seated → driving → driven, pull resets', () => {
-  it('accumulates a partial drive one tap at a time', () => {
-    let f = createFastener(KIND.NAIL);
-    for (let tap = 1; tap < FASTENER.tapsToDrive; tap++) {
-      f = transition(f, TAP);
-      expect(f.state).toBe(STATE.DRIVING);
-      expect(f.progress).toBeCloseTo(tap / FASTENER.tapsToDrive);
-      expect(isFastened(f)).toBe(true);
-    }
-    f = transition(f, TAP);
-    expect(f).toMatchObject({ state: STATE.DRIVEN, progress: 1 });
-    expect(transition(f, TAP)).toBe(f);
+describe('back fitting: a push-pin on the press/pull machine (1.5)', () => {
+  it('is the kind a back-fitting tip seats as, and a tap kind', () => {
+    expect(kindOf(CONNECTOR.BACK_FITTING_TIP)).toBe(KIND.FITTING);
+    expect(isTapKind(KIND.FITTING)).toBe(true);
   });
 
-  it('pulls out from part-driven or fully driven back to seated', () => {
-    const part = transition(createFastener(KIND.NAIL), TAP);
-    expect(transition(part, PULL)).toEqual(createFastener(KIND.NAIL));
-    const full = run(createFastener(KIND.NAIL), Array(FASTENER.tapsToDrive).fill(TAP));
-    expect(transition(full, PULL)).toEqual(createFastener(KIND.NAIL));
+  it('presses home in one tap, like a shelf pin, and runs exactly the pin machine', () => {
+    for (const events of [[TAP], [TAP, PULL], [PULL], [TAP, TAP], [TAP, crank(1)]]) {
+      const fitting = run(createFastener(KIND.FITTING), events);
+      const pin = run(createFastener(KIND.PIN), events);
+      expect({ ...fitting, kind: null }).toEqual({ ...pin, kind: null });
+    }
+  });
+
+  it('has no nail kind or hammer states left', () => {
+    expect(Object.values(KIND)).not.toContain('nail');
+    expect(Object.values(STATE)).not.toContain('driving');
+    expect(Object.values(STATE)).not.toContain('driven');
+    expect(FASTENER).not.toHaveProperty('tapsToDrive');
   });
 });
 

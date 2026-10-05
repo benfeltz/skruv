@@ -3,7 +3,7 @@
 // rotation: [x, y, z, w] }` supplied by the caller.
 //
 // A joint is one seated connector pair, normalised so `hardware` is the fastener-end side
-// (dowel, bolt, cam, pin, nail, tool) and `host` the hole side, with the fastener state
+// (dowel, bolt, cam, pin, back fitting, tool) and `host` the hole side, with the fastener state
 // machine that pair runs (src/game/fasteners.js). `mover` is the part that was dragged
 // into the seat — the one held in place until its first fastener engages.
 //
@@ -132,7 +132,7 @@ export function createAssembly(typeOf) {
       kind,
       mover,
       fastener: createFastener(kind),
-      // A driven nail's tip lands in whatever part sits behind its hole.
+      // A pressed back fitting's tip lands in whatever part sits behind its hole.
       through: null,
       // A locked cam's caught bolt.
       captured: null,
@@ -162,7 +162,7 @@ export function createAssembly(typeOf) {
 
   /**
    * Feeds `event` to a joint's machine. `ctx.captured` (a cam's caught bolt id or null) and
-   * `ctx.through` (the part behind a nail) come from the caller's geometry. True if it
+   * `ctx.through` (the part behind a back fitting) come from the caller's geometry. True if it
    * changed.
    */
   function apply(id, event, ctx = {}) {
@@ -174,7 +174,7 @@ export function createAssembly(typeOf) {
     });
     if (fastener === joint.fastener) return false;
     const next = { ...joint, fastener };
-    if (joint.kind === KIND.NAIL) next.through = fastener.state === STATE.DRIVEN ? (ctx.through ?? null) : null;
+    if (joint.kind === KIND.FITTING) next.through = isFastened(fastener) ? (ctx.through ?? null) : null;
     if (joint.kind === KIND.CAM) next.captured = fastener.state === STATE.LOCKED ? (joint.captured ?? ctx.captured) : null;
     joints.set(id, next);
     return true;
@@ -183,7 +183,7 @@ export function createAssembly(typeOf) {
   /**
    * A tap on `part` pushes home every tap-kind fastener touching it — a tapped dowel, or a
    * panel tapped down onto its dowels. `ctxFor(joint)` supplies per-joint context (a
-   * nail's `through`). Returns the ids that changed.
+   * back fitting's `through`). Returns the ids that changed.
    */
   function tap(part, ctxFor = () => ({})) {
     return jointsOf(part)
@@ -347,7 +347,7 @@ export function createAssembly(typeOf) {
             frame: () => jointFrame(compose(inFirst, invert(inSecond)), hostConnector(second).position),
           });
         } else {
-          // A nail into what lies behind, or a cam onto another host's bolt: as they are.
+          // A back fitting into what lies behind, or a cam onto another host's bolt: as they are.
           const pivot = connectorInWorld(hostConnector(first), poseOf(first.host)).position;
           addBridge({
             a: first.host,

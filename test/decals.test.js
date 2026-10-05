@@ -9,7 +9,7 @@ const SOCKETS = [
   CONNECTOR.CAM_BOLT_HOLE,
   CONNECTOR.CAM_LOCK_RECESS,
   CONNECTOR.SHELF_PIN_HOLE,
-  CONNECTOR.NAIL_HOLE,
+  CONNECTOR.BACK_FITTING_HOLE,
 ];
 
 describe('decalPlacements', () => {
@@ -26,7 +26,7 @@ describe('decalPlacements', () => {
   });
 
   it('gives fastener ends and hardware-borne sockets no decal', () => {
-    for (const type of ['dowel', 'camLockBolt', 'camLock', 'shelfPin', 'nail', 'allenWrench', 'screwdriver']) {
+    for (const type of ['dowel', 'camLockBolt', 'camLock', 'shelfPin', 'backFitting', 'allenWrench', 'screwdriver']) {
       expect(decalPlacements(PART_TYPES[type].connectors)).toEqual([]);
     }
   });
@@ -54,7 +54,7 @@ describe('decalPlacements', () => {
   });
 
   it('turns the decal correctly onto an axis opposite its own normal', () => {
-    const [decal] = decalPlacements([{ type: CONNECTOR.NAIL_HOLE, position: [0, 0, -0.01], axis: [0, 0, -1] }]);
+    const [decal] = decalPlacements([{ type: CONNECTOR.BACK_FITTING_HOLE, position: [0, 0, -0.01], axis: [0, 0, -1] }]);
     rotateVector(decal.rotation, [0, 0, 1]).forEach((v, i) => expect(v).toBeCloseTo([0, 0, -1][i], 9));
     expect(decal.position[2]).toBeCloseTo(-0.01 - DECAL.surfaceOffset, 9);
   });

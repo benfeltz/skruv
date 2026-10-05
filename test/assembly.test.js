@@ -17,7 +17,7 @@ const SHELF_LEFT_DOWEL = 0; // [-end, 0, -0.09], -x
 const SHELF_LEFT_RECESS = 2;
 const END_LOW = 0; // a rod's bottom end
 const END_HIGH = 1;
-const BACK_NAIL = 0;
+const BACK_FITTING = 0;
 
 // The carcass's bottom-left corner, assembled orientation: side at the origin, a dowel
 // seated in its lowest hole (end pointing into the hole), the bottom panel seated on it.
@@ -97,17 +97,18 @@ describe('tap, pull and canRelease', () => {
     expect(assembly.canRelease('dowel-1')).toBe(false);
   });
 
-  it('records the part a fully driven nail lands in, and forgets it on the pull', () => {
+  it('records the part a pressed back fitting lands in, and forgets it on the pull', () => {
     const assembly = createAssembly(typeOf);
-    const nail = assembly.seat({ partA: 'nail-1', connectorA: END_LOW, partB: 'backPanel-1', connectorB: BACK_NAIL, mover: 'nail-1' });
-    const behind = () => ({ through: 'sidePanel-1' });
-    for (let i = 1; i < FASTENER.tapsToDrive; i++) assembly.tap('nail-1', behind);
-    expect(assembly.get(nail.id).through).toBeNull();
-    assembly.tap('nail-1', behind);
-    expect(assembly.get(nail.id)).toMatchObject({ through: 'sidePanel-1', fastener: { state: STATE.DRIVEN } });
-    expect([...assembly.compoundOf('backPanel-1')].sort()).toEqual(['backPanel-1', 'nail-1', 'sidePanel-1']);
-    assembly.apply(nail.id, { type: 'pull' });
-    expect(assembly.get(nail.id).through).toBeNull();
+    const fitting = assembly.seat({ partA: 'backFitting-1', connectorA: END_LOW, partB: 'backPanel-1', connectorB: BACK_FITTING, mover: 'backFitting-1' });
+    expect(fitting.kind).toBe(KIND.FITTING);
+    expect(assembly.get(fitting.id).through).toBeNull();
+    assembly.tap('backFitting-1', () => ({ through: 'sidePanel-1' }));
+    expect(assembly.get(fitting.id)).toMatchObject({ through: 'sidePanel-1', fastener: { state: STATE.PRESSED } });
+    expect([...assembly.compoundOf('backPanel-1')].sort()).toEqual(['backFitting-1', 'backPanel-1', 'sidePanel-1']);
+    expect(assembly.pullable('backFitting-1').map((j) => j.id)).toEqual([fitting.id]);
+    assembly.apply(fitting.id, { type: 'pull' });
+    expect(assembly.get(fitting.id).through).toBeNull();
+    expect(assembly.canRelease('backFitting-1')).toBe(true);
   });
 });
 
