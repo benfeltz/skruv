@@ -371,12 +371,15 @@ export const TUNE = {
   // Frame-rate fallback (src/scene/fpsGuard.js): the loop's rate is sampled every
   // fpsSampleSeconds. Below fpsFloor for fpsWindow seconds running, the room renders every
   // other frame — a steady half rate rather than a stutter — while physics and gestures
-  // keep every frame. It renders every frame again once the rate holds at fpsRecover (or
-  // the floor, if higher) for fpsWindow. A floor of 0 never engages it.
+  // keep every frame. It renders every frame again once a fully rendered rate would hold at
+  // fpsRecover (or the floor, if higher) for fpsWindow — or at once if rendered frames
+  // cost less than fpsHelpRatio times skipped ones (a capped loop, not a loaded one, where
+  // skipping buys nothing). A floor of 0 never engages it.
   fpsSampleSeconds: 1,
   fpsFloor: 40,
   fpsWindow: 3,
   fpsRecover: 55,
+  fpsHelpRatio: 1.25,
 };
 
 // Android haptics (navigator.vibrate; iOS Safari has none), in ms: a tick when a part
