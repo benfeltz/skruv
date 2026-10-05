@@ -157,7 +157,7 @@ describe('the wall clamp never shrinks the orbit (1.4.1 review)', () => {
   it('runs every OrbitControls update — per frame and event-fired — from its unclamped pose, clamping after', () => {
     // OrbitControls calls this.update() inside its wheel/pointer handlers; wrapping the
     // instance method covers those too (wrapping only the per-frame call dropped zoom).
-    expect(controls).toMatch(/const orbitUpdate = controls\.update\.bind\(controls\);\s*controls\.update = \(deltaSeconds\) => \{\s*unconfine\(\);\s*const changed = orbitUpdate\(deltaSeconds\);\s*confine\(\);/);
+    expect(controls).toMatch(/const orbitUpdate = controls\.update\.bind\(controls\);\s*controls\.update = \(deltaSeconds\) => \{\s*unconfine\(\);[\s\S]*?seatOnFloor\(free\.toArray\(\)[^\n]*\n\s*const changed = orbitUpdate\(deltaSeconds\);\s*confine\(\);/);
     expect(controls).toMatch(/function unconfine\(\) \{\s*camera\.position\.copy\(free\);/);
     expect(controls).toMatch(/free\.copy\(camera\.position\);[\s\S]*clampCamera\(free\.toArray\(\)/);
     expect(update).not.toMatch(/unconfine\(\)/);

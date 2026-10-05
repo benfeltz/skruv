@@ -1,7 +1,7 @@
 import { MOUSE, TOUCH, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CAMERA, CAMERA_LIMITS, ROOM } from '../constants.js';
-import { clampCamera, clampTargetAlongView, panSpeedAt } from './cameraLimits.js';
+import { clampCamera, clampTargetAlongView, panSpeedAt, seatOnFloor } from './cameraLimits.js';
 
 /**
  * Touch camera: one finger orbits, two fingers pan + pinch-zoom toward the fingers (so a
@@ -51,6 +51,8 @@ export function createCameraControls(camera, domElement) {
   const orbitUpdate = controls.update.bind(controls);
   controls.update = (deltaSeconds) => {
     unconfine();
+    // Orbit and zoom about the floor spot in view, not a point hanging in the air.
+    controls.target.set(...seatOnFloor(free.toArray(), controls.target.toArray(), CAMERA_LIMITS));
     const changed = orbitUpdate(deltaSeconds);
     confine();
     return changed;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CAMERA, CAMERA_LIMITS, ROOM } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/catalog.js';
 import { createDevLayout } from '../src/game/devLayout.js';
-import { clampCamera, clampTarget, clampTargetAlongView, panSpeedAt } from '../src/scene/cameraLimits.js';
+import { clampCamera, clampTarget, clampTargetAlongView, panSpeedAt, seatOnFloor } from '../src/scene/cameraLimits.js';
 
 const room = { width: 10, depth: 8, height: 3 };
 const limits = { targetMargin: 0.5, targetHeight: [0, 2], wallMargin: 0.4, floorClearance: 0.05 };
@@ -132,5 +132,34 @@ describe('clampTargetAlongView (zoom toward the fingers near the floor — 1.4.1
 
   it('falls back to a plain clamp when the eye itself is past the bound', () => {
     expect(clampTargetAlongView([0, -0.2, 0], [0, -0.1, 1], room, limits)).toEqual([0, 0, 0]);
+  });
+});
+
+describe('seatOnFloor (zoom reaches the parts on the floor — Ben, 1.4.1)', () => {
+  const seat = { targetHeight: [0, 2], maxDistance: 6 };
+  const dir = (a, b) => { const d = b.map((v, i) => v - a[i]); const n = Math.hypot(...d); return d.map((x) => x / n); };
+
+  it('moves a target hanging in the air down the line of sight onto the floor', () => {
+    const eye = [2, 1.8, 2.4];
+    const target = [0, 0.6, 0];
+    const seated = seatOnFloor(eye, target, seat);
+    expect(seated[1]).toBeCloseTo(0, 12);
+    dir(eye, seated).forEach((v, i) => expect(v).toBeCloseTo(dir(eye, target)[i], 12));
+  });
+
+  it('pulls a target below the floor back up to it, on the same line of sight', () => {
+    const seated = seatOnFloor([0, 1, 1], [0, -1, -1], seat);
+    expect(seated).toEqual([0, 0, 0]);
+  });
+
+  it('leaves the target alone looking level or upward, or at floor out of reach', () => {
+    expect(seatOnFloor([0, 1, 1], [0, 1, 0], seat)).toEqual([0, 1, 0]);
+    expect(seatOnFloor([0, 1, 1], [0, 1.5, 0], seat)).toEqual([0, 1.5, 0]);
+    // Nearly level: the floor is 20 m away.
+    expect(seatOnFloor([0, 1, 0], [0, 0.95, -1], seat)).toEqual([0, 0.95, -1]);
+  });
+
+  it('is a no-op for a target already on the floor', () => {
+    seatOnFloor([1, 2, 1], [0.3, 0, -0.2], seat).forEach((v, i) => expect(v).toBeCloseTo([0.3, 0, -0.2][i], 12));
   });
 });

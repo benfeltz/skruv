@@ -49,3 +49,22 @@ export function clampTargetAlongView(target, eye, room, limits) {
   }
   return clampTarget(target, room, limits);
 }
+
+/**
+ * The orbit target moved along the line of sight from `eye` to where it meets the floor
+ * (the bottom of `targetHeight`), when that is within `maxDistance`. The view is unchanged,
+ * but the camera then orbits and zooms about the spot it is looking at — so a zoom closes
+ * all the way in on parts lying there instead of stalling at a point hanging in the air.
+ * Looking level or upward, or at floor out of reach, the target stays where it is.
+ */
+export function seatOnFloor(eye, target, limits) {
+  const toward = target.map((v, i) => v - eye[i]);
+  const length = Math.hypot(...toward);
+  const floor = limits.targetHeight[0];
+  if (!(length > 0) || eye[1] <= floor) return target;
+  const down = -toward[1] / length;
+  if (down <= 1e-6) return target;
+  const reach = (eye[1] - floor) / down;
+  if (reach > limits.maxDistance) return target;
+  return eye.map((v, i) => v + (toward[i] / length) * reach);
+}
