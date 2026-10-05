@@ -19,7 +19,7 @@ const HORIZONTALS = ['plinth', 'bottom', 'fixed', 'top'];
 /**
  * The twelve build steps. Each selects the joints it seats from the assembled layout
  * (`seats`), the panels it brings in (`roles`), the earlier cams it turns (`turns`), the
- * tool in hand, and whether the carcass lies on its left side or stands.
+ * tool in hand, and how the carcass lies: on its left side, face down, or standing.
  */
 const STEPS = [
   // ① Dowels into the horizontal parts' ends.
@@ -41,10 +41,10 @@ const STEPS = [
     tool: 'screwdriver',
     pose: 'lying',
   },
-  // ⑧ The back panel laid on.
-  { roles: ['back'], pose: 'lying' },
+  // ⑧ Turned face down, the back panel laid on.
+  { roles: ['back'], pose: 'faceDown' },
   // ⑨ Back fittings pressed through it.
-  { seats: (j) => j.kind === FITTING, pose: 'lying' },
+  { seats: (j) => j.kind === FITTING, pose: 'faceDown' },
   // ⑩ Tipped upright — two people.
   { tip: true, pose: 'upright' },
   // ⑪ Shelf pins into the sides.
@@ -61,7 +61,8 @@ const STEPS = [
  *   hardware — `[{ type, count, partNumber }]` count bubbles for the hardware first seated
  *              here (a dowel already in a panel end is not counted again when a side goes on)
  *   tool     — the tool in hand ('allenWrench', 'screwdriver') or null
- *   pose     — 'parts' (loose), 'lying' (carcass on its left side) or 'upright'
+ *   pose     — 'parts' (loose), 'lying' (carcass on its left side), 'faceDown' (on its
+ *              front, back up) or 'upright'
  */
 export function createBuildSteps(layout = createAssembledLayout()) {
   const roleOf = new Map(layout.parts.map((p) => [p.id, p.role]));

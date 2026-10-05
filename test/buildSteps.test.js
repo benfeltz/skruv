@@ -98,8 +98,8 @@ describe('createBuildSteps', () => {
     ]);
   });
 
-  it('builds flat on the left side, tips at step 10, and fits out standing', () => {
-    expect(steps.map((s) => s.pose)).toEqual(['parts', 'parts', ...Array(7).fill('lying'), 'upright', 'upright', 'upright']);
+  it('builds flat on the left side, backs it face down, tips at step 10, and fits out standing', () => {
+    expect(steps.map((s) => s.pose)).toEqual(['parts', 'parts', ...Array(5).fill('lying'), 'faceDown', 'faceDown', 'upright', 'upright', 'upright']);
     expect(steps.filter((s) => s.tip).map((s) => s.number)).toEqual([10]);
     const left = layout.parts.find((p) => p.role === 'leftSide').id;
     expect(steps[2].joints.every((i) => layout.joints[i].host === left)).toBe(true);

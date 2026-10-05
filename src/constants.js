@@ -54,6 +54,30 @@ export const COLORS = {
   unlit: 0x000000,
   // Sprue handle on a selected small part (src/scene/sprue.js): model-kit plastic grey.
   sprue: 0x8f9a93,
+  // Booklet pages (src/scene/bookletPages.js): black line art on white paper, earlier
+  // steps' parts in a pale grey.
+  bookletPaper: 0xffffff,
+  bookletInk: 0x1c1c1c,
+  bookletFaint: 0xbdbdbd,
+};
+
+// Booklet pages (src/scene/bookletPages.js), in page-canvas pixels: a portrait sheet drawn
+// at twice the size it shows on a phone, so lines and numerals stay crisp.
+export const BOOKLET = {
+  pageSize: [720, 1000],
+  margin: 44,
+  // Line weights of the outline renders: this page's parts, and earlier ones.
+  boldLine: 3.2,
+  faintLine: 1.6,
+  // Isometric-ish view the outline renders are drawn from (towards the origin).
+  viewDirection: [1.1, 0.9, 1.5],
+  // Space left round the drawing inside its frame, as a fraction.
+  framePadding: 0.08,
+  // Room between loose panels fanned out on a loose-parts page, in metres of the drawing.
+  fanGap: 0.12,
+  numeralSize: 150,
+  bubbleRadius: 64,
+  font: 'system-ui, -apple-system, "Segoe UI", sans-serif',
 };
 
 export const LIGHTS = {
