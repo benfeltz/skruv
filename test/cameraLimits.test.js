@@ -1,73 +1,65 @@
 import { describe, expect, it } from 'vitest';
 import { CAMERA, CAMERA_LIMITS, ROOM } from '../src/constants.js';
-import { maxOrbitDistance, minCameraHeight } from '../src/scene/cameraLimits.js';
+import { PART_TYPES } from '../src/game/catalog.js';
+import { createDevLayout } from '../src/game/devLayout.js';
+import { clampCamera, clampTarget } from '../src/scene/cameraLimits.js';
 
-const room = { width: 10, depth: 10, height: 4 };
-const limits = {
-  pivot: [0, 1, 0],
-  maxTargetRadius: 1,
-  wallMargin: 0.5,
-  minDistance: 1,
-  minPolarAngle: 0,
-  maxPolarAngle: Math.PI / 2,
-};
+const room = { width: 10, depth: 8, height: 3 };
+const limits = { targetMargin: 0.5, targetHeight: [0, 2], wallMargin: 0.4, floorClearance: 0.05 };
 
-describe('maxOrbitDistance', () => {
-  it('is bound by the walls when the room is tall', () => {
-    expect(maxOrbitDistance({ ...room, height: 100 }, limits)).toBeCloseTo(5 - 0.5 - 1);
+describe('clampTarget', () => {
+  it('leaves a target over the floor alone, down to floor level', () => {
+    expect(clampTarget([1.5, 0, -2], room, limits)).toEqual([1.5, 0, -2]);
   });
 
-  // 1.4.1 dollhouse view: the wall tops no longer bound zoom-out.
-  it('is no longer bound by the wall tops when the room is low', () => {
-    expect(maxOrbitDistance(room, limits)).toBeCloseTo(5 - 0.5 - 1);
-    expect(maxOrbitDistance({ ...room, height: 0.5 }, limits)).toBeCloseTo(5 - 0.5 - 1);
+  it('holds the target inside the walls and between its heights', () => {
+    expect(clampTarget([9, 5, -9], room, limits)).toEqual([4.5, 2, -3.5]);
+    expect(clampTarget([-9, -1, 9], room, limits)).toEqual([-4.5, 0, 3.5]);
+  });
+});
+
+describe('clampCamera', () => {
+  it('holds the camera wallMargin inside the walls horizontally', () => {
+    expect(clampCamera([7, 1, -7], room, limits)).toEqual([4.6, 1, -3.6]);
   });
 
-  it('ignores the polar limits — only the horizontal reach binds', () => {
-    const tilted = { ...limits, minPolarAngle: Math.PI / 3 };
-    expect(maxOrbitDistance(room, tilted)).toBeCloseTo(maxOrbitDistance(room, limits));
+  it('keeps the camera above the floor', () => {
+    expect(clampCamera([0, -0.3, 0], room, limits)).toEqual([0, 0.05, 0]);
   });
 
-  it('uses the nearer wall for an off-centre pivot or a narrow room', () => {
-    expect(maxOrbitDistance({ ...room, height: 100, depth: 6 }, limits)).toBeCloseTo(3 - 1.5);
-    const offCentre = { ...limits, pivot: [2, 1, 0] };
-    expect(maxOrbitDistance({ ...room, height: 100 }, offCentre)).toBeCloseTo(3 - 1.5);
+  it('lets the camera rise over the wall tops (dollhouse view)', () => {
+    expect(clampCamera([0, 12, 0], room, limits)).toEqual([0, 12, 0]);
   });
 });
 
 describe('shipped camera limits', () => {
-  const maxDistance = maxOrbitDistance(ROOM, CAMERA_LIMITS);
-  const [pivotX, pivotY, pivotZ] = CAMERA_LIMITS.pivot;
-  const { maxTargetRadius, wallMargin, minPolarAngle } = CAMERA_LIMITS;
-
-  it('leaves room to zoom', () => {
-    expect(maxDistance).toBeGreaterThan(CAMERA_LIMITS.minDistance);
+  it('lets the target reach every part laid out on the floor, at floor level', () => {
+    for (const { position: [x, , z] } of createDevLayout()) {
+      expect(clampTarget([x, 0, z], ROOM, CAMERA_LIMITS)).toEqual([x, 0, z]);
+    }
   });
 
-  it('keeps the camera inside the walls', () => {
-    const reach = maxTargetRadius + maxDistance;
-    expect(Math.abs(pivotX) + reach).toBeLessThanOrEqual(ROOM.width / 2 - wallMargin);
-    expect(Math.abs(pivotZ) + reach).toBeLessThanOrEqual(ROOM.depth / 2 - wallMargin);
+  it('zooms in close enough that a dowel fills a good part of the view', () => {
+    // Height of the view at the closest zoom, against the dowel's length.
+    const view = 2 * CAMERA_LIMITS.minDistance * Math.tan((CAMERA.fov * Math.PI) / 360);
+    expect(PART_TYPES.dowel.size[1] / view).toBeGreaterThan(0.15);
   });
 
-  it('lets the camera rise above the wall tops (dollhouse view)', () => {
-    const highest = pivotY + maxTargetRadius + maxDistance * Math.cos(minPolarAngle);
-    expect(highest).toBeGreaterThan(ROOM.height);
+  it('never clips what it zooms in on', () => {
+    expect(CAMERA.near).toBeLessThan(CAMERA_LIMITS.minDistance / 5);
+    expect(CAMERA_LIMITS.floorClearance).toBeGreaterThan(CAMERA.near);
   });
 
-  it('clears the wall tops fully zoomed out from the starting view, not only at the extreme', () => {
-    // The start target, at full zoom-out, looking down as steeply as allowed.
+  it('zooms out far enough to rise over the walls from the starting view', () => {
     const [, startY] = CAMERA.startTarget;
-    expect(startY + maxDistance * Math.cos(minPolarAngle)).toBeGreaterThan(ROOM.height);
+    expect(startY + CAMERA_LIMITS.maxDistance * Math.cos(CAMERA_LIMITS.minPolarAngle)).toBeGreaterThan(ROOM.height);
   });
 
-  it('zooms out further than the old wall-tops bound allowed', () => {
-    const byWallTops = (ROOM.height - wallMargin - (pivotY + maxTargetRadius)) / Math.cos(minPolarAngle);
-    expect(maxDistance).toBeGreaterThan(byWallTops);
-  });
-
-  it('keeps the camera above the floor by more than the near plane', () => {
-    expect(minCameraHeight(CAMERA_LIMITS)).toBeGreaterThan(CAMERA.near);
+  it('keeps the camera inside the walls whatever the zoom', () => {
+    const far = CAMERA_LIMITS.maxDistance * 3;
+    const [x, , z] = clampCamera([far, 1, -far], ROOM, CAMERA_LIMITS);
+    expect(Math.abs(x)).toBeLessThanOrEqual(ROOM.width / 2 - CAMERA_LIMITS.wallMargin);
+    expect(Math.abs(z)).toBeLessThanOrEqual(ROOM.depth / 2 - CAMERA_LIMITS.wallMargin);
   });
 
   it('starts the camera within its limits', () => {
@@ -75,20 +67,11 @@ describe('shipped camera limits', () => {
     const [tx, ty, tz] = CAMERA.startTarget;
     const distance = Math.hypot(cx - tx, cy - ty, cz - tz);
     const polar = Math.acos((cy - ty) / distance);
-    expect(Math.hypot(tx - pivotX, ty - pivotY, tz - pivotZ)).toBeLessThanOrEqual(maxTargetRadius);
+    expect(clampTarget(CAMERA.startTarget, ROOM, CAMERA_LIMITS)).toEqual(CAMERA.startTarget);
+    expect(clampCamera(CAMERA.startPosition, ROOM, CAMERA_LIMITS)).toEqual(CAMERA.startPosition);
     expect(distance).toBeGreaterThanOrEqual(CAMERA_LIMITS.minDistance);
-    expect(distance).toBeLessThanOrEqual(maxDistance);
-    expect(polar).toBeGreaterThanOrEqual(minPolarAngle);
+    expect(distance).toBeLessThanOrEqual(CAMERA_LIMITS.maxDistance);
+    expect(polar).toBeGreaterThanOrEqual(CAMERA_LIMITS.minPolarAngle);
     expect(polar).toBeLessThanOrEqual(CAMERA_LIMITS.maxPolarAngle);
-  });
-});
-
-describe('close-up zoom (1.4.1, Ben)', () => {
-  it('zooms in close enough to frame a dowel and its hole', () => {
-    expect(CAMERA_LIMITS.minDistance).toBeLessThanOrEqual(0.3);
-  });
-
-  it('never clips what it zooms in on: the near plane sits well inside the closest zoom', () => {
-    expect(CAMERA.near).toBeLessThan(CAMERA_LIMITS.minDistance / 10);
   });
 });

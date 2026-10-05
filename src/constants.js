@@ -65,16 +65,22 @@ export const CAMERA = {
   startTarget: [0, 0.6, 0],
 };
 
-// Orbit limits. maxDistance is derived from these and ROOM by
-// src/scene/cameraLimits.js so the camera stays wallMargin inside the walls horizontally;
-// it may rise over their tops. The pivot and maxPolarAngle keep it above the floor.
+// Orbit limits (src/scene/cameraLimits.js, applied by src/scene/cameraControls.js). The
+// orbit target roams the whole floor so the camera can get right up to any part; the
+// camera is clamped inside the walls and above the floor every frame, and may rise over
+// the wall tops when zoomed out (dollhouse view).
 export const CAMERA_LIMITS = {
-  // Centre of the sphere the orbit target may be panned within.
-  pivot: [0, 1, 0],
-  maxTargetRadius: 0.8,
+  // The target stays this far inside the walls, between these heights: down to the parts
+  // lying on the floor, up to just over the standing bookcase.
+  targetMargin: 0.6,
+  targetHeight: [0, 2.2],
   wallMargin: 0.4,
-  // Close enough to fill the screen with a dowel and the hole it goes in.
-  minDistance: 0.3,
+  // The camera never dips nearer the floor than this.
+  floorClearance: 0.05,
+  // Close enough that a dowel and the hole it goes in fill much of a phone screen.
+  minDistance: 0.15,
+  // Far enough to take in the whole room from over the walls.
+  maxDistance: 6,
   // Stops short of straight down: the build is always seen at an angle, never as a plan.
   minPolarAngle: (40 * Math.PI) / 180,
   maxPolarAngle: (80 * Math.PI) / 180,

@@ -11,7 +11,7 @@ import { easeToward } from '../src/game/dragMath.js';
 import { createGestureState, OWNER } from '../src/game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxGap } from '../src/game/pickMath.js';
 import { rotateVector } from '../src/game/snapMath.js';
-import { maxOrbitDistance, minCameraHeight } from '../src/scene/cameraLimits.js';
+import { clampCamera } from '../src/scene/cameraLimits.js';
 
 const sub = (a, b) => a.map((v, i) => v - b[i]);
 const add = (a, b) => a.map((v, i) => v + b[i]);
@@ -205,17 +205,13 @@ describe('Shift-drag lift (AC5)', () => {
 });
 
 describe('dollhouse zoom-out keeps its protections (AC6, regression risk)', () => {
-  const maxDistance = maxOrbitDistance(ROOM, CAMERA_LIMITS);
-  const [px, , pz] = CAMERA_LIMITS.pivot;
-
-  it('never lets the camera through a wall horizontally, at any polar angle', () => {
-    const reach = CAMERA_LIMITS.maxTargetRadius + maxDistance * Math.sin(CAMERA_LIMITS.maxPolarAngle);
-    expect(Math.abs(px) + reach).toBeLessThanOrEqual(ROOM.width / 2 - CAMERA_LIMITS.wallMargin);
-    expect(Math.abs(pz) + reach).toBeLessThanOrEqual(ROOM.depth / 2 - CAMERA_LIMITS.wallMargin);
-  });
-
-  it('still keeps it above the floor', () => {
-    expect(minCameraHeight(CAMERA_LIMITS)).toBeGreaterThan(CAMERA.near);
+  it('never lets the camera through a wall horizontally, nor under the floor', () => {
+    for (const point of [[99, -5, 99], [-99, 0, -99], [0, -1, 99]]) {
+      const [x, y, z] = clampCamera(point, ROOM, CAMERA_LIMITS);
+      expect(Math.abs(x)).toBeLessThanOrEqual(ROOM.width / 2 - CAMERA_LIMITS.wallMargin);
+      expect(Math.abs(z)).toBeLessThanOrEqual(ROOM.depth / 2 - CAMERA_LIMITS.wallMargin);
+      expect(y).toBeGreaterThan(CAMERA.near);
+    }
   });
 
   it('leaves the walls taller than the standing bookcase', () => {

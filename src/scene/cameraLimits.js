@@ -1,27 +1,24 @@
 // Pure orbit-limit geometry — no Three, no DOM — so Vitest covers it headlessly.
 //
-// The orbit target is confined to a sphere of `maxTargetRadius` around `pivot`; the camera
-// sits `distance` from the target at a polar angle in [minPolarAngle, maxPolarAngle].
-// Worst case horizontally:
-//   |camera.xz| <= |pivot.xz| + maxTargetRadius + distance
-// Height is deliberately unbounded above (1.4.1 dollhouse view): zoomed out, the camera
-// rises over the wall tops and the inward-facing walls vanish from outside. The floor stays
-// protected by maxPolarAngle and the pivot — see minCameraHeight.
+// The orbit target may go anywhere over the floor — down to the parts lying on it, out to
+// `targetMargin` inside the walls — so a pinch can bring the camera right up to any dowel
+// and its hole. The camera itself is clamped every frame: `wallMargin` inside the walls
+// horizontally, `floorClearance` above the floor, unbounded above (zoomed out it rises over
+// the wall tops — the dollhouse view).
 
-/** Largest orbit distance that keeps the camera `wallMargin` inside the walls horizontally. */
-export function maxOrbitDistance(room, limits) {
-  const [pivotX, , pivotZ] = limits.pivot;
-  const { maxTargetRadius, wallMargin } = limits;
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-  const horizontalReach = Math.min(
-    room.width / 2 - Math.abs(pivotX),
-    room.depth / 2 - Math.abs(pivotZ),
-  );
-  return horizontalReach - wallMargin - maxTargetRadius;
+/** The orbit target, held over the floor and inside the walls. */
+export function clampTarget([x, y, z], room, limits) {
+  const reachX = room.width / 2 - limits.targetMargin;
+  const reachZ = room.depth / 2 - limits.targetMargin;
+  const [low, high] = limits.targetHeight;
+  return [clamp(x, -reachX, reachX), clamp(y, low, high), clamp(z, -reachZ, reachZ)];
 }
 
-/** Lowest the camera can get: target at its lowest, camera at minDistance and maxPolarAngle. */
-export function minCameraHeight(limits) {
-  const [, pivotY] = limits.pivot;
-  return pivotY - limits.maxTargetRadius + limits.minDistance * Math.cos(limits.maxPolarAngle);
+/** The camera, held inside the walls horizontally and above the floor. */
+export function clampCamera([x, y, z], room, limits) {
+  const reachX = room.width / 2 - limits.wallMargin;
+  const reachZ = room.depth / 2 - limits.wallMargin;
+  return [clamp(x, -reachX, reachX), Math.max(limits.floorClearance, y), clamp(z, -reachZ, reachZ)];
 }
