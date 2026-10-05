@@ -410,7 +410,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const engagement = assembly.crankTarget(part.id);
     if (engagement) return unseat(engagement.tool);
     if (assembly.tap(part.id, behindNail).length > 0) return reconcile();
-    onTap?.(part);
+    // A part held at its seat is the router's: turning it would drop it off the seat.
+    if (!placed.has(part)) onTap?.(part);
   }
 
   // A nail driven home lands in whichever panel lies behind its hole.
@@ -474,7 +475,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       return;
     }
     if (effect.owner === OWNER.GIZMO_RING && rings) {
-      if (effect.type === 'dragStart') rings.start(effect.hit, effect);
+      // Rings left round a part that has since been seated never turn it; the gizmo's
+      // move/end do nothing for a turn that never started.
+      if (effect.type === 'dragStart') {
+        if (!placed.has(rings.selected)) rings.start(effect.hit, effect);
+      }
       else if (effect.type === 'dragMove') rings.move(effect);
       else if (effect.type === 'dragEnd') rings.end();
       else rings.cancel();
