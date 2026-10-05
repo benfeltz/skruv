@@ -13,7 +13,7 @@ const KIND_BY_SOCKET = Object.freeze({
   [CONNECTOR.DOWEL_HOLE]: 'hole',
   [CONNECTOR.CAM_BOLT_HOLE]: 'hole',
   [CONNECTOR.SHELF_PIN_HOLE]: 'hole',
-  [CONNECTOR.NAIL_HOLE]: 'hole',
+  [CONNECTOR.BACK_FITTING_HOLE]: 'hole',
   [CONNECTOR.CAM_LOCK_RECESS]: 'recess',
 });
 

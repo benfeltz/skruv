@@ -60,12 +60,12 @@ export async function createPhysicsWorld() {
         .setRotation(toRotation(rotation))
         .setLinearDamping(PHYSICS.linearDamping)
         .setAngularDamping(PHYSICS.angularDamping)
-        // Hardware is millimetres thin; CCD keeps a fast nail from tunnelling the floor.
+        // Hardware is millimetres thin; CCD keeps a fast pin from tunnelling the floor.
         .setCcdEnabled(true),
     );
     world.createCollider(
       RAPIER.ColliderDesc.cuboid(...halfExtents)
-        .setMass(mass)
+        .setMass(Math.max(mass, PHYSICS.minBodyMass))
         .setFriction(PHYSICS.friction)
         .setRestitution(PHYSICS.restitution),
       body,
@@ -74,6 +74,17 @@ export async function createPhysicsWorld() {
     mesh.quaternion.set(...rotation);
     bodies.push({ body, mesh });
     return body;
+  }
+
+  /** A fixed slab — the flatpack's cardboard — at `position`/`rotation`. */
+  function addStatic({ halfExtents, position, rotation }) {
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(...halfExtents)
+        .setTranslation(...position)
+        .setRotation(toRotation(rotation))
+        .setFriction(PHYSICS.friction)
+        .setRestitution(PHYSICS.restitution),
+    );
   }
 
   function step(delta) {
@@ -107,6 +118,15 @@ export async function createPhysicsWorld() {
   function release(body) {
     body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
     body.setLinvel(ZERO, true);
+    body.setAngvel(ZERO, true);
+  }
+
+  /** Sets a body down at a pose, at rest and under the simulation — a repack or a respawn. */
+  function place(body, position, rotation) {
+    body.setBodyType(RAPIER.RigidBodyType.Dynamic, false);
+    body.setTranslation(toVector(position), false);
+    body.setRotation(toRotation(rotation), false);
+    body.setLinvel(ZERO, false);
     body.setAngvel(ZERO, true);
   }
 
@@ -171,5 +191,5 @@ export async function createPhysicsWorld() {
     world.removeImpulseJoint(joint, true);
   }
 
-  return { register, step, grab, move, release, join, unjoin };
+  return { register, addStatic, step, grab, move, release, place, join, unjoin };
 }

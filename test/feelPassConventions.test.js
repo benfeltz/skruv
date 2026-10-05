@@ -1,12 +1,12 @@
 // Automated half of the 1.4.1 test plan: the feel pass's acceptance criteria and
-// regression risks, checked against the real catalog and dev layout headlessly. Touch
+// regression risks, checked against the real catalog and the packed flatpack headlessly. Touch
 // feel itself (phone pickability, sprue, assist, zoom-out) is manual — see Test Plan.md.
 
 import { describe, expect, it } from 'vitest';
 import { CAMERA, CAMERA_LIMITS, DECAL, GESTURE, PICK, ROOM, SNAP } from '../src/constants.js';
 import { CONNECTOR, MANIFEST, PART_TYPES } from '../src/game/catalog.js';
 import { decalPlacements } from '../src/game/decals.js';
-import { createDevLayout } from '../src/game/devLayout.js';
+import { createPackedWorldLayout } from '../src/game/packedLayout.js';
 import { easeToward } from '../src/game/dragMath.js';
 import { createGestureState, OWNER } from '../src/game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxReach } from '../src/game/pickMath.js';
@@ -62,18 +62,18 @@ function pick(parts, origin, target) {
   return preferHit(partHit, proxyHits, PICK)?.part ?? null;
 }
 
-describe('every fastener and tool pickable on the dev layout (AC1)', () => {
-  const layout = createDevLayout();
+describe('every fastener and tool pickable in the flatpack (AC1)', () => {
+  const layout = createPackedWorldLayout();
   const small = layout.filter(({ type }) => isSmallPart(PART_TYPES[type].size, PICK));
 
   it('covers every hardware type in the manifest', () => {
     expect(new Set(small.map((p) => p.type))).toEqual(
-      new Set(['dowel', 'camLockBolt', 'camLock', 'shelfPin', 'nail', 'allenWrench', 'screwdriver']),
+      new Set(['dowel', 'camLockBolt', 'camLock', 'shelfPin', 'backFitting', 'allenWrench', 'screwdriver']),
     );
   });
 
   // A phone camera ~1.4 m away, aimed a few millimetres off the part — where a fingertip
-  // centred on a 2 mm nail actually lands.
+  // centred on a 5 mm shelf pin actually lands.
   it.each(small.map((p) => [p.id, p]))('picks %s with a fingertip a few mm off it', (_, part) => {
     const eye = add(part.position, [0, 1, 1]);
     for (const offset of [[0.006, 0, 0], [0, 0, -0.006], [-0.004, 0, 0.004]]) {
@@ -83,8 +83,8 @@ describe('every fastener and tool pickable on the dev layout (AC1)', () => {
 });
 
 describe('panel grabs near hardware stay panel grabs (regression risk, both directions)', () => {
-  // A side panel as the dev layout lays it, holes up, with a dowel standing in one hole.
-  const side = createDevLayout().find(({ id }) => id === 'sidePanel-1');
+  // A side panel as the flatpack packs it, holes up, with a dowel standing in one hole.
+  const side = createPackedWorldLayout().find(({ id }) => id === 'sidePanel-1');
   const holeIndex = PART_TYPES.sidePanel.connectors.findIndex((c) => c.type === CONNECTOR.DOWEL_HOLE);
   const hole = PART_TYPES.sidePanel.connectors[holeIndex];
   const mouth = add(side.position, rotateVector(side.rotation, hole.position));
@@ -181,11 +181,11 @@ describe('picking among neighbouring hardware — real layouts (1.4.1 review, ro
       ],
     },
     {
-      name: 'a pin and a nail standing 2 cm apart',
-      parts: [standing('shelfPin-1', 'shelfPin', [0, 0]), standing('nail-1', 'nail', [0.02, 0])],
+      name: 'a shelf pin and a back fitting standing 2 cm apart',
+      parts: [standing('shelfPin-1', 'shelfPin', [0, 0]), standing('backFitting-1', 'backFitting', [0.02, 0])],
       presses: [
-        ['the nail, behind the pin', 'nail-1', [-1, 0.5, 0], 'nail-1'],
-        ['the pin, behind the nail', 'shelfPin-1', [1, 0.5, 0], 'shelfPin-1'],
+        ['the fitting, behind the pin', 'backFitting-1', [-1, 0.5, 0], 'backFitting-1'],
+        ['the pin, behind the fitting', 'shelfPin-1', [1, 0.5, 0], 'shelfPin-1'],
       ],
     },
   ];
@@ -208,7 +208,7 @@ describe('hole decals on every socket in the box (AC3)', () => {
     CONNECTOR.CAM_BOLT_HOLE,
     CONNECTOR.CAM_LOCK_RECESS,
     CONNECTOR.SHELF_PIN_HOLE,
-    CONNECTOR.NAIL_HOLE,
+    CONNECTOR.BACK_FITTING_HOLE,
   ]);
 
   it('marks every socket connector of every part instance once', () => {

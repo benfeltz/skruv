@@ -23,13 +23,15 @@ describe('type compatibility', () => {
     expect(areCompatible(CONNECTOR.DOWEL_END, CONNECTOR.DOWEL_HOLE)).toBe(true);
     expect(areCompatible(CONNECTOR.DOWEL_HOLE, CONNECTOR.DOWEL_END)).toBe(true);
     expect(areCompatible(CONNECTOR.CAM_LOCK_BODY, CONNECTOR.CAM_LOCK_RECESS)).toBe(true);
+    expect(areCompatible(CONNECTOR.BACK_FITTING_HOLE, CONNECTOR.BACK_FITTING_TIP)).toBe(true);
     expect(areCompatible(CONNECTOR.WRENCH_TIP, CONNECTOR.BOLT_HEAD)).toBe(true);
   });
 
   it('never pairs incompatible types', () => {
     expect(areCompatible(CONNECTOR.DOWEL_END, CONNECTOR.CAM_BOLT_HOLE)).toBe(false);
     expect(areCompatible(CONNECTOR.DOWEL_HOLE, CONNECTOR.DOWEL_HOLE)).toBe(false);
-    expect(areCompatible(CONNECTOR.NAIL_TIP, CONNECTOR.SHELF_PIN_HOLE)).toBe(false);
+    expect(areCompatible(CONNECTOR.BACK_FITTING_TIP, CONNECTOR.SHELF_PIN_HOLE)).toBe(false);
+    expect(areCompatible(CONNECTOR.PIN_TIP, CONNECTOR.BACK_FITTING_HOLE)).toBe(false);
   });
 
   it('pairs the screwdriver tip with a cam slot and nothing else', () => {

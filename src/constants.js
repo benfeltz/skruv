@@ -10,6 +10,15 @@ export const ROOM = {
   height: 3,
 };
 
+// The product and the company on the box and the booklet. A parody of flatpack furniture
+// in general — never any real maker's name, marks or document numbers.
+export const BRAND = {
+  product: 'JOHNNY',
+  maker: 'SKRUV',
+  // Printed on the booklet's back cover, where a real manual carries its document code.
+  documentCode: 'SK-0000451-1',
+};
+
 export const COLORS = {
   background: 0x1b1d22,
   floor: 0xc9b79c,
@@ -24,6 +33,8 @@ export const COLORS = {
   partMetal: 0xa7adb3,
   partWrench: 0x2f3136,
   partScrewdriver: 0xd9a21b,
+  partFitting: 0x5d5853,
+  cardboard: 0xb48a5a,
   // Rotate gizmo rings, one per world axis, x/y/z in the usual red/green/blue.
   gizmoX: 0xe5534b,
   gizmoY: 0x6cc04a,
@@ -43,6 +54,52 @@ export const COLORS = {
   unlit: 0x000000,
   // Sprue handle on a selected small part (src/scene/sprue.js): model-kit plastic grey.
   sprue: 0x8f9a93,
+  // Booklet pages (src/scene/bookletPages.js): black line art on white paper, earlier
+  // steps' parts in a pale grey.
+  bookletPaper: 0xffffff,
+  bookletInk: 0x1c1c1c,
+  bookletFaint: 0xbdbdbd,
+  // Per-page highlight (src/scene/highlight.js): the warm accent, glowing softly.
+  highlight: 0xe0a64a,
+};
+
+// Per-page highlight (src/scene/highlight.js): the parts the open booklet page is about
+// glow up and down — an aid for matching page to room, never a gate.
+export const HIGHLIGHT = {
+  // Seconds per glow cycle, and the peak emissive intensity — subtle.
+  period: 1.6,
+  intensity: 0.35,
+};
+
+// Booklet pages (src/scene/bookletPages.js), in page-canvas pixels: a portrait sheet drawn
+// at twice the size it shows on a phone, so lines and numerals stay crisp.
+export const BOOKLET = {
+  pageSize: [720, 1000],
+  margin: 44,
+  // Line weights of the outline renders: this page's parts, and earlier ones.
+  boldLine: 3.2,
+  faintLine: 1.6,
+  // Isometric-ish view the outline renders are drawn from (towards the origin).
+  viewDirection: [1.1, 0.9, 1.5],
+  // Space left round the drawing inside its frame, as a fraction.
+  framePadding: 0.08,
+  // Room between loose panels fanned out on a loose-parts page, in metres of the drawing.
+  fanGap: 0.12,
+  numeralSize: 150,
+  bubbleRadius: 64,
+  font: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+};
+
+// The booklet in hand (src/ui/booklet.js): CSS pixels.
+export const BOOKLET_UI = {
+  // The collapsed thumbnail of the open page, bottom-left — small enough to leave the room
+  // to the fingers.
+  thumbWidth: 64,
+  // A horizontal swipe this long flips a page; a downward one this long closes the sheet.
+  swipeDistance: 48,
+  // The open sheet never grows wider than this, nor taller than this share of the screen.
+  maxWidth: 520,
+  maxHeight: 0.92,
 };
 
 export const LIGHTS = {
@@ -91,13 +148,55 @@ export const CAMERA_LIMITS = {
   dampingFactor: 0.1,
 };
 
-// Temporary floor layout for the full manifest (src/game/devLayout.js) until PR 5's unbox.
-export const DEV_LAYOUT = {
-  // Parts pack into rows no wider than this, centred on the room origin.
-  rowWidth: 4,
-  gap: 0.08,
-  // Dropped from just above the floor so settling is visible without parts bouncing about.
-  dropHeight: 0.05,
+// The flatpack the game opens on (src/game/packedLayout.js, src/scene/flatpack.js): a
+// thin-walled cardboard box lying on the floor, its lid closed on top. Box-local frame:
+// length along z, origin on the floor at its centre.
+export const BOX = {
+  // Inside, [across, height, length]: the 2 m panels lie along it, the hardboard back
+  // only just fits across.
+  inner: [0.84, 0.07, 2.08],
+  // Cardboard walls and bottom, as physics slabs this thick (thin enough to read as
+  // cardboard, thick enough that a sliding panel can't tunnel through).
+  wall: 0.01,
+  floor: 0.01,
+  lidThickness: 0.008,
+  // On the floor in front of the start view, turned so its length runs across it.
+  position: [0, 0, 0.6],
+  yaw: Math.PI / 2,
+};
+
+// The display JOHNNY (src/scene/displayShelf.js): a second, already-built shelf standing
+// against the back wall, left of the start view — the exhibit, and a disassembly
+// playground. `position`/`yaw` place the assembled layout's frame (floor under the carcass
+// centre, front +z); its back panel's rear face is ~0.143 m behind that centre.
+export const DISPLAY = {
+  position: [-1.6, 0, -ROOM.depth / 2 + 0.165],
+  yaw: 0,
+  // Its parts' ids: the manifest's, prefixed, so they never collide with the player's set.
+  idPrefix: 'display/',
+};
+
+// Repack and recovery (src/ui/resetButton.js, src/main.js).
+export const RESET = {
+  // The repack button arms on a first tap and repacks only on a second within this many
+  // ms — cheap insurance against a fat finger wiping a build.
+  confirmMs: 2500,
+  // Every this many seconds, any loose player part found outside the room (by more than
+  // `escapeMargin` m) is set down again beside the box.
+  sweepInterval: 2,
+  escapeMargin: 0.05,
+  // Where: laid flat in a patch starting this far out from the box's long side and this
+  // deep, running the box's length, a gap between pieces; each dropped from this clearance
+  // above the floor. Pieces that don't fit go in again `layerHeight` higher, to land on top.
+  respawn: { offset: 0.35, depth: 2.5, gap: 0.05, height: 0.25, layerHeight: 0.1 },
+};
+
+// Packing inside the box (src/game/packedLayout.js).
+export const PACK = {
+  // Between neighbouring panels in a layer, and between a panel and the wall.
+  gap: 0.01,
+  // Loose hardware lies this far apart on top — a fingertip between pieces.
+  hardwareGap: 0.045,
 };
 
 export const PHYSICS = {
@@ -112,6 +211,10 @@ export const PHYSICS = {
   // Wood on wood: grippy, and no bounce (the design clamps restitution).
   friction: 0.6,
   restitution: 0,
+  // No body simulates lighter than this (kg); the catalog keeps the true masses. Impulse
+  // joints go soft at big mass ratios: a 1 g shelf pin fixed in a side spins loose under a
+  // 2 kg shelf resting on it, and the shelf drops through.
+  minBodyMass: 0.2,
   // Room colliders are slabs this thick, laid just outside the visible surfaces.
   roomColliderThickness: 0.5,
 };
@@ -218,7 +321,7 @@ export const DECAL = {
     dowelHole: 0.005,
     camBoltHole: 0.0045,
     shelfPinHole: 0.0035,
-    nailHole: 0.0022,
+    backFittingHole: 0.0045,
     camLockRecess: 0.009,
   },
   // A recess is drawn as a ring: inner radius as a fraction of the outer.
@@ -231,10 +334,8 @@ export const DECAL = {
 // Fasteners (src/game/fasteners.js, src/game/assembly.js) and the joints that follow them
 // (src/physics/world.js). Distances in metres unless marked CSS px; angles in radians.
 export const FASTENER = {
-  // A dowel, pin or nail comes back out when dragged this far (CSS px) along its axis.
+  // A dowel, pin or back fitting comes back out when dragged this far (CSS px) along its axis.
   pullDistance: 40,
-  // Hammer taps from a seated nail to a driven one.
-  tapsToDrive: 3,
   // Wrench crank from a seated cam bolt to a screwed one: two full turns.
   screwRadians: 4 * Math.PI,
   // Screwdriver turn from an open cam lock to a locked one.
@@ -242,7 +343,7 @@ export const FASTENER = {
   // A cam catches any screwed bolt head this close to its recess (Design: instance-agnostic).
   captureRadius: 0.015,
   // How deep each fastener sits in its hole once fully home, along its axis.
-  sinkDepth: { dowel: 0.015, pin: 0.008, nail: 0.018, bolt: 0.011, cam: 0.012 },
+  sinkDepth: { dowel: 0.015, pin: 0.008, fitting: 0.012, bolt: 0.011, cam: 0.012 },
   // Crank motion this close (CSS px) to the fastener's on-screen centre is ignored — the
   // angle swings wildly there.
   crankDeadzone: 12,

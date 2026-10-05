@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { FASTENER } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/catalog.js';
-import { capture, carryPose, connectorInWorld, createAssembly, relativePose } from '../src/game/assembly.js';
+import { capture, carryPose, connectorInWorld, createAssembly, relativePose, seatHome } from '../src/game/assembly.js';
+import { createAssembledLayout } from '../src/game/assembledLayout.js';
 import { KIND, STATE } from '../src/game/fasteners.js';
 import { rotateVector } from '../src/game/snapMath.js';
 
@@ -17,7 +18,7 @@ const SHELF_LEFT_DOWEL = 0; // [-end, 0, -0.09], -x
 const SHELF_LEFT_RECESS = 2;
 const END_LOW = 0; // a rod's bottom end
 const END_HIGH = 1;
-const BACK_NAIL = 0;
+const BACK_FITTING = 0;
 
 // The carcass's bottom-left corner, assembled orientation: side at the origin, a dowel
 // seated in its lowest hole (end pointing into the hole), the bottom panel seated on it.
@@ -97,17 +98,18 @@ describe('tap, pull and canRelease', () => {
     expect(assembly.canRelease('dowel-1')).toBe(false);
   });
 
-  it('records the part a fully driven nail lands in, and forgets it on the pull', () => {
+  it('records the part a pressed back fitting lands in, and forgets it on the pull', () => {
     const assembly = createAssembly(typeOf);
-    const nail = assembly.seat({ partA: 'nail-1', connectorA: END_LOW, partB: 'backPanel-1', connectorB: BACK_NAIL, mover: 'nail-1' });
-    const behind = () => ({ through: 'sidePanel-1' });
-    for (let i = 1; i < FASTENER.tapsToDrive; i++) assembly.tap('nail-1', behind);
-    expect(assembly.get(nail.id).through).toBeNull();
-    assembly.tap('nail-1', behind);
-    expect(assembly.get(nail.id)).toMatchObject({ through: 'sidePanel-1', fastener: { state: STATE.DRIVEN } });
-    expect([...assembly.compoundOf('backPanel-1')].sort()).toEqual(['backPanel-1', 'nail-1', 'sidePanel-1']);
-    assembly.apply(nail.id, { type: 'pull' });
-    expect(assembly.get(nail.id).through).toBeNull();
+    const fitting = assembly.seat({ partA: 'backFitting-1', connectorA: END_LOW, partB: 'backPanel-1', connectorB: BACK_FITTING, mover: 'backFitting-1' });
+    expect(fitting.kind).toBe(KIND.FITTING);
+    expect(assembly.get(fitting.id).through).toBeNull();
+    assembly.tap('backFitting-1', () => ({ through: 'sidePanel-1' }));
+    expect(assembly.get(fitting.id)).toMatchObject({ through: 'sidePanel-1', fastener: { state: STATE.PRESSED } });
+    expect([...assembly.compoundOf('backPanel-1')].sort()).toEqual(['backFitting-1', 'backPanel-1', 'sidePanel-1']);
+    expect(assembly.pullable('backFitting-1').map((j) => j.id)).toEqual([fitting.id]);
+    assembly.apply(fitting.id, { type: 'pull' });
+    expect(assembly.get(fitting.id).through).toBeNull();
+    expect(assembly.canRelease('backFitting-1')).toBe(true);
   });
 });
 
@@ -285,5 +287,132 @@ describe('relativePose', () => {
     const rel = relativePose(a, b);
     expectVec(rel.anchor, [1, 0, 0]);
     expectVec(rel.rotation, IDENTITY);
+  });
+});
+
+describe('drive and seatHome: a part set put in already fastened (1.5 display shelf)', () => {
+  const layout = createAssembledLayout();
+  const typeById = new Map(layout.parts.map((p) => [p.id, p.type]));
+  const poseOf = (id) => layout.parts.find((p) => p.id === id);
+  const build = () => {
+    const assembly = createAssembly((id) => typeById.get(id));
+    const joints = seatHome(
+      assembly,
+      layout.joints.map((j) => ({
+        partA: j.hardware,
+        connectorA: j.hardwareConnector,
+        partB: j.host,
+        connectorB: j.hostConnector,
+        mover: j.mover,
+        ctx: { through: j.through, captured: j.captured },
+      })),
+    );
+    return { assembly, joints };
+  };
+  const role = (r) => layout.parts.find((p) => p.role === r).id;
+
+  it('drives one joint home with the single event a player would send, and refuses a tool', () => {
+    const assembly = createAssembly(typeOf);
+    const dowel = assembly.seat({ partA: 'dowel-1', connectorA: END_LOW, partB: 'sidePanel-1', connectorB: SIDE_BOTTOM_DOWEL, mover: 'dowel-1' });
+    expect(assembly.drive(dowel.id)).toBe(true);
+    expect(assembly.get(dowel.id).fastener.state).toBe(STATE.PRESSED);
+    const bolt = assembly.seat({ partA: 'camLockBolt-1', connectorA: END_LOW, partB: 'sidePanel-1', connectorB: SIDE_BOTTOM_CAM_BOLT, mover: 'camLockBolt-1' });
+    expect(assembly.drive(bolt.id)).toBe(true);
+    expect(assembly.get(bolt.id).fastener).toMatchObject({ state: STATE.SCREWED, progress: 1 });
+    const tool = assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'camLockBolt-1', connectorB: END_HIGH, mover: 'allenWrench-1' });
+    expect(assembly.drive(tool.id)).toBe(false);
+  });
+
+  it('fastens every pair of the built JOHNNY: pressed, screwed, locked on its bolt', () => {
+    const { joints } = build();
+    expect(joints).toHaveLength(layout.joints.length);
+    for (const j of joints) expect(j.fastener.state, `${j.hardware} in ${j.host}`).not.toBe(STATE.SEATED);
+    for (const j of joints.filter((j) => j.kind === KIND.CAM)) expect(j.fastener.state).toBe(STATE.LOCKED);
+    for (const j of joints.filter((j) => j.kind === KIND.FITTING)) expect(j.through).not.toBeNull();
+  });
+
+  it('ties every panel but the resting shelves into one compound', () => {
+    const { assembly } = build();
+    const compound = assembly.compoundOf(role('leftSide'));
+    for (const p of layout.parts) expect(compound.has(p.id), p.id).toBe(p.role !== 'shelf');
+  });
+
+  it('bonds the carcass rigid where cams lock it, dowel play only at the plinth', () => {
+    const { assembly } = build();
+    const bridges = assembly.bonds(poseOf).filter((b) => b.key.startsWith('bridge:'));
+    const between = (a, b) => bridges.find((x) => (x.a === a && x.b === b) || (x.a === b && x.b === a));
+    for (const side of [role('leftSide'), role('rightSide')]) {
+      for (const r of ['bottom', 'fixed', 'top']) expect(between(role(r), side)?.mode).toBe('rigid');
+      expect(between(role('plinth'), side)?.mode).toBe('play');
+    }
+  });
+
+  it('comes fully apart by the same mechanics, in reverse: cams, bolts, then pulls', () => {
+    const { assembly, joints } = build();
+    const by = (kind) => joints.filter((j) => j.kind === kind);
+    // Bolts are held while their cams are locked.
+    for (const bolt of by(KIND.BOLT)) expect(assembly.apply(bolt.id, { type: 'crank', radians: -FASTENER.screwRadians })).toBe(false);
+    for (const cam of by(KIND.CAM)) expect(assembly.apply(cam.id, { type: 'crank', radians: -FASTENER.quarterTurn })).toBe(true);
+    for (const bolt of by(KIND.BOLT)) expect(assembly.apply(bolt.id, { type: 'crank', radians: -FASTENER.screwRadians })).toBe(true);
+    // Every pressed fastener is pullable by the part that was pushed into it.
+    for (const kind of [KIND.DOWEL, KIND.PIN, KIND.FITTING]) {
+      for (const j of by(kind)) {
+        expect(assembly.pullable(j.mover).map((p) => p.id)).toContain(j.id);
+        expect(assembly.apply(j.id, { type: 'pull' })).toBe(true);
+      }
+    }
+    for (const p of layout.parts) expect(assembly.canRelease(p.id), p.id).toBe(true);
+    expect(assembly.bonds(poseOf)).toEqual([]);
+  });
+});
+
+describe('letGoOf: a teardown leaves nothing fastened to the parts it takes away (PR #12 review)', () => {
+  // A display cam relocked on the player's own bolt, screwed into a display side.
+  function swapped() {
+    const typeOfAny = (id) => typeOf(id.replace(/^display\//, ''));
+    const assembly = createAssembly(typeOfAny);
+    const bolt = assembly.seat({ partA: 'camLockBolt-1', connectorA: END_LOW, partB: 'display/sidePanel-1', connectorB: SIDE_BOTTOM_CAM_BOLT, mover: 'camLockBolt-1' });
+    assembly.drive(bolt.id);
+    const cam = assembly.seat({ partA: 'display/camLock-1', connectorA: END_LOW, partB: 'display/topBottomPanel-1', connectorB: SHELF_LEFT_RECESS, mover: 'display/camLock-1' });
+    assembly.drive(cam.id, { captured: 'camLockBolt-1' });
+    return { assembly, bolt, cam };
+  }
+
+  it('turns the cam open by its own reverse turn, and leaves it seated where it is', () => {
+    const { assembly, bolt, cam } = swapped();
+    expect(assembly.get(cam.id)).toMatchObject({ captured: 'camLockBolt-1', fastener: { state: STATE.LOCKED } });
+    expect(assembly.letGoOf(['camLockBolt-1'])).toEqual([cam.id]);
+    expect(assembly.get(cam.id)).toMatchObject({ captured: null, fastener: { state: STATE.SEATED, progress: 0 } });
+    // The bolt is no longer held: it can be backed out, and once unseated it is on its own.
+    expect(assembly.apply(bolt.id, { type: 'crank', radians: -FASTENER.screwRadians })).toBe(true);
+    assembly.unseat(bolt.id);
+    expect([...assembly.compoundOf('camLockBolt-1')]).toEqual(['camLockBolt-1']);
+  });
+
+  it('leaves cams holding other bolts locked', () => {
+    const { assembly, cam } = swapped();
+    expect(assembly.letGoOf(['camLockBolt-2', 'dowel-1'])).toEqual([]);
+    expect(assembly.get(cam.id).fastener.state).toBe(STATE.LOCKED);
+  });
+
+  it('pulls back a display fitting pressed through into a player panel, leaving it seated', () => {
+    const typeOfAny = (id) => typeOf(id.replace(/^display\//, ''));
+    const assembly = createAssembly(typeOfAny);
+    const fitting = assembly.seat({ partA: 'display/backFitting-1', connectorA: END_LOW, partB: 'display/backPanel-1', connectorB: BACK_FITTING, mover: 'display/backFitting-1' });
+    assembly.tap('display/backFitting-1', () => ({ through: 'sidePanel-1' }));
+    expect(assembly.compoundOf('sidePanel-1').has('display/backPanel-1')).toBe(true);
+    expect(assembly.letGoOf(['sidePanel-1'])).toEqual([fitting.id]);
+    expect(assembly.get(fitting.id)).toMatchObject({ through: null, fastener: { state: STATE.SEATED } });
+    expect([...assembly.compoundOf('sidePanel-1')]).toEqual(['sidePanel-1']);
+    expect(assembly.bonds(() => ({ position: [0, 0, 0], rotation: [0, 0, 0, 1] }))).toEqual([]);
+  });
+
+  it('leaves joints whose hardware or host is being taken away to the unseat', () => {
+    const typeOfAny = (id) => typeOf(id.replace(/^display\//, ''));
+    const assembly = createAssembly(typeOfAny);
+    const fitting = assembly.seat({ partA: 'backFitting-1', connectorA: END_LOW, partB: 'backPanel-1', connectorB: BACK_FITTING, mover: 'backFitting-1' });
+    assembly.tap('backFitting-1', () => ({ through: 'sidePanel-1' }));
+    expect(assembly.letGoOf(['backFitting-1', 'backPanel-1', 'sidePanel-1'])).toEqual([]);
+    expect(assembly.get(fitting.id).through).toBe('sidePanel-1');
   });
 });

@@ -6,6 +6,7 @@ import {
   clampToRoom,
   easeToward,
   fitsInRoom,
+  hasEscaped,
   intersectDragPlane,
   pullAlong,
   quantizeAngle,
@@ -221,5 +222,24 @@ describe('easeToward (seat assist)', () => {
   it('keeps the rotation a unit quaternion', () => {
     const pose = easeToward({ position: [0, 0, 0], rotation: quarter }, { position: [0, 0, 0], rotation: [0, 0, 0, 1] }, 9, 0.05);
     expect(Math.hypot(...pose.rotation)).toBeCloseTo(1, 12);
+  });
+});
+
+describe('hasEscaped (1.5 recovery sweep)', () => {
+  const room = { width: 10, depth: 10, height: 3 };
+  const margin = 0.05;
+
+  it('keeps anything on or above the floor, inside the walls', () => {
+    expect(hasEscaped([0, 0.01, 0], room, margin)).toBe(false);
+    expect(hasEscaped([4.99, 2.9, -4.99], room, margin)).toBe(false);
+    // No ceiling: thrown up, it comes back down.
+    expect(hasEscaped([0, 40, 0], room, margin)).toBe(false);
+  });
+
+  it('flags a body under the floor or past a wall, beyond the margin', () => {
+    expect(hasEscaped([0, -0.06, 0], room, margin)).toBe(true);
+    expect(hasEscaped([5.06, 1, 0], room, margin)).toBe(true);
+    expect(hasEscaped([0, 1, -5.06], room, margin)).toBe(true);
+    expect(hasEscaped([0, -0.04, 5.04], room, margin)).toBe(false);
   });
 });

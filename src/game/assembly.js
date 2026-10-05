@@ -3,7 +3,7 @@
 // rotation: [x, y, z, w] }` supplied by the caller.
 //
 // A joint is one seated connector pair, normalised so `hardware` is the fastener-end side
-// (dowel, bolt, cam, pin, nail, tool) and `host` the hole side, with the fastener state
+// (dowel, bolt, cam, pin, back fitting, tool) and `host` the hole side, with the fastener state
 // machine that pair runs (src/game/fasteners.js). `mover` is the part that was dragged
 // into the seat — the one held in place until its first fastener engages.
 //
@@ -102,6 +102,29 @@ const sinkOf = (joint) => (FASTENER.sinkDepth[joint.kind] ?? 0) * joint.fastener
 
 const pairKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
+// The single event that takes a fastener of `kind` from seated to fully home, or null for
+// a tool (it fastens nothing).
+function homeEvent(kind) {
+  if (isTapKind(kind)) return { type: 'tap' };
+  if (kind === KIND.BOLT) return { type: 'crank', radians: FASTENER.screwRadians };
+  if (kind === KIND.CAM) return { type: 'crank', radians: FASTENER.quarterTurn };
+  return null;
+}
+
+/**
+ * Seats every pair in `pairs` — `{ partA, connectorA, partB, connectorB, mover, ctx }`, as
+ * `seat` takes them plus the `apply` context their fastener needs (`through`, `captured`)
+ * — and drives each home with `drive`: bolts before the cams that catch them. A part set
+ * put in this way is fastened by exactly the events a build sends, so the same events in
+ * reverse take it apart. Returns the joints.
+ */
+export function seatHome(assembly, pairs) {
+  const seated = pairs.map(({ ctx = {}, ...pair }) => ({ joint: assembly.seat(pair), ctx }));
+  const camsLast = (s) => (s.joint.kind === KIND.CAM ? 1 : 0);
+  for (const { joint, ctx } of [...seated].sort((a, b) => camsLast(a) - camsLast(b))) assembly.drive(joint.id, ctx);
+  return seated.map((s) => assembly.get(s.joint.id));
+}
+
 /**
  * `typeOf(partId)` names each part's catalog type.
  */
@@ -132,7 +155,7 @@ export function createAssembly(typeOf) {
       kind,
       mover,
       fastener: createFastener(kind),
-      // A driven nail's tip lands in whatever part sits behind its hole.
+      // A pressed back fitting's tip lands in whatever part sits behind its hole.
       through: null,
       // A locked cam's caught bolt.
       captured: null,
@@ -162,7 +185,7 @@ export function createAssembly(typeOf) {
 
   /**
    * Feeds `event` to a joint's machine. `ctx.captured` (a cam's caught bolt id or null) and
-   * `ctx.through` (the part behind a nail) come from the caller's geometry. True if it
+   * `ctx.through` (the part behind a back fitting) come from the caller's geometry. True if it
    * changed.
    */
   function apply(id, event, ctx = {}) {
@@ -174,16 +197,52 @@ export function createAssembly(typeOf) {
     });
     if (fastener === joint.fastener) return false;
     const next = { ...joint, fastener };
-    if (joint.kind === KIND.NAIL) next.through = fastener.state === STATE.DRIVEN ? (ctx.through ?? null) : null;
+    if (joint.kind === KIND.FITTING) next.through = isFastened(fastener) ? (ctx.through ?? null) : null;
     if (joint.kind === KIND.CAM) next.captured = fastener.state === STATE.LOCKED ? (joint.captured ?? ctx.captured) : null;
     joints.set(id, next);
     return true;
   }
 
   /**
+   * Drives a seated joint's fastener all the way home through the very events a player's
+   * hands send — one tap, or one full turn of the wrench or screwdriver — so a part can
+   * start out fastened (the display shelf) by the same path the build takes, and come
+   * apart by it too. `ctx` as for `apply`. True if the joint ended fastened.
+   */
+  function drive(id, ctx = {}) {
+    const joint = joints.get(id);
+    const event = joint && homeEvent(joint.kind);
+    if (!event) return false;
+    apply(id, event, ctx);
+    return isFastened(joints.get(id).fastener);
+  }
+
+  /**
+   * Lets go of `parts` wherever a joint holds them as its third party — neither its
+   * hardware nor its host — each by its own reverse move: a cam locked on one of their
+   * bolts turns open, a back fitting pressed through into one of them pulls back. The
+   * joints stay seated where they are. A teardown that takes those parts away runs this
+   * first, so nothing is left fastened to a part that has gone. Returns the ids changed.
+   */
+  function letGoOf(parts) {
+    const set = new Set(parts);
+    const reverse = (j) => {
+      if (j.kind === KIND.CAM && j.fastener.state === STATE.LOCKED && set.has(j.captured)) {
+        return { type: 'crank', radians: -FASTENER.quarterTurn };
+      }
+      if (j.kind === KIND.FITTING && set.has(j.through)) return { type: 'pull' };
+      return null;
+    };
+    return all()
+      .filter((j) => !set.has(j.hardware) && !set.has(j.host))
+      .filter((j) => reverse(j) && apply(j.id, reverse(j)))
+      .map((j) => j.id);
+  }
+
+  /**
    * A tap on `part` pushes home every tap-kind fastener touching it — a tapped dowel, or a
    * panel tapped down onto its dowels. `ctxFor(joint)` supplies per-joint context (a
-   * nail's `through`). Returns the ids that changed.
+   * back fitting's `through`). Returns the ids that changed.
    */
   function tap(part, ctxFor = () => ({})) {
     return jointsOf(part)
@@ -347,7 +406,7 @@ export function createAssembly(typeOf) {
             frame: () => jointFrame(compose(inFirst, invert(inSecond)), hostConnector(second).position),
           });
         } else {
-          // A nail into what lies behind, or a cam onto another host's bolt: as they are.
+          // A back fitting into what lies behind, or a cam onto another host's bolt: as they are.
           const pivot = connectorInWorld(hostConnector(first), poseOf(first.host)).position;
           addBridge({
             a: first.host,
@@ -379,6 +438,8 @@ export function createAssembly(typeOf) {
     seat,
     unseat,
     apply,
+    drive,
+    letGoOf,
     tap,
     pullable,
     canRelease,

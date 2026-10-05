@@ -1,20 +1,27 @@
-import { PICK } from './constants.js';
+import { PICK, RESET, ROOM } from './constants.js';
 import { createAssembly } from './game/assembly.js';
 import { PART_TYPES } from './game/catalog.js';
-import { createDevLayout } from './game/devLayout.js';
 import { createPartMesh } from './game/partMesh.js';
+import { hasEscaped } from './game/dragMath.js';
+import { createPackedWorldLayout, lidRest, respawnSpots } from './game/packedLayout.js';
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
 import { createGhost } from './scene/ghost.js';
 import { createCompoundPhysics } from './scene/compoundPhysics.js';
+import { createDisplayShelf } from './scene/displayShelf.js';
 import { createDropGuide } from './scene/dropGuide.js';
+import { createFlatpack } from './scene/flatpack.js';
 import { createGestureRouter } from './scene/gestureRouter.js';
 import { createGizmo } from './scene/gizmo.js';
+import { createHighlight } from './scene/highlight.js';
 import { createLoop } from './scene/loop.js';
 import { createRoom } from './scene/room.js';
 import { createScene } from './scene/scene.js';
 import { createSprue } from './scene/sprue.js';
+import { createBookletPages } from './scene/bookletPages.js';
+import { createBookletSheet } from './ui/booklet.js';
+import { createResetButton } from './ui/resetButton.js';
 import { createToggleButton } from './ui/toggleButton.js';
 
 const { renderer, scene, camera } = createScene(document.getElementById('app'));
@@ -23,9 +30,15 @@ scene.add(createRoom());
 const cameraControls = createCameraControls(camera, renderer.domElement);
 const physics = await createPhysicsWorld();
 
-// One record per physical part — what gestures pick, drag and snap.
-const parts = [];
-for (const { id, type, position, rotation } of createDevLayout()) {
+// The game opens on the closed flatpack: every part packed flat inside, settling at once
+// and resting until the lid comes off and a hand disturbs it.
+const flatpack = createFlatpack(physics);
+scene.add(flatpack.object, flatpack.lid.mesh);
+
+// One record per physical part — what gestures pick, drag and snap. The lid is one too.
+const parts = [flatpack.lid];
+const packed = createPackedWorldLayout();
+for (const { id, type, position, rotation } of packed) {
   const part = PART_TYPES[type];
   const mesh = createPartMesh(part);
   const body = physics.register(mesh, {
@@ -38,9 +51,16 @@ for (const { id, type, position, rotation } of createDevLayout()) {
   parts.push({ id, type, mesh, body });
 }
 
+// The display JOHNNY against the wall: already built, its parts ordinary parts.
+const display = createDisplayShelf(physics);
+for (const part of display.parts) scene.add(part.mesh);
+parts.push(...display.parts);
+
 // What is seated on and fastened to what — every type-compatible pair, right or wrong.
 const typeById = new Map(parts.map(({ id, type }) => [id, type]));
 const assembly = createAssembly((id) => typeById.get(id));
+// The display shelf goes in fastened, through the graph's own events.
+display.fasten(assembly);
 // Manipulation goes through this seam so a fastened compound moves as one.
 const manipulation = createCompoundPhysics(physics, parts, assembly);
 
@@ -55,6 +75,20 @@ const gizmo = createGizmo({
   isFree: () => freeRotate.pressed,
 });
 scene.add(gizmo.object);
+
+// The booklet: pages drawn from the same models, flipped freely — reference, never a gate.
+const bookletPages = createBookletPages(renderer);
+const booklet = createBookletSheet({ pages: bookletPages });
+document.body.append(booklet.thumb, booklet.element);
+
+// While the booklet is open, the open page's parts glow — the player's own set only, never
+// the display shelf or the box lid.
+const playerParts = parts.filter((part) => !display.parts.includes(part) && part !== flatpack.lid);
+const highlight = createHighlight(playerParts);
+booklet.onChange(({ page, expanded }) => {
+  const shown = bookletPages.pages[page];
+  highlight.show(expanded && shown.kind === 'step' ? shown.types : []);
+});
 
 const ghost = createGhost();
 scene.add(ghost.object);
@@ -93,12 +127,47 @@ const router = createGestureRouter({
   sprue,
   dropGuide,
 });
+// The display shelf's physics joints, made by the same reconcile every tap and turn runs.
+router.sync();
+
+// Repack: the player's parts come apart by the normal teardown and go back into the box
+// as packed, lid on. The display shelf is never touched.
+const packedPose = new Map([[flatpack.lid.id, lidRest()], ...packed.map((p) => [p.id, p])]);
+function repack() {
+  router.unseatAll(playerParts.map((part) => part.id));
+  select(null);
+  for (const { id, body } of [...playerParts, flatpack.lid]) {
+    const { position, rotation } = packedPose.get(id);
+    physics.place(body, position, rotation);
+  }
+}
+document.body.append(createResetButton({ onReset: repack }).element);
+
+// Recovery: a loose player part that has left the room (through a slab, off a wall) is set
+// down again beside the box. Bonded parts go back only with a repack.
+let sweepIn = RESET.sweepInterval;
+function sweep(delta) {
+  sweepIn -= delta;
+  if (sweepIn > 0) return;
+  sweepIn = RESET.sweepInterval;
+  const escaped = [...playerParts, flatpack.lid].filter(({ id, body }) => {
+    const { x, y, z } = body.translation();
+    return hasEscaped([x, y, z], ROOM, RESET.escapeMargin) && assembly.compoundOf(id).size === 1;
+  });
+  if (escaped.length === 0) return;
+  const spots = respawnSpots(escaped.map((part) => part.type));
+  escaped.forEach(({ body }, i) => physics.place(body, spots[i].position, spots[i].rotation));
+}
 
 createLoop((delta) => {
   cameraControls.update(delta);
   physics.step(delta);
+  sweep(delta);
   router.update(delta);
   gizmo.update();
   sprue.update();
+  highlight.update(delta);
   renderer.render(scene, camera);
 }).start();
+// The rest of the booklet draws in idle time, after the room is on screen.
+bookletPages.prerender();

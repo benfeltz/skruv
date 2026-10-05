@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CAMERA, CAMERA_LIMITS, ROOM } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/catalog.js';
-import { createDevLayout } from '../src/game/devLayout.js';
+import { createPackedWorldLayout } from '../src/game/packedLayout.js';
 import { clampCamera, clampTarget, clampTargetAlongView, panSpeedAt, seatOnFloor } from '../src/scene/cameraLimits.js';
 
 const room = { width: 10, depth: 8, height: 3 };
@@ -33,8 +33,8 @@ describe('clampCamera', () => {
 });
 
 describe('shipped camera limits', () => {
-  it('lets the target reach every part laid out on the floor, at floor level', () => {
-    for (const { position: [x, , z] } of createDevLayout()) {
+  it('lets the target reach every part packed in the box, at floor level', () => {
+    for (const { position: [x, , z] } of createPackedWorldLayout()) {
       expect(clampTarget([x, 0, z], ROOM, CAMERA_LIMITS)).toEqual([x, 0, z]);
     }
   });

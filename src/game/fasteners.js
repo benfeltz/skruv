@@ -3,8 +3,8 @@
 // cam open), never an abstract undo. Pure: plain records in, new records out — an event a
 // machine ignores returns the very same record, so callers detect change by identity.
 //
-//   dowel, pin   seated ⇄ pressed          tap / pull
-//   nail         seated → driving → driven  tap per hammer blow; pull resets
+//   dowel, pin,  seated ⇄ pressed          tap / pull
+//   back fitting
 //   bolt         seated ⇄ screwed          signed crank progress (wrench)
 //   cam          seated ⇄ locked           signed quarter turn (screwdriver), lock needs a
 //                                          captured bolt head
@@ -18,7 +18,8 @@ import { CONNECTOR } from './catalog.js';
 export const KIND = Object.freeze({
   DOWEL: 'dowel',
   PIN: 'pin',
-  NAIL: 'nail',
+  // A push-pin back fitting: pressed through the back panel into whatever lies behind.
+  FITTING: 'fitting',
   BOLT: 'bolt',
   CAM: 'cam',
   TOOL: 'tool',
@@ -27,8 +28,6 @@ export const KIND = Object.freeze({
 export const STATE = Object.freeze({
   SEATED: 'seated',
   PRESSED: 'pressed',
-  DRIVING: 'driving',
-  DRIVEN: 'driven',
   SCREWED: 'screwed',
   LOCKED: 'locked',
 });
@@ -37,7 +36,7 @@ export const STATE = Object.freeze({
 const KIND_FOR_END = Object.freeze({
   [CONNECTOR.DOWEL_END]: KIND.DOWEL,
   [CONNECTOR.PIN_TIP]: KIND.PIN,
-  [CONNECTOR.NAIL_TIP]: KIND.NAIL,
+  [CONNECTOR.BACK_FITTING_TIP]: KIND.FITTING,
   [CONNECTOR.BOLT_THREAD]: KIND.BOLT,
   [CONNECTOR.CAM_LOCK_BODY]: KIND.CAM,
   [CONNECTOR.WRENCH_TIP]: KIND.TOOL,
@@ -48,7 +47,7 @@ const KIND_FOR_END = Object.freeze({
 export const kindOf = (endType) => KIND_FOR_END[endType] ?? null;
 
 /** Kinds pushed home by a tap and pulled back out along their axis. */
-export const isTapKind = (kind) => kind === KIND.DOWEL || kind === KIND.PIN || kind === KIND.NAIL;
+export const isTapKind = (kind) => kind === KIND.DOWEL || kind === KIND.PIN || kind === KIND.FITTING;
 
 /** Kinds turned by a tool. */
 export const isCrankKind = (kind) => kind === KIND.BOLT || kind === KIND.CAM;
@@ -69,16 +68,6 @@ const clamp01 = (v) => Math.min(1, Math.max(0, v));
 function tapPull(f, type) {
   if (type === 'tap' && f.state === STATE.SEATED) return { ...f, state: STATE.PRESSED, progress: 1 };
   if (type === 'pull' && f.state === STATE.PRESSED) return { ...f, state: STATE.SEATED, progress: 0 };
-  return f;
-}
-
-function nail(f, type) {
-  if (type === 'tap' && f.state !== STATE.DRIVEN) {
-    const taps = Math.round(f.progress * FASTENER.tapsToDrive) + 1;
-    const driven = taps >= FASTENER.tapsToDrive;
-    return { ...f, state: driven ? STATE.DRIVEN : STATE.DRIVING, progress: driven ? 1 : taps / FASTENER.tapsToDrive };
-  }
-  if (type === 'pull' && f.state !== STATE.SEATED) return { ...f, state: STATE.SEATED, progress: 0 };
   return f;
 }
 
@@ -105,9 +94,8 @@ export function transition(f, event, ctx = {}) {
   switch (f.kind) {
     case KIND.DOWEL:
     case KIND.PIN:
+    case KIND.FITTING:
       return tapPull(f, event.type);
-    case KIND.NAIL:
-      return nail(f, event.type);
     case KIND.BOLT:
       if (event.type !== 'crank') return f;
       return turned(f, event.radians, FASTENER.screwRadians, { canFasten: true, canLoosen: !ctx.held }, STATE.SCREWED);

@@ -93,6 +93,15 @@ export function fitsInRoom([x, y, z], [hx, hy, hz], room, tolerance = 0) {
   );
 }
 
+/**
+ * True when a body centre at [x, y, z] has left the room: under the floor by more than
+ * `margin`, or past a wall by more than it — a part flung through a slab. No ceiling: one
+ * thrown up comes back down.
+ */
+export function hasEscaped([x, y, z], room, margin) {
+  return y < -margin || Math.abs(x) > room.width / 2 + margin || Math.abs(z) > room.depth / 2 + margin;
+}
+
 /** Spherical interpolation from quaternion `a` to `b` ([x, y, z, w]) by fraction `t`. */
 function slerp(a, b, t) {
   let cos = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];

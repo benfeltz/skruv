@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -57,9 +57,10 @@ describe('placeholders and headers', () => {
     expect(read('src/main.js')).not.toMatch(/createTestBox/);
   });
 
-  it('marks devLayout.js as temporary until the unbox flow', () => {
-    expect(read('src/game/devLayout.js').split('\n')[0]).toMatch(/TEMPORARY/);
-    expect(read('src/game/devLayout.js')).toMatch(/PR 5/);
+  it('retires the temporary dev floor layout now the flatpack replaces it (1.5)', () => {
+    expect(existsSync(new URL('../src/game/devLayout.js', import.meta.url))).toBe(false);
+    expect(read('src/main.js')).not.toMatch(/devLayout|DEV_LAYOUT/);
+    expect(read('src/main.js')).toMatch(/createPackedWorldLayout\(\)/);
   });
 
   it('documents catalog.js as data, not tunables, and keeps mating out', () => {
@@ -67,5 +68,20 @@ describe('placeholders and headers', () => {
     expect(catalog).toMatch(/as DATA/);
     expect(catalog).toMatch(/not behaviour tunables/);
     expect(catalog).not.toMatch(/\bMATING\b|\bmates\s*:/);
+  });
+});
+
+describe('stable stacks and supports (1.5)', () => {
+  const world = read('src/physics/world.js');
+
+  // Bodies born asleep never get their resting contacts, and a packed stack sank 2–3 cm
+  // through the box and room floors once anything touched it.
+  it('spawns every body awake, to settle and sleep on its own', () => {
+    expect(world).not.toMatch(/setSleeping\(/);
+  });
+
+  it('simulates no body lighter than PHYSICS.minBodyMass, keeping catalog masses true', () => {
+    expect(PHYSICS.minBodyMass).toBeGreaterThan(0);
+    expect(world).toMatch(/\.setMass\(Math\.max\(mass, PHYSICS\.minBodyMass\)\)/);
   });
 });
