@@ -1,3 +1,4 @@
+import { createAssembly } from './game/assembly.js';
 import { PART_TYPES } from './game/catalog.js';
 import { createDevLayout } from './game/devLayout.js';
 import { createPartMesh } from './game/partMesh.js';
@@ -32,6 +33,10 @@ for (const { id, type, position, rotation } of createDevLayout()) {
   parts.push({ id, type, mesh, body });
 }
 
+// What is seated on and fastened to what — every type-compatible pair, right or wrong.
+const typeById = new Map(parts.map(({ id, type }) => [id, type]));
+const assembly = createAssembly((id) => typeById.get(id));
+
 // 90° detents are the default; the toggle frees rotation.
 const freeRotate = createToggleButton({ label: 'Free rotate' });
 document.body.append(freeRotate.element);
@@ -53,6 +58,7 @@ createGestureRouter({
   cameraControls,
   physics,
   parts,
+  assembly,
   rings: gizmo,
   // Tap a part to select it; tap empty space to deselect.
   onTap: (part) => (part ? gizmo.show(part) : gizmo.hide()),

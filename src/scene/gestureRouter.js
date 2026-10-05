@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { GESTURE, ROOM, SNAP } from '../constants.js';
-import { PART_TYPES } from '../game/catalog.js';
+import { capture, connectorInWorld } from '../game/assembly.js';
+import { CONNECTOR, PART_TYPES } from '../game/catalog.js';
+import { createCrank, tightenSign } from '../game/crankMath.js';
 import { clampLift, clampToRoom, fitsInRoom, intersectDragPlane, rotatedHalfExtents } from '../game/dragMath.js';
+import { KIND } from '../game/fasteners.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
 
@@ -15,18 +18,22 @@ import { applyTransform, findSnap } from '../game/snapMath.js';
  * camera exactly as before, and every end path (up, cancel, lost capture, page hidden)
  * hands it back.
  *
+ * Seats land in `assembly` (src/game/assembly.js); a tool seated on a bolt head or cam slot
+ * is engaged, and dragging it cranks that fastener instead of moving the tool.
+ *
  * `parts` is the registry `[{ id, type, mesh, body }]`. Optional hooks:
  *   rings  — `{ selected, hitTest(raycaster), start(hit, pointer), move(pointer), end(),
  *            cancel() }`; which of ring and part a press lands on is `resolveHit`'s call.
  *   onTap  — called with the tapped part, or null for empty space.
  *   ghost  — `{ show(mesh, pose), hide() }` snap preview (src/scene/ghost.js).
  */
-export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, rings, onTap, ghost }) {
+export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost }) {
   const state = createGestureState();
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const meshes = parts.map((part) => part.mesh);
   const partByMesh = new Map(parts.map((part) => [part.mesh, part]));
+  const partById = new Map(parts.map((part) => [part.id, part]));
   const footprint = new THREE.Box3();
   const scratch = new THREE.Vector3();
 
@@ -62,13 +69,33 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     else cameraControls.disable();
   }
 
-  // World-space connector records for snapMath, for `part` posed at position/quaternion.
+  // World-space connector records for snapMath, for `part` posed at position/quaternion;
+  // `part` and `index` ride along so a snap can be seated in the assembly.
   function worldConnectors(part, position, quaternion) {
-    return PART_TYPES[part.type].connectors.map(({ type, position: local, axis }) => ({
+    return PART_TYPES[part.type].connectors.map(({ type, position: local, axis }, index) => ({
       type,
       position: scratch.fromArray(local).applyQuaternion(quaternion).add(position).toArray(),
       axis: scratch.fromArray(axis).applyQuaternion(quaternion).toArray(),
+      part,
+      index,
     }));
+  }
+
+  // The simulation's pose of a part (its mesh may show fastener feedback on top).
+  function poseOf(id) {
+    const { body } = partById.get(id);
+    const { x, y, z } = body.translation();
+    const r = body.rotation();
+    return { position: [x, y, z], rotation: [r.x, r.y, r.z, r.w] };
+  }
+
+  const connectorWorld = (id, index) => connectorInWorld(PART_TYPES[partById.get(id).type].connectors[index], poseOf(id));
+
+  // A world point in client (CSS px) coordinates.
+  function screenPoint(position) {
+    scratch.fromArray(position).project(camera);
+    const rect = domElement.getBoundingClientRect();
+    return [rect.left + ((scratch.x + 1) / 2) * rect.width, rect.top + ((1 - scratch.y) / 2) * rect.height];
   }
 
   function snapCandidate(target) {
@@ -85,15 +112,26 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     // that would hold it through the floor or a wall.
     const pose = applyTransform(snap.transform, { position: target, rotation: rotation.toArray() });
     const half = rotatedHalfExtents(PART_TYPES[part.type].size.map((d) => d / 2), pose.rotation);
-    return fitsInRoom(pose.position, half, ROOM, SNAP.roomTolerance) ? pose : null;
+    return fitsInRoom(pose.position, half, ROOM, SNAP.roomTolerance) ? { ...pose, snap } : null;
   }
 
   // --- part drag: kinematic body on a floor-parallel plane at the grab point's height ---
 
-  function beginDrag(part, [px, py, pz], event) {
+  function beginDrag(part, point, event) {
+    const engagement = assembly.crankTarget(part.id);
+    if (engagement?.target) beginCrank(part, engagement, event);
+    else if (assembly.canRelease(part.id)) {
+      // Nothing holds it: it leaves whatever it was seated on.
+      for (const joint of assembly.jointsOf(part.id)) assembly.unseat(joint.id);
+      beginMove(part, point, event);
+    }
+  }
+
+  function beginMove(part, [px, py, pz], event) {
     const { mesh, body } = part;
     footprint.setFromObject(mesh);
     drag = {
+      mode: 'move',
       part,
       planeY: py,
       height: mesh.position.y + GESTURE.hoverLift,
@@ -135,8 +173,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   function endDrag() {
+    if (drag.mode === 'crank') return stopDrag();
     const { part, snapped } = drag;
     if (snapped) {
+      const { from, to } = snapped.snap;
+      assembly.seat({ partA: part.id, connectorA: from.index, partB: to.part.id, connectorB: to.index, mover: part.id });
       // Seated parts stay kinematic ("placed") until regrabbed, or an unfastened panel
       // would fall straight over. TEMPORARY: remove once PR 4's fastener joints hold them.
       physics.move(part.body, snapped.position, snapped.rotation);
@@ -147,9 +188,40 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   function cancelDrag() {
-    physics.release(drag.part.body);
+    if (drag.mode !== 'crank') physics.release(drag.part.body);
     stopDrag();
   }
+
+  // --- crank: an engaged tool's drag turns its fastener ---
+
+  function beginCrank(part, engagement, event) {
+    drag = { mode: 'crank', part, engagement, crank: createCrank() };
+    crankTo(event);
+  }
+
+  function crankTo(event) {
+    const { tool, target } = drag.engagement;
+    const head = connectorWorld(tool.host, tool.hostConnector).position;
+    const delta = drag.crank.move(screenPoint(head), [event.clientX, event.clientY]);
+    if (!delta) return;
+    const into = connectorWorld(target.hardware, target.hardwareConnector).axis;
+    const view = scratch.fromArray(head).sub(camera.position).toArray();
+    const radians = tightenSign(into, view) * delta;
+    assembly.apply(target.id, { type: 'crank', radians }, crankContext(target));
+  }
+
+  // A cam catches the nearest screwed bolt head within reach of its recess, any bolt.
+  function crankContext(joint) {
+    if (joint.kind !== KIND.CAM) return {};
+    const recess = connectorWorld(joint.host, joint.hostConnector);
+    const heads = assembly.screwedBolts().map(({ hardware }) => ({
+      id: hardware,
+      position: connectorWorld(hardware, headIndex(hardware)).position,
+    }));
+    return { captured: capture(recess, heads)?.id ?? null };
+  }
+
+  const headIndex = (id) => PART_TYPES[partById.get(id).type].connectors.findIndex((c) => c.type === CONNECTOR.BOLT_HEAD);
 
   function stopDrag() {
     ghost?.hide();
@@ -167,7 +239,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (effect.owner === OWNER.DRAG_PART) {
       if (effect.type === 'dragStart') beginDrag(effect.hit.part, effect.hit.point, event);
       else if (!drag) return;
-      else if (effect.type === 'lift') liftDrag(effect.dy);
+      else if (drag.mode === 'crank') {
+        if (effect.type === 'dragMove') crankTo(event);
+        else if (effect.type === 'dragEnd') endDrag();
+        else if (effect.type === 'dragCancel') cancelDrag();
+      } else if (effect.type === 'lift') liftDrag(effect.dy);
       else if (effect.type === 'dragMove') updateDrag(event);
       else if (effect.type === 'dragEnd') endDrag();
       else cancelDrag(); // interrupted: drop it under physics, never snap
