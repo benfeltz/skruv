@@ -40,6 +40,10 @@ describe('LIVE_KNOBS', () => {
       'physics.angularDamping',
       'physics.friction',
       'render.maxPixelRatio',
+      'render.fpsFloor',
+      'render.fpsWindow',
+      'haptics.seatMs',
+      'haptics.lockMs',
     ]);
   });
 });

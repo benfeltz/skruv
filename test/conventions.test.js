@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DEV_WS } from '../src/constants.js';
+import { COLORS, DEV_WS } from '../src/constants.js';
 import viteConfig from '../vite.config.js';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -43,6 +43,7 @@ describe('pure-logic modules', () => {
     'src/game/events.js',
     'src/game/sessionBuffer.js',
     'src/game/tunables.js',
+    'src/scene/fpsGuard.js',
   ];
 
   it.each(pureModules)('%s imports neither Three nor Rapier', (path) => {
@@ -68,6 +69,7 @@ describe('pure-logic modules', () => {
     'src/game/events.js',
     'src/game/sessionBuffer.js',
     'src/game/tunables.js',
+    'src/scene/fpsGuard.js',
   ])(
     '%s touches no DOM globals',
     (path) => {
@@ -210,6 +212,15 @@ describe('the deployed bundle carries no dev stream (1.6)', () => {
     for (const { path, text } of files) expect(text.includes(marker), path).toBe(false);
   });
 
+  it('links the manifest and touch icon under the Pages base', () => {
+    const html = files.find(({ path }) => path.endsWith('index.html')).text;
+    expect(html).toContain(`<link rel="manifest" href="${viteConfig.base}manifest.webmanifest"`);
+    expect(html).toContain(`<link rel="apple-touch-icon" href="${viteConfig.base}icon-180.png"`);
+    for (const name of ['manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png']) {
+      expect(files.some(({ path }) => path.endsWith(`/${name}`)), name).toBe(true);
+    }
+  });
+
   it('keeps the tuning drawer out of the entry chunk — the plain URL never loads it', () => {
     const html = files.find(({ path }) => path.endsWith('index.html')).text;
     const entry = html.match(/src="[^"]*\/(assets\/index-[^"]+\.js)"/)[1];
@@ -252,5 +263,43 @@ describe('agent bridge (1.6)', () => {
 
   it('imports no game code — it only speaks the protocol', () => {
     expect(bridge).not.toMatch(/from ['"][^'"]*src\//);
+  });
+});
+
+describe('PWA install (1.6)', () => {
+  const manifest = JSON.parse(read('public/manifest.webmanifest'));
+  const png = (name) => {
+    const bytes = readFileSync(new URL(`../public/${name}`, import.meta.url));
+    return { signature: bytes.subarray(1, 4).toString(), width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  };
+
+  // Off the base, the installed app opens on a 404 (Pages serves the game at /skruv/).
+  it('starts and scopes the installed app at the Pages base', () => {
+    expect(manifest.start_url).toBe(viteConfig.base);
+    expect(manifest.scope).toBe(viteConfig.base);
+    expect(manifest.id).toBe(viteConfig.base);
+  });
+
+  it('launches standalone in the room colour', () => {
+    expect(manifest.display).toBe('standalone');
+    const background = `#${COLORS.background.toString(16).padStart(6, '0')}`;
+    expect(manifest.background_color).toBe(background);
+    expect(manifest.theme_color).toBe(background);
+    expect(read('index.html')).toContain(`<meta name="theme-color" content="${background}" />`);
+  });
+
+  it('ships icons the size they claim, relative to the manifest', () => {
+    for (const { src, sizes } of manifest.icons) {
+      expect(src).not.toMatch(/^\//);
+      const [w, h] = sizes.split('x').map(Number);
+      expect(png(src)).toEqual({ signature: 'PNG', width: w, height: h });
+    }
+    expect(manifest.icons.map((i) => i.sizes)).toEqual(['192x192', '512x512']);
+    expect(png('icon-180.png')).toEqual({ signature: 'PNG', width: 180, height: 180 });
+  });
+
+  it('registers no service worker (manifest-only)', () => {
+    const sources = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true }).filter((p) => p.endsWith('.js'));
+    for (const path of [...sources.map((p) => `src/${p}`), 'index.html']) expect(read(path), path).not.toMatch(/serviceWorker/);
   });
 });

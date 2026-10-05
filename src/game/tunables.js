@@ -11,7 +11,7 @@
 // never a JS object path — and units are the schema's, in the engine's own units; a key
 // once published is renamed only with a profile format bump.
 
-import { FASTENER, GESTURE, PHYSICS, RENDER, SNAP } from '../constants.js';
+import { FASTENER, GESTURE, HAPTICS, PHYSICS, RENDER, SNAP, TUNE } from '../constants.js';
 
 /** Bumped whenever a key is renamed or its unit changes, so old profiles stay readable. */
 export const PROFILE_FORMAT = 1;
@@ -71,6 +71,22 @@ export const LIVE_KNOBS = Object.freeze({
   'render.maxPixelRatio': {
     object: RENDER, prop: 'maxPixelRatio', min: 0.5, max: 3, step: 0.25, unit: 'x', group: 'render',
     desc: 'Device pixel ratio cap: sharpness against fill rate',
+  },
+  'render.fpsFloor': {
+    object: TUNE, prop: 'fpsFloor', min: 0, max: 120, step: 1, unit: 'fps', group: 'render',
+    desc: 'Below this for render.fpsWindow, render every other frame (0: never)',
+  },
+  'render.fpsWindow': {
+    object: TUNE, prop: 'fpsWindow', min: 0.5, max: 10, step: 0.5, unit: 's', group: 'render',
+    desc: 'How long a frame rate must hold before the fallback engages or lets go',
+  },
+  'haptics.seatMs': {
+    object: HAPTICS, prop: 'seatMs', min: 0, max: 50, step: 1, unit: 'ms', group: 'haptics',
+    desc: 'Vibration when a part seats (Android; 0: off)',
+  },
+  'haptics.lockMs': {
+    object: HAPTICS, prop: 'lockMs', min: 0, max: 80, step: 1, unit: 'ms', group: 'haptics',
+    desc: 'Each tick of the double vibration when a cam lock locks (Android; 0: off)',
   },
 });
 

@@ -1,6 +1,7 @@
-import { PICK, RENDER, RESET, ROOM, TUNE } from './constants.js';
+import { HAPTICS, PICK, RENDER, RESET, ROOM, TUNE } from './constants.js';
 import { createAssembly } from './game/assembly.js';
-import { ANY, createBus, recoveryEvent, resetEvent, sessionEvent, tuneEvent } from './game/events.js';
+import { ANY, createBus, EVENT, fpsEvent, recoveryEvent, resetEvent, sessionEvent, tuneEvent } from './game/events.js';
+import { KIND } from './game/fasteners.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
 import { createTunables, LIVE_KNOBS } from './game/tunables.js';
 import { PART_TYPES } from './game/catalog.js';
@@ -15,6 +16,7 @@ import { createGhost } from './scene/ghost.js';
 import { createCompoundPhysics } from './scene/compoundPhysics.js';
 import { createDisplayShelf } from './scene/displayShelf.js';
 import { createDropGuide } from './scene/dropGuide.js';
+import { createFpsGuard } from './scene/fpsGuard.js';
 import { createFlatpack } from './scene/flatpack.js';
 import { createGestureRouter } from './scene/gestureRouter.js';
 import { createGizmo } from './scene/gizmo.js';
@@ -191,6 +193,19 @@ function sweep(delta) {
   escaped.forEach(({ body }, i) => physics.place(body, spots[i].position, spots[i].rotation));
 }
 
+// Android haptics, off the event stream: a tick on a seat, a double tick on a cam lock.
+// navigator.vibrate is absent on iOS; a 0 ms knob turns one off.
+const vibrate = (pattern) => navigator.vibrate?.(pattern);
+events.on(EVENT.SEAT, () => {
+  if (HAPTICS.seatMs > 0) vibrate(HAPTICS.seatMs);
+});
+events.on(EVENT.FASTEN, ({ kind }) => {
+  if (kind === KIND.CAM && HAPTICS.lockMs > 0) vibrate([HAPTICS.lockMs, HAPTICS.lockGapMs, HAPTICS.lockMs]);
+});
+
+// Under sustained load the room renders every other frame; everything else runs every frame.
+const fps = createFpsGuard();
+
 createLoop((delta) => {
   cameraControls.update(delta);
   physics.step(delta);
@@ -199,7 +214,9 @@ createLoop((delta) => {
   gizmo.update();
   sprue.update();
   highlight.update(delta);
-  renderer.render(scene, camera);
+  const { render, sample } = fps.frame(delta);
+  if (sample) events.emit(fpsEvent(Math.round(sample.fps * 10) / 10, sample.skipping));
+  if (render) renderer.render(scene, camera);
 }).start();
 // The rest of the booklet draws in idle time, after the room is on screen.
 bookletPages.prerender();

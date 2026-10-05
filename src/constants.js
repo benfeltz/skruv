@@ -368,6 +368,23 @@ export const TUNE = {
   // screen, so the build stays in view above it.
   panelMaxWidth: 520,
   panelMaxHeight: 0.6,
+  // Frame-rate fallback (src/scene/fpsGuard.js): the loop's rate is sampled every
+  // fpsSampleSeconds. Below fpsFloor for fpsWindow seconds running, the room renders every
+  // other frame — a steady half rate rather than a stutter — while physics and gestures
+  // keep every frame. It renders every frame again once the rate holds at fpsRecover (or
+  // the floor, if higher) for fpsWindow. A floor of 0 never engages it.
+  fpsSampleSeconds: 1,
+  fpsFloor: 40,
+  fpsWindow: 3,
+  fpsRecover: 55,
+};
+
+// Android haptics (navigator.vibrate; iOS Safari has none), in ms: a tick when a part
+// seats, a double tick when a cam lock locks. 0 turns one off.
+export const HAPTICS = {
+  seatMs: 10,
+  lockMs: 18,
+  lockGapMs: 60,
 };
 
 // Dev stream (dev server only — never in a build): the socket a dev session streams its
