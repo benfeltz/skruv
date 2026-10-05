@@ -31,7 +31,7 @@ export function createCameraControls(camera, domElement) {
   // wall clamp only moves the camera as drawn, so orbiting toward a wall slides along it
   // and the chosen distance comes back once the camera swings clear; the clamp never
   // leaks into OrbitControls' own state.
-  const free = new Vector3();
+  const free = camera.position.clone();
 
   function confine() {
     free.copy(camera.position);
@@ -45,17 +45,25 @@ export function createCameraControls(camera, domElement) {
     camera.lookAt(controls.target);
   }
 
+  // Every update runs from the unclamped pose and ends clamped — the per-frame one AND the
+  // ones OrbitControls fires from inside its own wheel/pointer handlers, which would
+  // otherwise read the clamped pose or have their zoom and pan thrown away.
+  const orbitUpdate = controls.update.bind(controls);
+  controls.update = (deltaSeconds) => {
+    unconfine();
+    const changed = orbitUpdate(deltaSeconds);
+    confine();
+    return changed;
+  };
+
   controls.target.set(...CAMERA.startTarget);
   controls.update();
-  confine();
 
   return {
     /** Call once per frame — applies damping. */
     update(deltaSeconds) {
-      unconfine();
-      controls.panSpeed = panSpeedAt(camera.position.distanceTo(controls.target), CAMERA_LIMITS);
+      controls.panSpeed = panSpeedAt(free.distanceTo(controls.target), CAMERA_LIMITS);
       controls.update(deltaSeconds);
-      confine();
     },
     enable() {
       controls.enabled = true;
