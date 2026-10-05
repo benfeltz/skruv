@@ -38,11 +38,17 @@ describe('preferHit', () => {
     expect(preferHit(panelHit, [behind], PICK)).toBe(panelHit);
   });
 
-  it('picks the nearer of two small parts both under the finger', () => {
-    const a = proxy(dowel, 0.9, 0);
-    const b = proxy(pin, 0.85, 0.001);
-    expect(preferHit(panelHit, [a, b], PICK)).toBe(b);
-    expect(preferHit(panelHit, [b, a], PICK)).toBe(b);
+  it('picks the part the finger is squarely on, not a grazed neighbour whose proxy is nearer', () => {
+    const touched = proxy(dowel, 0.9, 0);
+    const grazed = proxy(pin, 0.85, 0.004);
+    expect(preferHit(panelHit, [touched, grazed], PICK)).toBe(touched);
+    expect(preferHit(panelHit, [grazed, touched], PICK)).toBe(touched);
+  });
+
+  it('picks the nearer of two parts the ray goes straight through', () => {
+    const front = { ...proxy(dowel, 0.86, 0), depth: 0.88 };
+    const back = { ...proxy(pin, 0.84, 0), depth: 0.9 };
+    expect(preferHit(panelHit, [back, front], PICK)).toBe(front);
   });
 
   it('keeps a direct hit on the small part itself as the real hit', () => {

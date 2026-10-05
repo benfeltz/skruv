@@ -151,6 +151,57 @@ describe('fasteners sunk in a panel stay hidden behind it (1.4.1 review)', () =>
   });
 });
 
+describe('picking among neighbouring hardware — real layouts (1.4.1 review, round 6)', () => {
+  const upright = [0, 0, 0, 1];
+  const flat = [0, 0, -Math.SQRT1_2, Math.SQRT1_2]; // long y axis laid along x
+  const standing = (id, type, [x, z]) => ({ id, type, position: [x, PART_TYPES[type].size[1] / 2, z], rotation: upright });
+  const lying = (id, type, [x, z]) => ({ id, type, position: [x, PART_TYPES[type].size[0] / 2, z], rotation: flat });
+  const top = (p) => add(p.position, [0, p.rotation === upright ? PART_TYPES[p.type].size[1] / 2 : PART_TYPES[p.type].size[0] / 2, 0]);
+
+  // Each layout: parts, then presses [description, part pressed, eye offset from its top, expected id].
+  const layouts = [
+    {
+      name: 'cam lock 3.4 cm from its bolt (CAM_INSET)',
+      parts: [standing('camLock-1', 'camLock', [0, 0]), standing('camLockBolt-1', 'camLockBolt', [0.034, 0])],
+      presses: [
+        ['the cam lock, seen over the bolt', 'camLock-1', [0.9, 1.2, 0], 'camLock-1'],
+        // Low enough that the bolt really blocks the view: the bolt is what is touched.
+        ['the cam lock hidden behind the bolt', 'camLock-1', [0.9, 0.4, 0], 'camLockBolt-1'],
+        ['the bolt, seen past the cam lock', 'camLockBolt-1', [-0.9, 0.7, 0], 'camLockBolt-1'],
+        ['the cam lock from above', 'camLock-1', [0, 1, 0.3], 'camLock-1'],
+      ],
+    },
+    {
+      name: 'two spare dowels lying side by side, 1.5 cm apart',
+      parts: [lying('dowel-13', 'dowel', [0, 0]), lying('dowel-14', 'dowel', [0, 0.015])],
+      presses: [
+        ['the far dowel, over the near one', 'dowel-13', [0, 0.6, 0.9], 'dowel-13'],
+        ['the near dowel', 'dowel-14', [0, 0.6, 0.9], 'dowel-14'],
+        ['the near dowel from the other side', 'dowel-14', [0, 0.6, -0.9], 'dowel-14'],
+      ],
+    },
+    {
+      name: 'a pin and a nail standing 2 cm apart',
+      parts: [standing('shelfPin-1', 'shelfPin', [0, 0]), standing('nail-1', 'nail', [0.02, 0])],
+      presses: [
+        ['the nail, behind the pin', 'nail-1', [-1, 0.5, 0], 'nail-1'],
+        ['the pin, behind the nail', 'shelfPin-1', [1, 0.5, 0], 'shelfPin-1'],
+      ],
+    },
+  ];
+
+  for (const { name, parts, presses } of layouts) {
+    describe(name, () => {
+      it.each(presses)('a press squarely on %s picks it', (_, id, eye, expected) => {
+        const target = top(parts.find((p) => p.id === id));
+        // Aim just under the top, onto the part itself.
+        const aim = add(target, [0, -0.002, 0]);
+        expect(pick(parts, add(aim, eye), aim)?.id).toBe(expected);
+      });
+    });
+  }
+});
+
 describe('hole decals on every socket in the box (AC3)', () => {
   const SOCKETS = new Set([
     CONNECTOR.DOWEL_HOLE,

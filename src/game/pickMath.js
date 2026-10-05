@@ -67,16 +67,21 @@ export const rayBoxGap = (origin, direction, half) => rayBoxReach(origin, direct
  * A small part wins only when the finger is genuinely over it — its `miss` within
  * `fingerRadius` (radians: the finger's angular radius, so metres at the hit's distance)
  * and the real part not behind the real hit: a fat proxy poking out of a panel never makes
- * the fastener sunk inside it pickable through it — the nearest such one if several are. Otherwise
- * the real hit stands, so a panel grabbed near hardware stays the panel. With no real hit
- * at all, the nearest proxy is the press (there is nothing it could hijack).
+ * the fastener sunk inside it pickable through it. Otherwise the real hit stands, so a
+ * panel grabbed near hardware stays the panel. With no real hit at all, the best proxy is
+ * the press (there is nothing it could hijack).
+ *
+ * Among several candidates the one the finger is most squarely on wins — smallest `miss`,
+ * then the nearer real part — never merely the one whose fat proxy the ray entered first:
+ * a press on one of two dowels lying side by side, or on a cam lock beside its bolt, picks
+ * that part and not its neighbour.
  */
 export function preferHit(partHit, proxyHits, { fingerRadius }) {
-  const visible = proxyHits.filter(
-    (hit) => !partHit || hit.part === partHit.part || (hit.depth ?? hit.distance) <= partHit.distance,
-  );
-  const nearest = (hits) => hits.reduce((best, hit) => (!best || hit.distance < best.distance ? hit : best), null);
-  const under = nearest(visible.filter((hit) => hit.miss <= fingerRadius * hit.distance));
+  const depthOf = (hit) => hit.depth ?? hit.distance;
+  const visible = proxyHits.filter((hit) => !partHit || hit.part === partHit.part || depthOf(hit) <= partHit.distance);
+  const best = (hits) =>
+    hits.reduce((top, hit) => (!top || hit.miss < top.miss || (hit.miss === top.miss && depthOf(hit) < depthOf(top)) ? hit : top), null);
+  const under = best(visible.filter((hit) => hit.miss <= fingerRadius * hit.distance));
   if (under) return under.part === partHit?.part ? partHit : under;
-  return partHit ?? nearest(visible);
+  return partHit ?? best(visible);
 }
