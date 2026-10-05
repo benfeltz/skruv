@@ -2,6 +2,25 @@ import { defineConfig } from 'vite';
 import { WebSocketServer } from 'ws';
 import { DEV_WS } from './src/constants.js';
 
+// The upgrade's Host must name this machine, as Vite requires of its own HMR socket — else
+// a site whose DNS rebinds to 127.0.0.1 sends a Host (and Origin) of its own and passes the
+// Origin check below. An IP literal (a phone on the LAN), localhost and *.localhost always
+// pass; any other name only if server.allowedHosts lets it in.
+function allowedHost(host, allowedHosts) {
+  let hostname;
+  try {
+    ({ hostname } = new URL(`http://${host}`));
+  } catch {
+    return false;
+  }
+  if (allowedHosts === true) return true;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) || hostname.startsWith('[')) return true;
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) return true;
+  return (allowedHosts ?? []).some((allowed) =>
+    allowed.startsWith('.') ? hostname === allowed.slice(1) || hostname.endsWith(allowed) : hostname === allowed,
+  );
+}
+
 // A browser always sends Origin on a WebSocket upgrade, and CORS never applies to one: only
 // a page served by this dev server may connect. Tools (websocat, the agent bridge) send none.
 function allowedOrigin({ origin, host }) {
@@ -16,7 +35,8 @@ function allowedOrigin({ origin, host }) {
 // The dev stream's hub (protocol: DEV_WS in src/constants.js): a WebSocket endpoint on the
 // dev server that relays the game page's messages to every tool connected (a websocat, the
 // agent bridge) and the tools' to every game page. Dev server only — `apply: 'serve'`, so a
-// build never sees it. Another site open in the same browser is refused (allowedOrigin).
+// build never sees it. Another site open in the same browser is refused (allowedHost,
+// allowedOrigin).
 function devStream() {
   return {
     name: 'skruv-dev-stream',
@@ -29,7 +49,7 @@ function devStream() {
       // Vite's own HMR socket upgrades on its own path; only ours is taken here.
       server.httpServer.on('upgrade', (request, socket, head) => {
         if (new URL(request.url, 'http://localhost').pathname !== DEV_WS.path) return;
-        if (!allowedOrigin(request.headers)) {
+        if (!allowedHost(request.headers.host, server.config.server.allowedHosts) || !allowedOrigin(request.headers)) {
           socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
           return;
         }

@@ -21,10 +21,12 @@ beforeAll(async () => {
 
 afterAll(() => server?.close());
 
-// Resolves 'open', or the HTTP status the upgrade was refused with.
-function connect(origin) {
+// Resolves 'open', or the HTTP status the upgrade was refused with. `host` overrides the
+// Host header, as a rebound DNS name would set it.
+function connect(origin, host) {
   return new Promise((resolve) => {
-    const ws = new WebSocket(url, origin === undefined ? {} : { origin });
+    const options = { ...(origin === undefined ? {} : { origin }), ...(host ? { headers: { Host: host } } : {}) };
+    const ws = new WebSocket(url, options);
     ws.on('open', () => resolve({ status: 'open', ws }));
     ws.on('unexpected-response', (_, response) => resolve({ status: response.statusCode }));
     ws.on('error', () => resolve({ status: 'error' }));
@@ -37,6 +39,22 @@ describe('dev stream hub', () => {
   it('refuses a page from another site (cross-site WebSocket)', async () => {
     expect((await connect('http://evil.example')).status).toBe(403);
     expect((await connect('null')).status).toBe(403);
+  });
+
+  // Review 1.6: a site rebound to 127.0.0.1 sends a matching Host and Origin of its own.
+  it('refuses a DNS-rebound name even when its Origin matches its Host', async () => {
+    const port = new URL(url).port;
+    expect((await connect(`http://attacker.example:${port}`, `attacker.example:${port}`)).status).toBe(403);
+    expect((await connect(undefined, `attacker.example:${port}`)).status).toBe(403);
+  });
+
+  it('admits localhost names whose Origin matches', async () => {
+    const port = new URL(url).port;
+    for (const name of ['localhost', 'skruv.localhost']) {
+      const { status, ws } = await connect(`http://${name}:${port}`, `${name}:${port}`);
+      expect(status, name).toBe('open');
+      ws.close();
+    }
   });
 
   it('admits a page served by this dev server, and a tool that sends no Origin', async () => {
