@@ -218,16 +218,24 @@ export function createAssembly(typeOf) {
   }
 
   /**
-   * Turns open, by the cam's own reverse quarter turn, every locked cam holding a bolt in
-   * `bolts` — whichever parts the cam and its host are. A teardown that takes those bolts
-   * away runs this first, so no cam is left locked on a bolt that has gone. Returns the
-   * ids that changed.
+   * Lets go of `parts` wherever a joint holds them as its third party — neither its
+   * hardware nor its host — each by its own reverse move: a cam locked on one of their
+   * bolts turns open, a back fitting pressed through into one of them pulls back. The
+   * joints stay seated where they are. A teardown that takes those parts away runs this
+   * first, so nothing is left fastened to a part that has gone. Returns the ids changed.
    */
-  function openCamsOn(bolts) {
-    const set = new Set(bolts);
+  function letGoOf(parts) {
+    const set = new Set(parts);
+    const reverse = (j) => {
+      if (j.kind === KIND.CAM && j.fastener.state === STATE.LOCKED && set.has(j.captured)) {
+        return { type: 'crank', radians: -FASTENER.quarterTurn };
+      }
+      if (j.kind === KIND.FITTING && set.has(j.through)) return { type: 'pull' };
+      return null;
+    };
     return all()
-      .filter((j) => j.kind === KIND.CAM && j.fastener.state === STATE.LOCKED && set.has(j.captured))
-      .filter((j) => apply(j.id, { type: 'crank', radians: -FASTENER.quarterTurn }))
+      .filter((j) => !set.has(j.hardware) && !set.has(j.host))
+      .filter((j) => reverse(j) && apply(j.id, reverse(j)))
       .map((j) => j.id);
   }
 
@@ -431,7 +439,7 @@ export function createAssembly(typeOf) {
     unseat,
     apply,
     drive,
-    openCamsOn,
+    letGoOf,
     tap,
     pullable,
     canRelease,

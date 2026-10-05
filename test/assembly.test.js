@@ -366,7 +366,7 @@ describe('drive and seatHome: a part set put in already fastened (1.5 display sh
   });
 });
 
-describe('openCamsOn: a teardown leaves no cam locked on a bolt it takes away (PR #12 review)', () => {
+describe('letGoOf: a teardown leaves nothing fastened to the parts it takes away (PR #12 review)', () => {
   // A display cam relocked on the player's own bolt, screwed into a display side.
   function swapped() {
     const typeOfAny = (id) => typeOf(id.replace(/^display\//, ''));
@@ -381,7 +381,7 @@ describe('openCamsOn: a teardown leaves no cam locked on a bolt it takes away (P
   it('turns the cam open by its own reverse turn, and leaves it seated where it is', () => {
     const { assembly, bolt, cam } = swapped();
     expect(assembly.get(cam.id)).toMatchObject({ captured: 'camLockBolt-1', fastener: { state: STATE.LOCKED } });
-    expect(assembly.openCamsOn(['camLockBolt-1'])).toEqual([cam.id]);
+    expect(assembly.letGoOf(['camLockBolt-1'])).toEqual([cam.id]);
     expect(assembly.get(cam.id)).toMatchObject({ captured: null, fastener: { state: STATE.SEATED, progress: 0 } });
     // The bolt is no longer held: it can be backed out, and once unseated it is on its own.
     expect(assembly.apply(bolt.id, { type: 'crank', radians: -FASTENER.screwRadians })).toBe(true);
@@ -391,7 +391,28 @@ describe('openCamsOn: a teardown leaves no cam locked on a bolt it takes away (P
 
   it('leaves cams holding other bolts locked', () => {
     const { assembly, cam } = swapped();
-    expect(assembly.openCamsOn(['camLockBolt-2', 'dowel-1'])).toEqual([]);
+    expect(assembly.letGoOf(['camLockBolt-2', 'dowel-1'])).toEqual([]);
     expect(assembly.get(cam.id).fastener.state).toBe(STATE.LOCKED);
+  });
+
+  it('pulls back a display fitting pressed through into a player panel, leaving it seated', () => {
+    const typeOfAny = (id) => typeOf(id.replace(/^display\//, ''));
+    const assembly = createAssembly(typeOfAny);
+    const fitting = assembly.seat({ partA: 'display/backFitting-1', connectorA: END_LOW, partB: 'display/backPanel-1', connectorB: BACK_FITTING, mover: 'display/backFitting-1' });
+    assembly.tap('display/backFitting-1', () => ({ through: 'sidePanel-1' }));
+    expect(assembly.compoundOf('sidePanel-1').has('display/backPanel-1')).toBe(true);
+    expect(assembly.letGoOf(['sidePanel-1'])).toEqual([fitting.id]);
+    expect(assembly.get(fitting.id)).toMatchObject({ through: null, fastener: { state: STATE.SEATED } });
+    expect([...assembly.compoundOf('sidePanel-1')]).toEqual(['sidePanel-1']);
+    expect(assembly.bonds(() => ({ position: [0, 0, 0], rotation: [0, 0, 0, 1] }))).toEqual([]);
+  });
+
+  it('leaves joints whose hardware or host is being taken away to the unseat', () => {
+    const typeOfAny = (id) => typeOf(id.replace(/^display\//, ''));
+    const assembly = createAssembly(typeOfAny);
+    const fitting = assembly.seat({ partA: 'backFitting-1', connectorA: END_LOW, partB: 'backPanel-1', connectorB: BACK_FITTING, mover: 'backFitting-1' });
+    assembly.tap('backFitting-1', () => ({ through: 'sidePanel-1' }));
+    expect(assembly.letGoOf(['backFitting-1', 'backPanel-1', 'sidePanel-1'])).toEqual([]);
+    expect(assembly.get(fitting.id).through).toBe('sidePanel-1');
   });
 });
