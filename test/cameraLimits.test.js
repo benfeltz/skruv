@@ -82,3 +82,13 @@ describe('shipped camera limits', () => {
     expect(polar).toBeLessThanOrEqual(CAMERA_LIMITS.maxPolarAngle);
   });
 });
+
+describe('close-up zoom (1.4.1, Ben)', () => {
+  it('zooms in close enough to frame a dowel and its hole', () => {
+    expect(CAMERA_LIMITS.minDistance).toBeLessThanOrEqual(0.3);
+  });
+
+  it('never clips what it zooms in on: the near plane sits well inside the closest zoom', () => {
+    expect(CAMERA.near).toBeLessThan(CAMERA_LIMITS.minDistance / 10);
+  });
+});

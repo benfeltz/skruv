@@ -56,7 +56,8 @@ export const LIGHTS = {
 
 export const CAMERA = {
   fov: 50,
-  near: 0.1,
+  // Close enough to zoom in on millimetre hardware without clipping it.
+  near: 0.02,
   far: 100,
   startPosition: [2, 1.8, 2.4],
   startTarget: [0, 0.6, 0],
@@ -70,7 +71,8 @@ export const CAMERA_LIMITS = {
   pivot: [0, 1, 0],
   maxTargetRadius: 0.8,
   wallMargin: 0.4,
-  minDistance: 1,
+  // Close enough to fill the screen with a dowel and the hole it goes in.
+  minDistance: 0.3,
   // Stops short of straight down: the build is always seen at an angle, never as a plan.
   minPolarAngle: (40 * Math.PI) / 180,
   maxPolarAngle: (80 * Math.PI) / 180,
