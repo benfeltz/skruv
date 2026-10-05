@@ -2,10 +2,21 @@ import { defineConfig } from 'vite';
 import { WebSocketServer } from 'ws';
 import { DEV_WS } from './src/constants.js';
 
+// A browser always sends Origin on a WebSocket upgrade, and CORS never applies to one: only
+// a page served by this dev server may connect. Tools (websocat, the agent bridge) send none.
+function allowedOrigin({ origin, host }) {
+  if (origin === undefined) return true;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
 // The dev stream's hub (protocol: DEV_WS in src/constants.js): a WebSocket endpoint on the
 // dev server that relays the game page's messages to every tool connected (a websocat, the
 // agent bridge) and the tools' to every game page. Dev server only — `apply: 'serve'`, so a
-// build never sees it.
+// build never sees it. Another site open in the same browser is refused (allowedOrigin).
 function devStream() {
   return {
     name: 'skruv-dev-stream',
@@ -18,6 +29,10 @@ function devStream() {
       // Vite's own HMR socket upgrades on its own path; only ours is taken here.
       server.httpServer.on('upgrade', (request, socket, head) => {
         if (new URL(request.url, 'http://localhost').pathname !== DEV_WS.path) return;
+        if (!allowedOrigin(request.headers)) {
+          socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
+          return;
+        }
         wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws));
       });
       wss.on('connection', (ws) => {
