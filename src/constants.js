@@ -174,6 +174,10 @@ export const PHYSICS = {
   // Wood on wood: grippy, and no bounce (the design clamps restitution).
   friction: 0.6,
   restitution: 0,
+  // No body simulates lighter than this (kg); the catalog keeps the true masses. Impulse
+  // joints go soft at big mass ratios: a 1 g shelf pin fixed in a side spins loose under a
+  // 2 kg shelf resting on it, and the shelf drops through.
+  minBodyMass: 0.2,
   // Room colliders are slabs this thick, laid just outside the visible surfaces.
   roomColliderThickness: 0.5,
 };

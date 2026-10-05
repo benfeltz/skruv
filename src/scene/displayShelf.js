@@ -31,7 +31,6 @@ export function createDisplayShelf(physics) {
       mass: part.mass,
       position,
       rotation,
-      asleep: true,
     });
     return { id: idOf(id), type, mesh, body };
   });

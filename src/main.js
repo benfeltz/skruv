@@ -25,8 +25,8 @@ scene.add(createRoom());
 const cameraControls = createCameraControls(camera, renderer.domElement);
 const physics = await createPhysicsWorld();
 
-// The game opens on the closed flatpack: every part packed flat inside, asleep until the
-// lid comes off and a hand disturbs it.
+// The game opens on the closed flatpack: every part packed flat inside, settling at once
+// and resting until the lid comes off and a hand disturbs it.
 const flatpack = createFlatpack(physics);
 scene.add(flatpack.object, flatpack.lid.mesh);
 
@@ -40,7 +40,6 @@ for (const { id, type, position, rotation } of createPackedWorldLayout()) {
     mass: part.mass,
     position,
     rotation,
-    asleep: true,
   });
   scene.add(mesh);
   parts.push({ id, type, mesh, body });

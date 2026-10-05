@@ -70,8 +70,7 @@ describe('physics boundary', () => {
   const world = read('src/physics/world.js');
 
   it('keeps register/step as they were and adds grab/move/release', () => {
-    // 1.5 adds only the optional `asleep` start, for parts packed in the flatpack.
-    expect(world).toMatch(/function register\(mesh, \{ halfExtents, mass, position, rotation, asleep = false \}\)/);
+    expect(world).toMatch(/function register\(mesh, \{ halfExtents, mass, position, rotation \}\)/);
     expect(world).toMatch(/function step\(delta\)/);
     expect(world).toMatch(/function grab\(body\)/);
     expect(world).toMatch(/function move\(body, position, rotation\)/);

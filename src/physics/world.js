@@ -53,8 +53,7 @@ export async function createPhysicsWorld() {
   const accumulator = createAccumulator(PHYSICS.timestep, PHYSICS.maxStepsPerFrame);
   const bodies = [];
 
-  /** `asleep`: starts at rest until something touches it — a packed part in its box. */
-  function register(mesh, { halfExtents, mass, position, rotation, asleep = false }) {
+  function register(mesh, { halfExtents, mass, position, rotation }) {
     const body = world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(...position)
@@ -62,12 +61,11 @@ export async function createPhysicsWorld() {
         .setLinearDamping(PHYSICS.linearDamping)
         .setAngularDamping(PHYSICS.angularDamping)
         // Hardware is millimetres thin; CCD keeps a fast pin from tunnelling the floor.
-        .setCcdEnabled(true)
-        .setSleeping(asleep),
+        .setCcdEnabled(true),
     );
     world.createCollider(
       RAPIER.ColliderDesc.cuboid(...halfExtents)
-        .setMass(mass)
+        .setMass(Math.max(mass, PHYSICS.minBodyMass))
         .setFriction(PHYSICS.friction)
         .setRestitution(PHYSICS.restitution),
       body,

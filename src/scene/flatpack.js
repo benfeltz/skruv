@@ -49,7 +49,6 @@ export function createFlatpack(physics) {
     mass: type.mass,
     position: rest.position,
     rotation: rest.rotation,
-    asleep: true,
   });
 
   return { object: box, lid: { id: 'boxLid-1', type: 'boxLid', mesh, body } };

@@ -70,3 +70,18 @@ describe('placeholders and headers', () => {
     expect(catalog).not.toMatch(/\bMATING\b|\bmates\s*:/);
   });
 });
+
+describe('stable stacks and supports (1.5)', () => {
+  const world = read('src/physics/world.js');
+
+  // Bodies born asleep never get their resting contacts, and a packed stack sank 2–3 cm
+  // through the box and room floors once anything touched it.
+  it('spawns every body awake, to settle and sleep on its own', () => {
+    expect(world).not.toMatch(/setSleeping\(/);
+  });
+
+  it('simulates no body lighter than PHYSICS.minBodyMass, keeping catalog masses true', () => {
+    expect(PHYSICS.minBodyMass).toBeGreaterThan(0);
+    expect(world).toMatch(/\.setMass\(Math\.max\(mass, PHYSICS\.minBodyMass\)\)/);
+  });
+});
