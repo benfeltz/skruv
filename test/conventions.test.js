@@ -261,6 +261,12 @@ describe('agent bridge (1.6)', () => {
     for (const [name, value] of Object.entries(DEV_WS.kinds)) expect(bridge).toContain(`${name}: '${value}'`);
   });
 
+  // The hub hands every game reply to every tool; ids from 1 in two bridges collide.
+  it('numbers its requests under a per-bridge prefix (1.6 review)', () => {
+    expect(bridge).toMatch(/const ID_PREFIX = crypto\.randomUUID\(\);/);
+    expect(bridge).toMatch(/const id = `\$\{ID_PREFIX\}:\$\{nextId\+\+\}`;/);
+  });
+
   it('imports no game code — it only speaks the protocol', () => {
     expect(bridge).not.toMatch(/from ['"][^'"]*src\//);
   });

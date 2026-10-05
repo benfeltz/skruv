@@ -24,6 +24,9 @@ const RETRY_MS = 2000;
 const { kinds } = PROTOCOL;
 const events = [];
 const pending = new Map();
+// The hub hands every game reply to every tool, so ids carry this bridge's own prefix: a
+// reply to another tool's request is never taken for one of ours.
+const ID_PREFIX = crypto.randomUUID();
 let nextId = 1;
 let socket = null;
 
@@ -64,7 +67,7 @@ function request(kind, fields = {}) {
   if (socket?.readyState !== WebSocket.OPEN) {
     return Promise.reject(new Error(`not connected to a dev server at ${ORIGIN} — run \`npm run dev\` and open the game`));
   }
-  const id = nextId++;
+  const id = `${ID_PREFIX}:${nextId++}`;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(id);
