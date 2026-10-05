@@ -194,7 +194,10 @@ export function createBookletSheet({ pages }) {
     if (open === value) return;
     open = value;
     render();
-    (open ? next : thumb).focus({ preventScroll: true });
+    // Into the sheet on a control that can take focus (a disabled one can't, on the last
+    // or first page), back to the thumb on close.
+    const inside = [next, prev, handle].find((control) => !control.disabled);
+    (open ? inside : thumb).focus({ preventScroll: true });
   }
 
   thumb.addEventListener('click', () => setOpen(true));

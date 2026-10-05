@@ -94,3 +94,15 @@ describe('repack frees the player\'s parts from anything holding them (PR #12 re
     expect(unseatAll.indexOf('assembly.letGoOf(ids)')).toBeLessThan(unseatAll.indexOf('unseat(joint)'));
   });
 });
+
+describe('booklet focus (PR #12 review)', () => {
+  const booklet = read('src/ui/booklet.js');
+  const setOpen = booklet.slice(booklet.indexOf('function setOpen('), booklet.indexOf("thumb.addEventListener('click'"));
+
+  it('opens onto a control that is never disabled at that moment, the handle as the last resort', () => {
+    expect(setOpen).toMatch(/\[next, prev, handle\]\.find\(\(control\) => !control\.disabled\)/);
+    expect(setOpen).not.toMatch(/\(open \? next : thumb\)/);
+    // The handle is never disabled anywhere.
+    expect(booklet).not.toMatch(/handle\.disabled\s*=/);
+  });
+});
