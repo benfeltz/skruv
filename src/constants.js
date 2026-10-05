@@ -361,4 +361,11 @@ export const TUNE = {
   // The session buffer keeps this many of the latest events for export — a long session's
   // worth of grabs, seats and fps samples.
   sessionBufferSize: 5000,
+  // The tuning drawer (src/ui/tunePanel.js) exists only on a URL carrying this query flag
+  // (…/skruv/?tune); the plain URL is the teaser, untouched.
+  queryFlag: 'tune',
+  // The drawer, in CSS pixels: never wider than this, nor taller than this share of the
+  // screen, so the build stays in view above it.
+  panelMaxWidth: 520,
+  panelMaxHeight: 0.6,
 };

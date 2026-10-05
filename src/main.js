@@ -203,3 +203,10 @@ createLoop((delta) => {
 }).start();
 // The rest of the booklet draws in idle time, after the room is on screen.
 bookletPages.prerender();
+
+// ?tune: the tuning drawer, on any build. Loaded only then — the plain URL never fetches it.
+if (new URLSearchParams(location.search).has(TUNE.queryFlag)) {
+  const { createTunePanel } = await import('./ui/tunePanel.js');
+  const panel = createTunePanel({ tunables, exportSession: session.toExportJson });
+  document.body.append(panel.tab, panel.element);
+}
