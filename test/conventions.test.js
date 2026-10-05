@@ -140,3 +140,12 @@ describe('drop guide (1.4.1, Ben)', () => {
     expect(stop).toMatch(/dropGuide\?\.hide\(\)/);
   });
 });
+
+describe('seat flash hands back to the drop glow (1.4.1 review)', () => {
+  const router = read('src/scene/gestureRouter.js');
+  const fade = router.slice(router.indexOf('function fadeFlashes('), router.indexOf('// --- pull'));
+
+  it('restores the glow, not dark, when a flash ends on the hole still lit', () => {
+    expect(fade).toMatch(/if \(decal === glowing\) \{\s*decal\.material\.emissiveIntensity = DROP\.glowIntensity;/);
+  });
+});

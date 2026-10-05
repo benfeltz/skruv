@@ -408,9 +408,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       decal.material.emissiveIntensity = Math.max(0, remaining / SNAP.flashMs);
       if (remaining > 0) flashes.set(decal, remaining);
       else {
-        decal.material.emissive.setHex(COLORS.unlit);
-        decal.material.emissiveIntensity = 1;
         flashes.delete(decal);
+        // A hole still under the drop line (or the seat on offer) goes back to its glow.
+        if (decal === glowing) {
+          decal.material.emissiveIntensity = DROP.glowIntensity;
+        } else {
+          decal.material.emissive.setHex(COLORS.unlit);
+          decal.material.emissiveIntensity = 1;
+        }
       }
     }
   }
