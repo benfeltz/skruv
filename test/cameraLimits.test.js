@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CAMERA, CAMERA_LIMITS, ROOM } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/catalog.js';
 import { createDevLayout } from '../src/game/devLayout.js';
-import { clampCamera, clampTarget, panSpeedAt } from '../src/scene/cameraLimits.js';
+import { clampCamera, clampTarget, clampTargetAlongView, panSpeedAt } from '../src/scene/cameraLimits.js';
 
 const room = { width: 10, depth: 8, height: 3 };
 const limits = { targetMargin: 0.5, targetHeight: [0, 2], wallMargin: 0.4, floorClearance: 0.05 };
@@ -99,5 +99,38 @@ describe('panSpeedAt (zoomed-in panning)', () => {
     // least a third of what it is at the reference distance.
     const { minDistance, panReference } = CAMERA_LIMITS;
     expect((minDistance * panSpeedAt(minDistance, CAMERA_LIMITS)) / panReference).toBeGreaterThan(1 / 3 - 1e-9);
+  });
+});
+
+describe('clampTargetAlongView (zoom toward the fingers near the floor — 1.4.1 review)', () => {
+  const eye = [1, 1, 2];
+  const direction = (from, to) => {
+    const d = to.map((v, i) => v - from[i]);
+    const n = Math.hypot(...d);
+    return d.map((v) => v / n);
+  };
+
+  it('slides a target pushed below the floor back along the line of sight to floor level', () => {
+    const sunk = [0.2, -0.3, 0.4];
+    const held = clampTargetAlongView(sunk, eye, room, limits);
+    expect(held[1]).toBeCloseTo(0, 12);
+    // Same view direction: no tilt.
+    direction(eye, held).forEach((v, i) => expect(v).toBeCloseTo(direction(eye, sunk)[i], 12));
+  });
+
+  it('does the same at the top of the range', () => {
+    const low = [0, 0.5, 0];
+    const held = clampTargetAlongView([1, 3, 0], low, room, limits);
+    expect(held[1]).toBeCloseTo(2, 12);
+    direction(low, held).forEach((v, i) => expect(v).toBeCloseTo(direction(low, [1, 3, 0])[i], 12));
+  });
+
+  it('leaves a target in range alone, and still holds it inside the walls', () => {
+    expect(clampTargetAlongView([1, 0.5, -1], eye, room, limits)).toEqual([1, 0.5, -1]);
+    expect(clampTargetAlongView([9, 0.5, 0], eye, room, limits)).toEqual([4.5, 0.5, 0]);
+  });
+
+  it('falls back to a plain clamp when the eye itself is past the bound', () => {
+    expect(clampTargetAlongView([0, -0.2, 0], [0, -0.1, 1], room, limits)).toEqual([0, 0, 0]);
   });
 });

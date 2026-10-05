@@ -1,7 +1,7 @@
 import { MOUSE, TOUCH } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CAMERA, CAMERA_LIMITS, ROOM } from '../constants.js';
-import { clampCamera, clampTarget, panSpeedAt } from './cameraLimits.js';
+import { clampCamera, clampTargetAlongView, panSpeedAt } from './cameraLimits.js';
 
 /**
  * Touch camera: one finger orbits, two fingers pan + pinch-zoom toward the fingers (so a
@@ -28,7 +28,7 @@ export function createCameraControls(camera, domElement) {
   controls.zoomToCursor = true;
 
   function confine() {
-    controls.target.set(...clampTarget(controls.target.toArray(), ROOM, CAMERA_LIMITS));
+    controls.target.set(...clampTargetAlongView(controls.target.toArray(), camera.position.toArray(), ROOM, CAMERA_LIMITS));
     camera.position.set(...clampCamera(camera.position.toArray(), ROOM, CAMERA_LIMITS));
     camera.lookAt(controls.target);
   }

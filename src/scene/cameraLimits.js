@@ -32,3 +32,20 @@ export function panSpeedAt(distance, { panReference, maxPanBoost }) {
   if (!(distance > 0)) return maxPanBoost;
   return Math.min(maxPanBoost, Math.max(1, panReference / distance));
 }
+
+/**
+ * The orbit target clamped like `clampTarget`, but out of its height range it slides back
+ * along the line of sight from `eye` to the bound it crossed — so the view direction holds
+ * and a zoom toward the fingers near the floor neither tilts the view nor drifts it.
+ */
+export function clampTargetAlongView(target, eye, room, limits) {
+  const [low, high] = limits.targetHeight;
+  const y = target[1];
+  const bound = y < low ? low : y > high ? high : null;
+  // Only when the eye is on the near side of the bound is there a crossing to slide to.
+  if (bound !== null && (eye[1] - bound) * (y - bound) < 0) {
+    const t = (eye[1] - bound) / (eye[1] - y);
+    return clampTarget(eye.map((v, i) => v + (target[i] - v) * t), room, limits);
+  }
+  return clampTarget(target, room, limits);
+}
