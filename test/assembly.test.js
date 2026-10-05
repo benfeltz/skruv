@@ -365,3 +365,33 @@ describe('drive and seatHome: a part set put in already fastened (1.5 display sh
     expect(assembly.bonds(poseOf)).toEqual([]);
   });
 });
+
+describe('openCamsOn: a teardown leaves no cam locked on a bolt it takes away (PR #12 review)', () => {
+  // A display cam relocked on the player's own bolt, screwed into a display side.
+  function swapped() {
+    const typeOfAny = (id) => typeOf(id.replace(/^display\//, ''));
+    const assembly = createAssembly(typeOfAny);
+    const bolt = assembly.seat({ partA: 'camLockBolt-1', connectorA: END_LOW, partB: 'display/sidePanel-1', connectorB: SIDE_BOTTOM_CAM_BOLT, mover: 'camLockBolt-1' });
+    assembly.drive(bolt.id);
+    const cam = assembly.seat({ partA: 'display/camLock-1', connectorA: END_LOW, partB: 'display/topBottomPanel-1', connectorB: SHELF_LEFT_RECESS, mover: 'display/camLock-1' });
+    assembly.drive(cam.id, { captured: 'camLockBolt-1' });
+    return { assembly, bolt, cam };
+  }
+
+  it('turns the cam open by its own reverse turn, and leaves it seated where it is', () => {
+    const { assembly, bolt, cam } = swapped();
+    expect(assembly.get(cam.id)).toMatchObject({ captured: 'camLockBolt-1', fastener: { state: STATE.LOCKED } });
+    expect(assembly.openCamsOn(['camLockBolt-1'])).toEqual([cam.id]);
+    expect(assembly.get(cam.id)).toMatchObject({ captured: null, fastener: { state: STATE.SEATED, progress: 0 } });
+    // The bolt is no longer held: it can be backed out, and once unseated it is on its own.
+    expect(assembly.apply(bolt.id, { type: 'crank', radians: -FASTENER.screwRadians })).toBe(true);
+    assembly.unseat(bolt.id);
+    expect([...assembly.compoundOf('camLockBolt-1')]).toEqual(['camLockBolt-1']);
+  });
+
+  it('leaves cams holding other bolts locked', () => {
+    const { assembly, cam } = swapped();
+    expect(assembly.openCamsOn(['camLockBolt-2', 'dowel-1'])).toEqual([]);
+    expect(assembly.get(cam.id).fastener.state).toBe(STATE.LOCKED);
+  });
+});

@@ -218,6 +218,20 @@ export function createAssembly(typeOf) {
   }
 
   /**
+   * Turns open, by the cam's own reverse quarter turn, every locked cam holding a bolt in
+   * `bolts` — whichever parts the cam and its host are. A teardown that takes those bolts
+   * away runs this first, so no cam is left locked on a bolt that has gone. Returns the
+   * ids that changed.
+   */
+  function openCamsOn(bolts) {
+    const set = new Set(bolts);
+    return all()
+      .filter((j) => j.kind === KIND.CAM && j.fastener.state === STATE.LOCKED && set.has(j.captured))
+      .filter((j) => apply(j.id, { type: 'crank', radians: -FASTENER.quarterTurn }))
+      .map((j) => j.id);
+  }
+
+  /**
    * A tap on `part` pushes home every tap-kind fastener touching it — a tapped dowel, or a
    * panel tapped down onto its dowels. `ctxFor(joint)` supplies per-joint context (a
    * back fitting's `through`). Returns the ids that changed.
@@ -417,6 +431,7 @@ export function createAssembly(typeOf) {
     unseat,
     apply,
     drive,
+    openCamsOn,
     tap,
     pullable,
     canRelease,

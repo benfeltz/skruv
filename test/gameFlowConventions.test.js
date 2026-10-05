@@ -84,3 +84,11 @@ describe('branding (decision 4)', () => {
     }
   });
 });
+
+describe('repack frees the player\'s bolts from any cam (PR #12 review)', () => {
+  it('turns open cams locked on the repacked parts before unseating', () => {
+    const unseatAll = router.slice(router.indexOf('unseatAll(ids) {'), router.indexOf('dispose() {'));
+    expect(unseatAll.indexOf('assembly.openCamsOn(ids)')).toBeGreaterThan(-1);
+    expect(unseatAll.indexOf('assembly.openCamsOn(ids)')).toBeLessThan(unseatAll.indexOf('unseat(joint)'));
+  });
+});
