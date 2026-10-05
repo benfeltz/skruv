@@ -1,14 +1,15 @@
 import { PICK } from './constants.js';
 import { createAssembly } from './game/assembly.js';
 import { PART_TYPES } from './game/catalog.js';
-import { createDevLayout } from './game/devLayout.js';
 import { createPartMesh } from './game/partMesh.js';
+import { createPackedWorldLayout } from './game/packedLayout.js';
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
 import { createGhost } from './scene/ghost.js';
 import { createCompoundPhysics } from './scene/compoundPhysics.js';
 import { createDropGuide } from './scene/dropGuide.js';
+import { createFlatpack } from './scene/flatpack.js';
 import { createGestureRouter } from './scene/gestureRouter.js';
 import { createGizmo } from './scene/gizmo.js';
 import { createLoop } from './scene/loop.js';
@@ -23,9 +24,14 @@ scene.add(createRoom());
 const cameraControls = createCameraControls(camera, renderer.domElement);
 const physics = await createPhysicsWorld();
 
-// One record per physical part — what gestures pick, drag and snap.
-const parts = [];
-for (const { id, type, position, rotation } of createDevLayout()) {
+// The game opens on the closed flatpack: every part packed flat inside, asleep until the
+// lid comes off and a hand disturbs it.
+const flatpack = createFlatpack(physics);
+scene.add(flatpack.object, flatpack.lid.mesh);
+
+// One record per physical part — what gestures pick, drag and snap. The lid is one too.
+const parts = [flatpack.lid];
+for (const { id, type, position, rotation } of createPackedWorldLayout()) {
   const part = PART_TYPES[type];
   const mesh = createPartMesh(part);
   const body = physics.register(mesh, {
@@ -33,6 +39,7 @@ for (const { id, type, position, rotation } of createDevLayout()) {
     mass: part.mass,
     position,
     rotation,
+    asleep: true,
   });
   scene.add(mesh);
   parts.push({ id, type, mesh, body });

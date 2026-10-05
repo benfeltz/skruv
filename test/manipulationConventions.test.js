@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { GESTURE, SNAP } from '../src/constants.js';
 import { CONNECTOR, PART_TYPES } from '../src/game/catalog.js';
-import { createDevLayout } from '../src/game/devLayout.js';
+import { createPackedWorldLayout } from '../src/game/packedLayout.js';
 import { createGestureState } from '../src/game/gestureState.js';
 import * as snapMath from '../src/game/snapMath.js';
 import { applyTransform, findSnap, rotateVector } from '../src/game/snapMath.js';
@@ -70,7 +70,8 @@ describe('physics boundary', () => {
   const world = read('src/physics/world.js');
 
   it('keeps register/step as they were and adds grab/move/release', () => {
-    expect(world).toMatch(/function register\(mesh, \{ halfExtents, mass, position, rotation \}\)/);
+    // 1.5 adds only the optional `asleep` start, for parts packed in the flatpack.
+    expect(world).toMatch(/function register\(mesh, \{ halfExtents, mass, position, rotation, asleep = false \}\)/);
     expect(world).toMatch(/function step\(delta\)/);
     expect(world).toMatch(/function grab\(body\)/);
     expect(world).toMatch(/function move\(body, position, rotation\)/);
@@ -80,7 +81,12 @@ describe('physics boundary', () => {
   it('adds join/unjoin (1.4) and exposes exactly that API', () => {
     expect(world).toMatch(/function join\(bodyA, bodyB, \{ anchorA, anchorB, rotation \}, mode\)/);
     expect(world).toMatch(/function unjoin\(joint\)/);
-    expect(world).toMatch(/return \{ register, step, grab, move, release, join, unjoin \};/);
+    expect(world).toMatch(/return \{ register, addStatic, step, grab, move, release, join, unjoin \};/);
+  });
+
+  it('adds static slabs for the flatpack (1.5) and nothing else', () => {
+    expect(world).toMatch(/function addStatic\(\{ halfExtents, position, rotation \}\)/);
+    expect(read('src/scene/flatpack.js')).toMatch(/physics\.addStatic\(/);
   });
 });
 
@@ -128,7 +134,7 @@ describe('snapping scope', () => {
   });
 });
 
-describe('snapping against the real catalog and dev layout', () => {
+describe('snapping against the real catalog and the packed flatpack', () => {
   const world = (part, { position, rotation }) =>
     PART_TYPES[part].connectors.map(({ type, position: local, axis }) => ({
       type,
@@ -136,8 +142,8 @@ describe('snapping against the real catalog and dev layout', () => {
       axis: rotateVector(rotation, axis),
     }));
 
-  // A side panel as the dev layout lays it: inner face (its dowel holes) facing up.
-  const side = createDevLayout().find(({ id }) => id === 'sidePanel-1');
+  // A side panel as the flatpack packs it: inner face (its dowel holes) facing up.
+  const side = createPackedWorldLayout().find(({ id }) => id === 'sidePanel-1');
   const sideConnectors = world('sidePanel', side);
   const hole = sideConnectors.find(({ type }) => type === CONNECTOR.DOWEL_HOLE);
 
@@ -160,7 +166,7 @@ describe('snapping against the real catalog and dev layout', () => {
   });
 
   it('does not seat a dowel still lying flat', () => {
-    const flat = createDevLayout().find(({ id }) => id === 'dowel-1');
+    const flat = createPackedWorldLayout().find(({ id }) => id === 'dowel-1');
     const pose = { position: [hole.position[0], hole.position[1] + 0.01, hole.position[2]], rotation: flat.rotation };
     expect(findSnap(world('dowel', pose), sideConnectors, SNAP)).toBeNull();
   });

@@ -11,6 +11,8 @@
 // the direction a fastener's end points. Which instance mates with which is the assembly
 // graph's concern (src/game/assembly.js) and deliberately absent here.
 
+import { BOX } from '../constants.js';
+
 export const CONNECTOR = Object.freeze({
   DOWEL_HOLE: 'dowelHole',
   CAM_BOLT_HOLE: 'camBoltHole',
@@ -230,6 +232,15 @@ export const PART_TYPES = Object.freeze({
         Z,
       ),
     ],
+  },
+  // The flatpack's lid: not furniture and never in the manifest, but a part like any other
+  // — grabbed, lifted and dropped (src/scene/flatpack.js). It closes over the box's walls.
+  boxLid: {
+    size: [BOX.inner[0] + 2 * BOX.wall, BOX.lidThickness, BOX.inner[2] + 2 * BOX.wall],
+    partNumber: '10001',
+    mass: 0.9,
+    color: 'cardboard',
+    connectors: [],
   },
   screwdriver: {
     size: SCREWDRIVER_SIZE,

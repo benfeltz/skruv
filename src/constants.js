@@ -34,6 +34,7 @@ export const COLORS = {
   partWrench: 0x2f3136,
   partScrewdriver: 0xd9a21b,
   partFitting: 0x5d5853,
+  cardboard: 0xb48a5a,
   // Rotate gizmo rings, one per world axis, x/y/z in the usual red/green/blue.
   gizmoX: 0xe5534b,
   gizmoY: 0x6cc04a,
@@ -101,13 +102,29 @@ export const CAMERA_LIMITS = {
   dampingFactor: 0.1,
 };
 
-// Temporary floor layout for the full manifest (src/game/devLayout.js) until PR 5's unbox.
-export const DEV_LAYOUT = {
-  // Parts pack into rows no wider than this, centred on the room origin.
-  rowWidth: 4,
-  gap: 0.08,
-  // Dropped from just above the floor so settling is visible without parts bouncing about.
-  dropHeight: 0.05,
+// The flatpack the game opens on (src/game/packedLayout.js, src/scene/flatpack.js): a
+// thin-walled cardboard box lying on the floor, its lid closed on top. Box-local frame:
+// length along z, origin on the floor at its centre.
+export const BOX = {
+  // Inside, [across, height, length]: the 2 m panels lie along it, the hardboard back
+  // only just fits across.
+  inner: [0.84, 0.07, 2.08],
+  // Cardboard walls and bottom, as physics slabs this thick (thin enough to read as
+  // cardboard, thick enough that a sliding panel can't tunnel through).
+  wall: 0.01,
+  floor: 0.01,
+  lidThickness: 0.008,
+  // On the floor in front of the start view, turned so its length runs across it.
+  position: [0, 0, 0.6],
+  yaw: Math.PI / 2,
+};
+
+// Packing inside the box (src/game/packedLayout.js).
+export const PACK = {
+  // Between neighbouring panels in a layer, and between a panel and the wall.
+  gap: 0.01,
+  // Loose hardware lies this far apart on top — a fingertip between pieces.
+  hardwareGap: 0.045,
 };
 
 export const PHYSICS = {

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -57,9 +57,10 @@ describe('placeholders and headers', () => {
     expect(read('src/main.js')).not.toMatch(/createTestBox/);
   });
 
-  it('marks devLayout.js as temporary until the unbox flow', () => {
-    expect(read('src/game/devLayout.js').split('\n')[0]).toMatch(/TEMPORARY/);
-    expect(read('src/game/devLayout.js')).toMatch(/PR 5/);
+  it('retires the temporary dev floor layout now the flatpack replaces it (1.5)', () => {
+    expect(existsSync(new URL('../src/game/devLayout.js', import.meta.url))).toBe(false);
+    expect(read('src/main.js')).not.toMatch(/devLayout|DEV_LAYOUT/);
+    expect(read('src/main.js')).toMatch(/createPackedWorldLayout\(\)/);
   });
 
   it('documents catalog.js as data, not tunables, and keeps mating out', () => {

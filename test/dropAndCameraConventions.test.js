@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { CAMERA, CAMERA_LIMITS, DECAL, DROP, ROOM } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/catalog.js';
 import { decalPlacements, socketUnder } from '../src/game/decals.js';
-import { createDevLayout } from '../src/game/devLayout.js';
+import { createPackedWorldLayout } from '../src/game/packedLayout.js';
 import { rotateVector } from '../src/game/snapMath.js';
 import { clampCamera, clampTarget, clampTargetAlongView, panSpeedAt, seatOnFloor } from '../src/scene/cameraLimits.js';
 
@@ -33,9 +33,9 @@ describe('drop-line hole glow is never ambiguous (round 3)', () => {
     expect(DROP.glowIntensity).toBeLessThan(1);
   });
 
-  // The side panels as the dev layout lays them, holes up: a drop a few mm off any hole
+  // The side panels as the flatpack packs them, holes up: a drop a few mm off any hole
   // lights that hole; a drop on bare panel lights none.
-  const side = createDevLayout().find(({ id }) => id === 'sidePanel-1');
+  const side = createPackedWorldLayout().find(({ id }) => id === 'sidePanel-1');
   const sockets = PART_TYPES.sidePanel.connectors
     .map((c, index) => ({ index, type: c.type, position: add(side.position, rotateVector(side.rotation, c.position)) }));
 
@@ -59,7 +59,7 @@ describe('shipped camera, from the first frame (rounds 4–6)', () => {
   });
 
   it('can bring the camera to within minDistance of any part laid out on the floor', () => {
-    for (const { position: [x, , z] } of createDevLayout()) {
+    for (const { position: [x, , z] } of createPackedWorldLayout()) {
       // Target on the part, camera minDistance back along a 60° line of sight.
       const target = [x, 0, z];
       const camera = add(target, [0, CAMERA_LIMITS.minDistance * Math.cos(Math.PI / 3), CAMERA_LIMITS.minDistance * Math.sin(Math.PI / 3)]);

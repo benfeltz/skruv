@@ -53,7 +53,8 @@ export async function createPhysicsWorld() {
   const accumulator = createAccumulator(PHYSICS.timestep, PHYSICS.maxStepsPerFrame);
   const bodies = [];
 
-  function register(mesh, { halfExtents, mass, position, rotation }) {
+  /** `asleep`: starts at rest until something touches it — a packed part in its box. */
+  function register(mesh, { halfExtents, mass, position, rotation, asleep = false }) {
     const body = world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(...position)
@@ -61,7 +62,8 @@ export async function createPhysicsWorld() {
         .setLinearDamping(PHYSICS.linearDamping)
         .setAngularDamping(PHYSICS.angularDamping)
         // Hardware is millimetres thin; CCD keeps a fast pin from tunnelling the floor.
-        .setCcdEnabled(true),
+        .setCcdEnabled(true)
+        .setSleeping(asleep),
     );
     world.createCollider(
       RAPIER.ColliderDesc.cuboid(...halfExtents)
@@ -74,6 +76,17 @@ export async function createPhysicsWorld() {
     mesh.quaternion.set(...rotation);
     bodies.push({ body, mesh });
     return body;
+  }
+
+  /** A fixed slab — the flatpack's cardboard — at `position`/`rotation`. */
+  function addStatic({ halfExtents, position, rotation }) {
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(...halfExtents)
+        .setTranslation(...position)
+        .setRotation(toRotation(rotation))
+        .setFriction(PHYSICS.friction)
+        .setRestitution(PHYSICS.restitution),
+    );
   }
 
   function step(delta) {
@@ -171,5 +184,5 @@ export async function createPhysicsWorld() {
     world.removeImpulseJoint(joint, true);
   }
 
-  return { register, step, grab, move, release, join, unjoin };
+  return { register, addStatic, step, grab, move, release, join, unjoin };
 }

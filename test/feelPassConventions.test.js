@@ -1,12 +1,12 @@
 // Automated half of the 1.4.1 test plan: the feel pass's acceptance criteria and
-// regression risks, checked against the real catalog and dev layout headlessly. Touch
+// regression risks, checked against the real catalog and the packed flatpack headlessly. Touch
 // feel itself (phone pickability, sprue, assist, zoom-out) is manual — see Test Plan.md.
 
 import { describe, expect, it } from 'vitest';
 import { CAMERA, CAMERA_LIMITS, DECAL, GESTURE, PICK, ROOM, SNAP } from '../src/constants.js';
 import { CONNECTOR, MANIFEST, PART_TYPES } from '../src/game/catalog.js';
 import { decalPlacements } from '../src/game/decals.js';
-import { createDevLayout } from '../src/game/devLayout.js';
+import { createPackedWorldLayout } from '../src/game/packedLayout.js';
 import { easeToward } from '../src/game/dragMath.js';
 import { createGestureState, OWNER } from '../src/game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxReach } from '../src/game/pickMath.js';
@@ -62,8 +62,8 @@ function pick(parts, origin, target) {
   return preferHit(partHit, proxyHits, PICK)?.part ?? null;
 }
 
-describe('every fastener and tool pickable on the dev layout (AC1)', () => {
-  const layout = createDevLayout();
+describe('every fastener and tool pickable in the flatpack (AC1)', () => {
+  const layout = createPackedWorldLayout();
   const small = layout.filter(({ type }) => isSmallPart(PART_TYPES[type].size, PICK));
 
   it('covers every hardware type in the manifest', () => {
@@ -83,8 +83,8 @@ describe('every fastener and tool pickable on the dev layout (AC1)', () => {
 });
 
 describe('panel grabs near hardware stay panel grabs (regression risk, both directions)', () => {
-  // A side panel as the dev layout lays it, holes up, with a dowel standing in one hole.
-  const side = createDevLayout().find(({ id }) => id === 'sidePanel-1');
+  // A side panel as the flatpack packs it, holes up, with a dowel standing in one hole.
+  const side = createPackedWorldLayout().find(({ id }) => id === 'sidePanel-1');
   const holeIndex = PART_TYPES.sidePanel.connectors.findIndex((c) => c.type === CONNECTOR.DOWEL_HOLE);
   const hole = PART_TYPES.sidePanel.connectors[holeIndex];
   const mouth = add(side.position, rotateVector(side.rotation, hole.position));
