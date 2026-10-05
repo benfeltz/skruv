@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CAMERA, CAMERA_LIMITS, ROOM } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/catalog.js';
 import { createDevLayout } from '../src/game/devLayout.js';
-import { clampCamera, clampTarget } from '../src/scene/cameraLimits.js';
+import { clampCamera, clampTarget, panSpeedAt } from '../src/scene/cameraLimits.js';
 
 const room = { width: 10, depth: 8, height: 3 };
 const limits = { targetMargin: 0.5, targetHeight: [0, 2], wallMargin: 0.4, floorClearance: 0.05 };
@@ -73,5 +73,31 @@ describe('shipped camera limits', () => {
     expect(distance).toBeLessThanOrEqual(CAMERA_LIMITS.maxDistance);
     expect(polar).toBeGreaterThanOrEqual(CAMERA_LIMITS.minPolarAngle);
     expect(polar).toBeLessThanOrEqual(CAMERA_LIMITS.maxPolarAngle);
+  });
+});
+
+describe('panSpeedAt (zoomed-in panning)', () => {
+  const pan = { panReference: 1.2, maxPanBoost: 5 };
+
+  it('leaves panning alone from the reference distance out', () => {
+    expect(panSpeedAt(1.2, pan)).toBe(1);
+    expect(panSpeedAt(4, pan)).toBe(1);
+  });
+
+  it('speeds panning up as the camera closes in, inversely to distance', () => {
+    expect(panSpeedAt(0.6, pan)).toBeCloseTo(2);
+    expect(panSpeedAt(0.4, pan)).toBeCloseTo(3);
+  });
+
+  it('caps the boost, and never divides by zero', () => {
+    expect(panSpeedAt(0.05, pan)).toBe(5);
+    expect(panSpeedAt(0, pan)).toBe(5);
+  });
+
+  it('at the shipped closest zoom, a swipe covers ground like one from further out', () => {
+    // World distance a pan covers per px is distance × speed; at minDistance it must be at
+    // least a third of what it is at the reference distance.
+    const { minDistance, panReference } = CAMERA_LIMITS;
+    expect((minDistance * panSpeedAt(minDistance, CAMERA_LIMITS)) / panReference).toBeGreaterThan(1 / 3 - 1e-9);
   });
 });

@@ -81,6 +81,10 @@ export const CAMERA_LIMITS = {
   minDistance: 0.15,
   // Far enough to take in the whole room from over the walls.
   maxDistance: 6,
+  // Panning slows with zoom; closer than panReference (m) it is sped back up, by at most
+  // maxPanBoost, so moving around a close-up doesn't crawl.
+  panReference: 1.2,
+  maxPanBoost: 5,
   // Stops short of straight down: the build is always seen at an angle, never as a plan.
   minPolarAngle: (40 * Math.PI) / 180,
   maxPolarAngle: (80 * Math.PI) / 180,

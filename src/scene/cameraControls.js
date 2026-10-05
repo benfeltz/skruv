@@ -1,7 +1,7 @@
 import { MOUSE, TOUCH } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CAMERA, CAMERA_LIMITS, ROOM } from '../constants.js';
-import { clampCamera, clampTarget } from './cameraLimits.js';
+import { clampCamera, clampTarget, panSpeedAt } from './cameraLimits.js';
 
 /**
  * Touch camera: one finger orbits, two fingers pan + pinch-zoom toward the fingers (so a
@@ -40,6 +40,7 @@ export function createCameraControls(camera, domElement) {
   return {
     /** Call once per frame — applies damping. */
     update(deltaSeconds) {
+      controls.panSpeed = panSpeedAt(camera.position.distanceTo(controls.target), CAMERA_LIMITS);
       controls.update(deltaSeconds);
       confine();
     },

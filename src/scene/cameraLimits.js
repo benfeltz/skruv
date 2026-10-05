@@ -22,3 +22,13 @@ export function clampCamera([x, y, z], room, limits) {
   const reachZ = room.depth / 2 - limits.wallMargin;
   return [clamp(x, -reachX, reachX), Math.max(limits.floorClearance, y), clamp(z, -reachZ, reachZ)];
 }
+
+/**
+ * Pan speed multiplier at `distance` from the orbit target. OrbitControls pans in
+ * proportion to that distance, which crawls once zoomed in on hardware; closer than
+ * `panReference` the pan is boosted by panReference / distance, up to `maxPanBoost`.
+ */
+export function panSpeedAt(distance, { panReference, maxPanBoost }) {
+  if (!(distance > 0)) return maxPanBoost;
+  return Math.min(maxPanBoost, Math.max(1, panReference / distance));
+}
