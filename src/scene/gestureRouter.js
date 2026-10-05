@@ -124,13 +124,26 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return [rect.left + ((scratch.x + 1) / 2) * rect.width, rect.top + ((1 - scratch.y) / 2) * rect.height];
   }
 
+  // Connectors already in a seat — a filled hole, a dowel end already in one, a bolt head
+  // with a wrench on it — take no second one.
+  function occupied() {
+    const taken = new Set();
+    for (const j of assembly.all()) {
+      taken.add(`${j.hardware}#${j.hardwareConnector}`);
+      taken.add(`${j.host}#${j.hostConnector}`);
+    }
+    return (c) => taken.has(`${c.part.id}#${c.index}`);
+  }
+
   function snapCandidate(target) {
     const { part } = drag;
     const rotation = part.mesh.quaternion;
-    const dragged = worldConnectors(part, scratch.clone().fromArray(target), rotation);
+    const isTaken = occupied();
+    const free = (connectors) => connectors.filter((c) => !isTaken(c));
+    const dragged = free(worldConnectors(part, scratch.clone().fromArray(target), rotation));
     if (dragged.length === 0) return null;
     const others = parts.flatMap((other) =>
-      other === part ? [] : worldConnectors(other, other.mesh.position, other.mesh.quaternion),
+      other === part ? [] : free(worldConnectors(other, other.mesh.position, other.mesh.quaternion)),
     );
     const snap = findSnap(dragged, others, SNAP);
     if (!snap) return null;
