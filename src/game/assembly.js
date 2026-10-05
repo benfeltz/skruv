@@ -50,6 +50,18 @@ export function relativePose(a, b) {
   };
 }
 
+/**
+ * Where `pose` ends up when whatever it is rigidly attached to moves from pose `from` to
+ * pose `to` — how a fastened compound follows one of its parts.
+ */
+export function carryPose(from, to, pose) {
+  const rel = relativePose(from, pose);
+  return {
+    position: add(to.position, rotateVector(to.rotation, rel.anchor)),
+    rotation: normalize(multiplyQuaternions(to.rotation, rel.rotation)),
+  };
+}
+
 const compose = (f, g) => ({
   anchor: add(f.anchor, rotateVector(f.rotation, g.anchor)),
   rotation: normalize(multiplyQuaternions(f.rotation, g.rotation)),
@@ -264,6 +276,17 @@ export function createAssembly(typeOf) {
     return { anchor: sub(target, rotateVector(rotation, h.position)), rotation };
   }
 
+  /** World pose of a joint's hardware sitting at the hole's mouth, its host where it is now. */
+  function restPose(id, poseOf) {
+    const joint = joints.get(id);
+    const host = poseOf(joint.host);
+    const rel = seatedPose(joint, poseOf, 0);
+    return {
+      position: add(host.position, rotateVector(host.rotation, rel.anchor)),
+      rotation: normalize(multiplyQuaternions(host.rotation, rel.rotation)),
+    };
+  }
+
   // World-joint frame: the same physical point in each body's frame, plus b's rest rotation
   // in a's frame. `pivot` is b-local — where the connection bends under play.
   const jointFrame = (rel, pivot) => ({
@@ -363,6 +386,7 @@ export function createAssembly(typeOf) {
     screwedBolts,
     compoundOf,
     bonds,
+    restPose,
     jointsOf,
     hardwareConnector,
     hostConnector,

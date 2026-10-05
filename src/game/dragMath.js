@@ -34,6 +34,17 @@ export function clampLift(y, halfHeight, room, margin) {
 }
 
 /**
+ * How far (CSS px) a pointer has travelled from `start` to `point` along the on-screen
+ * direction `axis` — negative when moving against it, 0 for a degenerate axis (one pointing
+ * straight at the camera cannot be pulled along from this view).
+ */
+export function pullAlong([sx, sy], [x, y], [ax, ay]) {
+  const length = Math.hypot(ax, ay);
+  if (length < PARALLEL_EPSILON) return 0;
+  return ((x - sx) * ax + (y - sy) * ay) / length;
+}
+
+/**
  * Nearest detent to `angle` for detents every `step` radians; exact halfway points round
  * away from zero, so ±45° goes to ±90° symmetrically. A falsy step (free rotation)
  * returns the angle unchanged.

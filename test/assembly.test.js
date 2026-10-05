@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FASTENER } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/catalog.js';
-import { capture, connectorInWorld, createAssembly, relativePose } from '../src/game/assembly.js';
+import { capture, carryPose, connectorInWorld, createAssembly, relativePose } from '../src/game/assembly.js';
 import { KIND, STATE } from '../src/game/fasteners.js';
 import { rotateVector } from '../src/game/snapMath.js';
 
@@ -244,6 +244,37 @@ describe('bonds', () => {
     const shape = (bonds) => bonds.map(({ key, mode }) => [key.split(':')[0], mode]);
     expect(shape(wrong.bonds((id) => wrongPoses[id]))).toEqual(shape(right.bonds(poseOf)));
     expect(wrong.canRelease('sidePanel-2')).toBe(false);
+  });
+});
+
+describe('restPose', () => {
+  it('puts the hardware back at the hole mouth, wherever its host now is', () => {
+    const { assembly, inSide } = corner();
+    const moved = { ...POSES, 'sidePanel-1': { position: [1, 2, 3], rotation: [0, 1, 0, 0] } };
+    const rest = assembly.restPose(inSide.id, (id) => moved[id]);
+    const end = connectorInWorld(PART_TYPES.dowel.connectors[END_LOW], rest);
+    const hole = connectorInWorld(PART_TYPES.sidePanel.connectors[SIDE_BOTTOM_DOWEL], moved['sidePanel-1']);
+    expectVec(end.position, hole.position);
+    expectVec(end.axis, hole.axis.map((v) => -v));
+  });
+});
+
+describe('carryPose', () => {
+  it('moves an attached pose by the same rigid motion', () => {
+    const from = { position: [0, 0, 0], rotation: IDENTITY };
+    const to = { position: [1, 0, 0], rotation: [0, SQRT1_2, 0, SQRT1_2] }; // +90° about y
+    const carried = carryPose(from, to, { position: [0, 0, -1], rotation: IDENTITY });
+    expectVec(carried.position, [0, 0, 0]);
+    expectVec(carried.rotation, to.rotation);
+  });
+
+  it('is a pure translation when the rotation is unchanged', () => {
+    const from = { position: [1, 2, 3], rotation: [0, 0, SQRT1_2, SQRT1_2] };
+    const to = { position: [1.5, 2, 3], rotation: [0, 0, SQRT1_2, SQRT1_2] };
+    const pose = { position: [0, 0, 0], rotation: [1, 0, 0, 0] };
+    const carried = carryPose(from, to, pose);
+    expectVec(carried.position, [0.5, 0, 0]);
+    expectVec(carried.rotation, pose.rotation);
   });
 });
 

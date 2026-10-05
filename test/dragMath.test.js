@@ -6,6 +6,7 @@ import {
   clampToRoom,
   fitsInRoom,
   intersectDragPlane,
+  pullAlong,
   quantizeAngle,
   rotatedHalfExtents,
 } from '../src/game/dragMath.js';
@@ -159,3 +160,20 @@ describe('clampLift', () => {
     expect(clampLift(2, ROOM.height, ROOM, margin)).toBe(ROOM.height);
   });
 });
+
+describe('pullAlong', () => {
+  it('measures travel along the on-screen axis, whatever its length', () => {
+    expect(pullAlong([10, 10], [40, 50], [3, 4])).toBeCloseTo(50);
+    expect(pullAlong([10, 10], [40, 50], [30, 40])).toBeCloseTo(50);
+  });
+
+  it('is negative against the axis and zero across it', () => {
+    expect(pullAlong([0, 0], [-20, 0], [1, 0])).toBe(-20);
+    expect(pullAlong([0, 0], [0, 35], [1, 0])).toBe(0);
+  });
+
+  it('is zero for an axis pointing at the camera', () => {
+    expect(pullAlong([0, 0], [100, 100], [0, 0])).toBe(0);
+  });
+});
+
