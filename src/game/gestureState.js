@@ -1,7 +1,8 @@
 // Pointer-gesture state machine: decides who owns each touch — the camera, a part drag,
 // or a gizmo ring — and classifies taps vs drags. Pure: it consumes plain pointer records
-// `{ id, x, y, t, hit }` (CSS px, ms) built by src/scene/gestureRouter.js, where `hit` is
-// null (empty space) or `{ kind: 'part' | 'ring', ... }` passed through untouched.
+// `{ id, x, y, t, hit, button }` (CSS px, ms) built by src/scene/gestureRouter.js, where
+// `hit` is null (empty space) or `{ kind: 'part' | 'ring', ... }` passed through untouched,
+// and `button` is the pressed button (0 = primary: every touch and pen; default 0).
 
 import { GESTURE } from '../constants.js';
 
@@ -47,7 +48,7 @@ export function createGestureState(thresholds = GESTURE) {
   let cameraMulti = false;
 
   const movedTooFar = (p, x, y) => Math.hypot(x - p.startX, y - p.startY) > tapMaxDistance;
-  const isTap = (p, { x, y, t }) => !movedTooFar(p, x, y) && t - p.startT <= tapMaxMs;
+  const isTap = (p, { x, y, t }) => p.canTap && !movedTooFar(p, x, y) && t - p.startT <= tapMaxMs;
 
   function reset() {
     owner = null;
@@ -56,10 +57,21 @@ export function createGestureState(thresholds = GESTURE) {
     cameraMulti = false;
   }
 
-  function down({ id, x, y, t, hit }) {
+  function down({ id, x, y, t, hit, button = 0 }) {
     if (owner === null) {
-      owner = (hit && OWNER_FOR_HIT[hit.kind]) || OWNER.CAMERA;
-      primary = { id, hit: owner === OWNER.CAMERA ? null : hit, startX: x, startY: y, startT: t, dragging: false };
+      // Only the primary button picks up parts or rings; mouse right/middle presses are
+      // the camera's pan and zoom.
+      owner = (button === 0 && hit && OWNER_FOR_HIT[hit.kind]) || OWNER.CAMERA;
+      primary = {
+        id,
+        hit: owner === OWNER.CAMERA ? null : hit,
+        startX: x,
+        startY: y,
+        startT: t,
+        dragging: false,
+        // A right/middle click is never a tap — it must not deselect.
+        canTap: button === 0,
+      };
       if (owner === OWNER.CAMERA) cameraPointers.add(id);
       return null;
     }

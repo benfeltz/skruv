@@ -54,6 +54,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     y: event.clientY,
     t: event.timeStamp,
     hit,
+    button: event.button,
   });
 
   function syncCamera() {
@@ -170,10 +171,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // Capture phase, so this runs before OrbitControls' own pointerdown on the same element
   // and a part touch has already disabled the camera when OrbitControls sees it.
-  // Only the primary button (every touch and pen press) can pick up a part; mouse
-  // right/middle presses stay the camera's pan and zoom.
   function onPointerDown(event) {
-    const hit = state.owner === null && event.button === 0 ? hitTest(event) : null;
+    const hit = state.owner === null ? hitTest(event) : null;
     const wasCamera = state.cameraEnabled;
     state.down(pointer(event, hit));
     syncCamera();

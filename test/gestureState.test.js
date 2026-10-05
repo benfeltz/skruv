@@ -108,6 +108,32 @@ describe('tap vs drag', () => {
   });
 });
 
+describe('non-primary buttons', () => {
+  const press = (button, hit = null) => ({ ...at(1, 0, 0, 0, hit), button });
+
+  it('never reports a stationary right or middle click as a tap (no deselect)', () => {
+    for (const button of [1, 2]) {
+      const g = createGestureState(T);
+      g.down(press(button));
+      expect(g.up(at(1, 0, 0, 100))).toBeNull();
+      expect(g.owner).toBeNull();
+    }
+  });
+
+  it('leaves a right press on a part with the camera (pan), never a part drag', () => {
+    const g = createGestureState(T);
+    g.down(press(2, PART));
+    expect(g.owner).toBe(OWNER.CAMERA);
+    expect(g.cameraEnabled).toBe(true);
+  });
+
+  it('still taps on the primary button', () => {
+    const g = createGestureState(T);
+    g.down(press(0));
+    expect(g.up(at(1, 0, 0, 100))).toMatchObject({ type: 'tap', hit: null });
+  });
+});
+
 describe('cancel', () => {
   it('cancels a live part drag, resets, and re-enables the camera', () => {
     const g = createGestureState(T);
