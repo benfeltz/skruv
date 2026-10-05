@@ -4,7 +4,8 @@
 export const ROOM = {
   width: 10,
   depth: 10,
-  // No ceiling — walls are tall enough that the orbit limits keep the camera below them.
+  // No ceiling. Zoomed out, the camera may rise above the walls (dollhouse view); their
+  // inward faces vanish from outside.
   height: 5,
 };
 
@@ -61,15 +62,15 @@ export const CAMERA = {
 };
 
 // Orbit limits. maxDistance is derived from these and ROOM by
-// src/scene/cameraLimits.js so the camera stays wallMargin inside the walls and below
-// their tops; the pivot and maxPolarAngle keep it above the floor.
+// src/scene/cameraLimits.js so the camera stays wallMargin inside the walls horizontally;
+// it may rise over their tops. The pivot and maxPolarAngle keep it above the floor.
 export const CAMERA_LIMITS = {
   // Centre of the sphere the orbit target may be panned within.
   pivot: [0, 1, 0],
   maxTargetRadius: 0.8,
   wallMargin: 0.4,
   minDistance: 1,
-  // Stops short of straight down so the wall tops bound height without crushing zoom-out.
+  // Stops short of straight down: the build is always seen at an angle, never as a plan.
   minPolarAngle: (40 * Math.PI) / 180,
   maxPolarAngle: (80 * Math.PI) / 180,
   dampingFactor: 0.1,

@@ -17,14 +17,15 @@ describe('maxOrbitDistance', () => {
     expect(maxOrbitDistance({ ...room, height: 100 }, limits)).toBeCloseTo(5 - 0.5 - 1);
   });
 
-  it('is bound by the wall tops when the room is low', () => {
-    // 4 - 0.5 - (1 + 1) = 1.5, looking straight down
-    expect(maxOrbitDistance(room, limits)).toBeCloseTo(1.5);
+  // 1.4.1 dollhouse view: the wall tops no longer bound zoom-out.
+  it('is no longer bound by the wall tops when the room is low', () => {
+    expect(maxOrbitDistance(room, limits)).toBeCloseTo(5 - 0.5 - 1);
+    expect(maxOrbitDistance({ ...room, height: 0.5 }, limits)).toBeCloseTo(5 - 0.5 - 1);
   });
 
-  it('allows more distance when the camera cannot look straight down', () => {
+  it('ignores the polar limits — only the horizontal reach binds', () => {
     const tilted = { ...limits, minPolarAngle: Math.PI / 3 };
-    expect(maxOrbitDistance(room, tilted)).toBeCloseTo(1.5 / Math.cos(Math.PI / 3));
+    expect(maxOrbitDistance(room, tilted)).toBeCloseTo(maxOrbitDistance(room, limits));
   });
 
   it('uses the nearer wall for an off-centre pivot or a narrow room', () => {
@@ -49,9 +50,14 @@ describe('shipped camera limits', () => {
     expect(Math.abs(pivotZ) + reach).toBeLessThanOrEqual(ROOM.depth / 2 - wallMargin);
   });
 
-  it('keeps the camera below the wall tops', () => {
+  it('lets the camera rise above the wall tops (dollhouse view)', () => {
     const highest = pivotY + maxTargetRadius + maxDistance * Math.cos(minPolarAngle);
-    expect(highest).toBeLessThanOrEqual(ROOM.height - wallMargin + 1e-9);
+    expect(highest).toBeGreaterThan(ROOM.height - wallMargin);
+  });
+
+  it('zooms out further than the old wall-tops bound allowed', () => {
+    const byWallTops = (ROOM.height - wallMargin - (pivotY + maxTargetRadius)) / Math.cos(minPolarAngle);
+    expect(maxDistance).toBeGreaterThan(byWallTops);
   });
 
   it('keeps the camera above the floor by more than the near plane', () => {

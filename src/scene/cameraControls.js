@@ -5,7 +5,8 @@ import { maxOrbitDistance } from './cameraLimits.js';
 
 /**
  * Touch camera: one finger orbits, two fingers pan + pinch-zoom; limits keep the camera
- * inside the walls, below their tops and above the floor (see cameraLimits.js).
+ * inside the walls horizontally and above the floor, free to rise over the wall tops
+ * (see cameraLimits.js).
  *
  * `enable()`/`disable()` is the seam the gesture router drives to hand touches to part
  * manipulation — callers never reach into OrbitControls directly.
