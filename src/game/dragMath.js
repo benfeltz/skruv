@@ -25,6 +25,26 @@ export function clampToRoom([x, y, z], [halfX, halfZ], room, margin) {
 }
 
 /**
+ * Clamps a lifted part's centre height so its bottom stays on or above the floor and its
+ * top stays `margin` below the walls' tops. A part taller than that range sits on the floor.
+ */
+export function clampLift(y, halfHeight, room, margin) {
+  const ceiling = Math.max(halfHeight, room.height - margin - halfHeight);
+  return Math.min(ceiling, Math.max(halfHeight, y));
+}
+
+/**
+ * How far (CSS px) a pointer has travelled from `start` to `point` along the on-screen
+ * direction `axis` — negative when moving against it, 0 for a degenerate axis (one pointing
+ * straight at the camera cannot be pulled along from this view).
+ */
+export function pullAlong([sx, sy], [x, y], [ax, ay]) {
+  const length = Math.hypot(ax, ay);
+  if (length < PARALLEL_EPSILON) return 0;
+  return ((x - sx) * ax + (y - sy) * ay) / length;
+}
+
+/**
  * Nearest detent to `angle` for detents every `step` radians; exact halfway points round
  * away from zero, so ±45° goes to ±90° symmetrically. A falsy step (free rotation)
  * returns the angle unchanged.

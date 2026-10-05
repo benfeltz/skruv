@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { GESTURE, ROOM } from '../src/constants.js';
 import {
   arcDelta,
+  clampLift,
   clampToRoom,
   fitsInRoom,
   intersectDragPlane,
+  pullAlong,
   quantizeAngle,
   rotatedHalfExtents,
 } from '../src/game/dragMath.js';
@@ -138,3 +140,40 @@ describe('fitsInRoom', () => {
     expect(fitsInRoom([halfW - 1.01, 1.02, 0], [1.01, 1.01, 0.008], ROOM)).toBe(true);
   });
 });
+
+describe('clampLift', () => {
+  const margin = GESTURE.ceilingMargin;
+
+  it('leaves a height inside the range alone', () => {
+    expect(clampLift(1.2, 0.1, ROOM, margin)).toBe(1.2);
+  });
+
+  it('keeps the part on or above the floor', () => {
+    expect(clampLift(-3, 0.1, ROOM, margin)).toBe(0.1);
+  });
+
+  it('keeps the top margin below the walls', () => {
+    expect(clampLift(99, 1.01, ROOM, margin)).toBeCloseTo(ROOM.height - margin - 1.01);
+  });
+
+  it('sits a part taller than the room on the floor', () => {
+    expect(clampLift(2, ROOM.height, ROOM, margin)).toBe(ROOM.height);
+  });
+});
+
+describe('pullAlong', () => {
+  it('measures travel along the on-screen axis, whatever its length', () => {
+    expect(pullAlong([10, 10], [40, 50], [3, 4])).toBeCloseTo(50);
+    expect(pullAlong([10, 10], [40, 50], [30, 40])).toBeCloseTo(50);
+  });
+
+  it('is negative against the axis and zero across it', () => {
+    expect(pullAlong([0, 0], [-20, 0], [1, 0])).toBe(-20);
+    expect(pullAlong([0, 0], [0, 35], [1, 0])).toBe(0);
+  });
+
+  it('is zero for an axis pointing at the camera', () => {
+    expect(pullAlong([0, 0], [100, 100], [0, 0])).toBe(0);
+  });
+});
+

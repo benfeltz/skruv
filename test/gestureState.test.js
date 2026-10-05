@@ -211,3 +211,96 @@ describe('resolveHit', () => {
     expect(resolveHit(null, null, null)).toBeNull();
   });
 });
+
+describe('lift channel (second finger during a part drag)', () => {
+  const dragging = () => {
+    const g = createGestureState(T);
+    g.down(at(1, 0, 0, 0, PART));
+    g.move(at(1, 30, 0, 10));
+    return g;
+  };
+
+  it('turns a second finger into the lift: upward travel raises, downward lowers', () => {
+    const g = dragging();
+    expect(g.down(at(2, 100, 200, 20))).toBeNull();
+    expect(g.move(at(2, 100, 170, 30))).toEqual({ type: 'lift', owner: OWNER.DRAG_PART, hit: PART, dy: 30 });
+    expect(g.move(at(2, 100, 180, 40))).toEqual({ type: 'lift', owner: OWNER.DRAG_PART, hit: PART, dy: -10 });
+  });
+
+  it('ends the lift when the second finger lifts, while the drag carries on', () => {
+    const g = dragging();
+    g.down(at(2, 100, 200, 20));
+    g.move(at(2, 100, 150, 30));
+    expect(g.up(at(2, 100, 150, 40))).toBeNull();
+    expect(g.owner).toBe(OWNER.DRAG_PART);
+    expect(g.move(at(2, 100, 100, 50))).toBeNull();
+    expect(g.move(at(1, 50, 0, 60))).toMatchObject({ type: 'dragMove', x: 50 });
+    expect(g.up(at(1, 50, 0, 70))).toMatchObject({ type: 'dragEnd', owner: OWNER.DRAG_PART });
+  });
+
+  it('a cancelled lift finger leaves the drag alive', () => {
+    const g = dragging();
+    g.down(at(2, 100, 200, 20));
+    expect(g.cancel(at(2, 100, 200, 30))).toBeNull();
+    expect(g.phase).toBe('dragging');
+    expect(g.move(at(1, 40, 0, 40))).toMatchObject({ type: 'dragMove' });
+  });
+
+  it('never moves the primary drag from the lift finger, nor lifts from the primary', () => {
+    const g = dragging();
+    g.down(at(2, 100, 200, 20));
+    expect(g.move(at(2, 300, 200, 30))).toBeNull(); // sideways only: no lift, no drag
+    expect(g.move(at(1, 30, -50, 40))).toMatchObject({ type: 'dragMove', x: 30, y: -50 });
+  });
+
+  it('keeps the camera disabled and unclaimed throughout, and hands it back at the end', () => {
+    const g = dragging();
+    g.down(at(2, 100, 200, 20));
+    expect(g.cameraEnabled).toBe(false);
+    g.move(at(2, 100, 120, 30));
+    expect(g.owner).toBe(OWNER.DRAG_PART);
+    expect(g.cameraEnabled).toBe(false);
+    g.up(at(1, 30, 0, 40));
+    expect(g.cameraEnabled).toBe(true);
+    // The lift finger outlives the drag: it never becomes a camera pointer or a tap.
+    expect(g.move(at(2, 100, 100, 50))).toBeNull();
+    expect(g.up(at(2, 100, 100, 60))).toBeNull();
+    expect(g.owner).toBeNull();
+    g.down(at(3, 0, 0, 70));
+    expect(g.owner).toBe(OWNER.CAMERA);
+  });
+
+  it('takes only one lift finger; a third is ignored', () => {
+    const g = dragging();
+    g.down(at(2, 100, 200, 20));
+    g.down(at(3, 200, 200, 30));
+    expect(g.move(at(3, 200, 100, 40))).toBeNull();
+    expect(g.move(at(2, 100, 190, 50))).toMatchObject({ type: 'lift', dy: 10 });
+  });
+
+  it('emits no lift before the press has become a drag', () => {
+    const g = createGestureState(T);
+    g.down(at(1, 0, 0, 0, PART));
+    g.down(at(2, 100, 200, 10));
+    expect(g.move(at(2, 100, 150, 20))).toBeNull();
+  });
+
+  it('still ignores a second finger during a ring gesture', () => {
+    const g = createGestureState(T);
+    g.down(at(1, 0, 0, 0, RING));
+    g.move(at(1, 30, 0, 10));
+    g.down(at(2, 100, 200, 20));
+    expect(g.move(at(2, 100, 100, 30))).toBeNull();
+    expect(g.owner).toBe(OWNER.GIZMO_RING);
+  });
+
+  it('lifts on the desktop wheel only while dragging a part (scroll up raises)', () => {
+    const g = dragging();
+    expect(g.wheel({ dy: -40 })).toEqual({ type: 'lift', owner: OWNER.DRAG_PART, hit: PART, dy: 40 });
+    expect(g.wheel({ dy: 25 })).toMatchObject({ type: 'lift', dy: -25 });
+    const idle = createGestureState(T);
+    expect(idle.wheel({ dy: -40 })).toBeNull();
+    idle.down(at(1, 0, 0, 0));
+    expect(idle.wheel({ dy: -40 })).toBeNull(); // camera owns the wheel: zoom
+  });
+});

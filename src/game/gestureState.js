@@ -35,6 +35,11 @@ export function resolveHit(ringHit, partHit, selectedPart) {
  *   { type: 'dragEnd', owner, hit, x, y }
  *   { type: 'dragCancel', owner, hit }        pointercancel / interrupted mid-drag
  *   { type: 'tap', hit, x, y }                hit is null for an empty-space tap
+ *   { type: 'lift', owner, hit, dy }          raise (+) / lower (−) the dragged part, CSS px
+ *
+ * A second finger during a part gesture is the lift channel: its vertical travel (up is
+ * positive) raises the held part, and lifting it ends the lift while the drag carries on.
+ * `wheel` is the desktop stand-in. The camera never sees the lift finger.
  *
  * `cameraEnabled` is false only while a part or ring gesture is live; the router mirrors
  * it onto the camera after every event, so every end path hands the camera back.
@@ -44,6 +49,7 @@ export function createGestureState(thresholds = GESTURE) {
 
   let owner = null;
   let primary = null; // { id, hit, startX, startY, startT, dragging }
+  let lift = null; // { id, y } — the second finger of a part gesture
   const cameraPointers = new Set();
   let cameraMulti = false;
 
@@ -53,6 +59,7 @@ export function createGestureState(thresholds = GESTURE) {
   function reset() {
     owner = null;
     primary = null;
+    lift = null;
     cameraPointers.clear();
     cameraMulti = false;
   }
@@ -75,16 +82,27 @@ export function createGestureState(thresholds = GESTURE) {
       if (owner === OWNER.CAMERA) cameraPointers.add(id);
       return null;
     }
-    // Extra fingers join a camera gesture (pinch/pan) whatever they land on; during a part
-    // or ring gesture the first owner keeps it and extra fingers are ignored.
+    // Extra fingers join a camera gesture (pinch/pan) whatever they land on. During a part
+    // gesture the first owner keeps it and the second finger becomes the lift channel;
+    // during a ring gesture, and beyond a second finger, extras are ignored.
     if (owner === OWNER.CAMERA) {
       cameraPointers.add(id);
       cameraMulti = true;
+    } else if (owner === OWNER.DRAG_PART && !lift) {
+      lift = { id, y };
     }
     return null;
   }
 
+  const liftEffect = (dy) =>
+    primary && primary.dragging && dy !== 0 ? { type: 'lift', owner, hit: primary.hit, dy } : null;
+
   function move({ id, x, y }) {
+    if (lift && id === lift.id) {
+      const dy = lift.y - y;
+      lift.y = y;
+      return liftEffect(dy);
+    }
     if (!primary || id !== primary.id) return null;
     if (owner === OWNER.CAMERA) {
       if (movedTooFar(primary, x, y)) primary.dragging = true;
@@ -106,6 +124,10 @@ export function createGestureState(thresholds = GESTURE) {
       if (cameraPointers.size === 0) reset();
       return tapped ? { type: 'tap', hit: null, x, y } : null;
     }
+    if (lift && id === lift.id) {
+      lift = null;
+      return null;
+    }
     if (!primary || id !== primary.id) return null;
     const ended = { owner, hit: primary.hit, x, y };
     const tapped = !primary.dragging && isTap(primary, event);
@@ -123,8 +145,17 @@ export function createGestureState(thresholds = GESTURE) {
       if (cameraPointers.size === 0) reset();
       return null;
     }
+    if (lift && id === lift.id) {
+      lift = null;
+      return null;
+    }
     if (!primary || id !== primary.id) return null;
     return cancelAll();
+  }
+
+  /** Desktop lift: wheel delta (CSS px, positive = scroll down) while a part is dragged. */
+  function wheel({ dy }) {
+    return owner === OWNER.DRAG_PART ? liftEffect(-dy) : null;
   }
 
   /** Abandon whatever is live (page hidden, focus lost). */
@@ -143,6 +174,7 @@ export function createGestureState(thresholds = GESTURE) {
     up,
     cancel,
     cancelAll,
+    wheel,
     get owner() {
       return owner;
     },

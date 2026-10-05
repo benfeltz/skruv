@@ -72,7 +72,15 @@ describe('physics boundary', () => {
   it('keeps register/step as they were and adds grab/move/release', () => {
     expect(world).toMatch(/function register\(mesh, \{ halfExtents, mass, position, rotation \}\)/);
     expect(world).toMatch(/function step\(delta\)/);
-    expect(world).toMatch(/return \{ register, step, grab, move, release \};/);
+    expect(world).toMatch(/function grab\(body\)/);
+    expect(world).toMatch(/function move\(body, position, rotation\)/);
+    expect(world).toMatch(/function release\(body\)/);
+  });
+
+  it('adds join/unjoin (1.4) and exposes exactly that API', () => {
+    expect(world).toMatch(/function join\(bodyA, bodyB, \{ anchorA, anchorB, rotation \}, mode\)/);
+    expect(world).toMatch(/function unjoin\(joint\)/);
+    expect(world).toMatch(/return \{ register, step, grab, move, release, join, unjoin \};/);
   });
 });
 
@@ -104,12 +112,15 @@ describe('snapping scope', () => {
     );
   });
 
-  it('marks the kinematic "placed" hold as temporary until PR 4', () => {
+  it('keeps the placed hold only until the first fastener engages (its 1.3 removal condition)', () => {
     const router = read('src/scene/gestureRouter.js');
     const hold = router.slice(router.indexOf('if (snapped)'), router.indexOf('} else {', router.indexOf('if (snapped)')));
-    expect(hold).toMatch(/TEMPORARY/);
-    expect(hold).toMatch(/PR 4/);
     expect(hold).not.toMatch(/physics\.release/);
+    expect(hold).toMatch(/placed\.add\(part\)/);
+    expect(router).not.toMatch(/TEMPORARY/);
+    // reconcile() releases a held part once a bond holds it.
+    const reconcile = router.slice(router.indexOf('function reconcile()'), router.indexOf('function holdLooseHardware()'));
+    expect(reconcile).toMatch(/if \(!isBonded\(part\)\) continue;\s*placed\.delete\(part\);\s*physics\.release\(part\.body\);/);
   });
 
   it('reaches a hole from a part hovering at grab height (generous first)', () => {

@@ -32,6 +32,15 @@ describe('type compatibility', () => {
     expect(areCompatible(CONNECTOR.NAIL_TIP, CONNECTOR.SHELF_PIN_HOLE)).toBe(false);
   });
 
+  it('pairs the screwdriver tip with a cam slot and nothing else', () => {
+    expect(areCompatible(CONNECTOR.SCREWDRIVER_TIP, CONNECTOR.CAM_SLOT)).toBe(true);
+    expect(areCompatible(CONNECTOR.CAM_SLOT, CONNECTOR.SCREWDRIVER_TIP)).toBe(true);
+    const others = Object.values(CONNECTOR).filter((t) => t !== CONNECTOR.CAM_SLOT);
+    for (const type of others) expect(areCompatible(CONNECTOR.SCREWDRIVER_TIP, type)).toBe(false);
+    // The allen wrench keeps hex bolts; it never turns a cam.
+    expect(areCompatible(CONNECTOR.WRENCH_TIP, CONNECTOR.CAM_SLOT)).toBe(false);
+  });
+
   it('covers every catalog connector type exactly once', () => {
     const covered = [...Object.keys(COMPATIBLE), ...Object.values(COMPATIBLE)].sort();
     expect(covered).toEqual(Object.values(CONNECTOR).sort());

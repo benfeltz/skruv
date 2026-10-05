@@ -21,6 +21,7 @@ export const COLORS = {
   partDowel: 0xd8b27a,
   partMetal: 0xa7adb3,
   partWrench: 0x2f3136,
+  partScrewdriver: 0xd9a21b,
   // Rotate gizmo rings, one per world axis, x/y/z in the usual red/green/blue.
   gizmoX: 0xe5534b,
   gizmoY: 0x6cc04a,
@@ -112,6 +113,10 @@ export const GESTURE = {
   wallMargin: 0.05,
   // Rotate-gizmo detent — the default; the free-rotate toggle turns it off.
   detentStep: Math.PI / 2,
+  // Lift channel (second finger, or the wheel on desktop): metres per CSS px of travel.
+  liftRate: 0.004,
+  // A lifted part's top stays this far below the walls' tops.
+  ceilingMargin: 0.1,
 };
 
 // Rotate gizmo (src/scene/gizmo.js): rings sized from the selected part's bounding sphere.
@@ -136,3 +141,29 @@ export const SNAP = {
   roomTolerance: 0.002,
   ghostOpacity: 0.45,
 };
+
+// Fasteners (src/game/fasteners.js, src/game/assembly.js) and the joints that follow them
+// (src/physics/world.js). Distances in metres unless marked CSS px; angles in radians.
+export const FASTENER = {
+  // A dowel, pin or nail comes back out when dragged this far (CSS px) along its axis.
+  pullDistance: 40,
+  // Hammer taps from a seated nail to a driven one.
+  tapsToDrive: 3,
+  // Wrench crank from a seated cam bolt to a screwed one: two full turns.
+  screwRadians: 4 * Math.PI,
+  // Screwdriver turn from an open cam lock to a locked one.
+  quarterTurn: Math.PI / 2,
+  // A cam catches any screwed bolt head this close to its recess (Design: instance-agnostic).
+  captureRadius: 0.015,
+  // How deep each fastener sits in its hole once fully home, along its axis.
+  sinkDepth: { dowel: 0.015, pin: 0.008, nail: 0.018, bolt: 0.011, cam: 0.012 },
+  // Crank motion this close (CSS px) to the fastener's on-screen centre is ignored — the
+  // angle swings wildly there.
+  crankDeadzone: 12,
+  // Dowel-stage connections: rigid in translation, this much angular play, and damped so
+  // the carcass slumps to the limit and stays (no spring, no bounce). Cam-locked = rigid.
+  angularPlayDegrees: 4,
+  // Torque per rad/s resisting the slump (N·m·s/rad), so it reads as a sag, not a drop.
+  playDamping: 1000,
+};
+
