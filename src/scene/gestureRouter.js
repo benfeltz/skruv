@@ -197,6 +197,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function unseat(joint) {
     assembly.unseat(joint.id);
     if (joint.kind === KIND.TOOL) toolGrips.delete(joint.hardware);
+    // A part held only for this seat goes back to the simulation — a dowel whose panel
+    // was carried off, a wrench whose bolt was.
+    for (const id of [joint.hardware, joint.host]) {
+      const part = partById.get(id);
+      if (!placed.has(part) || assembly.jointsOf(id).length > 0) continue;
+      placed.delete(part);
+      physics.release(part.body);
+    }
   }
 
   // --- part drag: kinematic body on a floor-parallel plane at the grab point's height ---
@@ -207,8 +215,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (engagement?.target) beginCrank(part, engagement, event);
     else if (assembly.canRelease(part.id)) {
       // Nothing holds it: it leaves whatever it was seated on.
-      for (const joint of assembly.jointsOf(part.id)) unseat(joint);
       placed.delete(part);
+      for (const joint of assembly.jointsOf(part.id)) unseat(joint);
       reconcile();
       beginMove(part, point, event, 'move');
     } else if (assembly.pullable(part.id).length > 0) beginPull(part, event);
@@ -278,6 +286,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       physics.release(part.body);
     }
     stopDrag();
+    // Whatever was seated on a part that just moved away drops.
+    pruneStale();
   }
 
   function cancelDrag() {
@@ -375,12 +385,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function tapPart(part) {
     pruneStale();
     const engagement = assembly.crankTarget(part.id);
-    if (engagement) {
-      unseat(engagement.tool);
-      placed.delete(part);
-      physics.release(part.body);
-      return;
-    }
+    if (engagement) return unseat(engagement.tool);
     if (assembly.tap(part.id, behindNail).length > 0) return reconcile();
     onTap?.(part);
   }
