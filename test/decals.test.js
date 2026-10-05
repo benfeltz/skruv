@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DECAL } from '../src/constants.js';
 import { CONNECTOR, PART_TYPES } from '../src/game/catalog.js';
-import { decalPlacements } from '../src/game/decals.js';
+import { decalPlacements, socketUnder } from '../src/game/decals.js';
 import { rotateVector } from '../src/game/snapMath.js';
 
 const SOCKETS = [
@@ -57,5 +57,25 @@ describe('decalPlacements', () => {
     const [decal] = decalPlacements([{ type: CONNECTOR.NAIL_HOLE, position: [0, 0, -0.01], axis: [0, 0, -1] }]);
     rotateVector(decal.rotation, [0, 0, 1]).forEach((v, i) => expect(v).toBeCloseTo([0, 0, -1][i], 9));
     expect(decal.position[2]).toBeCloseTo(-0.01 - DECAL.surfaceOffset, 9);
+  });
+});
+
+describe('socketUnder (drop line over a hole)', () => {
+  const a = { id: 'a', position: [0, 0.008, 0] };
+  const b = { id: 'b', position: [0.18, 0.008, 0] };
+
+  it('finds the hole the drop line lands on', () => {
+    expect(socketUnder([0.004, 0.008, -0.003], [a, b], 0.012)).toBe(a);
+    expect(socketUnder([0.175, 0.008, 0.002], [a, b], 0.012)).toBe(b);
+  });
+
+  it('finds nothing when the line lands on bare surface', () => {
+    expect(socketUnder([0.05, 0.008, 0], [a, b], 0.012)).toBeNull();
+    expect(socketUnder([0, 0, 0], [], 0.012)).toBeNull();
+  });
+
+  it('picks the nearer of two holes in reach', () => {
+    const c = { id: 'c', position: [0.01, 0.008, 0] };
+    expect(socketUnder([0.007, 0.008, 0], [a, c], 0.012)).toBe(c);
   });
 });

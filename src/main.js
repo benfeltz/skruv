@@ -8,6 +8,7 @@ import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
 import { createGhost } from './scene/ghost.js';
 import { createCompoundPhysics } from './scene/compoundPhysics.js';
+import { createDropGuide } from './scene/dropGuide.js';
 import { createGestureRouter } from './scene/gestureRouter.js';
 import { createGizmo } from './scene/gizmo.js';
 import { createLoop } from './scene/loop.js';
@@ -58,6 +59,10 @@ scene.add(gizmo.object);
 const ghost = createGhost();
 scene.add(ghost.object);
 
+// While a part is dragged: where it would land, and the hole it would drop onto.
+const dropGuide = createDropGuide();
+scene.add(dropGuide.object);
+
 // A model-kit handle on a selected fastener or tool, to drag millimetre hardware by.
 const sprue = createSprue();
 scene.add(sprue.object);
@@ -86,6 +91,7 @@ const router = createGestureRouter({
   onTap: select,
   ghost,
   sprue,
+  dropGuide,
 });
 
 createLoop((delta) => {

@@ -117,3 +117,24 @@ describe('Shift-lift never skews a crank or a pull (1.4.1 review)', () => {
     expect(moveDrag).not.toMatch(/crankTo\(at\)|pullTo\(at\)/);
   });
 });
+
+describe('drop guide (1.4.1, Ben)', () => {
+  const router = read('src/scene/gestureRouter.js');
+
+  it('renders only — where it lands and which hole lights are the router raycast and decals.js', () => {
+    const guide = read('src/scene/dropGuide.js');
+    expect(guide).not.toMatch(/physics|raycast|from '\.\.\/game\//);
+    expect(router).toMatch(/socketUnder\(to, freeSocketsFor\(part, host\), DROP\.holeReach\)/);
+  });
+
+  it('lights only empty holes that take the dragged part', () => {
+    const free = router.slice(router.indexOf('function freeSocketsFor('), router.indexOf('function glow('));
+    expect(free).toMatch(/areCompatible\(end, c\.type\)/);
+    expect(free).toMatch(/!isTaken\(c\)/);
+  });
+
+  it('goes away when the drag ends, however it ends', () => {
+    const stop = router.slice(router.indexOf('function stopDrag()'), router.indexOf('}', router.indexOf('function stopDrag()')));
+    expect(stop).toMatch(/dropGuide\?\.hide\(\)/);
+  });
+});

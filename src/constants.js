@@ -37,6 +37,8 @@ export const COLORS = {
   // Hole markings (src/game/decals.js) and the flash when a fastener seats in one.
   decal: 0x3a3029,
   decalFlash: 0xe0a64a,
+  // Drop line under a dragged part, and the glow on the hole it would drop onto.
+  dropGuide: 0xe0a64a,
   // Emissive off: what a decal glows when it isn't flashing.
   unlit: 0x000000,
   // Sprue handle on a selected small part (src/scene/sprue.js): model-kit plastic grey.
@@ -142,6 +144,20 @@ export const GIZMO = {
   tube: 0.025,
   hitTube: 0.12,
   opacity: 0.85,
+};
+
+// Drop guide (src/scene/dropGuide.js): a line from a dragged part straight down to where it
+// would land, a ring there, and the hole marking under it lit when it is a free hole that
+// takes the part.
+export const DROP = {
+  ringRadius: 0.012,
+  ringWidth: 0.003,
+  opacity: 0.7,
+  // A landing spot this close to a hole's centre is "over the hole" (a dowel hole's
+  // marking is 5 mm across, so a little slack beyond it).
+  holeReach: 0.012,
+  // Glow of a hole under the drop line, or the seat the ghost shows; the seat flash is 1.
+  glowIntensity: 0.6,
 };
 
 // Fat-finger picking (src/game/pickMath.js, src/scene/gestureRouter.js). Hardware is

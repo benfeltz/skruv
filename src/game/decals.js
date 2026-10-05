@@ -41,3 +41,21 @@ export function decalPlacements(connectors, decal = DECAL) {
     ];
   });
 }
+
+/**
+ * The socket a part let go of at `point` would drop onto: the nearest of `sockets`
+ * (world-space records with a `position`, e.g. free holes that take the part) within
+ * `reach` metres of where the drop line lands — or null when it lands on bare surface.
+ */
+export function socketUnder(point, sockets, reach) {
+  let best = null;
+  let bestDistance = reach;
+  for (const socket of sockets) {
+    const distance = Math.hypot(...socket.position.map((v, i) => v - point[i]));
+    if (distance <= bestDistance) {
+      best = socket;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}

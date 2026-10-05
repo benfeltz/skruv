@@ -1,13 +1,14 @@
 import * as THREE from 'three';
-import { COLORS, FASTENER, GESTURE, PICK, ROOM, SNAP } from '../constants.js';
+import { COLORS, DROP, FASTENER, GESTURE, PICK, ROOM, SNAP } from '../constants.js';
 import { capture, connectorInWorld } from '../game/assembly.js';
 import { CONNECTOR, PART_TYPES } from '../game/catalog.js';
+import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
 import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rotatedHalfExtents } from '../game/dragMath.js';
 import { isFastened, KIND } from '../game/fasteners.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxGap } from '../game/pickMath.js';
-import { applyTransform, COMPATIBLE, findSnap } from '../game/snapMath.js';
+import { applyTransform, areCompatible, COMPATIBLE, findSnap } from '../game/snapMath.js';
 
 // Hardware (fastener or tool) has a fastener end; panels have only holes, or nothing.
 const isHardware = (type) => PART_TYPES[type].connectors.some((c) => c.type in COMPATIBLE);
@@ -43,13 +44,16 @@ const PULL_AXIS_PROBE = 0.05;
  *            cancel() }`; which of ring and part a press lands on is `resolveHit`'s call.
  *   onTap  — called with the tapped part, or null for empty space.
  *   ghost  — `{ show(mesh, pose), hide() }` snap preview (src/scene/ghost.js).
+ *   dropGuide — `{ show(from, to), hide() }` line from a dragged part down to where it
+ *            would land (src/scene/dropGuide.js); a free hole there that takes the part
+ *            glows, as does the seat the ghost shows.
  *   sprue  — `{ selected, hitTest(raycaster) }` handle on a selected small part
  *            (src/scene/sprue.js); a press on it nearer than anything else is a press on
  *            its part, so dragging it is the part's own drag.
  * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
  * eases a dragged part toward the seat on offer (seat assist) and fades the seat flash.
  */
-export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue }) {
+export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide }) {
   const state = createGestureState();
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -79,6 +83,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const toolGrips = new Map();
   // decal mesh → ms of glow left, after a fastener seated in its hole.
   const flashes = new Map();
+  // The hole marking lit under the drop line (or at the seat on offer), if any.
+  let glowing = null;
+  const down = new THREE.Vector3(0, -1, 0);
 
   function aim({ clientX, clientY }) {
     const rect = domElement.getBoundingClientRect();
@@ -378,6 +385,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   function stopDrag() {
     ghost?.hide();
+    dropGuide?.hide();
     drag = null;
   }
 
@@ -388,6 +396,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       const decal = part.mesh.userData.decals?.get(index);
       if (!decal) continue;
       decal.material.emissive.setHex(COLORS.decalFlash);
+      decal.material.emissiveIntensity = 1;
       flashes.set(decal, SNAP.flashMs);
     }
   }
@@ -403,6 +412,48 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
         flashes.delete(decal);
       }
     }
+  }
+
+  // --- drop guide: where a dragged part lands, and the hole it would drop onto ---
+
+  function guideDrop() {
+    if (!drag || (drag.mode !== 'move' && drag.mode !== 'compound')) return glow(null);
+    const { part, centre, halfHeight } = drag;
+    const { position } = part.mesh;
+    const from = [position.x + centre[0], position.y + centre[1] - halfHeight, position.z + centre[2]];
+    const carried = new Set(drag.mode === 'compound' ? assembly.compoundOf(part.id) : []);
+    carried.add(part.id);
+    raycaster.set(scratch.fromArray(from), down);
+    const hit = raycaster.intersectObjects(meshes, false).find(({ object }) => !carried.has(partByMesh.get(object).id));
+    const to = hit ? hit.point.toArray() : [from[0], 0, from[2]];
+    dropGuide?.show(from, to);
+    if (drag.snapped) {
+      const { from: a, to: b } = drag.snapped.snap;
+      return glow(decalOf(a) ?? decalOf(b));
+    }
+    const host = hit && drag.mode === 'move' ? partByMesh.get(hit.object) : null;
+    glow(host ? decalOf(socketUnder(to, freeSocketsFor(part, host), DROP.holeReach)) : null);
+  }
+
+  const decalOf = (connector) => connector?.part.mesh.userData.decals?.get(connector.index) ?? null;
+
+  // The holes on `host` still empty that take one of `part`'s fastener ends.
+  function freeSocketsFor(part, host) {
+    const ends = PART_TYPES[part.type].connectors.map((c) => c.type);
+    const isTaken = occupied();
+    return worldConnectors(host, host.mesh.position, host.mesh.quaternion).filter(
+      (c) => ends.some((end) => areCompatible(end, c.type)) && !isTaken(c),
+    );
+  }
+
+  // Lights one hole marking at a time; a hole mid-flash keeps its flash.
+  function glow(decal) {
+    if (decal === glowing) return;
+    if (glowing && !flashes.has(glowing)) glowing.material.emissive.setHex(COLORS.unlit);
+    glowing = decal;
+    if (!decal || flashes.has(decal)) return;
+    decal.material.emissive.setHex(COLORS.decalFlash);
+    decal.material.emissiveIntensity = DROP.glowIntensity;
   }
 
   // --- pull: a part pushed into fastened seats comes back out along their axis ---
@@ -515,6 +566,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function update(delta = 0) {
     assist(delta);
     fadeFlashes(delta);
+    guideDrop();
     for (const joint of assembly.all()) {
       if (joint.kind !== KIND.BOLT && joint.kind !== KIND.CAM) continue;
       const { mesh, body } = partById.get(joint.hardware);
