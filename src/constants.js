@@ -369,3 +369,33 @@ export const TUNE = {
   panelMaxWidth: 520,
   panelMaxHeight: 0.6,
 };
+
+// Dev stream (dev server only — never in a build): the socket a dev session streams its
+// events out of and takes knob sets in through. The hub is a plugin in vite.config.js, the
+// game's end src/dev/wsClient.js, and tools/agent-bridge the agent's. Every message is
+// JSON `{ kind, ... }`, one of `kinds`:
+//   hello       any → hub      `{ role }`: 'game' for the page; anything else is a tool
+//   event       game → tools   `{ event }`: one bus event (src/game/events.js)
+//   list        tool → game    `{ id }`: asks for the knobs
+//   knobs       game → tools   `{ id, knobs }`: tunables.list(), answering list or set
+//   set         tool → game    `{ id, key, value }`: a knob set, clamped by the registry
+//   screenshot  tool → game    `{ id }`: asks for the canvas
+//   image       game → tools   `{ id, dataUrl }`: a PNG of the next rendered frame
+//   error       game → tools   `{ id, message }`: a request refused
+// The hub relays game messages to every tool and tool messages to every game.
+export const DEV_WS = {
+  path: '/__skruv-dev',
+  kinds: {
+    hello: 'hello',
+    event: 'event',
+    list: 'list',
+    knobs: 'knobs',
+    set: 'set',
+    screenshot: 'screenshot',
+    image: 'image',
+    error: 'error',
+  },
+  gameRole: 'game',
+  // A dropped socket (the dev server restarted) is retried this often, in ms.
+  retryMs: 2000,
+};

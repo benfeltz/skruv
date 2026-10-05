@@ -1,5 +1,10 @@
-import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { DEV_WS } from '../src/constants.js';
 import viteConfig from '../vite.config.js';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -171,5 +176,68 @@ describe('the wall clamp never shrinks the orbit (1.4.1 review)', () => {
     expect(controls).toMatch(/function unconfine\(\) \{\s*camera\.position\.copy\(free\);/);
     expect(controls).toMatch(/free\.copy\(camera\.position\);[\s\S]*clampCamera\(free\.toArray\(\)/);
     expect(update).not.toMatch(/unconfine\(\)/);
+  });
+});
+
+describe('the deployed bundle carries no dev stream (1.6)', () => {
+  // A real production build into a scratch dir, then asserted on byte for byte: the plain
+  // URL on Pages must never open a socket or carry dev code.
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  let outDir;
+  let files;
+  beforeAll(() => {
+    outDir = mkdtempSync(join(tmpdir(), 'skruv-dist-'));
+    // As CI builds it: vitest's NODE_ENV=test would build with import.meta.env.DEV true.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'NODE_ENV' && !key.startsWith('VITEST')));
+    execFileSync(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', outDir, '--emptyOutDir', '--logLevel', 'error'], { cwd: root, env });
+    files = readdirSync(outDir, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => {
+        const path = join(entry.parentPath, entry.name);
+        return { path, text: readFileSync(path, 'utf8') };
+      });
+  }, 120_000);
+  afterAll(() => outDir && rmSync(outDir, { recursive: true, force: true }));
+
+  it.each([
+    ['the dev socket path', DEV_WS.path],
+    ['the dev client', 'connectDevStream'],
+    ['the dev client module', 'wsClient'],
+    ['a WebSocket', 'WebSocket'],
+    ['the dev console trail', '[skruv]'],
+  ])('contains no %s', (_, marker) => {
+    expect(files.length).toBeGreaterThan(0);
+    for (const { path, text } of files) expect(text.includes(marker), path).toBe(false);
+  });
+
+  it('keeps the tuning drawer out of the entry chunk — the plain URL never loads it', () => {
+    const html = files.find(({ path }) => path.endsWith('index.html')).text;
+    const entry = html.match(/src="[^"]*\/(assets\/index-[^"]+\.js)"/)[1];
+    const entryText = files.find(({ path }) => path.endsWith(entry)).text;
+    expect(entryText).not.toContain('skruv-tune-panel');
+    expect(files.some(({ path, text }) => /tunePanel/.test(path) && text.includes('skruv-tune-panel'))).toBe(true);
+  });
+});
+
+describe('dev stream wiring (1.6)', () => {
+  const main = read('src/main.js');
+
+  it('reaches the client only through a DEV-guarded dynamic import', () => {
+    expect(main.match(/dev\/wsClient/g)).toHaveLength(1);
+    expect(main).toMatch(/if \(import\.meta\.env\.DEV\) \{\s*import\('\.\/dev\/wsClient\.js'\)/);
+    expect(main).not.toMatch(/^import .*dev\//m);
+  });
+
+  it('keeps src/dev to the one client file, imported by nothing else', () => {
+    const dir = fileURLToPath(new URL('../src/dev', import.meta.url));
+    expect(readdirSync(dir)).toEqual(['wsClient.js']);
+    const others = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true })
+      .filter((path) => path.endsWith('.js') && path !== 'main.js' && !path.startsWith('dev'));
+    for (const path of others) expect(read(`src/${path}`), path).not.toMatch(/(import\(|from )['"][^'"]*\/dev\//);
+  });
+
+  it('runs the hub on the dev server only', () => {
+    const plugin = viteConfig.plugins.flat().find((p) => p?.name === 'skruv-dev-stream');
+    expect(plugin.apply).toBe('serve');
   });
 });

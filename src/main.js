@@ -204,6 +204,21 @@ createLoop((delta) => {
 // The rest of the booklet draws in idle time, after the room is on screen.
 bookletPages.prerender();
 
+// Dev server only: the dev stream — events out, knob sets and screenshots in. The guard is
+// compile-time, so a build drops the import and src/dev with it.
+if (import.meta.env.DEV) {
+  import('./dev/wsClient.js').then(({ connectDevStream }) =>
+    connectDevStream({
+      events,
+      tunables,
+      screenshot: () => {
+        renderer.render(scene, camera);
+        return renderer.domElement.toDataURL('image/png');
+      },
+    }),
+  );
+}
+
 // ?tune: the tuning drawer, on any build. Loaded only then — the plain URL never fetches it.
 if (new URLSearchParams(location.search).has(TUNE.queryFlag)) {
   const { createTunePanel } = await import('./ui/tunePanel.js');
