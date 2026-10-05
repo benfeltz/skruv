@@ -17,6 +17,8 @@ import { createLoop } from './scene/loop.js';
 import { createRoom } from './scene/room.js';
 import { createScene } from './scene/scene.js';
 import { createSprue } from './scene/sprue.js';
+import { createBookletPages } from './scene/bookletPages.js';
+import { createBookletSheet } from './ui/booklet.js';
 import { createToggleButton } from './ui/toggleButton.js';
 
 const { renderer, scene, camera } = createScene(document.getElementById('app'));
@@ -70,6 +72,11 @@ const gizmo = createGizmo({
 });
 scene.add(gizmo.object);
 
+// The booklet: pages drawn from the same models, flipped freely — reference, never a gate.
+const bookletPages = createBookletPages(renderer);
+const booklet = createBookletSheet({ pages: bookletPages });
+document.body.append(booklet.thumb, booklet.element);
+
 const ghost = createGhost();
 scene.add(ghost.object);
 
@@ -118,3 +125,5 @@ createLoop((delta) => {
   sprue.update();
   renderer.render(scene, camera);
 }).start();
+// The rest of the booklet draws in idle time, after the room is on screen.
+bookletPages.prerender();

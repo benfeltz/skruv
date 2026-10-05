@@ -80,6 +80,18 @@ export const BOOKLET = {
   font: 'system-ui, -apple-system, "Segoe UI", sans-serif',
 };
 
+// The booklet in hand (src/ui/booklet.js): CSS pixels.
+export const BOOKLET_UI = {
+  // The collapsed thumbnail of the open page, bottom-left — small enough to leave the room
+  // to the fingers.
+  thumbWidth: 64,
+  // A horizontal swipe this long flips a page; a downward one this long closes the sheet.
+  swipeDistance: 48,
+  // The open sheet never grows wider than this, nor taller than this share of the screen.
+  maxWidth: 520,
+  maxHeight: 0.92,
+};
+
 export const LIGHTS = {
   hemisphereIntensity: 1.2,
   sunIntensity: 1.6,
