@@ -72,7 +72,15 @@ describe('physics boundary', () => {
   it('keeps register/step as they were and adds grab/move/release', () => {
     expect(world).toMatch(/function register\(mesh, \{ halfExtents, mass, position, rotation \}\)/);
     expect(world).toMatch(/function step\(delta\)/);
-    expect(world).toMatch(/return \{ register, step, grab, move, release \};/);
+    expect(world).toMatch(/function grab\(body\)/);
+    expect(world).toMatch(/function move\(body, position, rotation\)/);
+    expect(world).toMatch(/function release\(body\)/);
+  });
+
+  it('adds join/unjoin (1.4) and exposes exactly that API', () => {
+    expect(world).toMatch(/function join\(bodyA, bodyB, \{ anchorA, anchorB, rotation \}, mode\)/);
+    expect(world).toMatch(/function unjoin\(joint\)/);
+    expect(world).toMatch(/return \{ register, step, grab, move, release, join, unjoin \};/);
   });
 });
 
