@@ -3,21 +3,24 @@ import { COLORS } from '../src/constants.js';
 import { CONNECTOR, MANIFEST, MANIFEST_QUANTITIES, PART_TYPES } from '../src/game/catalog.js';
 
 // The Design doc's manifest table, restated independently so a catalog edit can't
-// silently change what ships in the box.
+// silently change what ships in the box. Dowels and cam locks include the bag's spares.
 const DESIGN_MANIFEST = {
   sidePanel: 2,
   topBottomPanel: 2,
   fixedShelf: 1,
   adjustableShelf: 2,
   backPanel: 1,
-  dowel: 12,
+  dowel: 14,
   camLockBolt: 8,
-  camLock: 8,
+  camLock: 10,
   shelfPin: 8,
   nail: 8,
   allenWrench: 1,
   screwdriver: 1,
 };
+
+// Loose spares in the bag (1.4.1): extras beyond what the holes take.
+const SPARES = { dowel: 2, camLock: 2 };
 
 const EPSILON = 1e-9;
 const types = Object.entries(PART_TYPES);
@@ -34,11 +37,17 @@ describe('manifest', () => {
     expect(MANIFEST_QUANTITIES).toEqual(DESIGN_MANIFEST);
   });
 
-  it('expands to one instance per physical part, 54 in all', () => {
-    expect(MANIFEST).toHaveLength(54);
+  it('expands to one instance per physical part, 58 in all', () => {
+    expect(MANIFEST).toHaveLength(58);
     for (const [type, quantity] of Object.entries(DESIGN_MANIFEST)) {
       expect(MANIFEST.filter((p) => p.type === type)).toHaveLength(quantity);
     }
+  });
+
+  it('ships two spare dowels and two spare cam locks, but no spare bolts', () => {
+    expect(countHoles(CONNECTOR.DOWEL_HOLE) / 2 + SPARES.dowel).toBe(MANIFEST_QUANTITIES.dowel);
+    expect(countHoles(CONNECTOR.CAM_LOCK_RECESS) + SPARES.camLock).toBe(MANIFEST_QUANTITIES.camLock);
+    expect(MANIFEST_QUANTITIES.camLockBolt).toBe(countHoles(CONNECTOR.CAM_BOLT_HOLE));
   });
 
   it('gives every instance a unique id', () => {
@@ -80,10 +89,10 @@ describe('connectors', () => {
   });
 
   // Hole counts only — which hole takes which fastener is PR 4's mating table.
-  it('has enough holes for every fastener in the box', () => {
-    expect(countHoles(CONNECTOR.DOWEL_HOLE)).toBe(2 * DESIGN_MANIFEST.dowel);
+  it('has enough holes for every fastener in the box, spares aside', () => {
+    expect(countHoles(CONNECTOR.DOWEL_HOLE)).toBe(2 * (DESIGN_MANIFEST.dowel - SPARES.dowel));
     expect(countHoles(CONNECTOR.CAM_BOLT_HOLE)).toBe(DESIGN_MANIFEST.camLockBolt);
-    expect(countHoles(CONNECTOR.CAM_LOCK_RECESS)).toBe(DESIGN_MANIFEST.camLock);
+    expect(countHoles(CONNECTOR.CAM_LOCK_RECESS)).toBe(DESIGN_MANIFEST.camLock - SPARES.camLock);
     expect(countHoles(CONNECTOR.SHELF_PIN_HOLE)).toBe(DESIGN_MANIFEST.shelfPin);
     expect(countHoles(CONNECTOR.NAIL_HOLE)).toBe(DESIGN_MANIFEST.nail);
   });
