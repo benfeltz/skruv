@@ -32,6 +32,9 @@ export const COLORS = {
   uiAccent: 0xe0a64a,
   // Snap preview (src/scene/ghost.js).
   ghost: 0xe0a64a,
+  // Hole markings (src/game/decals.js) and the flash when a fastener seats in one.
+  decal: 0x3a3029,
+  decalFlash: 0xe0a64a,
 };
 
 export const LIGHTS = {
@@ -140,6 +143,24 @@ export const SNAP = {
   // refused (the part would be held kinematic inside a static collider).
   roomTolerance: 0.002,
   ghostOpacity: 0.45,
+};
+
+// Hole markings (src/game/decals.js, drawn by src/game/partMesh.js). Radii are keyed by
+// the catalog's socket connector type and sized a touch wider than what fills them, so a
+// seated fastener still shows a rim.
+export const DECAL = {
+  radius: {
+    dowelHole: 0.005,
+    camBoltHole: 0.0045,
+    shelfPinHole: 0.0035,
+    nailHole: 0.0022,
+    camLockRecess: 0.009,
+  },
+  // A recess is drawn as a ring: inner radius as a fraction of the outer.
+  recessInner: 0.55,
+  // Laid this far proud of the face, so it never z-fights the panel.
+  surfaceOffset: 0.0004,
+  segments: 24,
 };
 
 // Fasteners (src/game/fasteners.js, src/game/assembly.js) and the joints that follow them

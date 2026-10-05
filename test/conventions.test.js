@@ -31,6 +31,7 @@ describe('pure-logic modules', () => {
     'src/game/fasteners.js',
     'src/game/assembly.js',
     'src/game/crankMath.js',
+    'src/game/decals.js',
   ];
 
   it.each(pureModules)('%s imports neither Three nor Rapier', (path) => {
@@ -49,6 +50,7 @@ describe('pure-logic modules', () => {
     'src/game/fasteners.js',
     'src/game/assembly.js',
     'src/game/crankMath.js',
+    'src/game/decals.js',
   ])(
     '%s touches no DOM globals',
     (path) => {
