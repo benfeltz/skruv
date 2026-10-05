@@ -273,7 +273,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       // over; reconcile() hands them to their joints once a fastener engages.
       physics.move(part.body, snapped.position, snapped.rotation);
       placed.add(part);
-      if (joint.kind === KIND.TOOL) gripTool(part, to.part, snapped);
+      if (joint.kind === KIND.TOOL) gripTool(joint, snapped);
     } else {
       physics.release(part.body);
     }
@@ -352,10 +352,21 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   const headIndex = (id) => PART_TYPES[partById.get(id).type].connectors.findIndex((c) => c.type === CONNECTOR.BOLT_HEAD);
 
-  // The tool keeps its seated pose relative to what it turns.
-  function gripTool(tool, fastener, { position, rotation }) {
-    toolPose.compose(scratch.fromArray(position), twist.fromArray(rotation), unitScale);
-    hardwarePose.compose(fastener.mesh.position, fastener.mesh.quaternion, unitScale);
+  // The tool keeps its seated pose relative to what it turns. Either side may have been
+  // the one dragged into the seat (a bolt head onto a wrench on the floor): the dragged
+  // side is at `snapped`, the other where it lies — and the tool is held from now on.
+  function gripTool(joint, snapped) {
+    const tool = partById.get(joint.hardware);
+    const fastener = partById.get(joint.host);
+    const toolMoved = joint.mover === tool.id;
+    const at = (part, moved) =>
+      moved ? [scratch.fromArray(snapped.position), twist.fromArray(snapped.rotation)] : [part.mesh.position, part.mesh.quaternion];
+    toolPose.compose(...at(tool, toolMoved), unitScale);
+    hardwarePose.compose(...at(fastener, !toolMoved), unitScale);
+    if (!toolMoved) {
+      physics.grab(tool.body);
+      placed.add(tool);
+    }
     toolGrips.set(tool.id, { fastener, grip: hardwarePose.clone().invert().multiply(toolPose) });
   }
 
