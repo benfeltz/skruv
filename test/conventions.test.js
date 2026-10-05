@@ -149,3 +149,14 @@ describe('seat flash hands back to the drop glow (1.4.1 review)', () => {
     expect(fade).toMatch(/if \(decal === glowing\) \{\s*decal\.material\.emissiveIntensity = DROP\.glowIntensity;/);
   });
 });
+
+describe('the wall clamp never shrinks the orbit (1.4.1 review)', () => {
+  const controls = read('src/scene/cameraControls.js');
+  const update = controls.slice(controls.indexOf('update(deltaSeconds) {'), controls.indexOf('enable() {'));
+
+  it('hands OrbitControls its own unclamped pose back before every update, and clamps after', () => {
+    expect(update).toMatch(/unconfine\(\);[\s\S]*controls\.update\(deltaSeconds\);\s*confine\(\);/);
+    expect(controls).toMatch(/function unconfine\(\) \{\s*camera\.position\.copy\(free\);/);
+    expect(controls).toMatch(/free\.copy\(camera\.position\);[\s\S]*clampCamera\(free\.toArray\(\)/);
+  });
+});

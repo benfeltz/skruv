@@ -1,4 +1,4 @@
-import { MOUSE, TOUCH } from 'three';
+import { MOUSE, TOUCH, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CAMERA, CAMERA_LIMITS, ROOM } from '../constants.js';
 import { clampCamera, clampTargetAlongView, panSpeedAt } from './cameraLimits.js';
@@ -27,9 +27,21 @@ export function createCameraControls(camera, domElement) {
   controls.maxPolarAngle = CAMERA_LIMITS.maxPolarAngle;
   controls.zoomToCursor = true;
 
+  // Where OrbitControls has the camera, unclamped — its orbit and zoom kept whole. The
+  // wall clamp only moves the camera as drawn, so orbiting toward a wall slides along it
+  // and the chosen distance comes back once the camera swings clear; the clamp never
+  // leaks into OrbitControls' own state.
+  const free = new Vector3();
+
   function confine() {
-    controls.target.set(...clampTargetAlongView(controls.target.toArray(), camera.position.toArray(), ROOM, CAMERA_LIMITS));
-    camera.position.set(...clampCamera(camera.position.toArray(), ROOM, CAMERA_LIMITS));
+    free.copy(camera.position);
+    controls.target.set(...clampTargetAlongView(controls.target.toArray(), free.toArray(), ROOM, CAMERA_LIMITS));
+    camera.position.set(...clampCamera(free.toArray(), ROOM, CAMERA_LIMITS));
+    camera.lookAt(controls.target);
+  }
+
+  function unconfine() {
+    camera.position.copy(free);
     camera.lookAt(controls.target);
   }
 
@@ -40,6 +52,7 @@ export function createCameraControls(camera, domElement) {
   return {
     /** Call once per frame — applies damping. */
     update(deltaSeconds) {
+      unconfine();
       controls.panSpeed = panSpeedAt(camera.position.distanceTo(controls.target), CAMERA_LIMITS);
       controls.update(deltaSeconds);
       confine();
