@@ -147,16 +147,32 @@ export function lidRest(box = BOX) {
 }
 
 /**
- * Where the `n`th recovered part is set down: in a row beside the box's long side, above
- * the floor so it drops into place, wrapping back along the box. `{ position, rotation }`.
+ * Where recovered parts of `types` are set down, one `{ position, rotation }` each: laid
+ * flat as they pack, side by side in a patch beside the box's long side (as long as the
+ * box, plus the patch's clearance at each end), every one's
+ * underside `respawn.height` above the floor so it drops into place. Those that don't fit
+ * go in again a layer higher, so no two in one batch ever overlap.
  */
-export function respawnSpot(n, box = BOX, respawn = RESET.respawn) {
+export function respawnSpots(types, box = BOX, respawn = RESET.respawn) {
   const [width, , length] = box.inner;
-  const slots = Math.max(1, Math.floor(length / respawn.spacing));
-  const along = -length / 2 + respawn.spacing / 2 + (n % slots) * respawn.spacing;
-  const local = { position: [width / 2 + box.wall + respawn.offset, respawn.height, along], rotation: IDENTITY };
-  const [pose] = placeLayout([local], boxPlacement(box));
-  return { position: pose.position, rotation: pose.rotation };
+  const near = width / 2 + box.wall + respawn.offset;
+  // Along the box, overhanging each end by the same clearance, so even the lid fits.
+  const along = length / 2 + box.wall + respawn.offset;
+  const patch = [near, -along, near + respawn.depth, along];
+  const items = types.map((type, i) => ({ i, ...orient(type, width) }));
+  const local = [];
+  let pending = items;
+  for (let layer = 0; pending.length; layer++) {
+    const centres = packRows(pending, patch, respawn.gap);
+    if (centres.length === 0) throw new Error('a recovered part is too big for the patch beside the box');
+    const lift = respawn.height + layer * respawn.layerHeight;
+    centres.forEach(([x, z], k) => {
+      const { i, height, rotation } = pending[k];
+      local[i] = { position: [x, lift + height / 2, z], rotation };
+    });
+    pending = pending.slice(centres.length);
+  }
+  return placeLayout(local, boxPlacement(box)).map(({ position, rotation }) => ({ position, rotation }));
 }
 
 /** The packed layout carried into the room — what main.js spawns. */

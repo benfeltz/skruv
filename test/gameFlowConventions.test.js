@@ -41,7 +41,9 @@ describe('recovery sweep (Feedback #9)', () => {
 
   it('respawns only loose player parts, never the display shelf', () => {
     expect(sweep).toMatch(/\[\.\.\.playerParts, flatpack\.lid\]/);
-    expect(sweep).toMatch(/compoundOf\(id\)\.size > 1/);
+    expect(sweep).toMatch(/compoundOf\(id\)\.size === 1/);
+    // One batch per sweep, so the parts recovered together are laid out together.
+    expect(sweep).toMatch(/respawnSpots\(escaped\.map\(\(part\) => part\.type\)\)/);
   });
 });
 

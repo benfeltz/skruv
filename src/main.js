@@ -3,7 +3,7 @@ import { createAssembly } from './game/assembly.js';
 import { PART_TYPES } from './game/catalog.js';
 import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
-import { createPackedWorldLayout, lidRest, respawnSpot } from './game/packedLayout.js';
+import { createPackedWorldLayout, lidRest, respawnSpots } from './game/packedLayout.js';
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
@@ -146,17 +146,17 @@ document.body.append(createResetButton({ onReset: repack }).element);
 // Recovery: a loose player part that has left the room (through a slab, off a wall) is set
 // down again beside the box. Bonded parts go back only with a repack.
 let sweepIn = RESET.sweepInterval;
-let recovered = 0;
 function sweep(delta) {
   sweepIn -= delta;
   if (sweepIn > 0) return;
   sweepIn = RESET.sweepInterval;
-  for (const { id, body } of [...playerParts, flatpack.lid]) {
+  const escaped = [...playerParts, flatpack.lid].filter(({ id, body }) => {
     const { x, y, z } = body.translation();
-    if (!hasEscaped([x, y, z], ROOM, RESET.escapeMargin) || assembly.compoundOf(id).size > 1) continue;
-    const { position, rotation } = respawnSpot(recovered++);
-    physics.place(body, position, rotation);
-  }
+    return hasEscaped([x, y, z], ROOM, RESET.escapeMargin) && assembly.compoundOf(id).size === 1;
+  });
+  if (escaped.length === 0) return;
+  const spots = respawnSpots(escaped.map((part) => part.type));
+  escaped.forEach(({ body }, i) => physics.place(body, spots[i].position, spots[i].rotation));
 }
 
 createLoop((delta) => {

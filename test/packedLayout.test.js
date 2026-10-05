@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BOX, CAMERA_LIMITS, RESET, ROOM } from '../src/constants.js';
 import { CONNECTOR, MANIFEST, PART_TYPES } from '../src/game/catalog.js';
-import { boxPlacement, createPackedLayout, createPackedWorldLayout, lidRest, respawnSpot } from '../src/game/packedLayout.js';
+import { boxPlacement, createPackedLayout, createPackedWorldLayout, lidRest, respawnSpots } from '../src/game/packedLayout.js';
 import { hasEscaped } from '../src/game/dragMath.js';
 import { COMPATIBLE, rotateVector } from '../src/game/snapMath.js';
 
@@ -142,26 +142,53 @@ describe('the box in the room', () => {
   });
 });
 
-describe('respawnSpot (1.5 recovery)', () => {
-  const spots = Array.from({ length: 40 }, (_, n) => respawnSpot(n).position);
+describe('respawnSpots (1.5 recovery; PR #12 review)', () => {
   const { position, rotation } = boxPlacement();
-  const local = (p) => rotateVector([-rotation[0], -rotation[1], -rotation[2], rotation[3]], p.map((v, i) => v - position[i]));
+  const toLocal = (p) => rotateVector([-rotation[0], -rotation[1], -rotation[2], rotation[3]], p.map((v, i) => v - position[i]));
+  // World axis-aligned box of a part at a spot (quarter turns only).
+  const worldBox = (type, spot) => {
+    const e = extents({ type, rotation: spot.rotation });
+    return { min: spot.position.map((v, i) => v - e[i]), max: spot.position.map((v, i) => v + e[i]) };
+  };
+  const overlap3 = (a, b) => [0, 1, 2].every((i) => a.min[i] < b.max[i] - EPS && b.min[i] < a.max[i] - EPS);
 
-  it('sets parts down beside the box, outside its walls, above the floor, inside the room', () => {
-    for (const spot of spots) {
-      const [x, y, z] = local(spot);
-      expect(x).toBeGreaterThan(width / 2 + BOX.wall);
-      expect(Math.abs(z)).toBeLessThanOrEqual(length / 2);
-      expect(y).toBeCloseTo(RESET.respawn.height, 9);
-      expect(hasEscaped(spot, ROOM, RESET.escapeMargin)).toBe(false);
+  // The worst case: everything at once, the biggest panels included.
+  const types = [...MANIFEST.map((p) => p.type), 'boxLid'];
+  const spots = respawnSpots(types);
+
+  it('sets every part down lying flat, its underside above the floor by the drop clearance', () => {
+    expect(spots).toHaveLength(types.length);
+    types.forEach((type, i) => {
+      const box = worldBox(type, spots[i]);
+      const [thin] = [...PART_TYPES[type].size].sort((a, b) => a - b);
+      expect(box.max[1] - box.min[1], type).toBeCloseTo(thin, 9);
+      expect(box.min[1], type).toBeGreaterThanOrEqual(RESET.respawn.height - EPS);
+    });
+  });
+
+  it('keeps a side panel or the back clear of the floor: never stood on end into it', () => {
+    for (const type of ['sidePanel', 'backPanel']) {
+      const [spot] = respawnSpots([type]);
+      expect(worldBox(type, spot).min[1]).toBeCloseTo(RESET.respawn.height, 9);
     }
   });
 
-  it('spaces consecutive recoveries apart along the box, wrapping when the row is full', () => {
-    for (let n = 1; n < 10; n++) {
-      expect(Math.hypot(...spots[n].map((v, i) => v - spots[n - 1][i]))).toBeCloseTo(RESET.respawn.spacing, 9);
+  it('keeps every part clear of the box walls and inside the room', () => {
+    types.forEach((type, i) => {
+      const box = worldBox(type, spots[i]);
+      const corners = [box.min, box.max].flatMap((a) => [box.min, box.max].map((b) => [a[0], 0, b[2]]));
+      for (const c of corners) expect(toLocal(c)[0], type).toBeGreaterThan(width / 2 + BOX.wall);
+      expect(box.min[0]).toBeGreaterThan(-ROOM.width / 2);
+      expect(box.max[0]).toBeLessThan(ROOM.width / 2);
+      expect(box.min[2]).toBeGreaterThan(-ROOM.depth / 2);
+      expect(box.max[2]).toBeLessThan(ROOM.depth / 2);
+    });
+  });
+
+  it('never overlaps two parts set down in the same sweep', () => {
+    const boxes = types.map((type, i) => worldBox(type, spots[i]));
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) expect(overlap3(boxes[i], boxes[j]), `${types[i]} vs ${types[j]}`).toBe(false);
     }
-    const slots = Math.floor(length / RESET.respawn.spacing);
-    expect(spots[slots]).toEqual(spots[0]);
   });
 });

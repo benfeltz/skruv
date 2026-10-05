@@ -185,9 +185,10 @@ export const RESET = {
   // `escapeMargin` m) is set down again beside the box.
   sweepInterval: 2,
   escapeMargin: 0.05,
-  // Where: this far out from the box's long side, this high (it drops into place), and
-  // spread along the box this far apart so two never land on each other.
-  respawn: { offset: 0.35, height: 0.25, spacing: 0.15 },
+  // Where: laid flat in a patch starting this far out from the box's long side and this
+  // deep, running the box's length, a gap between pieces; each dropped from this clearance
+  // above the floor. Pieces that don't fit go in again `layerHeight` higher, to land on top.
+  respawn: { offset: 0.35, depth: 2.5, gap: 0.05, height: 0.25, layerHeight: 0.1 },
 };
 
 // Packing inside the box (src/game/packedLayout.js).
