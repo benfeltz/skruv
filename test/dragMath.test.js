@@ -4,6 +4,7 @@ import {
   arcDelta,
   clampLift,
   clampToRoom,
+  easeToward,
   fitsInRoom,
   intersectDragPlane,
   pullAlong,
@@ -177,3 +178,48 @@ describe('pullAlong', () => {
   });
 });
 
+
+describe('easeToward (seat assist)', () => {
+  const quarter = [0, Math.SQRT1_2, 0, Math.SQRT1_2]; // 90° about y
+  const from = { position: [0, 0, 0], rotation: [0, 0, 0, 1] };
+  const seat = { position: [0.06, -0.02, 0.04], rotation: quarter };
+  const distance = (a, b) => Math.hypot(...a.position.map((v, i) => v - b.position[i]));
+  const angle = ({ rotation: [, , , w] }) => 2 * Math.acos(Math.min(1, Math.abs(w)));
+
+  it('converges on the seat over time', () => {
+    let pose = from;
+    for (let i = 0; i < 120; i++) pose = easeToward(pose, seat, 9, 1 / 60);
+    pose.position.forEach((v, i) => expect(v).toBeCloseTo(seat.position[i], 6));
+    pose.rotation.forEach((v, i) => expect(v).toBeCloseTo(quarter[i], 6));
+  });
+
+  it('closes the gap by 1 − e^(−strength·delta) per step, position and angle alike', () => {
+    const pose = easeToward(from, seat, 9, 0.1);
+    const kept = Math.exp(-0.9);
+    expect(distance(pose, seat)).toBeCloseTo(distance(from, seat) * kept, 9);
+    expect(angle(pose)).toBeCloseTo((Math.PI / 2) * (1 - kept), 9);
+  });
+
+  it('is framerate-independent: two half steps land where one full step does', () => {
+    const once = easeToward(from, seat, 9, 1 / 30);
+    const twice = easeToward(easeToward(from, seat, 9, 1 / 60), seat, 9, 1 / 60);
+    once.position.forEach((v, i) => expect(twice.position[i]).toBeCloseTo(v, 12));
+    once.rotation.forEach((v, i) => expect(twice.rotation[i]).toBeCloseTo(v, 12));
+  });
+
+  it('pulls nothing at strength 0 or over no time', () => {
+    expect(easeToward(from, seat, 0, 1 / 60)).toEqual(from);
+    expect(easeToward(from, seat, 9, 0)).toEqual(from);
+  });
+
+  it('takes the short way round when the seat quaternion has the opposite sign', () => {
+    const negated = { ...seat, rotation: quarter.map((v) => -v) };
+    const pose = easeToward(from, negated, 9, 0.1);
+    expect(angle(pose)).toBeCloseTo((Math.PI / 2) * (1 - Math.exp(-0.9)), 9);
+  });
+
+  it('keeps the rotation a unit quaternion', () => {
+    const pose = easeToward({ position: [0, 0, 0], rotation: quarter }, { position: [0, 0, 0], rotation: [0, 0, 0, 1] }, 9, 0.05);
+    expect(Math.hypot(...pose.rotation)).toBeCloseTo(1, 12);
+  });
+});

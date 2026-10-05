@@ -91,7 +91,7 @@ const router = createGestureRouter({
 createLoop((delta) => {
   cameraControls.update(delta);
   physics.step(delta);
-  router.update();
+  router.update(delta);
   gizmo.update();
   sprue.update();
   renderer.render(scene, camera);

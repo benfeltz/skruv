@@ -35,6 +35,8 @@ export const COLORS = {
   // Hole markings (src/game/decals.js) and the flash when a fastener seats in one.
   decal: 0x3a3029,
   decalFlash: 0xe0a64a,
+  // Emissive off: what a decal glows when it isn't flashing.
+  unlit: 0x000000,
   // Sprue handle on a selected small part (src/scene/sprue.js): model-kit plastic grey.
   sprue: 0x8f9a93,
 };
@@ -171,6 +173,11 @@ export const SNAP = {
   // refused (the part would be held kinematic inside a static collider).
   roomTolerance: 0.002,
   ghostOpacity: 0.45,
+  // Seat assist: while a seat is on offer, the held part eases toward it this fast (1/s —
+  // about 90% of the way in a quarter second). Zero pull whenever no seat is on offer.
+  assistStrength: 9,
+  // How long the hole's decal glows after a fastener seats in it.
+  flashMs: 450,
 };
 
 // Hole markings (src/game/decals.js, drawn by src/game/partMesh.js). Radii are keyed by

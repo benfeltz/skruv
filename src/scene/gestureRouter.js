@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { FASTENER, GESTURE, PICK, ROOM, SNAP } from '../constants.js';
+import { COLORS, FASTENER, GESTURE, PICK, ROOM, SNAP } from '../constants.js';
 import { capture, connectorInWorld } from '../game/assembly.js';
 import { CONNECTOR, PART_TYPES } from '../game/catalog.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
-import { clampLift, clampToRoom, fitsInRoom, intersectDragPlane, pullAlong, rotatedHalfExtents } from '../game/dragMath.js';
+import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rotatedHalfExtents } from '../game/dragMath.js';
 import { isFastened, KIND } from '../game/fasteners.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxGap } from '../game/pickMath.js';
@@ -46,7 +46,8 @@ const PULL_AXIS_PROBE = 0.05;
  *   sprue  — `{ selected, hitTest(raycaster) }` handle on a selected small part
  *            (src/scene/sprue.js); a press on it nearer than anything else is a press on
  *            its part, so dragging it is the part's own drag.
- * Call `update()` once per frame after the physics step: it draws fastener progress.
+ * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
+ * eases a dragged part toward the seat on offer (seat assist) and fades the seat flash.
  */
 export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue }) {
   const state = createGestureState();
@@ -76,6 +77,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const bonds = new Map();
   // tool id → its pose relative to the fastener it turns, so it turns along.
   const toolGrips = new Map();
+  // decal mesh → ms of glow left, after a fastener seated in its hole.
+  const flashes = new Map();
 
   function aim({ clientX, clientY }) {
     const rect = domElement.getBoundingClientRect();
@@ -169,7 +172,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   function snapCandidate(target) {
     const { part } = drag;
-    const rotation = part.mesh.quaternion;
+    // The rotation the part was picked up at — the mesh's may be easing toward a seat.
+    const rotation = twist.fromArray(drag.rotation);
     const isTaken = occupied();
     const free = (connectors) => connectors.filter((c) => !isTaken(c));
     const dragged = free(worldConnectors(part, scratch.clone().fromArray(target), rotation));
@@ -181,7 +185,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (!snap) return null;
     // The alignment can swing a long part's far end by up to SNAP.maxAngle; refuse a seat
     // that would hold it through the floor or a wall.
-    const pose = applyTransform(snap.transform, { position: target, rotation: rotation.toArray() });
+    const pose = applyTransform(snap.transform, { position: target, rotation: drag.rotation });
     const half = rotatedHalfExtents(PART_TYPES[part.type].size.map((d) => d / 2), pose.rotation);
     return fitsInRoom(pose.position, half, ROOM, SNAP.roomTolerance) ? { ...pose, snap } : null;
   }
@@ -295,6 +299,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       half: [(footprint.max.x - footprint.min.x) / 2, (footprint.max.z - footprint.min.z) / 2],
       halfHeight: (footprint.max.y - footprint.min.y) / 2,
       centre,
+      rotation: mesh.quaternion.toArray(),
+      // Where the part is held: the finger's pose, or easing from it toward a seat on offer.
+      held: null,
       snapped: null,
       pointer: null,
     };
@@ -326,11 +333,22 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       GESTURE.wallMargin,
     );
     const target = [bx - cx, drag.height, bz - cz];
-    physics.move(drag.part.body, target);
     // A compound carries its joints along; only a free part looks for a seat.
     drag.snapped = drag.mode === 'move' ? snapCandidate(target) : null;
     if (drag.snapped) ghost?.show(drag.part.mesh, drag.snapped);
     else ghost?.hide();
+    // No seat on offer: the part is exactly where the finger puts it, no pull at all. With
+    // one, update() eases it in from wherever it is held.
+    if (drag.snapped && drag.held) return;
+    drag.held = { position: target, rotation: drag.rotation };
+    physics.move(drag.part.body, target, drag.mode === 'move' ? drag.rotation : undefined);
+  }
+
+  // Seat assist: only while a seat is on offer, the held part glides toward it.
+  function assist(delta) {
+    if (!drag?.snapped || !drag.held) return;
+    drag.held = easeToward(drag.held, drag.snapped, SNAP.assistStrength, delta);
+    physics.move(drag.part.body, drag.held.position, drag.held.rotation);
   }
 
   function endDrag() {
@@ -344,6 +362,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       physics.move(part.body, snapped.position, snapped.rotation);
       placed.add(part);
       if (joint.kind === KIND.TOOL) gripTool(joint, snapped);
+      flash(from, to);
     } else {
       physics.release(part.body);
     }
@@ -360,6 +379,30 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function stopDrag() {
     ghost?.hide();
     drag = null;
+  }
+
+  // The hole a fastener just seated in glows; whichever side of the pair is the socket
+  // carries its decal (a tool on a bolt head has none).
+  function flash(...connectors) {
+    for (const { part, index } of connectors) {
+      const decal = part.mesh.userData.decals?.get(index);
+      if (!decal) continue;
+      decal.material.emissive.setHex(COLORS.decalFlash);
+      flashes.set(decal, SNAP.flashMs);
+    }
+  }
+
+  function fadeFlashes(delta) {
+    for (const [decal, left] of flashes) {
+      const remaining = left - delta * 1000;
+      decal.material.emissiveIntensity = Math.max(0, remaining / SNAP.flashMs);
+      if (remaining > 0) flashes.set(decal, remaining);
+      else {
+        decal.material.emissive.setHex(COLORS.unlit);
+        decal.material.emissiveIntensity = 1;
+        flashes.delete(decal);
+      }
+    }
   }
 
   // --- pull: a part pushed into fastened seats comes back out along their axis ---
@@ -467,7 +510,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // --- per frame: fastener progress drawn on top of the simulated poses ---
 
-  function update() {
+  function update(delta = 0) {
+    assist(delta);
+    fadeFlashes(delta);
     for (const joint of assembly.all()) {
       if (joint.kind !== KIND.BOLT && joint.kind !== KIND.CAM) continue;
       const { mesh, body } = partById.get(joint.hardware);

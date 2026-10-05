@@ -21,7 +21,7 @@ export function createPartMesh({ size, color, connectors = [] }) {
         ? new THREE.RingGeometry(radius * DECAL.recessInner, radius, DECAL.segments)
         : new THREE.CircleGeometry(radius, DECAL.segments);
     // Own material per decal: the seat flash lights one hole, not all of them.
-    const decal = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: COLORS.decal, emissive: 0x000000 }));
+    const decal = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: COLORS.decal, emissive: COLORS.unlit }));
     decal.position.set(...position);
     decal.quaternion.set(...rotation);
     decal.castShadow = false;

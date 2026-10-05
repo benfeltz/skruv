@@ -90,3 +90,19 @@ describe('hit proxies (1.4.1)', () => {
     expect(router).toMatch(/from '\.\.\/game\/pickMath\.js'/);
   });
 });
+
+describe('seat assist and flash (1.4.1)', () => {
+  const router = read('src/scene/gestureRouter.js');
+  const assist = router.slice(router.indexOf('function assist('), router.indexOf('}', router.indexOf('function assist(')));
+
+  it('pulls only while a seat is on offer — never in free space', () => {
+    expect(assist).toMatch(/if \(!drag\?\.snapped \|\| !drag\.held\) return;/);
+    expect(assist).toMatch(/easeToward\([^)]*SNAP\.assistStrength, delta\)/);
+  });
+
+  it('plays no audio anywhere (dropped for 0.0.1)', () => {
+    for (const path of ['src/main.js', 'src/scene/gestureRouter.js', 'src/scene/sprue.js', 'src/game/partMesh.js']) {
+      expect(read(path)).not.toMatch(/\bAudio(Context|Listener)?\b|PositionalAudio|\.play\(/);
+    }
+  });
+});
