@@ -102,6 +102,29 @@ const sinkOf = (joint) => (FASTENER.sinkDepth[joint.kind] ?? 0) * joint.fastener
 
 const pairKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
+// The single event that takes a fastener of `kind` from seated to fully home, or null for
+// a tool (it fastens nothing).
+function homeEvent(kind) {
+  if (isTapKind(kind)) return { type: 'tap' };
+  if (kind === KIND.BOLT) return { type: 'crank', radians: FASTENER.screwRadians };
+  if (kind === KIND.CAM) return { type: 'crank', radians: FASTENER.quarterTurn };
+  return null;
+}
+
+/**
+ * Seats every pair in `pairs` — `{ partA, connectorA, partB, connectorB, mover, ctx }`, as
+ * `seat` takes them plus the `apply` context their fastener needs (`through`, `captured`)
+ * — and drives each home with `drive`: bolts before the cams that catch them. A part set
+ * put in this way is fastened by exactly the events a build sends, so the same events in
+ * reverse take it apart. Returns the joints.
+ */
+export function seatHome(assembly, pairs) {
+  const seated = pairs.map(({ ctx = {}, ...pair }) => ({ joint: assembly.seat(pair), ctx }));
+  const camsLast = (s) => (s.joint.kind === KIND.CAM ? 1 : 0);
+  for (const { joint, ctx } of [...seated].sort((a, b) => camsLast(a) - camsLast(b))) assembly.drive(joint.id, ctx);
+  return seated.map((s) => assembly.get(s.joint.id));
+}
+
 /**
  * `typeOf(partId)` names each part's catalog type.
  */
@@ -178,6 +201,20 @@ export function createAssembly(typeOf) {
     if (joint.kind === KIND.CAM) next.captured = fastener.state === STATE.LOCKED ? (joint.captured ?? ctx.captured) : null;
     joints.set(id, next);
     return true;
+  }
+
+  /**
+   * Drives a seated joint's fastener all the way home through the very events a player's
+   * hands send — one tap, or one full turn of the wrench or screwdriver — so a part can
+   * start out fastened (the display shelf) by the same path the build takes, and come
+   * apart by it too. `ctx` as for `apply`. True if the joint ended fastened.
+   */
+  function drive(id, ctx = {}) {
+    const joint = joints.get(id);
+    const event = joint && homeEvent(joint.kind);
+    if (!event) return false;
+    apply(id, event, ctx);
+    return isFastened(joints.get(id).fastener);
   }
 
   /**
@@ -379,6 +416,7 @@ export function createAssembly(typeOf) {
     seat,
     unseat,
     apply,
+    drive,
     tap,
     pullable,
     canRelease,

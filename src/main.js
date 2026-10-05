@@ -8,6 +8,7 @@ import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
 import { createGhost } from './scene/ghost.js';
 import { createCompoundPhysics } from './scene/compoundPhysics.js';
+import { createDisplayShelf } from './scene/displayShelf.js';
 import { createDropGuide } from './scene/dropGuide.js';
 import { createFlatpack } from './scene/flatpack.js';
 import { createGestureRouter } from './scene/gestureRouter.js';
@@ -45,9 +46,16 @@ for (const { id, type, position, rotation } of createPackedWorldLayout()) {
   parts.push({ id, type, mesh, body });
 }
 
+// The display JOHNNY against the wall: already built, its parts ordinary parts.
+const display = createDisplayShelf(physics);
+for (const part of display.parts) scene.add(part.mesh);
+parts.push(...display.parts);
+
 // What is seated on and fastened to what — every type-compatible pair, right or wrong.
 const typeById = new Map(parts.map(({ id, type }) => [id, type]));
 const assembly = createAssembly((id) => typeById.get(id));
+// The display shelf goes in fastened, through the graph's own events.
+display.fasten(assembly);
 // Manipulation goes through this seam so a fastened compound moves as one.
 const manipulation = createCompoundPhysics(physics, parts, assembly);
 
@@ -100,6 +108,8 @@ const router = createGestureRouter({
   sprue,
   dropGuide,
 });
+// The display shelf's physics joints, made by the same reconcile every tap and turn runs.
+router.sync();
 
 createLoop((delta) => {
   cameraControls.update(delta);

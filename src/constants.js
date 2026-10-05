@@ -119,6 +119,17 @@ export const BOX = {
   yaw: Math.PI / 2,
 };
 
+// The display JOHNNY (src/scene/displayShelf.js): a second, already-built shelf standing
+// against the back wall, left of the start view — the exhibit, and a disassembly
+// playground. `position`/`yaw` place the assembled layout's frame (floor under the carcass
+// centre, front +z); its back panel's rear face is ~0.143 m behind that centre.
+export const DISPLAY = {
+  position: [-1.6, 0, -ROOM.depth / 2 + 0.165],
+  yaw: 0,
+  // Its parts' ids: the manifest's, prefixed, so they never collide with the player's set.
+  idPrefix: 'display/',
+};
+
 // Packing inside the box (src/game/packedLayout.js).
 export const PACK = {
   // Between neighbouring panels in a layer, and between a panel and the wall.

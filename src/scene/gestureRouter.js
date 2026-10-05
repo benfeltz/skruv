@@ -706,6 +706,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   return {
     update,
+    // Brings the physics joints in line with the graph after a change made outside a
+    // gesture — the display shelf seated pre-fastened — through the same reconcile a tap
+    // or turn runs.
+    sync: reconcile,
     dispose() {
       onInterrupted();
       domElement.removeEventListener('pointerdown', onPointerDown, { capture: true });
