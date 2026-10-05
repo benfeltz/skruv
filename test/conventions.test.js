@@ -241,3 +241,16 @@ describe('dev stream wiring (1.6)', () => {
     expect(plugin.apply).toBe('serve');
   });
 });
+
+describe('agent bridge (1.6)', () => {
+  const bridge = read('tools/agent-bridge/index.js');
+
+  it('mirrors the DEV_WS protocol strings exactly', () => {
+    expect(bridge).toContain(`path: '${DEV_WS.path}'`);
+    for (const [name, value] of Object.entries(DEV_WS.kinds)) expect(bridge).toContain(`${name}: '${value}'`);
+  });
+
+  it('imports no game code — it only speaks the protocol', () => {
+    expect(bridge).not.toMatch(/from ['"][^'"]*src\//);
+  });
+});
