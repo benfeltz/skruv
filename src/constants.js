@@ -368,6 +368,9 @@ export const TUNE = {
   // screen, so the build stays in view above it.
   panelMaxWidth: 520,
   panelMaxHeight: 0.6,
+  // A download's object URL is let go only after this many ms: Safari starts blob
+  // downloads asynchronously and fails on a URL already revoked (FileSaver.js waits as long).
+  downloadRevokeMs: 40_000,
   // Frame-rate fallback (src/scene/fpsGuard.js): the loop's rate is sampled every
   // fpsSampleSeconds. Below fpsFloor for fpsWindow seconds running, the room renders every
   // other frame — a steady half rate rather than a stutter — while physics and gestures

@@ -117,7 +117,7 @@ function download(name, json) {
   document.body.append(link);
   link.click();
   link.remove();
-  setTimeout(() => URL.revokeObjectURL(url));
+  setTimeout(() => URL.revokeObjectURL(url), TUNE.downloadRevokeMs);
 }
 
 const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');

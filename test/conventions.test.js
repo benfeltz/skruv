@@ -324,3 +324,9 @@ describe('the fps guard measures true frame time (1.6 review)', () => {
     expect(read('src/main.js')).toMatch(/createLoop\(\(delta, rawDelta\) => \{[\s\S]*fps\.frame\(rawDelta\)/);
   });
 });
+
+describe('tuning drawer downloads survive Safari (1.6 review)', () => {
+  it('revokes a download URL only after TUNE.downloadRevokeMs', () => {
+    expect(read('src/ui/tunePanel.js')).toMatch(/setTimeout\(\(\) => URL\.revokeObjectURL\(url\), TUNE\.downloadRevokeMs\)/);
+  });
+});
