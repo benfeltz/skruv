@@ -303,3 +303,12 @@ describe('PWA install (1.6)', () => {
     for (const path of [...sources.map((p) => `src/${p}`), 'index.html']) expect(read(path), path).not.toMatch(/serviceWorker/);
   });
 });
+
+describe('telemetry pairs every grab with a release of its mode (1.6 review)', () => {
+  const router = read('src/scene/gestureRouter.js');
+  const pull = router.slice(router.indexOf('function pullTo('), router.indexOf('// --- crank'));
+
+  it('reports a pull that frees its part as a pull released and a move grabbed', () => {
+    expect(pull).toMatch(/events\?\.emit\(releaseEvent\(part\.id, 'pull'\)\);\s*beginMove\(part, grab, pointer, 'move'\);\s*events\?\.emit\(grabEvent\(part\.id, 'move'\)\);/);
+  });
+});

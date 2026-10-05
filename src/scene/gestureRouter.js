@@ -526,7 +526,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     aim(pointer);
     const { origin, direction } = raycaster.ray;
     const grab = intersectDragPlane(origin.toArray(), direction.toArray(), part.mesh.position.y) ?? part.mesh.position.toArray();
+    // Telemetry: the pull ends here and a move begins, so each grab pairs with its release.
+    events?.emit(releaseEvent(part.id, 'pull'));
     beginMove(part, grab, pointer, 'move');
+    events?.emit(grabEvent(part.id, 'move'));
   }
 
   // --- crank: an engaged tool's drag turns its fastener ---
