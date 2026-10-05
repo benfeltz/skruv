@@ -15,12 +15,33 @@ function pointBoxGap(p, half) {
   return Math.hypot(...outside);
 }
 
+/** Distance along the ray to where it enters an origin-centred box (slab test), or null. */
+function rayBoxEntry(origin, direction, half) {
+  let near = 0;
+  let far = Infinity;
+  for (let i = 0; i < 3; i++) {
+    if (Math.abs(direction[i]) < 1e-12) {
+      if (Math.abs(origin[i]) > half[i]) return null;
+      continue;
+    }
+    const a = (-half[i] - origin[i]) / direction[i];
+    const b = (half[i] - origin[i]) / direction[i];
+    near = Math.max(near, Math.min(a, b));
+    far = Math.min(far, Math.max(a, b));
+  }
+  return near <= far ? near : null;
+}
+
 /**
- * Closest the ray `origin + t·direction` (t ≥ 0, `direction` unit length) passes to an
- * origin-centred box with half-extents `half` — 0 when it goes through it. Both in the
- * box's own frame. The gap along a ray is convex in t, so a ternary search finds it.
+ * How the ray `origin + t·direction` (t ≥ 0, `direction` unit length) meets an
+ * origin-centred box with half-extents `half`, both in the box's own frame:
+ * `{ miss, depth }` — the closest it passes (0 when it goes through), and how far along
+ * the ray the box is (where it enters, else where it passes closest). The gap along a ray
+ * is convex in t, so a ternary search finds the closest approach.
  */
-export function rayBoxGap(origin, direction, half) {
+export function rayBoxReach(origin, direction, half) {
+  const entry = rayBoxEntry(origin, direction, half);
+  if (entry !== null) return { miss: 0, depth: entry };
   let lo = 0;
   let hi = Math.hypot(...origin) + 2 * Math.hypot(...half);
   const gapAt = (t) => pointBoxGap(origin.map((v, i) => v + direction[i] * t), half);
@@ -30,22 +51,30 @@ export function rayBoxGap(origin, direction, half) {
     if (gapAt(a) <= gapAt(b)) hi = b;
     else lo = a;
   }
-  return gapAt((lo + hi) / 2);
+  const t = (lo + hi) / 2;
+  return { miss: gapAt(t), depth: t };
 }
+
+/** Closest the ray passes to the box — `rayBoxReach`'s miss. */
+export const rayBoxGap = (origin, direction, half) => rayBoxReach(origin, direction, half).miss;
 
 /**
  * What a press picks, from the nearest real-mesh hit `partHit` (`{ part, distance, ... }`
- * or null) and the small parts' proxy hits `proxyHits` (`[{ part, distance, miss, ... }]`,
- * where `miss` is how far the ray passes from the real part, metres).
+ * or null) and the small parts' proxy hits `proxyHits` (`[{ part, distance, miss, depth,
+ * ... }]`, where `miss` is how far the ray passes from the real part and `depth` how far
+ * along the ray the real part is — `rayBoxReach` — in metres; depth defaults to distance).
  *
  * A small part wins only when the finger is genuinely over it — its `miss` within
  * `fingerRadius` (radians: the finger's angular radius, so metres at the hit's distance)
- * and its proxy not behind the real hit — the nearest such one if several are. Otherwise
+ * and the real part not behind the real hit: a fat proxy poking out of a panel never makes
+ * the fastener sunk inside it pickable through it — the nearest such one if several are. Otherwise
  * the real hit stands, so a panel grabbed near hardware stays the panel. With no real hit
  * at all, the nearest proxy is the press (there is nothing it could hijack).
  */
 export function preferHit(partHit, proxyHits, { fingerRadius }) {
-  const visible = proxyHits.filter((hit) => !partHit || hit.part === partHit.part || hit.distance <= partHit.distance);
+  const visible = proxyHits.filter(
+    (hit) => !partHit || hit.part === partHit.part || (hit.depth ?? hit.distance) <= partHit.distance,
+  );
   const nearest = (hits) => hits.reduce((best, hit) => (!best || hit.distance < best.distance ? hit : best), null);
   const under = nearest(visible.filter((hit) => hit.miss <= fingerRadius * hit.distance));
   if (under) return under.part === partHit?.part ? partHit : under;

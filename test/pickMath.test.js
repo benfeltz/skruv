@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PICK } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/catalog.js';
-import { isSmallPart, preferHit, rayBoxGap } from '../src/game/pickMath.js';
+import { isSmallPart, preferHit, rayBoxGap, rayBoxReach } from '../src/game/pickMath.js';
 
 const panel = { id: 'sidePanel-1' };
 const dowel = { id: 'dowel-1' };
@@ -100,5 +100,35 @@ describe('PICK sizing', () => {
 
   it('makes a proxy at least as fat as the finger is wide at arm’s length', () => {
     expect(PICK.proxyMinSize / 2).toBeGreaterThanOrEqual(PICK.fingerRadius * 0.5);
+  });
+});
+
+describe('hidden hardware (1.4.1 review)', () => {
+  it('never picks a fastener sunk in the panel, though its fat proxy pokes out in front', () => {
+    // Proxy entered 4 mm before the panel face, but the dowel itself is 8 mm behind it.
+    const sunk = { part: dowel, point: [0, 0, 0], distance: 0.996, miss: 0, depth: 1.008 };
+    expect(preferHit(panelHit, [sunk], PICK)).toBe(panelHit);
+  });
+
+  it('still picks one standing proud of the panel', () => {
+    const proud = { part: dowel, point: [0, 0, 0], distance: 0.97, miss: 0, depth: 0.985 };
+    expect(preferHit(panelHit, [proud], PICK)).toBe(proud);
+  });
+});
+
+describe('rayBoxReach', () => {
+  const half = [0.004, 0.015, 0.004];
+
+  it('reports where a ray through the box enters it', () => {
+    const { miss, depth } = rayBoxReach([0, 0, -1], [0, 0, 1], half);
+    expect(miss).toBe(0);
+    expect(depth).toBeCloseTo(1 - half[2], 9);
+  });
+
+  it('reports the miss and where a passing ray comes closest', () => {
+    const { miss, depth } = rayBoxReach([0.024, 0, -1], [0, 0, 1], half);
+    expect(miss).toBeCloseTo(0.02, 6);
+    expect(depth).toBeGreaterThan(1 - half[2] - 1e-6);
+    expect(depth).toBeLessThan(1 + half[2] + 1e-6);
   });
 });

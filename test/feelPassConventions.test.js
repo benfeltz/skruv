@@ -9,7 +9,7 @@ import { decalPlacements } from '../src/game/decals.js';
 import { createDevLayout } from '../src/game/devLayout.js';
 import { easeToward } from '../src/game/dragMath.js';
 import { createGestureState, OWNER } from '../src/game/gestureState.js';
-import { isSmallPart, preferHit, rayBoxGap } from '../src/game/pickMath.js';
+import { isSmallPart, preferHit, rayBoxReach } from '../src/game/pickMath.js';
 import { rotateVector } from '../src/game/snapMath.js';
 import { clampCamera } from '../src/scene/cameraLimits.js';
 
@@ -57,7 +57,7 @@ function pick(parts, origin, target) {
     if (real !== null && (!partHit || real < partHit.distance)) partHit = { part, distance: real };
     if (!isSmallPart(PART_TYPES[part.type].size, PICK)) continue;
     const fat = entry(o, d, proxyHalf(part.type));
-    if (fat !== null) proxyHits.push({ part, distance: fat, miss: rayBoxGap(o, d, halfOf(part.type)) });
+    if (fat !== null) proxyHits.push({ part, distance: fat, ...rayBoxReach(o, d, halfOf(part.type)) });
   }
   return preferHit(partHit, proxyHits, PICK)?.part ?? null;
 }
@@ -122,6 +122,32 @@ describe('panel grabs near hardware stay panel grabs (regression risk, both dire
       const target = add(top, offset);
       expect(pick(scene, add(target, [0, 1, 0.8]), target)?.id).toBe(dowel.id);
     }
+  });
+});
+
+describe('fasteners sunk in a panel stay hidden behind it (1.4.1 review)', () => {
+  // A side panel standing as assembled (inner face +x) with a dowel seated in a dowel hole,
+  // half in the panel: its 4 cm proxy pokes ~4 mm out of the panel's outer face.
+  const side = { id: 'sidePanel-1', type: 'sidePanel', position: [0, 1.01, 0], rotation: [0, 0, 0, 1] };
+  const hole = PART_TYPES.sidePanel.connectors.find((c) => c.type === CONNECTOR.DOWEL_HOLE);
+  const mouth = add(side.position, hole.position);
+  // Quarter turn about z: the dowel's long y axis along the hole's x axis.
+  const dowel = { id: 'dowel-1', type: 'dowel', position: mouth, rotation: [0, 0, -Math.SQRT1_2, Math.SQRT1_2] };
+  const scene = [side, dowel];
+
+  it('pokes the proxy out of the outer face — the case that needs guarding', () => {
+    const outer = side.position[0] - PART_TYPES.sidePanel.size[0] / 2;
+    expect(dowel.position[0] - PICK.proxyMinSize / 2).toBeLessThan(outer);
+  });
+
+  it('picks the panel when pressed from outside, right over the hidden dowel', () => {
+    const eye = add(mouth, [-1, 0.05, 0]);
+    expect(pick(scene, eye, mouth)?.id).toBe(side.id);
+  });
+
+  it('picks the dowel from the inner side, where it stands proud', () => {
+    const eye = add(mouth, [1, 0.05, 0]);
+    expect(pick(scene, eye, mouth)?.id).toBe(dowel.id);
   });
 });
 

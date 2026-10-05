@@ -7,7 +7,7 @@ import { createCrank, tightenSign } from '../game/crankMath.js';
 import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rotatedHalfExtents } from '../game/dragMath.js';
 import { isFastened, KIND } from '../game/fasteners.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
-import { isSmallPart, preferHit, rayBoxGap } from '../game/pickMath.js';
+import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
 import { applyTransform, areCompatible, COMPATIBLE, findSnap } from '../game/snapMath.js';
 
 // Hardware (fastener or tool) has a fastener end; panels have only holes, or nothing.
@@ -108,7 +108,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return resolveHit(ring, picked, rings?.selected);
   }
 
-  // The nearest proxy hit per small part, with how far the ray passes from the real part.
+  // The nearest proxy hit per small part, with how far the ray passes from the real part
+  // and how far along it the real part is (so one sunk in a panel stays hidden behind it).
   function proxyHits() {
     const nearest = new Map();
     for (const { object, point, distance } of raycaster.intersectObjects(proxies, false)) {
@@ -117,8 +118,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       toLocal.copy(part.mesh.matrixWorld).invert();
       localRay.copy(raycaster.ray).applyMatrix4(toLocal);
       const half = PART_TYPES[part.type].size.map((d) => d / 2);
-      const miss = rayBoxGap(localRay.origin.toArray(), localRay.direction.normalize().toArray(), half);
-      nearest.set(part, { part, point: point.toArray(), distance, miss });
+      const { miss, depth } = rayBoxReach(localRay.origin.toArray(), localRay.direction.normalize().toArray(), half);
+      nearest.set(part, { part, point: point.toArray(), distance, miss, depth });
     }
     return [...nearest.values()];
   }
