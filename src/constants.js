@@ -59,6 +59,16 @@ export const COLORS = {
   bookletPaper: 0xffffff,
   bookletInk: 0x1c1c1c,
   bookletFaint: 0xbdbdbd,
+  // Per-page highlight (src/scene/highlight.js): the warm accent, glowing softly.
+  highlight: 0xe0a64a,
+};
+
+// Per-page highlight (src/scene/highlight.js): the parts the open booklet page is about
+// glow up and down — an aid for matching page to room, never a gate.
+export const HIGHLIGHT = {
+  // Seconds per glow cycle, and the peak emissive intensity — subtle.
+  period: 1.6,
+  intensity: 0.35,
 };
 
 // Booklet pages (src/scene/bookletPages.js), in page-canvas pixels: a portrait sheet drawn

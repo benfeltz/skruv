@@ -13,6 +13,7 @@ import { createDropGuide } from './scene/dropGuide.js';
 import { createFlatpack } from './scene/flatpack.js';
 import { createGestureRouter } from './scene/gestureRouter.js';
 import { createGizmo } from './scene/gizmo.js';
+import { createHighlight } from './scene/highlight.js';
 import { createLoop } from './scene/loop.js';
 import { createRoom } from './scene/room.js';
 import { createScene } from './scene/scene.js';
@@ -77,6 +78,15 @@ const bookletPages = createBookletPages(renderer);
 const booklet = createBookletSheet({ pages: bookletPages });
 document.body.append(booklet.thumb, booklet.element);
 
+// While the booklet is open, the open page's parts glow — the player's own set only, never
+// the display shelf or the box lid.
+const playerParts = parts.filter((part) => !display.parts.includes(part) && part !== flatpack.lid);
+const highlight = createHighlight(playerParts);
+booklet.onChange(({ page, expanded }) => {
+  const shown = bookletPages.pages[page];
+  highlight.show(expanded && shown.kind === 'step' ? shown.types : []);
+});
+
 const ghost = createGhost();
 scene.add(ghost.object);
 
@@ -123,6 +133,7 @@ createLoop((delta) => {
   router.update(delta);
   gizmo.update();
   sprue.update();
+  highlight.update(delta);
   renderer.render(scene, camera);
 }).start();
 // The rest of the booklet draws in idle time, after the room is on screen.

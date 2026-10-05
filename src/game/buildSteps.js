@@ -60,6 +60,9 @@ const STEPS = [
  *   turns    — indices of the cam joints this page locks
  *   hardware — `[{ type, count, partNumber }]` count bubbles for the hardware first seated
  *              here (a dowel already in a panel end is not counted again when a side goes on)
+ *   types    — the part types the page is about (its panels, the hardware it seats or
+ *              turns, the panels that hardware goes into, the tool) — what the per-page
+ *              highlight pulses in the room, an aid only
  *   tool     — the tool in hand ('allenWrench', 'screwdriver') or null
  *   pose     — 'parts' (loose), 'lying' (carcass on its left side), 'faceDown' (on its
  *              front, back up) or 'upright'
@@ -85,6 +88,9 @@ export function createBuildSteps(layout = createAssembledLayout()) {
     const joints = select(step.seats);
     const fresh = [...new Set(joints.map((i) => layout.joints[i].hardware))].filter((id) => !counted.has(id));
     for (const id of fresh) counted.add(id);
+    const acted = [...joints, ...select(step.turns)].flatMap((i) => [layout.joints[i].hardware, layout.joints[i].host]);
+    const types = new Set([...(step.roles ?? []).flatMap(idsWithRole), ...acted].map(typeOf));
+    if (step.tool) types.add(step.tool);
     return {
       number: n + 1,
       pose: step.pose,
@@ -92,6 +98,7 @@ export function createBuildSteps(layout = createAssembledLayout()) {
       joints,
       turns: select(step.turns),
       hardware: countHardware(fresh, typeOf),
+      types: [...types],
       tool: step.tool ?? null,
       tip: step.tip ?? false,
     };

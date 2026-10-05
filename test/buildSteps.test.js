@@ -114,8 +114,26 @@ describe('createBuildSteps', () => {
     expect(steps.filter((s) => s.tool).length).toBe(3);
   });
 
+  it('names the part types each page is about, for the highlight', () => {
+    expect(steps.map((s) => [...s.types].sort())).toEqual([
+      ['dowel', 'fixedShelf', 'plinth', 'topBottomPanel'],
+      ['allenWrench', 'camLockBolt', 'sidePanel'],
+      ['dowel', 'sidePanel'],
+      ['camLock', 'fixedShelf', 'topBottomPanel'],
+      ['camLock', 'fixedShelf', 'screwdriver', 'topBottomPanel'],
+      ['dowel', 'sidePanel'],
+      ['camLock', 'fixedShelf', 'screwdriver', 'topBottomPanel'],
+      ['backPanel'],
+      ['backFitting', 'backPanel'],
+      [],
+      ['shelfPin', 'sidePanel'],
+      ['adjustableShelf'],
+    ]);
+  });
+
   it('only names part types the catalog knows', () => {
     for (const s of steps) for (const id of s.parts) expect(PART_TYPES).toHaveProperty(typeOf(id));
+    for (const s of steps) for (const type of s.types) expect(PART_TYPES).toHaveProperty(type);
   });
 });
 
