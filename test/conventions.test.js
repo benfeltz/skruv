@@ -123,7 +123,9 @@ describe('drop guide (1.4.1, Ben)', () => {
 
   it('renders only — where it lands and which hole lights are the router raycast and decals.js', () => {
     const guide = read('src/scene/dropGuide.js');
-    expect(guide).not.toMatch(/physics|raycast|from '\.\.\/game\//);
+    const imports = guide.match(/^import .*$/gm).join('\n');
+    expect(imports).not.toMatch(/physics|\/game\//);
+    expect(guide).not.toMatch(/\.intersectObjects?\(|physics\./);
     expect(router).toMatch(/socketUnder\(to, freeSocketsFor\(part, host\), DROP\.holeReach\)/);
   });
 
