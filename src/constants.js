@@ -4,9 +4,10 @@
 export const ROOM = {
   width: 10,
   depth: 10,
-  // No ceiling. Zoomed out, the camera may rise above the walls (dollhouse view); their
-  // inward faces vanish from outside.
-  height: 5,
+  // No ceiling. A real room's height — well clear of the 2.02 m bookcase standing — and
+  // low enough that zooming out lifts the camera over the walls (dollhouse view), where
+  // their inward faces vanish from outside.
+  height: 3,
 };
 
 export const COLORS = {

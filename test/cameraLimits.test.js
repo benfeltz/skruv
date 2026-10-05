@@ -52,7 +52,13 @@ describe('shipped camera limits', () => {
 
   it('lets the camera rise above the wall tops (dollhouse view)', () => {
     const highest = pivotY + maxTargetRadius + maxDistance * Math.cos(minPolarAngle);
-    expect(highest).toBeGreaterThan(ROOM.height - wallMargin);
+    expect(highest).toBeGreaterThan(ROOM.height);
+  });
+
+  it('clears the wall tops fully zoomed out from the starting view, not only at the extreme', () => {
+    // The start target, at full zoom-out, looking down as steeply as allowed.
+    const [, startY] = CAMERA.startTarget;
+    expect(startY + maxDistance * Math.cos(minPolarAngle)).toBeGreaterThan(ROOM.height);
   });
 
   it('zooms out further than the old wall-tops bound allowed', () => {
