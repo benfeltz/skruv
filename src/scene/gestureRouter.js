@@ -1,15 +1,19 @@
 import * as THREE from 'three';
-import { FASTENER, GESTURE, ROOM, SNAP } from '../constants.js';
+import { FASTENER, GESTURE, PICK, ROOM, SNAP } from '../constants.js';
 import { capture, connectorInWorld } from '../game/assembly.js';
 import { CONNECTOR, PART_TYPES } from '../game/catalog.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
 import { clampLift, clampToRoom, fitsInRoom, intersectDragPlane, pullAlong, rotatedHalfExtents } from '../game/dragMath.js';
 import { isFastened, KIND } from '../game/fasteners.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
+import { preferHit, rayBoxGap } from '../game/pickMath.js';
 import { applyTransform, COMPATIBLE, findSnap } from '../game/snapMath.js';
 
 // Hardware (fastener or tool) has a fastener end; panels have only holes, or nothing.
 const isHardware = (type) => PART_TYPES[type].connectors.some((c) => c.type in COMPATIBLE);
+
+// Fasteners and tools, never panels — the parts that get a fat hit proxy.
+const isSmall = (type) => Math.max(...PART_TYPES[type].size) < PICK.smallPartMax;
 
 // A pull is judged along a short stretch of the joint's axis projected to the screen.
 const PULL_AXIS_PROBE = 0.05;
@@ -49,7 +53,12 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const panelMeshes = parts.filter((part) => !isHardware(part.type)).map((part) => part.mesh);
   const partByMesh = new Map(parts.map((part) => [part.mesh, part]));
   const partById = new Map(parts.map((part) => [part.id, part]));
+  const proxies = parts.filter((part) => isSmall(part.type)).map(addHitProxy);
+  const partByProxy = new Map(proxies.map((proxy) => [proxy, partByMesh.get(proxy.parent)]));
+  const localRay = new THREE.Ray();
+  const toLocal = new THREE.Matrix4();
   const footprint = new THREE.Box3();
+  const bounds = new THREE.Box3();
   const scratch = new THREE.Vector3();
   const offset = new THREE.Vector3();
   const twist = new THREE.Quaternion();
@@ -75,10 +84,25 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     aim(event);
     const ring = rings?.hitTest(raycaster) ?? null;
     const [first] = raycaster.intersectObjects(meshes, false);
-    const part = first
+    const partHit = first
       ? { part: partByMesh.get(first.object), point: first.point.toArray(), distance: first.distance }
       : null;
-    return resolveHit(ring, part, rings?.selected);
+    return resolveHit(ring, preferHit(partHit, proxyHits(), PICK), rings?.selected);
+  }
+
+  // The nearest proxy hit per small part, with how far the ray passes from the real part.
+  function proxyHits() {
+    const nearest = new Map();
+    for (const { object, point, distance } of raycaster.intersectObjects(proxies, false)) {
+      const part = partByProxy.get(object);
+      if (nearest.has(part)) continue;
+      toLocal.copy(part.mesh.matrixWorld).invert();
+      localRay.copy(raycaster.ray).applyMatrix4(toLocal);
+      const half = PART_TYPES[part.type].size.map((d) => d / 2);
+      const miss = rayBoxGap(localRay.origin.toArray(), localRay.direction.normalize().toArray(), half);
+      nearest.set(part, { part, point: point.toArray(), distance, miss });
+    }
+    return [...nearest.values()];
   }
 
   const pointer = (event, hit = null) => ({
@@ -220,6 +244,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     }
   }
 
+  // World box of a part's own geometry — hit proxies and decals riding on it don't count.
+  function boxOf(mesh, box) {
+    mesh.updateWorldMatrix(true, false);
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+    return box.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrixWorld);
+  }
+
   // --- part drag: kinematic body on a floor-parallel plane at the grab point's height ---
 
   function beginDrag(part, point, event) {
@@ -242,9 +273,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const { mesh, body } = part;
     // Clamps keep everything that moves inside the room: a compound's whole bounding box,
     // carried at its offset from the grabbed part.
-    footprint.setFromObject(mesh);
+    boxOf(mesh, footprint);
     if (mode === 'compound') {
-      for (const id of assembly.compoundOf(part.id)) footprint.expandByObject(partById.get(id).mesh);
+      for (const id of assembly.compoundOf(part.id)) footprint.union(boxOf(partById.get(id).mesh, bounds));
     }
     const centre = footprint.getCenter(offset).sub(mesh.position).toArray();
     drag = {
@@ -549,4 +580,17 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       window.removeEventListener('blur', onInterrupted);
     },
   };
+}
+
+// An invisible box round a small part, never thinner than PICK.proxyMinSize, that widens its
+// touch target. Raycasts ignore visibility; it casts and receives no shadow and is never
+// registered with physics — it only rides on the part's mesh.
+function addHitProxy(part) {
+  const size = PART_TYPES[part.type].size.map((d) => Math.max(d, PICK.proxyMinSize));
+  const proxy = new THREE.Mesh(new THREE.BoxGeometry(...size));
+  proxy.visible = false;
+  proxy.castShadow = false;
+  proxy.receiveShadow = false;
+  part.mesh.add(proxy);
+  return proxy;
 }

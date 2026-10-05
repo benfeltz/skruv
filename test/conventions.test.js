@@ -32,6 +32,7 @@ describe('pure-logic modules', () => {
     'src/game/assembly.js',
     'src/game/crankMath.js',
     'src/game/decals.js',
+    'src/game/pickMath.js',
   ];
 
   it.each(pureModules)('%s imports neither Three nor Rapier', (path) => {
@@ -51,6 +52,7 @@ describe('pure-logic modules', () => {
     'src/game/assembly.js',
     'src/game/crankMath.js',
     'src/game/decals.js',
+    'src/game/pickMath.js',
   ])(
     '%s touches no DOM globals',
     (path) => {
@@ -65,5 +67,26 @@ describe('CLAUDE.md', () => {
     for (const command of ['npm run dev', 'npm run build', 'npx vitest run', 'npx vitest run <path>']) {
       expect(doc).toContain(command);
     }
+  });
+});
+
+describe('hit proxies (1.4.1)', () => {
+  const router = read('src/scene/gestureRouter.js');
+  const proxy = router.slice(router.indexOf('function addHitProxy('));
+
+  it('are invisible and shadowless', () => {
+    expect(proxy).toMatch(/proxy\.visible = false;/);
+    expect(proxy).toMatch(/proxy\.castShadow = false;/);
+    expect(proxy).toMatch(/proxy\.receiveShadow = false;/);
+  });
+
+  it('are never registered with physics', () => {
+    expect(proxy).not.toMatch(/physics\./);
+    expect(read('src/main.js')).not.toMatch(/register\([^)]*proxy/i);
+  });
+
+  it('leave the pick decision to the pure preference rule', () => {
+    expect(router).toMatch(/preferHit\(/);
+    expect(router).toMatch(/from '\.\.\/game\/pickMath\.js'/);
   });
 });

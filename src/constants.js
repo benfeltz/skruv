@@ -133,6 +133,18 @@ export const GIZMO = {
   opacity: 0.85,
 };
 
+// Fat-finger picking (src/game/pickMath.js, src/scene/gestureRouter.js). Hardware is
+// millimetres across; an invisible proxy box never thinner than proxyMinSize surrounds each
+// small part, and the preference rule decides when a press on it means the part.
+export const PICK = {
+  // A part whose longest side is under this is "small": every fastener and both tools,
+  // never a panel (the narrowest is ~0.77 m long).
+  smallPartMax: 0.25,
+  proxyMinSize: 0.04,
+  // The finger's angular radius from the camera (radians): ~20 CSS px on a phone.
+  fingerRadius: 0.025,
+};
+
 // Connector snapping (src/game/snapMath.js). Generous first, per the Design doc: a snap
 // that fires too eagerly is a nuisance, one that never fires reads as broken. Tighten
 // from playtest feedback.
