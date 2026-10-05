@@ -354,3 +354,11 @@ export const FASTENER = {
   playDamping: 1000,
 };
 
+
+// Telemetry and live tuning (src/game/events.js, src/game/sessionBuffer.js,
+// src/game/tunables.js).
+export const TUNE = {
+  // The session buffer keeps this many of the latest events for export — a long session's
+  // worth of grabs, seats and fps samples.
+  sessionBufferSize: 5000,
+};

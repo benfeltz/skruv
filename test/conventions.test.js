@@ -35,6 +35,8 @@ describe('pure-logic modules', () => {
     'src/game/pickMath.js',
     'src/game/assembledLayout.js',
     'src/game/buildSteps.js',
+    'src/game/events.js',
+    'src/game/sessionBuffer.js',
   ];
 
   it.each(pureModules)('%s imports neither Three nor Rapier', (path) => {
@@ -57,6 +59,8 @@ describe('pure-logic modules', () => {
     'src/game/pickMath.js',
     'src/game/assembledLayout.js',
     'src/game/buildSteps.js',
+    'src/game/events.js',
+    'src/game/sessionBuffer.js',
   ])(
     '%s touches no DOM globals',
     (path) => {
