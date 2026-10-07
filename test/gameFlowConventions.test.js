@@ -127,7 +127,7 @@ describe('boot with the manual up (1.6.1)', () => {
     expect(scrimUp).toMatch(/endSplash\(BOOKLET_UI\.splashLingerMs\);\s*setOpen\(false, \{ focus: false \}\);/);
     // Only a press that began on the scrim: a mouse pressed on the sheet and released off it
     // must not put the booklet down (PR #17 review).
-    expect(scrimUp).toMatch(/if \(!pressed\.delete\(event\.pointerId\)\) return;\s*endSplash\(/);
+    expect(scrimUp).toMatch(/if \(!pressed\.delete\(event\.pointerId\) \|\| !splash\) return;\s*endSplash\(/);
     expect(router).not.toMatch(/booklet|splash|scrim/i);
   });
 
