@@ -1,10 +1,10 @@
 {
-  "id": "/skruv/",
+  "id": "/",
   "name": "Skruv",
   "short_name": "Skruv",
   "description": "Assemble a flatpack bookcase with your fingers.",
-  "start_url": "/skruv/",
-  "scope": "/skruv/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#1b1d22",
   "theme_color": "#1b1d22",
