@@ -11,24 +11,8 @@
 // the direction a fastener's end points. Which instance mates with which is the assembly
 // graph's concern (src/game/assembly.js) and deliberately absent here.
 
+import { CONNECTOR } from '../../tools/validate/lib/vocabulary.js';
 import { BOX } from '../constants.js';
-
-export const CONNECTOR = Object.freeze({
-  DOWEL_HOLE: 'dowelHole',
-  CAM_BOLT_HOLE: 'camBoltHole',
-  CAM_LOCK_RECESS: 'camLockRecess',
-  SHELF_PIN_HOLE: 'shelfPinHole',
-  BACK_FITTING_HOLE: 'backFittingHole',
-  DOWEL_END: 'dowelEnd',
-  BOLT_THREAD: 'boltThread',
-  BOLT_HEAD: 'boltHead',
-  CAM_LOCK_BODY: 'camLockBody',
-  PIN_TIP: 'pinTip',
-  BACK_FITTING_TIP: 'backFittingTip',
-  WRENCH_TIP: 'wrenchTip',
-  CAM_SLOT: 'camSlot',
-  SCREWDRIVER_TIP: 'screwdriverTip',
-});
 
 const PANEL_THICKNESS = 0.016;
 const CARCASS_WIDTH = 0.8;

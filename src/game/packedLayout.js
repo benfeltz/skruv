@@ -12,8 +12,8 @@
 
 import { BOX, PACK, RESET } from '../constants.js';
 import { MANIFEST, PART_TYPES } from './catalog.js';
-import { placeLayout } from './assembledLayout.js';
-import { COMPATIBLE, multiplyQuaternions } from './snapMath.js';
+import { COMPATIBLE } from '../../tools/validate/lib/vocabulary.js';
+import { multiplyQuaternions, placeLayout } from '../../tools/validate/lib/geometry.js';
 
 const QUARTER_TURN = Math.SQRT1_2;
 const IDENTITY = [0, 0, 0, 1];

@@ -1,6 +1,8 @@
 // Every tunable lives here — modules import names, never literals.
 // Units: metres, seconds, radians.
 
+import { CONTRACT } from '../tools/validate/lib/vocabulary.js';
+
 export const ROOM = {
   width: 10,
   depth: 10,
@@ -346,10 +348,11 @@ export const FASTENER = {
   screwRadians: 4 * Math.PI,
   // Screwdriver turn from an open cam lock to a locked one.
   quarterTurn: Math.PI / 2,
-  // A cam catches any screwed bolt head this close to its recess (Design: instance-agnostic).
-  captureRadius: 0.015,
-  // How deep each fastener sits in its hole once fully home, along its axis.
-  sinkDepth: { dowel: 0.015, pin: 0.008, fitting: 0.012, bolt: 0.011, cam: 0.012 },
+  // A cam catches any screwed bolt head this close to its recess, and how deep each
+  // fastener sits in its hole once fully home — the Flatpack contract's, so the game and
+  // the validator never disagree (tools/validate/lib/vocabulary.js).
+  captureRadius: CONTRACT.captureRadius,
+  sinkDepth: CONTRACT.sinkDepth,
   // Crank motion this close (CSS px) to the fastener's on-screen centre is ignored — the
   // angle swings wildly there.
   crankDeadzone: 12,

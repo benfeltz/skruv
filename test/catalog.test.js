@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { CONNECTOR } from '../tools/validate/lib/vocabulary.js';
 import { COLORS } from '../src/constants.js';
-import { CONNECTOR, MANIFEST, MANIFEST_QUANTITIES, PART_TYPES } from '../src/game/catalog.js';
+import { MANIFEST, MANIFEST_QUANTITIES, PART_TYPES } from '../src/game/catalog.js';
 
 // The Design doc's manifest table, restated independently so a catalog edit can't
 // silently change what ships in the box. Dowels and cam locks include the bag's spares.

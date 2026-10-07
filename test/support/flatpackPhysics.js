@@ -1,8 +1,8 @@
 // The flatpack's static slabs, as src/scene/flatpack.js adds them, without Three: the same
 // box-local slabs carried into the room by the box placement.
+import { rotateVector } from '../../tools/validate/lib/geometry.js';
 import { BOX } from '../../src/constants.js';
 import { boxPlacement } from '../../src/game/packedLayout.js';
-import { rotateVector } from '../../src/game/snapMath.js';
 
 export function createFlatpack(physics) {
   const { position, rotation } = boxPlacement();

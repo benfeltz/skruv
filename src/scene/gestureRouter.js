@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { COLORS, DROP, FASTENER, GESTURE, PICK, ROOM, SNAP } from '../constants.js';
-import { capture, connectorInWorld } from '../game/assembly.js';
-import { CONNECTOR, PART_TYPES } from '../game/catalog.js';
+import { areCompatible, COMPATIBLE, CONNECTOR, KIND } from '../../tools/validate/lib/vocabulary.js';
+import { connectorInWorld } from '../../tools/validate/lib/geometry.js';
+import { capture } from '../game/assembly.js';
+import { PART_TYPES } from '../game/catalog.js';
 import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
 import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rotatedHalfExtents } from '../game/dragMath.js';
-import { isFastened, KIND } from '../game/fasteners.js';
+import { isFastened } from '../game/fasteners.js';
 import {
   fastenEvent,
   grabEvent,
@@ -17,7 +19,7 @@ import {
 } from '../game/events.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
-import { applyTransform, areCompatible, COMPATIBLE, findSnap } from '../game/snapMath.js';
+import { applyTransform, findSnap } from '../game/snapMath.js';
 
 // Hardware (fastener or tool) has a fastener end; panels have only holes, or nothing.
 const isHardware = (type) => PART_TYPES[type].connectors.some((c) => c.type in COMPATIBLE);

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { COMPATIBLE, CONNECTOR } from '../tools/validate/lib/vocabulary.js';
+import { rotateVector } from '../tools/validate/lib/geometry.js';
 import { BOX, CAMERA_LIMITS, RESET, ROOM } from '../src/constants.js';
-import { CONNECTOR, MANIFEST, PART_TYPES } from '../src/game/catalog.js';
+import { MANIFEST, PART_TYPES } from '../src/game/catalog.js';
 import { boxPlacement, createPackedLayout, createPackedWorldLayout, lidRest, respawnSpots } from '../src/game/packedLayout.js';
 import { hasEscaped } from '../src/game/dragMath.js';
-import { COMPATIBLE, rotateVector } from '../src/game/snapMath.js';
 
 const layout = createPackedLayout();
 const [width, height, length] = BOX.inner;

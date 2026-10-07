@@ -16,18 +16,17 @@
 
 import { FASTENER } from '../constants.js';
 import { PART_TYPES } from './catalog.js';
+import { COMPATIBLE, KIND, kindOf } from '../../tools/validate/lib/vocabulary.js';
+import { connectorInWorld, multiplyQuaternions, rotateVector, rotationBetween } from '../../tools/validate/lib/geometry.js';
 import {
   canRelease as fastenersRelease,
   createFastener,
   isFastened,
   isCrankKind,
   isTapKind,
-  KIND,
-  kindOf,
   STATE,
   transition,
 } from './fasteners.js';
-import { COMPATIBLE, multiplyQuaternions, rotateVector, rotationBetween } from './snapMath.js';
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -71,14 +70,6 @@ const invert = (f) => {
   const rotation = conjugate(f.rotation);
   return { anchor: negate(rotateVector(rotation, f.anchor)), rotation };
 };
-
-/** World-space `{ position, axis }` of a part-local connector at `pose`. */
-export function connectorInWorld(connector, pose) {
-  return {
-    position: add(rotateVector(pose.rotation, connector.position), pose.position),
-    axis: rotateVector(pose.rotation, connector.axis),
-  };
-}
 
 /**
  * The bolt head (`{ id, position }` records) nearest the cam recess position, if within

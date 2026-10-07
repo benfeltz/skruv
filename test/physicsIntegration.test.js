@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { placeLayout } from '../tools/validate/lib/geometry.js';
 import { DISPLAY, PHYSICS } from '../src/constants.js';
-import { createAssembledLayout, placeLayout } from '../src/game/assembledLayout.js';
+import { createAssembledLayout } from '../src/game/assembledLayout.js';
 import { createAssembly, seatHome } from '../src/game/assembly.js';
 import { PART_TYPES } from '../src/game/catalog.js';
 import { createPackedWorldLayout, lidRest, respawnSpots } from '../src/game/packedLayout.js';

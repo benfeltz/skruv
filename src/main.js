@@ -1,7 +1,7 @@
 import { HAPTICS, PICK, RENDER, RESET, ROOM, TUNE } from './constants.js';
 import { createAssembly } from './game/assembly.js';
 import { ANY, createBus, EVENT, fpsEvent, recoveryEvent, resetEvent, sessionEvent, tuneEvent } from './game/events.js';
-import { KIND } from './game/fasteners.js';
+import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
 import { createTunables, LIVE_KNOBS } from './game/tunables.js';
 import { PART_TYPES } from './game/catalog.js';

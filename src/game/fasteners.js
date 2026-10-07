@@ -13,17 +13,7 @@
 // Correctness never enters here: any type-compatible seated pair fastens.
 
 import { FASTENER } from '../constants.js';
-import { CONNECTOR } from './catalog.js';
-
-export const KIND = Object.freeze({
-  DOWEL: 'dowel',
-  PIN: 'pin',
-  // A push-pin back fitting: pressed through the back panel into whatever lies behind.
-  FITTING: 'fitting',
-  BOLT: 'bolt',
-  CAM: 'cam',
-  TOOL: 'tool',
-});
+import { KIND } from '../../tools/validate/lib/vocabulary.js';
 
 export const STATE = Object.freeze({
   SEATED: 'seated',
@@ -31,20 +21,6 @@ export const STATE = Object.freeze({
   SCREWED: 'screwed',
   LOCKED: 'locked',
 });
-
-// Keyed by the fastener-end side of a pair (snapMath's COMPATIBLE keys).
-const KIND_FOR_END = Object.freeze({
-  [CONNECTOR.DOWEL_END]: KIND.DOWEL,
-  [CONNECTOR.PIN_TIP]: KIND.PIN,
-  [CONNECTOR.BACK_FITTING_TIP]: KIND.FITTING,
-  [CONNECTOR.BOLT_THREAD]: KIND.BOLT,
-  [CONNECTOR.CAM_LOCK_BODY]: KIND.CAM,
-  [CONNECTOR.WRENCH_TIP]: KIND.TOOL,
-  [CONNECTOR.SCREWDRIVER_TIP]: KIND.TOOL,
-});
-
-/** The fastener kind for a pair whose fastener end has connector type `endType`, or null. */
-export const kindOf = (endType) => KIND_FOR_END[endType] ?? null;
 
 /** Kinds pushed home by a tap and pulled back out along their axis. */
 export const isTapKind = (kind) => kind === KIND.DOWEL || kind === KIND.PIN || kind === KIND.FITTING;

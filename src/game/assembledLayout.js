@@ -11,10 +11,10 @@
 // pair then lines up is exactly what test/assembledLayout.test.js checks.
 
 import { FASTENER } from '../constants.js';
-import { capture, connectorInWorld } from './assembly.js';
-import { CONNECTOR, MANIFEST, PART_TYPES } from './catalog.js';
-import { multiplyQuaternions, rotateVector, rotationBetween } from './snapMath.js';
-import { kindOf } from './fasteners.js';
+import { CONNECTOR, kindOf } from '../../tools/validate/lib/vocabulary.js';
+import { connectorInWorld, contains, rotateVector, rotationBetween } from '../../tools/validate/lib/geometry.js';
+import { capture } from './assembly.js';
+import { MANIFEST, PART_TYPES } from './catalog.js';
 
 const IDENTITY = [0, 0, 0, 1];
 // Half turns: the right side is the left one turned about y; the bottom panel is turned
@@ -22,11 +22,9 @@ const IDENTITY = [0, 0, 0, 1];
 const HALF_TURN_Y = [0, 1, 0, 0];
 const HALF_TURN_Z = [0, 0, 1, 0];
 
-const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const scale = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
 const negate = (a) => scale(a, -1);
-const conjugate = ([x, y, z, w]) => [-x, -y, -z, w];
 
 /** Connector indices of `type` with connector type `connectorType`. */
 const indicesOf = (type, connectorType) =>
@@ -49,12 +47,6 @@ function seatedPose(type, index, hole, sink, rotation) {
   const turn = rotation ?? rotationBetween(local.axis, negate(hole.axis));
   const target = sub(hole.position, scale(hole.axis, sink));
   return { position: sub(target, rotateVector(turn, local.position)), rotation: turn };
-}
-
-/** True when world `point` lies inside the box of a part posed at `pose`. */
-export function contains(type, pose, point, tolerance = 1e-9) {
-  const local = rotateVector(conjugate(pose.rotation), sub(point, pose.position));
-  return local.every((v, i) => Math.abs(v) <= PART_TYPES[type].size[i] / 2 + tolerance);
 }
 
 /**
@@ -133,7 +125,7 @@ export function createAssembledLayout() {
   const joints = [];
   const panels = () => parts.filter((p) => p.role !== 'hardware');
   // The panel (other than `except`) whose box holds a world point.
-  const panelAt = (point, except) => panels().find((p) => p.id !== except && contains(p.type, p, point))?.id ?? null;
+  const panelAt = (point, except) => panels().find((p) => p.id !== except && contains(PART_TYPES[p.type].size, p, point))?.id ?? null;
 
   // Hardware of `type`, its connector `index` seated in `host`'s connector `hostIndex`.
   function seatHardware(type, index, host, hostIndex, extra = {}) {
@@ -208,12 +200,3 @@ export function createAssembledLayout() {
 
 const distance = (a, b) => Math.hypot(...sub(a, b));
 const nearest = (items, cost) => items.reduce((best, item) => (cost(item) < cost(best) ? item : best));
-
-/** A layout's poses carried by a rigid placement `{ position, rotation }` — e.g. against a wall. */
-export function placeLayout(parts, { position, rotation }) {
-  return parts.map((part) => ({
-    ...part,
-    position: add(rotateVector(rotation, part.position), position),
-    rotation: multiplyQuaternions(rotation, part.rotation),
-  }));
-}

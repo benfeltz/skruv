@@ -1,6 +1,7 @@
 import { DISPLAY } from '../constants.js';
 import { seatHome } from '../game/assembly.js';
-import { createAssembledLayout, placeLayout } from '../game/assembledLayout.js';
+import { placeLayout } from '../../tools/validate/lib/geometry.js';
+import { createAssembledLayout } from '../game/assembledLayout.js';
 import { PART_TYPES } from '../game/catalog.js';
 import { createPartMesh } from '../game/partMesh.js';
 

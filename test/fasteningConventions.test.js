@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { KIND } from '../tools/validate/lib/vocabulary.js';
+import { connectorInWorld, rotateVector } from '../tools/validate/lib/geometry.js';
 import { FASTENER } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/catalog.js';
-import { connectorInWorld, createAssembly } from '../src/game/assembly.js';
-import { createFastener, KIND, transition } from '../src/game/fasteners.js';
+import { createAssembly } from '../src/game/assembly.js';
+import { createFastener, transition } from '../src/game/fasteners.js';
 import { createGestureState, OWNER } from '../src/game/gestureState.js';
-import { rotateVector } from '../src/game/snapMath.js';
 import { createCompoundPhysics } from '../src/scene/compoundPhysics.js';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');

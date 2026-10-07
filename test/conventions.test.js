@@ -272,6 +272,19 @@ describe('agent bridge (1.6)', () => {
   });
 });
 
+describe('Flatpack pack code (1.7)', () => {
+  const lib = fileURLToPath(new URL('../tools/validate/lib', import.meta.url));
+  const modules = readdirSync(lib).filter((name) => name.endsWith('.js'));
+
+  // One implementation, imported by the game in the browser and by the validator CLI.
+  it.each(modules)('lib/%s imports nothing — no game code, Three, Rapier or Node', (name) => {
+    const text = read(`tools/validate/lib/${name}`);
+    const sources = [...text.matchAll(/(?:from\s+|import\s*\(\s*)['"]([^'"]+)['"]/g)].map((m) => m[1]);
+    for (const source of sources) expect(source, name).toMatch(/^\.\/[\w.]+\.js$/);
+    expect(text).not.toMatch(/\b(window|document|process|require)\b/);
+  });
+});
+
 describe('PWA install (1.6)', () => {
   const manifest = JSON.parse(read('public/manifest.webmanifest'));
   const png = (name) => {

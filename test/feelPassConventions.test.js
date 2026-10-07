@@ -3,14 +3,15 @@
 // feel itself (phone pickability, sprue, assist, zoom-out) is manual — see Test Plan.md.
 
 import { describe, expect, it } from 'vitest';
+import { CONNECTOR } from '../tools/validate/lib/vocabulary.js';
+import { rotateVector } from '../tools/validate/lib/geometry.js';
 import { CAMERA, CAMERA_LIMITS, DECAL, GESTURE, PICK, ROOM, SNAP } from '../src/constants.js';
-import { CONNECTOR, MANIFEST, PART_TYPES } from '../src/game/catalog.js';
+import { MANIFEST, PART_TYPES } from '../src/game/catalog.js';
 import { decalPlacements } from '../src/game/decals.js';
 import { createPackedWorldLayout } from '../src/game/packedLayout.js';
 import { easeToward } from '../src/game/dragMath.js';
 import { createGestureState, OWNER } from '../src/game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxReach } from '../src/game/pickMath.js';
-import { rotateVector } from '../src/game/snapMath.js';
 import { clampCamera } from '../src/scene/cameraLimits.js';
 
 const sub = (a, b) => a.map((v, i) => v - b[i]);

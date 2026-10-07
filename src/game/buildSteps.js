@@ -4,9 +4,9 @@
 // src/scene/bookletPages.js and read by the per-page highlight; nothing here (or anywhere)
 // checks a player's build against them. The booklet is reference; the player judges.
 
-import { CONNECTOR, MANIFEST, PART_TYPES } from './catalog.js';
+import { CONNECTOR, kindOf } from '../../tools/validate/lib/vocabulary.js';
+import { MANIFEST, PART_TYPES } from './catalog.js';
 import { createAssembledLayout } from './assembledLayout.js';
-import { kindOf } from './fasteners.js';
 
 const DOWEL = kindOf(CONNECTOR.DOWEL_END);
 const BOLT = kindOf(CONNECTOR.BOLT_THREAD);

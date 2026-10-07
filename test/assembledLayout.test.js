@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { CONNECTOR, KIND } from '../tools/validate/lib/vocabulary.js';
+import { connectorInWorld, contains, placeLayout, rotateVector } from '../tools/validate/lib/geometry.js';
 import { FASTENER, ROOM } from '../src/constants.js';
-import { capture, connectorInWorld } from '../src/game/assembly.js';
-import { contains, createAssembledLayout, placeLayout } from '../src/game/assembledLayout.js';
-import { CONNECTOR, MANIFEST, MANIFEST_QUANTITIES, PART_TYPES } from '../src/game/catalog.js';
-import { KIND } from '../src/game/fasteners.js';
-import { rotateVector } from '../src/game/snapMath.js';
+import { capture } from '../src/game/assembly.js';
+import { createAssembledLayout } from '../src/game/assembledLayout.js';
+import { MANIFEST, MANIFEST_QUANTITIES, PART_TYPES } from '../src/game/catalog.js';
 
 // Pose integrity: the geometry of a correctly built JOHNNY, checked pair by pair. This
 // validates OUR catalog and layout — a wrong hole shows up here before any human sees it —
@@ -133,7 +133,7 @@ describe('pose integrity: mated connectors coincide', () => {
       expect(f.through).not.toBeNull();
       const through = poseOf.get(f.through);
       expect(['leftSide', 'rightSide', 'bottom', 'top']).toContain(through.role);
-      expect(contains(through.type, through, world(f.hardware, f.hardwareConnector).position)).toBe(true);
+      expect(contains(PART_TYPES[through.type].size, through, world(f.hardware, f.hardwareConnector).position)).toBe(true);
     }
   });
 

@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { createAssembledLayout } from '../src/game/assembledLayout.js';
 import { createBooklet, createBuildSteps } from '../src/game/buildSteps.js';
 import { MANIFEST, MANIFEST_QUANTITIES, PART_TYPES } from '../src/game/catalog.js';
-import { KIND } from '../src/game/fasteners.js';
 
 // Page coverage: the booklet tells the whole build — every joint on exactly one page, every
 // panel brought in once, hardware counts that add up to the box. A stale page (a fastener
