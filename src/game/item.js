@@ -2,6 +2,7 @@
 // one pack implementation (tools/validate/lib) the validator also runs. Bundled at build
 // time, so boot stays synchronous — no fetch. The only module that names the item.
 
+import { deriveJoints } from '../../tools/validate/lib/joints.js';
 import { loadPack } from '../../tools/validate/lib/pack.js';
 import johnny from '../../items/johnny/flatpack.json';
 
@@ -37,3 +38,13 @@ export const SPARES = pack.spares;
 
 /** The product and its maker, on the box and the booklet. */
 export const IDENTITY = pack.identity;
+
+/**
+ * The complete upright JOHNNY: `{ parts, joints }`, worked out once at boot and shared by
+ * the display shelf and the booklet.
+ *   parts  — `{ id, type, role, position, rotation }`, one per instance built into it; frame
+ *            on the floor under the carcass centre, front +z
+ *   joints — derived from those poses (tools/validate/lib/joints.js): `{ hardware,
+ *            hardwareConnector, host, hostConnector, kind, mover, through, captured }`
+ */
+export const ASSEMBLED = Object.freeze({ parts: pack.assembled, joints: deriveJoints(pack) });

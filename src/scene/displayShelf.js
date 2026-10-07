@@ -1,8 +1,7 @@
 import { DISPLAY } from '../constants.js';
 import { seatHome } from '../game/assembly.js';
 import { placeLayout } from '../../tools/validate/lib/geometry.js';
-import { createAssembledLayout } from '../game/assembledLayout.js';
-import { PART_TYPES } from '../game/item.js';
+import { ASSEMBLED, PART_TYPES } from '../game/item.js';
 import { createPartMesh } from '../game/partMesh.js';
 
 /**
@@ -19,7 +18,7 @@ import { createPartMesh } from '../game/partMesh.js';
  * Adjustable shelves just rest on their pins, as in a real one.
  */
 export function createDisplayShelf(physics) {
-  const layout = createAssembledLayout();
+  const layout = ASSEMBLED;
   const half = DISPLAY.yaw / 2;
   const posed = placeLayout(layout.parts, { position: DISPLAY.position, rotation: [0, Math.sin(half), 0, Math.cos(half)] });
   const idOf = (id) => (id === null ? null : `${DISPLAY.idPrefix}${id}`);

@@ -3,9 +3,8 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { BOOKLET, COLORS } from '../constants.js';
-import { createAssembledLayout } from '../game/assembledLayout.js';
 import { createBooklet } from '../game/buildSteps.js';
-import { IDENTITY, PART_TYPES } from '../game/item.js';
+import { ASSEMBLED, IDENTITY, MANIFEST, PART_TYPES } from '../game/item.js';
 
 // The booklet's pages, drawn from the same part models the room uses, so a page can never
 // disagree with the geometry. Wordless, as the real thing is: a big step numeral, an
@@ -43,8 +42,8 @@ const TO_SRGB = Uint8ClampedArray.from({ length: 256 }, (_, i) => {
  * WebGL context) into an offscreen target and restores its state after every page.
  */
 export function createBookletPages(renderer) {
-  const layout = createAssembledLayout();
-  const pages = createBooklet();
+  const layout = ASSEMBLED;
+  const pages = createBooklet(MANIFEST, layout);
   const [pageW, pageH] = BOOKLET.pageSize;
   const cache = new Map();
   const views = createViewRenderer(renderer);
