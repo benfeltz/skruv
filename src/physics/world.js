@@ -41,7 +41,8 @@ function addRoomColliders(world) {
  * advances the simulation by whole fixed steps and copies body poses onto their meshes.
  * `grab`/`move`/`release` hand a registered body between the simulation and direct
  * control (part manipulation). `join`/`unjoin` add and remove the joints fastener state
- * calls for (src/game/assembly.js `bonds()`).
+ * calls for (src/game/assembly.js `bonds()`). `retune` re-applies the live-tunable values
+ * baked in at creation (src/game/tunables.js) to every body, collider and joint.
  */
 export async function createPhysicsWorld() {
   await RAPIER.init();
@@ -156,16 +157,7 @@ export async function createPhysicsWorld() {
     if (play) {
       // Limits and motors measure from the rest rotation, not from bodies aligned.
       joint.setFrameX1(toRotation(rotation));
-      // The spherical joint has no typed limit/motor wrapper in this Rapier build; the raw
-      // joint set takes them per axis.
-      const raw = world.impulseJoints.raw;
-      const limit = FASTENER.angularPlayDegrees * DEGREES;
-      for (const axis of ANGULAR_AXES) {
-        raw.jointSetLimits(joint.handle, axis, -limit, limit);
-        raw.jointConfigureMotorModel(joint.handle, axis, RAPIER.MotorModel.ForceBased);
-        // Zero stiffness, pure damping: resists the slump's speed, never pushes back.
-        raw.jointConfigureMotor(joint.handle, axis, 0, 0, 0, FASTENER.playDamping);
-      }
+      setPlay(joint);
     }
     if (mode === 'embed') {
       embedded.set(bodyB, (embedded.get(bodyB) ?? 0) + 1);
@@ -173,6 +165,38 @@ export async function createPhysicsWorld() {
     }
     joints.set(joint, { mode, bodyB });
     return joint;
+  }
+
+  // The play joint's angular limit and damping, from FASTENER. The spherical joint has no
+  // typed limit/motor wrapper in this Rapier build; the raw joint set takes them per axis.
+  function setPlay(joint) {
+    const raw = world.impulseJoints.raw;
+    const limit = FASTENER.angularPlayDegrees * DEGREES;
+    for (const axis of ANGULAR_AXES) {
+      raw.jointSetLimits(joint.handle, axis, -limit, limit);
+      raw.jointConfigureMotorModel(joint.handle, axis, RAPIER.MotorModel.ForceBased);
+      // Zero stiffness, pure damping: resists the slump's speed, never pushes back.
+      raw.jointConfigureMotor(joint.handle, axis, 0, 0, 0, FASTENER.playDamping);
+    }
+  }
+
+  /**
+   * Re-applies the live-tunable values made into bodies, colliders and joints when they
+   * were created: PHYSICS damping and friction, FASTENER play. Play joints wake, so a
+   * carcass re-slumps to a changed limit at once. Additive — creation is unchanged.
+   */
+  function retune() {
+    for (const { body } of bodies) {
+      body.setLinearDamping(PHYSICS.linearDamping);
+      body.setAngularDamping(PHYSICS.angularDamping);
+    }
+    world.forEachCollider((collider) => collider.setFriction(PHYSICS.friction));
+    for (const [joint, { mode }] of joints) {
+      if (mode !== 'play') continue;
+      setPlay(joint);
+      joint.body1().wakeUp();
+      joint.body2().wakeUp();
+    }
   }
 
   /** Removes a joint from `join`; both bodies wake, and embedded hardware collides again. */
@@ -191,5 +215,5 @@ export async function createPhysicsWorld() {
     world.removeImpulseJoint(joint, true);
   }
 
-  return { register, addStatic, step, grab, move, release, place, join, unjoin };
+  return { register, addStatic, step, grab, move, release, place, join, unjoin, retune };
 }

@@ -39,6 +39,15 @@ describe('createLoop', () => {
     expect(onFrame.mock.calls[2][0]).toBeLessThan(1);
   });
 
+  it('passes the true delta alongside the clamped one, for frame-rate measurement', () => {
+    const onFrame = vi.fn();
+    createLoop(onFrame).start();
+    runFrame(1000);
+    runFrame(1100);
+    expect(onFrame.mock.calls[1][1]).toBeCloseTo(0.1);
+    expect(onFrame.mock.calls[1][0]).toBeLessThan(0.1);
+  });
+
   it('stops when stop() is called from inside onFrame', () => {
     let loop;
     const onFrame = vi.fn(() => loop.stop());

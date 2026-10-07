@@ -6,6 +6,15 @@ import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
 import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rotatedHalfExtents } from '../game/dragMath.js';
 import { isFastened, KIND } from '../game/fasteners.js';
+import {
+  fastenEvent,
+  grabEvent,
+  releaseEvent,
+  seatEvent,
+  snapCandidateEvent,
+  unfastenEvent,
+  unseatEvent,
+} from '../game/events.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
 import { applyTransform, areCompatible, COMPATIBLE, findSnap } from '../game/snapMath.js';
@@ -50,10 +59,13 @@ const PULL_AXIS_PROBE = 0.05;
  *   sprue  — `{ selected, hitTest(raycaster) }` handle on a selected small part
  *            (src/scene/sprue.js); a press on it nearer than anything else is a press on
  *            its part, so dragging it is the part's own drag.
+ *   events — `{ emit(event) }` bus (src/game/events.js): grabs, releases, seat offers,
+ *            seats and fastenings are reported as they happen. Reporting only — nothing
+ *            here reads it back.
  * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
  * eases a dragged part toward the seat on offer (seat assist) and fades the seat flash.
  */
-export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide }) {
+export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, events }) {
   const state = createGestureState();
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -253,6 +265,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   function unseat(joint) {
     assembly.unseat(joint.id);
+    events?.emit(unseatEvent(joint));
     if (joint.kind === KIND.TOOL) toolGrips.delete(joint.hardware);
     // A part held only for this seat goes back to the simulation — a dowel whose panel
     // was carried off, a wrench whose bolt was.
@@ -262,6 +275,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       placed.delete(part);
       physics.release(part.body);
     }
+  }
+
+  // A fastener that changed state across a tap, pull or turn reports going home or coming
+  // back out; `was` is whether it was fastened before.
+  function reportFastening(id, was) {
+    const joint = assembly.get(id);
+    if (!events || !joint || isFastened(joint.fastener) === was) return;
+    events.emit(isFastened(joint.fastener) ? fastenEvent(joint) : unfastenEvent(joint));
   }
 
   // World box of a part's own geometry — hit proxies and decals riding on it don't count.
@@ -311,6 +332,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       // Where the part is held: the finger's pose, or easing from it toward a seat on offer.
       held: null,
       snapped: null,
+      // The seat last reported on offer (telemetry), so only a change is reported.
+      offer: null,
       pointer: null,
     };
     physics.grab(body);
@@ -343,6 +366,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const target = [bx - cx, drag.height, bz - cz];
     // A compound carries its joints along; only a free part looks for a seat.
     drag.snapped = drag.mode === 'move' ? snapCandidate(target) : null;
+    reportOffer();
     if (drag.snapped) ghost?.show(drag.part.mesh, drag.snapped);
     else ghost?.hide();
     // No seat on offer: the part is exactly where the finger puts it, no pull at all. With
@@ -350,6 +374,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (drag.snapped && drag.held) return;
     drag.held = { position: target, rotation: drag.rotation };
     physics.move(drag.part.body, target, drag.mode === 'move' ? drag.rotation : undefined);
+  }
+
+  function reportOffer() {
+    const snap = drag.snapped?.snap ?? null;
+    const offer = snap && `${snap.from.index}>${snap.to.part.id}#${snap.to.index}`;
+    if (offer === drag.offer) return;
+    drag.offer = offer;
+    events?.emit(snapCandidateEvent(drag.part.id, snap));
   }
 
   // Seat assist: only while a seat is on offer, the held part glides toward it.
@@ -365,6 +397,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (snapped) {
       const { from, to } = snapped.snap;
       const joint = assembly.seat({ partA: part.id, connectorA: from.index, partB: to.part.id, connectorB: to.index, mover: part.id });
+      events?.emit(seatEvent(joint));
       // Seated parts stay kinematic ("placed") or an unfastened panel would fall straight
       // over; reconcile() hands them to their joints once a fastener engages.
       physics.move(part.body, snapped.position, snapped.rotation);
@@ -484,6 +517,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const at = [event.clientX, event.clientY];
     const pulled = joints.filter(({ id, axis }) => pullAlong(start, at, axis) >= FASTENER.pullDistance && assembly.apply(id, { type: 'pull' }));
     if (pulled.length === 0) return;
+    for (const { id } of pulled) reportFastening(id, true);
     drag.joints = joints.filter((j) => !pulled.includes(j));
     if (!assembly.canRelease(part.id)) return reconcile();
     // Pulled free: it leaves its seats and carries on as a normal drag from here.
@@ -492,7 +526,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     aim(pointer);
     const { origin, direction } = raycaster.ray;
     const grab = intersectDragPlane(origin.toArray(), direction.toArray(), part.mesh.position.y) ?? part.mesh.position.toArray();
+    // Telemetry: the pull ends here and a move begins, so each grab pairs with its release.
+    events?.emit(releaseEvent(part.id, 'pull'));
     beginMove(part, grab, pointer, 'move');
+    events?.emit(grabEvent(part.id, 'move'));
   }
 
   // --- crank: an engaged tool's drag turns its fastener ---
@@ -510,7 +547,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const into = connectorWorld(target.hardware, target.hardwareConnector).axis;
     const view = scratch.fromArray(head).sub(camera.position).toArray();
     const radians = tightenSign(into, view) * delta;
-    if (assembly.apply(target.id, { type: 'crank', radians }, crankContext(target))) reconcile();
+    const was = isFastened(assembly.get(target.id).fastener);
+    if (assembly.apply(target.id, { type: 'crank', radians }, crankContext(target))) {
+      reportFastening(target.id, was);
+      reconcile();
+    }
   }
 
   // A cam catches the nearest screwed bolt head within reach of its recess, any bolt.
@@ -550,7 +591,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     pruneStale();
     const engagement = assembly.crankTarget(part.id);
     if (engagement) return unseat(engagement.tool);
-    if (assembly.tap(part.id, behindFitting).length > 0) return reconcile();
+    const pressed = assembly.tap(part.id, behindFitting);
+    for (const id of pressed) reportFastening(id, false);
+    if (pressed.length > 0) return reconcile();
     // A part held at its seat is the router's: turning it would drop it off the seat.
     if (!placed.has(part)) onTap?.(part);
   }
@@ -622,10 +665,21 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       return;
     }
     if (effect.owner === OWNER.DRAG_PART) {
-      if (effect.type === 'dragStart') beginDrag(effect.hit.part, effect.hit.point, event);
+      if (effect.type === 'dragStart') {
+        beginDrag(effect.hit.part, effect.hit.point, event);
+        if (drag) events?.emit(grabEvent(drag.part.id, drag.mode));
+      }
       else if (!drag) return;
-      else if (effect.type === 'dragEnd') endDrag();
-      else if (effect.type === 'dragCancel') cancelDrag(); // interrupted: never snap
+      else if (effect.type === 'dragEnd') {
+        const { part, mode, snapped } = drag;
+        endDrag();
+        events?.emit(releaseEvent(part.id, mode, { seated: !!snapped }));
+      }
+      else if (effect.type === 'dragCancel') {
+        const { part, mode } = drag;
+        cancelDrag(); // interrupted: never snap
+        events?.emit(releaseEvent(part.id, mode, { cancelled: true }));
+      }
       else moveDrag(effect, event);
       return;
     }
@@ -717,7 +771,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     // through — fastened or not, so the physics joints go with them.
     unseatAll(ids) {
       onInterrupted();
-      assembly.letGoOf(ids);
+      for (const id of assembly.letGoOf(ids)) reportFastening(id, true);
       const set = new Set(ids);
       for (const joint of assembly.all()) if (set.has(joint.hardware) || set.has(joint.host)) unseat(joint);
       reconcile();

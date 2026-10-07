@@ -1,5 +1,10 @@
-import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { COLORS, DEV_WS } from '../src/constants.js';
 import viteConfig from '../vite.config.js';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -35,6 +40,10 @@ describe('pure-logic modules', () => {
     'src/game/pickMath.js',
     'src/game/assembledLayout.js',
     'src/game/buildSteps.js',
+    'src/game/events.js',
+    'src/game/sessionBuffer.js',
+    'src/game/tunables.js',
+    'src/scene/fpsGuard.js',
   ];
 
   it.each(pureModules)('%s imports neither Three nor Rapier', (path) => {
@@ -57,6 +66,10 @@ describe('pure-logic modules', () => {
     'src/game/pickMath.js',
     'src/game/assembledLayout.js',
     'src/game/buildSteps.js',
+    'src/game/events.js',
+    'src/game/sessionBuffer.js',
+    'src/game/tunables.js',
+    'src/scene/fpsGuard.js',
   ])(
     '%s touches no DOM globals',
     (path) => {
@@ -165,5 +178,155 @@ describe('the wall clamp never shrinks the orbit (1.4.1 review)', () => {
     expect(controls).toMatch(/function unconfine\(\) \{\s*camera\.position\.copy\(free\);/);
     expect(controls).toMatch(/free\.copy\(camera\.position\);[\s\S]*clampCamera\(free\.toArray\(\)/);
     expect(update).not.toMatch(/unconfine\(\)/);
+  });
+});
+
+describe('the deployed bundle carries no dev stream (1.6)', () => {
+  // A real production build into a scratch dir, then asserted on byte for byte: the plain
+  // URL on Pages must never open a socket or carry dev code.
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  let outDir;
+  let files;
+  beforeAll(() => {
+    outDir = mkdtempSync(join(tmpdir(), 'skruv-dist-'));
+    // As CI builds it: vitest's NODE_ENV=test would build with import.meta.env.DEV true.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'NODE_ENV' && !key.startsWith('VITEST')));
+    execFileSync(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', outDir, '--emptyOutDir', '--logLevel', 'error'], { cwd: root, env });
+    files = readdirSync(outDir, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => {
+        const path = join(entry.parentPath, entry.name);
+        return { path, text: readFileSync(path, 'utf8') };
+      });
+  }, 120_000);
+  afterAll(() => outDir && rmSync(outDir, { recursive: true, force: true }));
+
+  it.each([
+    ['the dev socket path', DEV_WS.path],
+    ['the dev client', 'connectDevStream'],
+    ['the dev client module', 'wsClient'],
+    ['a WebSocket', 'WebSocket'],
+    ['the dev console trail', '[skruv]'],
+  ])('contains no %s', (_, marker) => {
+    expect(files.length).toBeGreaterThan(0);
+    for (const { path, text } of files) expect(text.includes(marker), path).toBe(false);
+  });
+
+  it('links the manifest and touch icon under the Pages base', () => {
+    const html = files.find(({ path }) => path.endsWith('index.html')).text;
+    expect(html).toContain(`<link rel="manifest" href="${viteConfig.base}manifest.webmanifest"`);
+    expect(html).toContain(`<link rel="apple-touch-icon" href="${viteConfig.base}icon-180.png"`);
+    for (const name of ['manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png']) {
+      expect(files.some(({ path }) => path.endsWith(`/${name}`)), name).toBe(true);
+    }
+  });
+
+  it('keeps the tuning drawer out of the entry chunk — the plain URL never loads it', () => {
+    const html = files.find(({ path }) => path.endsWith('index.html')).text;
+    const entry = html.match(/src="[^"]*\/(assets\/index-[^"]+\.js)"/)[1];
+    const entryText = files.find(({ path }) => path.endsWith(entry)).text;
+    expect(entryText).not.toContain('skruv-tune-panel');
+    expect(files.some(({ path, text }) => /tunePanel/.test(path) && text.includes('skruv-tune-panel'))).toBe(true);
+  });
+});
+
+describe('dev stream wiring (1.6)', () => {
+  const main = read('src/main.js');
+
+  it('reaches the client only through a DEV-guarded dynamic import', () => {
+    expect(main.match(/dev\/wsClient/g)).toHaveLength(1);
+    expect(main).toMatch(/if \(import\.meta\.env\.DEV\) \{\s*import\('\.\/dev\/wsClient\.js'\)/);
+    expect(main).not.toMatch(/^import .*dev\//m);
+  });
+
+  it('keeps src/dev to the one client file, imported by nothing else', () => {
+    const dir = fileURLToPath(new URL('../src/dev', import.meta.url));
+    expect(readdirSync(dir)).toEqual(['wsClient.js']);
+    const others = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true })
+      .filter((path) => path.endsWith('.js') && path !== 'main.js' && !path.startsWith('dev'));
+    for (const path of others) expect(read(`src/${path}`), path).not.toMatch(/(import\(|from )['"][^'"]*\/dev\//);
+  });
+
+  it('runs the hub on the dev server only', () => {
+    const plugin = viteConfig.plugins.flat().find((p) => p?.name === 'skruv-dev-stream');
+    expect(plugin.apply).toBe('serve');
+  });
+});
+
+describe('agent bridge (1.6)', () => {
+  const bridge = read('tools/agent-bridge/index.js');
+
+  it('mirrors the DEV_WS protocol strings exactly', () => {
+    expect(bridge).toContain(`path: '${DEV_WS.path}'`);
+    for (const [name, value] of Object.entries(DEV_WS.kinds)) expect(bridge).toContain(`${name}: '${value}'`);
+  });
+
+  // The hub hands every game reply to every tool; ids from 1 in two bridges collide.
+  it('numbers its requests under a per-bridge prefix (1.6 review)', () => {
+    expect(bridge).toMatch(/const ID_PREFIX = crypto\.randomUUID\(\);/);
+    expect(bridge).toMatch(/const id = `\$\{ID_PREFIX\}:\$\{nextId\+\+\}`;/);
+  });
+
+  it('imports no game code — it only speaks the protocol', () => {
+    expect(bridge).not.toMatch(/from ['"][^'"]*src\//);
+  });
+});
+
+describe('PWA install (1.6)', () => {
+  const manifest = JSON.parse(read('public/manifest.webmanifest'));
+  const png = (name) => {
+    const bytes = readFileSync(new URL(`../public/${name}`, import.meta.url));
+    return { signature: bytes.subarray(1, 4).toString(), width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  };
+
+  // Off the base, the installed app opens on a 404 (Pages serves the game at /skruv/).
+  it('starts and scopes the installed app at the Pages base', () => {
+    expect(manifest.start_url).toBe(viteConfig.base);
+    expect(manifest.scope).toBe(viteConfig.base);
+    expect(manifest.id).toBe(viteConfig.base);
+  });
+
+  it('launches standalone in the room colour', () => {
+    expect(manifest.display).toBe('standalone');
+    const background = `#${COLORS.background.toString(16).padStart(6, '0')}`;
+    expect(manifest.background_color).toBe(background);
+    expect(manifest.theme_color).toBe(background);
+    expect(read('index.html')).toContain(`<meta name="theme-color" content="${background}" />`);
+  });
+
+  it('ships icons the size they claim, relative to the manifest', () => {
+    for (const { src, sizes } of manifest.icons) {
+      expect(src).not.toMatch(/^\//);
+      const [w, h] = sizes.split('x').map(Number);
+      expect(png(src)).toEqual({ signature: 'PNG', width: w, height: h });
+    }
+    expect(manifest.icons.map((i) => i.sizes)).toEqual(['192x192', '512x512']);
+    expect(png('icon-180.png')).toEqual({ signature: 'PNG', width: 180, height: 180 });
+  });
+
+  it('registers no service worker (manifest-only)', () => {
+    const sources = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true }).filter((p) => p.endsWith('.js'));
+    for (const path of [...sources.map((p) => `src/${p}`), 'index.html']) expect(read(path), path).not.toMatch(/serviceWorker/);
+  });
+});
+
+describe('telemetry pairs every grab with a release of its mode (1.6 review)', () => {
+  const router = read('src/scene/gestureRouter.js');
+  const pull = router.slice(router.indexOf('function pullTo('), router.indexOf('// --- crank'));
+
+  it('reports a pull that frees its part as a pull released and a move grabbed', () => {
+    expect(pull).toMatch(/events\?\.emit\(releaseEvent\(part\.id, 'pull'\)\);\s*beginMove\(part, grab, pointer, 'move'\);\s*events\?\.emit\(grabEvent\(part\.id, 'move'\)\);/);
+  });
+});
+
+describe('the fps guard measures true frame time (1.6 review)', () => {
+  it('is fed the loop raw delta, never the clamped game step', () => {
+    expect(read('src/main.js')).toMatch(/createLoop\(\(delta, rawDelta\) => \{[\s\S]*fps\.frame\(rawDelta\)/);
+  });
+});
+
+describe('tuning drawer downloads survive Safari (1.6 review)', () => {
+  it('revokes a download URL only after TUNE.downloadRevokeMs', () => {
+    expect(read('src/ui/tunePanel.js')).toMatch(/setTimeout\(\(\) => URL\.revokeObjectURL\(url\), TUNE\.downloadRevokeMs\)/);
   });
 });

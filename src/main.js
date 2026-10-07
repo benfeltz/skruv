@@ -1,5 +1,9 @@
-import { PICK, RESET, ROOM } from './constants.js';
+import { HAPTICS, PICK, RENDER, RESET, ROOM, TUNE } from './constants.js';
 import { createAssembly } from './game/assembly.js';
+import { ANY, createBus, EVENT, fpsEvent, recoveryEvent, resetEvent, sessionEvent, tuneEvent } from './game/events.js';
+import { KIND } from './game/fasteners.js';
+import { createSessionBuffer } from './game/sessionBuffer.js';
+import { createTunables, LIVE_KNOBS } from './game/tunables.js';
 import { PART_TYPES } from './game/catalog.js';
 import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
@@ -7,10 +11,12 @@ import { createPackedWorldLayout, lidRest, respawnSpots } from './game/packedLay
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
+import { clampPixelRatio } from './scene/clamp.js';
 import { createGhost } from './scene/ghost.js';
 import { createCompoundPhysics } from './scene/compoundPhysics.js';
 import { createDisplayShelf } from './scene/displayShelf.js';
 import { createDropGuide } from './scene/dropGuide.js';
+import { createFpsGuard } from './scene/fpsGuard.js';
 import { createFlatpack } from './scene/flatpack.js';
 import { createGestureRouter } from './scene/gestureRouter.js';
 import { createGizmo } from './scene/gizmo.js';
@@ -24,11 +30,36 @@ import { createBookletSheet } from './ui/booklet.js';
 import { createResetButton } from './ui/resetButton.js';
 import { createToggleButton } from './ui/toggleButton.js';
 
+// The session's event stream, and the buffer that keeps it for export. Observers only:
+// nothing in the game reads it back.
+const events = createBus({ now: () => performance.now() });
+const session = createSessionBuffer({
+  size: TUNE.sessionBufferSize,
+  // randomUUID needs a secure context; a phone on the LAN dev server isn't one.
+  session: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`,
+  startedAt: new Date().toISOString(),
+});
+events.on(ANY, session.push);
+if (import.meta.env.DEV) events.on(ANY, (event) => console.debug('[skruv]', event.type, event));
+events.emit(sessionEvent('start'));
+// Backgrounded and back: a session that ends hidden is an abandon.
+document.addEventListener('visibilitychange', () => events.emit(sessionEvent(document.visibilityState)));
+
 const { renderer, scene, camera } = createScene(document.getElementById('app'));
 scene.add(createRoom());
 
 const cameraControls = createCameraControls(camera, renderer.domElement);
 const physics = await createPhysicsWorld();
+
+// Live tuning: a knob set writes through to the constants every module reads; values baked
+// into engine objects at creation are re-applied here.
+const tunables = createTunables();
+tunables.subscribe((key, value) => {
+  events.emit(tuneEvent(key, value));
+  const { group } = LIVE_KNOBS[key];
+  if (group === 'physics' || group === 'joint') physics.retune();
+  if (key === 'render.maxPixelRatio') renderer.setPixelRatio(clampPixelRatio(window.devicePixelRatio, RENDER.maxPixelRatio));
+});
 
 // The game opens on the closed flatpack: every part packed flat inside, settling at once
 // and resting until the lid comes off and a hand disturbs it.
@@ -126,6 +157,7 @@ const router = createGestureRouter({
   ghost,
   sprue,
   dropGuide,
+  events,
 });
 // The display shelf's physics joints, made by the same reconcile every tap and turn runs.
 router.sync();
@@ -134,6 +166,7 @@ router.sync();
 // as packed, lid on. The display shelf is never touched.
 const packedPose = new Map([[flatpack.lid.id, lidRest()], ...packed.map((p) => [p.id, p])]);
 function repack() {
+  events.emit(resetEvent());
   router.unseatAll(playerParts.map((part) => part.id));
   select(null);
   for (const { id, body } of [...playerParts, flatpack.lid]) {
@@ -155,11 +188,25 @@ function sweep(delta) {
     return hasEscaped([x, y, z], ROOM, RESET.escapeMargin) && assembly.compoundOf(id).size === 1;
   });
   if (escaped.length === 0) return;
+  events.emit(recoveryEvent(escaped.map(({ id }) => id)));
   const spots = respawnSpots(escaped.map((part) => part.type));
   escaped.forEach(({ body }, i) => physics.place(body, spots[i].position, spots[i].rotation));
 }
 
-createLoop((delta) => {
+// Android haptics, off the event stream: a tick on a seat, a double tick on a cam lock.
+// navigator.vibrate is absent on iOS; a 0 ms knob turns one off.
+const vibrate = (pattern) => navigator.vibrate?.(pattern);
+events.on(EVENT.SEAT, () => {
+  if (HAPTICS.seatMs > 0) vibrate(HAPTICS.seatMs);
+});
+events.on(EVENT.FASTEN, ({ kind }) => {
+  if (kind === KIND.CAM && HAPTICS.lockMs > 0) vibrate([HAPTICS.lockMs, HAPTICS.lockGapMs, HAPTICS.lockMs]);
+});
+
+// Under sustained load the room renders every other frame; everything else runs every frame.
+const fps = createFpsGuard();
+
+createLoop((delta, rawDelta) => {
   cameraControls.update(delta);
   physics.step(delta);
   sweep(delta);
@@ -167,7 +214,32 @@ createLoop((delta) => {
   gizmo.update();
   sprue.update();
   highlight.update(delta);
-  renderer.render(scene, camera);
+  // Measured on the true delta: the clamped one would floor every slow device at 15 fps.
+  const { render, sample } = fps.frame(rawDelta);
+  if (sample) events.emit(fpsEvent(Math.round(sample.fps * 10) / 10, sample.skipping));
+  if (render) renderer.render(scene, camera);
 }).start();
 // The rest of the booklet draws in idle time, after the room is on screen.
 bookletPages.prerender();
+
+// Dev server only: the dev stream — events out, knob sets and screenshots in. The guard is
+// compile-time, so a build drops the import and src/dev with it.
+if (import.meta.env.DEV) {
+  import('./dev/wsClient.js').then(({ connectDevStream }) =>
+    connectDevStream({
+      events,
+      tunables,
+      screenshot: () => {
+        renderer.render(scene, camera);
+        return renderer.domElement.toDataURL('image/png');
+      },
+    }),
+  );
+}
+
+// ?tune: the tuning drawer, on any build. Loaded only then — the plain URL never fetches it.
+if (new URLSearchParams(location.search).has(TUNE.queryFlag)) {
+  const { createTunePanel } = await import('./ui/tunePanel.js');
+  const panel = createTunePanel({ tunables, exportSession: session.toExportJson });
+  document.body.append(panel.tab, panel.element);
+}

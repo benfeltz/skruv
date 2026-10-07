@@ -354,3 +354,74 @@ export const FASTENER = {
   playDamping: 1000,
 };
 
+
+// Telemetry and live tuning (src/game/events.js, src/game/sessionBuffer.js,
+// src/game/tunables.js).
+export const TUNE = {
+  // The session buffer keeps this many of the latest events for export — a long session's
+  // worth of grabs, seats and fps samples.
+  sessionBufferSize: 5000,
+  // The tuning drawer (src/ui/tunePanel.js) exists only on a URL carrying this query flag
+  // (…/skruv/?tune); the plain URL is the teaser, untouched.
+  queryFlag: 'tune',
+  // The drawer, in CSS pixels: never wider than this, nor taller than this share of the
+  // screen, so the build stays in view above it.
+  panelMaxWidth: 520,
+  panelMaxHeight: 0.6,
+  // A download's object URL is let go only after this many ms: Safari starts blob
+  // downloads asynchronously and fails on a URL already revoked (FileSaver.js waits as long).
+  downloadRevokeMs: 40_000,
+  // Frame-rate fallback (src/scene/fpsGuard.js): the loop's rate is sampled every
+  // fpsSampleSeconds. Below fpsFloor for fpsWindow seconds running, the room renders every
+  // other frame — a steady half rate rather than a stutter — while physics and gestures
+  // keep every frame. It renders every frame again once a fully rendered rate would hold at
+  // fpsRecover (or the floor, if higher) for fpsWindow — or at once if rendered frames
+  // cost less than fpsHelpRatio times skipped ones (a capped loop, not a loaded one, where
+  // skipping buys nothing). A floor of 0 never engages it.
+  fpsSampleSeconds: 1,
+  fpsFloor: 40,
+  fpsWindow: 3,
+  fpsRecover: 55,
+  fpsHelpRatio: 1.25,
+  // A frame gap longer than this many seconds is a backgrounded tab, not load: the sample
+  // in progress is dropped rather than read as a frame rate near zero.
+  fpsMaxGap: 1,
+};
+
+// Android haptics (navigator.vibrate; iOS Safari has none), in ms: a tick when a part
+// seats, a double tick when a cam lock locks. 0 turns one off.
+export const HAPTICS = {
+  seatMs: 10,
+  lockMs: 18,
+  lockGapMs: 60,
+};
+
+// Dev stream (dev server only — never in a build): the socket a dev session streams its
+// events out of and takes knob sets in through. The hub is a plugin in vite.config.js, the
+// game's end src/dev/wsClient.js, and tools/agent-bridge the agent's. Every message is
+// JSON `{ kind, ... }`, one of `kinds`:
+//   hello       any → hub      `{ role }`: 'game' for the page; anything else is a tool
+//   event       game → tools   `{ event }`: one bus event (src/game/events.js)
+//   list        tool → game    `{ id }`: asks for the knobs
+//   knobs       game → tools   `{ id, knobs }`: tunables.list(), answering list or set
+//   set         tool → game    `{ id, key, value }`: a knob set, clamped by the registry
+//   screenshot  tool → game    `{ id }`: asks for the canvas
+//   image       game → tools   `{ id, dataUrl }`: a PNG of the next rendered frame
+//   error       game → tools   `{ id, message }`: a request refused
+// The hub relays game messages to every tool and tool messages to every game.
+export const DEV_WS = {
+  path: '/__skruv-dev',
+  kinds: {
+    hello: 'hello',
+    event: 'event',
+    list: 'list',
+    knobs: 'knobs',
+    set: 'set',
+    screenshot: 'screenshot',
+    image: 'image',
+    error: 'error',
+  },
+  gameRole: 'game',
+  // A dropped socket (the dev server restarted) is retried this often, in ms.
+  retryMs: 2000,
+};
