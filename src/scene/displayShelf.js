@@ -2,7 +2,7 @@ import { DISPLAY } from '../constants.js';
 import { seatHome } from '../game/assembly.js';
 import { placeLayout } from '../../tools/validate/lib/geometry.js';
 import { createAssembledLayout } from '../game/assembledLayout.js';
-import { PART_TYPES } from '../game/catalog.js';
+import { PART_TYPES } from '../game/item.js';
 import { createPartMesh } from '../game/partMesh.js';
 
 /**

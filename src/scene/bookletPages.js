@@ -2,10 +2,10 @@ import * as THREE from 'three';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
-import { BOOKLET, BRAND, COLORS } from '../constants.js';
+import { BOOKLET, COLORS } from '../constants.js';
 import { createAssembledLayout } from '../game/assembledLayout.js';
 import { createBooklet } from '../game/buildSteps.js';
-import { PART_TYPES } from '../game/catalog.js';
+import { IDENTITY, PART_TYPES } from '../game/item.js';
 
 // The booklet's pages, drawn from the same part models the room uses, so a page can never
 // disagree with the geometry. Wordless, as the real thing is: a big step numeral, an
@@ -86,9 +86,9 @@ export function createBookletPages(renderer) {
     ctx.fillStyle = INK;
     ctx.textBaseline = 'alphabetic';
     ctx.font = font(124, 800);
-    ctx.fillText(BRAND.product, m, m + 110);
+    ctx.fillText(IDENTITY.product, m, m + 110);
     ctx.font = font(30, 600);
-    ctx.fillText(BRAND.maker, m + 4, m + 158);
+    ctx.fillText(IDENTITY.maker, m + 4, m + 158);
     const all = new Set(layout.parts.map((p) => p.id));
     drawView(ctx, itemsFor(all, all), [m, 240, pageW - 2 * m, pageH - 240 - m]);
   }
@@ -97,9 +97,9 @@ export function createBookletPages(renderer) {
     const m = BOOKLET.margin;
     ctx.fillStyle = INK;
     ctx.font = font(34, 800);
-    ctx.fillText(BRAND.maker, m, pageH - m - 40);
+    ctx.fillText(IDENTITY.maker, m, pageH - m - 40);
     ctx.font = font(20, 500);
-    ctx.fillText(BRAND.documentCode, m, pageH - m);
+    ctx.fillText(IDENTITY.documentCode, m, pageH - m);
   }
 
   // Two panels side by side: what goes wrong (crossed) and what goes right (ticked).

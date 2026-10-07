@@ -15,7 +15,7 @@
 // bridged — with angular play while only dowels hold them, rigid once a cam locks.
 
 import { FASTENER } from '../constants.js';
-import { PART_TYPES } from './catalog.js';
+import { PART_TYPES } from './item.js';
 import { COMPATIBLE, KIND, kindOf } from '../../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, multiplyQuaternions, rotateVector, rotationBetween } from '../../tools/validate/lib/geometry.js';
 import {

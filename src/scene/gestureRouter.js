@@ -3,7 +3,7 @@ import { COLORS, DROP, FASTENER, GESTURE, PICK, ROOM, SNAP } from '../constants.
 import { areCompatible, COMPATIBLE, CONNECTOR, KIND } from '../../tools/validate/lib/vocabulary.js';
 import { connectorInWorld } from '../../tools/validate/lib/geometry.js';
 import { capture } from '../game/assembly.js';
-import { PART_TYPES } from '../game/catalog.js';
+import { PART_TYPES } from '../game/item.js';
 import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
 import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rotatedHalfExtents } from '../game/dragMath.js';

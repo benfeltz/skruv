@@ -4,7 +4,7 @@ import { ANY, createBus, EVENT, fpsEvent, recoveryEvent, resetEvent, sessionEven
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
 import { createTunables, LIVE_KNOBS } from './game/tunables.js';
-import { PART_TYPES } from './game/catalog.js';
+import { PART_TYPES } from './game/item.js';
 import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
 import { createPackedWorldLayout, lidRest, respawnSpots } from './game/packedLayout.js';
