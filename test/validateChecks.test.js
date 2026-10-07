@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -73,5 +73,14 @@ describe('the validator CLI', () => {
 
   it('passes items/johnny', () => {
     expect(execFileSync(process.execPath, [cli, item], { encoding: 'utf8' })).toMatch(/^ok /);
+  });
+
+  it('reports a path that does not exist and still checks the targets after it', () => {
+    const run = spawnSync(process.execPath, [cli, `${item}-typo`, item], { encoding: 'utf8' });
+    expect(run.status).toBe(1);
+    expect(run.stderr).toMatch(/^FAIL .*johnny-typo/m);
+    expect(run.stderr).toMatch(/\[json\]/);
+    expect(run.stderr).not.toMatch(/\n\s+at /);
+    expect(run.stdout).toMatch(/^ok .*items\/johnny\/flatpack\.json$/m);
   });
 });

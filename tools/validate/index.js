@@ -13,14 +13,15 @@ const schema = JSON.parse(readFileSync(new URL('./flatpack.schema.json', import.
 const validateSchema = new Ajv({ allErrors: true }).compile(schema);
 
 function validate(target) {
-  const file = statSync(target).isDirectory() ? join(target, 'flatpack.json') : target;
-  const folder = dirname(file);
+  let file = target;
   let pack;
   try {
+    if (statSync(target).isDirectory()) file = join(target, 'flatpack.json');
     pack = JSON.parse(readFileSync(file, 'utf8'));
   } catch (cause) {
     return { file, errors: [{ rule: 'json', path: '', message: cause.message }] };
   }
+  const folder = dirname(file);
   if (!validateSchema(pack)) {
     return { file, errors: validateSchema.errors.map((e) => ({ rule: 'schema', path: e.instancePath || '/', message: e.message })) };
   }
