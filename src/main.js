@@ -113,6 +113,8 @@ scene.add(gizmo.object);
 const bookletPages = createBookletPages(renderer);
 const booklet = createBookletSheet({ pages: bookletPages });
 document.body.append(booklet.scrim, booklet.thumb, booklet.element);
+// The real sheet now covers index.html's stand-in; it goes in the frame that first paints it.
+requestAnimationFrame(() => document.getElementById('pre-splash')?.remove());
 
 // While the booklet is open, the open page's parts glow — the player's own set only, never
 // the display shelf or the box lid.
