@@ -1,0 +1,19 @@
+{
+  "name": "skruv-flatpack-validate",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Validates a Flatpack item (format 1): JSON Schema, then the geometry checks the schema cannot express",
+  "type": "module",
+  "bin": {
+    "skruv-flatpack-validate": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1"
+  }
+}
