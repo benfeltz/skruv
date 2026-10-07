@@ -3,14 +3,14 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { BOOKLET, COLORS } from '../constants.js';
-import { createBooklet } from '../game/buildSteps.js';
-import { ASSEMBLED, IDENTITY, MANIFEST, PART_TYPES } from '../game/item.js';
+import { createBooklet } from '../game/bookletModel.js';
+import { ASSEMBLED, IDENTITY, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../game/item.js';
 
 // The booklet's pages, drawn from the same part models the room uses, so a page can never
 // disagree with the geometry. Wordless, as the real thing is: a big step numeral, an
 // outline drawing (this page's parts bold, what is already built pale), hardware count
 // bubbles with their part numbers, and pictogram warning pages with faceless figures.
-// WHAT each page shows is src/game/buildSteps.js's; this module only draws. Branding is
+// WHAT each page shows is src/game/bookletModel.js's; this module only draws. Branding is
 // JOHNNY by SKRUV — black on white, no borrowed marks.
 
 const css = (hex) => `#${hex.toString(16).padStart(6, '0')}`;
@@ -43,7 +43,7 @@ const TO_SRGB = Uint8ClampedArray.from({ length: 256 }, (_, i) => {
  */
 export function createBookletPages(renderer) {
   const layout = ASSEMBLED;
-  const pages = createBooklet(MANIFEST, layout);
+  const pages = createBooklet(MANUAL.pages, { layout, manifest: MANIFEST, partTypes: PART_TYPES, resolve: resolveConnector });
   const [pageW, pageH] = BOOKLET.pageSize;
   const cache = new Map();
   const views = createViewRenderer(renderer);

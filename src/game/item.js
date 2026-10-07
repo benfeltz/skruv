@@ -48,3 +48,9 @@ export const IDENTITY = pack.identity;
  *            hardwareConnector, host, hostConnector, kind, mover, through, captured }`
  */
 export const ASSEMBLED = Object.freeze({ parts: pack.assembled, joints: deriveJoints(pack) });
+
+/** The booklet as the pack writes it: `{ pages }`, cover to back (src/game/bookletModel.js). */
+export const MANUAL = pack.manual;
+
+/** `resolveConnector('dowel-1/dowelEnd-2') → { part: 'dowel-1', connector: 1 }`. */
+export const resolveConnector = pack.resolve;
