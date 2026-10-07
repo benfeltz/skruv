@@ -1,7 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
-import { createAssembledLayout } from '../src/game/assembledLayout.js';
-import { createBooklet as createTodaysBooklet } from '../src/game/buildSteps.js';
 import { createBooklet, createBuildSteps } from '../src/game/bookletModel.js';
 import { ASSEMBLED, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../src/game/item.js';
 
@@ -162,7 +161,7 @@ describe('createBuildSteps (from the pack\'s manual pages)', () => {
     expect(new Set(steps.at(-1).shown)).toEqual(new Set(layout.parts.map((p) => p.id)));
   });
 
-  it('only names part types the catalog knows', () => {
+  it('only names part types the pack knows', () => {
     for (const s of steps) for (const id of s.parts) expect(PART_TYPES).toHaveProperty(typeOf(id));
     for (const s of steps) for (const type of s.types) expect(PART_TYPES).toHaveProperty(type);
   });
@@ -190,9 +189,12 @@ describe('createBooklet', () => {
   });
 });
 
-// Guard while buildSteps.js still exists: the pack's pages make exactly today's booklet.
-describe('equivalence with today\'s booklet', () => {
-  it('matches createBooklet page for page, field for field', () => {
-    expect(createBooklet(MANUAL.pages, model)).toEqual(createTodaysBooklet(MANIFEST, createAssembledLayout()));
+describe('no validation anywhere (Ben, 2026-10-04)', () => {
+  const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+
+  it('keeps the booklet data out of the engine — pages are reference, never a gate', () => {
+    for (const path of ['src/game/assembly.js', 'src/game/fasteners.js', 'src/scene/gestureRouter.js']) {
+      expect(read(path)).not.toMatch(/bookletModel|createBooklet|\bMANUAL\b|\bASSEMBLED\b/);
+    }
   });
 });

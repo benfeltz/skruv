@@ -1,19 +1,25 @@
-// The flatpack as data: where every part lies inside the closed box, and where the box and
-// its lid sit in the room. Pure — catalog and constants in, plain poses out — so Vitest
-// checks the packing headlessly; src/scene/flatpack.js builds the box and main.js spawns
-// the parts at these poses. Replaces the dev floor grid: the game opens on the box.
-//
-// Stacking, as a real flatpack is packed: panels lie flat on their largest face, heaviest
-// first, each layer filled row by row before the next starts on top of it — the sides on
-// the bottom, the hardboard back over them, the horizontals and shelves above — and the
-// loose hardware and tools on top, spread over the top layer's panels (no bags or
-// cardboard spacers yet). Box-local frame: origin on the floor at the box's centre, its
-// length along z, height along y.
+// The flatpack in the room: where the box and its lid sit, where every packed part lies,
+// and where a recovered part is set down again. Pure — the pack's packing and the room's
+// constants in, plain poses out — so Vitest checks it headlessly; src/scene/flatpack.js
+// builds the box and main.js spawns the parts at these poses. The packed placements
+// themselves are the pack's (items/johnny `packing.placements`), in the box-local frame:
+// origin on the floor at the box's centre, its length along z, height along y.
 
-import { BOX, PACK, RESET } from '../constants.js';
-import { MANIFEST, PART_TYPES } from './catalog.js';
-import { COMPATIBLE } from '../../tools/validate/lib/vocabulary.js';
 import { multiplyQuaternions, placeLayout } from '../../tools/validate/lib/geometry.js';
+import { BOX, RESET } from '../constants.js';
+import { MANIFEST, PACKING, PART_TYPES } from './item.js';
+
+/**
+ * The box as packed and placed: the pack's inside, walls and lid (`inner`, `wall`,
+ * `floor`, `lidThickness`), stood where the room puts it (`position`, `yaw`).
+ */
+export const PACKED_BOX = Object.freeze({
+  ...BOX,
+  inner: PACKING.boxInner,
+  wall: PACKING.wall,
+  floor: PACKING.floor,
+  lidThickness: PACKING.lid.thickness,
+});
 
 const QUARTER_TURN = Math.SQRT1_2;
 const IDENTITY = [0, 0, 0, 1];
@@ -24,8 +30,6 @@ const LAY_Z_DOWN = [QUARTER_TURN, 0, 0, QUARTER_TURN];
 // A further quarter turn about y swaps a footprint's x and z.
 const TURN_Y = [0, QUARTER_TURN, 0, QUARTER_TURN];
 
-const isHardware = (type) => PART_TYPES[type].connectors.some((c) => c.type in COMPATIBLE);
-
 /** Rotation laying a part on its largest face, plus the resulting [x, z] footprint and height. */
 function layFlat([sx, sy, sz]) {
   const thinnest = Math.min(sx, sy, sz);
@@ -34,8 +38,7 @@ function layFlat([sx, sy, sz]) {
   return { rotation: LAY_Z_DOWN, footprint: [sx, sy], height: sz };
 }
 
-// A panel too long to lie across the box lies along it; one that fits across lies across,
-// so the short horizontals stack up the box's length one per row.
+// A panel too long to lie across the box lies along it; one that fits across lies across.
 function orient(type, width) {
   const flat = layFlat(PART_TYPES[type].size);
   const [fx, fz] = flat.footprint;
@@ -80,67 +83,14 @@ function packRows(items, [minX, minZ, maxX, maxZ], gap) {
   return centres;
 }
 
-/**
- * One `{ id, type, position, rotation, footprint, layer }` per manifest instance, in the
- * box-local frame: position is the body centre resting on whatever lies beneath it,
- * footprint its [x, z] extent, layer 0 the box floor upward. Throws if the box is too
- * small for the manifest.
- */
-export function createPackedLayout(manifest = MANIFEST, box = BOX, pack = PACK) {
-  const [width, height, length] = box.inner;
-  const inner = [-width / 2 + pack.gap, -length / 2 + pack.gap, width / 2 - pack.gap, length / 2 - pack.gap];
-  const placed = [];
-  let base = box.floor;
-
-  // Panels, heaviest first: each layer takes as many as fit, the rest go on top.
-  let panels = manifest
-    .filter(({ type }) => !isHardware(type))
-    .map(({ id, type }) => ({ id, type, ...orient(type, width) }))
-    .sort((a, b) => PART_TYPES[b.type].mass - PART_TYPES[a.type].mass);
-  const layers = [];
-  while (panels.length) {
-    const centres = packRows(panels, inner, pack.gap);
-    if (centres.length === 0) throw new Error(`${panels[0].id} does not fit in the box`);
-    const layer = panels.slice(0, centres.length);
-    const thickness = Math.max(...layer.map((p) => p.height));
-    for (const [i, p] of layer.entries()) {
-      placed.push({ ...p, position: [centres[i][0], base + p.height / 2, centres[i][1]], layer: layers.length });
-    }
-    layers.push(layer.map((p, i) => ({ ...p, centre: centres[i] })));
-    base += thickness;
-    panels = panels.slice(centres.length);
-  }
-
-  // Hardware and tools on top, spread over the top layer's panels one after another, a
-  // fingertip apart.
-  let hardware = manifest.filter(({ type }) => isHardware(type)).map(({ id, type }) => ({ id, type, ...layFlat(PART_TYPES[type].size) }));
-  for (const panel of layers.at(-1) ?? []) {
-    if (!hardware.length) break;
-    const [cx, cz] = panel.centre;
-    const [w, d] = panel.footprint;
-    const centres = packRows(hardware, [cx - w / 2 + pack.hardwareGap / 2, cz - d / 2 + pack.hardwareGap / 2, cx + w / 2, cz + d / 2], pack.hardwareGap);
-    for (const [i, p] of hardware.slice(0, centres.length).entries()) {
-      placed.push({ ...p, position: [centres[i][0], base + p.height / 2, centres[i][1]], layer: layers.length });
-    }
-    hardware = hardware.slice(centres.length);
-  }
-  if (hardware.length) throw new Error(`no room on top for ${hardware[0].id}`);
-
-  const byId = new Map(placed.map((p) => [p.id, p]));
-  return manifest.map(({ id }) => {
-    const { type, position, rotation, footprint, layer } = byId.get(id);
-    return { id, type, position, rotation, footprint, layer };
-  });
-}
-
 /** Where the box stands in the room: `{ position, rotation }` of its box-local frame. */
-export function boxPlacement(box = BOX) {
+export function boxPlacement(box = PACKED_BOX) {
   const half = box.yaw / 2;
   return { position: box.position, rotation: [0, Math.sin(half), 0, Math.cos(half)] };
 }
 
 /** The lid's pose closed on the walls' top edges, in the room. */
-export function lidRest(box = BOX) {
+export function lidRest(box = PACKED_BOX) {
   const local = { position: [0, box.floor + box.inner[1] + box.lidThickness / 2, 0], rotation: IDENTITY };
   const [pose] = placeLayout([local], boxPlacement(box));
   return { position: pose.position, rotation: pose.rotation };
@@ -153,7 +103,7 @@ export function lidRest(box = BOX) {
  * underside `respawn.height` above the floor so it drops into place. Those that don't fit
  * go in again a layer higher, so no two in one batch ever overlap.
  */
-export function respawnSpots(types, box = BOX, respawn = RESET.respawn) {
+export function respawnSpots(types, box = PACKED_BOX, respawn = RESET.respawn) {
   const [width, , length] = box.inner;
   const near = width / 2 + box.wall + respawn.offset;
   // Along the box, overhanging each end by the same clearance, so even the lid fits.
@@ -175,5 +125,12 @@ export function respawnSpots(types, box = BOX, respawn = RESET.respawn) {
   return placeLayout(local, boxPlacement(box)).map(({ position, rotation }) => ({ position, rotation }));
 }
 
-/** The packed layout carried into the room — what main.js spawns. */
-export const createPackedWorldLayout = (manifest = MANIFEST, box = BOX) => placeLayout(createPackedLayout(manifest, box), boxPlacement(box));
+/**
+ * Every part in the box as the pack packs it, carried into the room — what main.js spawns:
+ * `{ id, type, position, rotation }` per manifest instance, spares included.
+ */
+export function createPackedWorldLayout(box = PACKED_BOX) {
+  const typeOf = new Map(MANIFEST.map(({ id, type }) => [id, type]));
+  const local = PACKING.placements.map(({ id, position, rotation }) => ({ id, type: typeOf.get(id), position, rotation }));
+  return placeLayout(local, boxPlacement(box));
+}

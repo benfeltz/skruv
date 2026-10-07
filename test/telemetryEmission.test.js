@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAssembly } from '../src/game/assembly.js';
-import { PART_TYPES } from '../src/game/catalog.js';
+import { PART_TYPES } from '../src/game/item.js';
 import { ANY, createBus, EVENT_FIELDS } from '../src/game/events.js';
 import { createGestureRouter } from '../src/scene/gestureRouter.js';
 

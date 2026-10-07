@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveJoints } from '../tools/validate/lib/joints.js';
 import { CONTRACT, KIND } from '../tools/validate/lib/vocabulary.js';
-import { createAssembledLayout } from '../src/game/assembledLayout.js';
-import { PART_TYPES } from '../src/game/catalog.js';
 
 const IDENTITY = [0, 0, 0, 1];
 const c = (type, position, axis) => ({ type, position, axis });
@@ -64,25 +62,5 @@ describe('deriveJoints', () => {
     // The bolt moved along its hole's row: no longer seated, so no head to catch.
     const joints = deriveJoints({ partTypes, assembled: [...boards(), bolt(0.05), cam] });
     expect(joints.find((j) => j.kind === KIND.CAM).captured).toBeNull();
-  });
-});
-
-// Guard while today's computed layout still exists: the derived joints are exactly its.
-describe('equivalence with today\'s assembled layout', () => {
-  const layout = createAssembledLayout();
-  const derived = deriveJoints({ partTypes: PART_TYPES, assembled: layout.parts });
-
-  it('derives all 60 joints: 28 dowel, 8 bolt, 8 cam, 8 pin, 8 fitting', () => {
-    const count = (kind) => derived.filter((j) => j.kind === kind).length;
-    expect(derived).toHaveLength(60);
-    expect([count(KIND.DOWEL), count(KIND.BOLT), count(KIND.CAM), count(KIND.PIN), count(KIND.FITTING)]).toEqual([28, 8, 8, 8, 8]);
-  });
-
-  it('derives the same set of joints, movers, captures and pass-throughs included', () => {
-    expect(new Set(derived.map((j) => JSON.stringify(j)))).toEqual(new Set(layout.joints.map((j) => JSON.stringify(j))));
-  });
-
-  it('derives them in the same order', () => {
-    expect(derived).toEqual(layout.joints);
   });
 });

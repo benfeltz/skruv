@@ -1,47 +1,36 @@
 import { describe, expect, it } from 'vitest';
-import { BRAND } from '../src/constants.js';
-import { createAssembledLayout } from '../src/game/assembledLayout.js';
-import { MANIFEST as CATALOG_MANIFEST, PART_TYPES as CATALOG_PART_TYPES } from '../src/game/catalog.js';
-import { ASSEMBLED, IDENTITY, MANIFEST, PART_TYPES, SPARES } from '../src/game/item.js';
-
-// Guard while catalog.js still exists: the pack, loaded, is exactly today's data.
-const withoutIds = (types) =>
-  Object.fromEntries(Object.entries(types).map(([type, part]) => [type, { ...part, connectors: part.connectors.map(({ id, ...c }) => c) }]));
+import { deriveJoints } from '../tools/validate/lib/joints.js';
+import { ASSEMBLED, IDENTITY, MANIFEST, MANUAL, PACKING, PART_TYPES, resolveConnector, SPARES } from '../src/game/item.js';
 
 describe('src/game/item.js', () => {
-  it('loads the same part types as catalog.js, connectors in the same order', () => {
-    expect(withoutIds(PART_TYPES)).toEqual(CATALOG_PART_TYPES);
-  });
-
-  it('names every connector', () => {
+  it('names every connector, in index order', () => {
     for (const part of Object.values(PART_TYPES)) for (const c of part.connectors) expect(c.id).toMatch(/^[A-Za-z]+-\d+$/);
+    expect(resolveConnector('sidePanel-2/dowelHole-3')).toEqual({ part: 'sidePanel-2', connector: PART_TYPES.sidePanel.connectors.findIndex((c) => c.id === 'dowelHole-3') });
   });
 
-  it('loads the same manifest as catalog.js, ids and order', () => {
-    expect(MANIFEST).toEqual(CATALOG_MANIFEST);
+  it('expands the manifest with the spares numbered last', () => {
+    expect(MANIFEST.filter((p) => p.type === 'dowel').map((p) => p.id).slice(-2)).toEqual([...SPARES].slice(0, 2));
+    expect(Object.isFrozen(MANIFEST)).toBe(true);
   });
 
-  it('sets aside two spare dowels and two spare cam locks, numbered last', () => {
-    expect([...SPARES]).toEqual(['dowel-15', 'dowel-16', 'camLock-9', 'camLock-10']);
+  it('sizes the lid to close over the box walls, from the pack', () => {
+    const { boxInner, wall, lid } = PACKING;
+    expect(PART_TYPES.boxLid).toEqual({
+      size: [boxInner[0] + 2 * wall, lid.thickness, boxInner[2] + 2 * wall],
+      partNumber: lid.partNumber,
+      mass: lid.mass,
+      color: lid.color,
+      connectors: [],
+    });
   });
 
-  it('carries the brand as the pack identity', () => {
-    expect(IDENTITY).toMatchObject(BRAND);
-  });
-});
-
-describe('ASSEMBLED', () => {
-  const today = createAssembledLayout();
-
-  // JSON has no -0: the pack writes today's signed zeros as 0, the same rotation.
-  const unsigned = (parts) => parts.map((p) => ({ ...p, position: p.position.map((v) => v + 0), rotation: p.rotation.map((v) => v + 0) }));
-
-  it('poses every part as today\'s computed layout does, bit for bit but the sign of zero', () => {
-    expect(ASSEMBLED.parts).toEqual(unsigned(today.parts));
+  it('works out the joints once, from the pack\'s poses', () => {
+    expect(ASSEMBLED.joints).toEqual(deriveJoints({ partTypes: PART_TYPES, assembled: ASSEMBLED.parts }));
+    expect(ASSEMBLED.parts.every((p) => PART_TYPES[p.type])).toBe(true);
   });
 
-  it('derives exactly today\'s joints, as a set and in order', () => {
-    expect(new Set(ASSEMBLED.joints.map((j) => JSON.stringify(j)))).toEqual(new Set(today.joints.map((j) => JSON.stringify(j))));
-    expect(ASSEMBLED.joints).toEqual(today.joints);
+  it('carries the identity and the manual as the pack writes them', () => {
+    expect(IDENTITY.product).toBe('JOHNNY');
+    expect(MANUAL.pages[0]).toEqual({ kind: 'cover' });
   });
 });

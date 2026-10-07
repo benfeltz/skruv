@@ -28,8 +28,8 @@ describe('pure-logic modules', () => {
     'src/scene/cameraLimits.js',
     'src/scene/loop.js',
     'src/physics/stepping.js',
-    'src/game/catalog.js',
-    'src/game/packedLayout.js',
+    'src/game/item.js',
+    'src/game/boxLayout.js',
     'src/game/gestureState.js',
     'src/game/dragMath.js',
     'src/game/snapMath.js',
@@ -38,8 +38,7 @@ describe('pure-logic modules', () => {
     'src/game/crankMath.js',
     'src/game/decals.js',
     'src/game/pickMath.js',
-    'src/game/assembledLayout.js',
-    'src/game/buildSteps.js',
+    'src/game/bookletModel.js',
     'src/game/events.js',
     'src/game/sessionBuffer.js',
     'src/game/tunables.js',
@@ -54,8 +53,8 @@ describe('pure-logic modules', () => {
     'src/scene/clamp.js',
     'src/scene/cameraLimits.js',
     'src/physics/stepping.js',
-    'src/game/catalog.js',
-    'src/game/packedLayout.js',
+    'src/game/item.js',
+    'src/game/boxLayout.js',
     'src/game/gestureState.js',
     'src/game/dragMath.js',
     'src/game/snapMath.js',
@@ -64,8 +63,7 @@ describe('pure-logic modules', () => {
     'src/game/crankMath.js',
     'src/game/decals.js',
     'src/game/pickMath.js',
-    'src/game/assembledLayout.js',
-    'src/game/buildSteps.js',
+    'src/game/bookletModel.js',
     'src/game/events.js',
     'src/game/sessionBuffer.js',
     'src/game/tunables.js',
@@ -275,6 +273,13 @@ describe('agent bridge (1.6)', () => {
 describe('Flatpack pack code (1.7)', () => {
   const lib = fileURLToPath(new URL('../tools/validate/lib', import.meta.url));
   const modules = readdirSync(lib).filter((name) => name.endsWith('.js'));
+
+  it('is loaded by the game in exactly one place, src/game/item.js', () => {
+    const sources = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true }).filter((p) => p.endsWith('.js'));
+    const naming = sources.filter((p) => /from ['"][^'"]*\/items\//.test(read(`src/${p}`)));
+    expect(naming).toEqual(['game/item.js']);
+    for (const path of sources) expect(read(`src/${path}`), path).not.toMatch(/from ['"][^'"]*tools\/validate\/(index\.js|flatpack\.schema\.json)|from ['"]ajv/);
+  });
 
   // One implementation, imported by the game in the browser and by the validator CLI.
   it.each(modules)('lib/%s imports nothing — no game code, Three, Rapier or Node', (name) => {

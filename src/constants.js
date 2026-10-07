@@ -12,15 +12,6 @@ export const ROOM = {
   height: 3,
 };
 
-// The product and the company on the box and the booklet. A parody of flatpack furniture
-// in general — never any real maker's name, marks or document numbers.
-export const BRAND = {
-  product: 'JOHNNY',
-  maker: 'SKRUV',
-  // Printed on the booklet's back cover, where a real manual carries its document code.
-  documentCode: 'SK-0000451-1',
-};
-
 export const COLORS = {
   background: 0x1b1d22,
   floor: 0xc9b79c,
@@ -156,18 +147,11 @@ export const CAMERA_LIMITS = {
   dampingFactor: 0.1,
 };
 
-// The flatpack the game opens on (src/game/packedLayout.js, src/scene/flatpack.js): a
-// thin-walled cardboard box lying on the floor, its lid closed on top. Box-local frame:
-// length along z, origin on the floor at its centre.
+// Where the flatpack the game opens on stands (src/game/boxLayout.js, src/scene/flatpack.js):
+// a thin-walled cardboard box lying on the floor, its lid closed on top. Its inside, walls
+// and lid are the item's (items/johnny `packing`). Box-local frame: length along z,
+// origin on the floor at its centre.
 export const BOX = {
-  // Inside, [across, height, length]: the 2 m panels lie along it, the hardboard back
-  // only just fits across.
-  inner: [0.84, 0.07, 2.08],
-  // Cardboard walls and bottom, as physics slabs this thick (thin enough to read as
-  // cardboard, thick enough that a sliding panel can't tunnel through).
-  wall: 0.01,
-  floor: 0.01,
-  lidThickness: 0.008,
   // On the floor in front of the start view, turned so its length runs across it.
   position: [0, 0, 0.6],
   yaw: Math.PI / 2,
@@ -197,14 +181,6 @@ export const RESET = {
   // deep, running the box's length, a gap between pieces; each dropped from this clearance
   // above the floor. Pieces that don't fit go in again `layerHeight` higher, to land on top.
   respawn: { offset: 0.35, depth: 2.5, gap: 0.05, height: 0.25, layerHeight: 0.1 },
-};
-
-// Packing inside the box (src/game/packedLayout.js).
-export const PACK = {
-  // Between neighbouring panels in a layer, and between a panel and the wall.
-  gap: 0.01,
-  // Loose hardware lies this far apart on top — a fingertip between pieces.
-  hardwareGap: 0.045,
 };
 
 export const PHYSICS = {

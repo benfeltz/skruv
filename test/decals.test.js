@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CONNECTOR } from '../tools/validate/lib/vocabulary.js';
 import { rotateVector } from '../tools/validate/lib/geometry.js';
 import { DECAL } from '../src/constants.js';
-import { PART_TYPES } from '../src/game/catalog.js';
+import { PART_TYPES } from '../src/game/item.js';
 import { decalPlacements, socketUnder } from '../src/game/decals.js';
 
 const SOCKETS = [

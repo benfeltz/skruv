@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, rotateVector } from '../tools/validate/lib/geometry.js';
 import { FASTENER } from '../src/constants.js';
-import { PART_TYPES } from '../src/game/catalog.js';
+import { PART_TYPES } from '../src/game/item.js';
 import { createAssembly } from '../src/game/assembly.js';
 import { createFastener, transition } from '../src/game/fasteners.js';
 import { createGestureState, OWNER } from '../src/game/gestureState.js';
@@ -17,7 +17,7 @@ const ALONG_X = [0, 0, -Math.SQRT1_2, Math.SQRT1_2]; // a rod's local +y onto wo
 describe('no correctness gate in the engine (decision 1)', () => {
   it('keeps the graph and fastener machines blind to the intended assembly', () => {
     for (const path of ['src/game/assembly.js', 'src/game/fasteners.js']) {
-      expect(read(path)).not.toMatch(/\bMANIFEST\b|devLayout|packedLayout|assembledLayout|buildSteps|booklet\s*\(/);
+      expect(read(path)).not.toMatch(/\bMANIFEST\b|\bASSEMBLED\b|\bMANUAL\b|devLayout|boxLayout|bookletModel|booklet\s*\(/);
     }
   });
 });
