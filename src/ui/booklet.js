@@ -233,8 +233,16 @@ export function createBookletSheet({ pages }) {
 
   // The tap that puts the booklet down. Captured, so a finger that slides onto the sheet
   // still ends here; the room never sees its pointerdown, so nothing is grabbed or orbited.
-  scrim.addEventListener('pointerdown', (event) => scrim.setPointerCapture(event.pointerId));
-  scrim.addEventListener('pointerup', () => {
+  // Only a press that began on the scrim counts: a mouse pressed on the sheet and released
+  // off it lifts over the scrim too, uncaptured.
+  const pressed = new Set();
+  scrim.addEventListener('pointerdown', (event) => {
+    pressed.add(event.pointerId);
+    scrim.setPointerCapture(event.pointerId);
+  });
+  scrim.addEventListener('pointercancel', (event) => pressed.delete(event.pointerId));
+  scrim.addEventListener('pointerup', (event) => {
+    if (!pressed.delete(event.pointerId)) return;
     endSplash(BOOKLET_UI.splashLingerMs);
     setOpen(false, { focus: false });
   });
