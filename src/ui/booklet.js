@@ -1,13 +1,14 @@
-import { BOOKLET, BOOKLET_UI, COLORS } from '../constants.js';
+import { BOOKLET, BOOKLET_UI, COLORS, GESTURE } from '../constants.js';
 
 // The booklet in hand: a bottom sheet over the room. Collapsed, it is a thumbnail of the
 // open page in the corner — the only thing it puts under a finger, so the room stays
 // free. Tapped, it opens: one page at a time, flipped by a horizontal swipe, the arrow
-// buttons or the arrow keys, closed by its handle, a swipe down, or Escape. It flips
-// freely, front to back and back again: reference, never a checklist. The game opens with
-// it in hand, on its cover. While it is open, a scrim over the room takes any tap outside
-// the sheet, puts the booklet down with it and swallows it whole. Follows the src/ui
-// pattern (own element, own style, colours from COLORS).
+// buttons or the arrow keys, closed by a tap on it, its handle, a swipe down, or Escape:
+// swipe to flip, tap to put it down. It flips freely, front to back and back again:
+// reference, never a checklist. The game opens with it in hand, on its cover. While it is
+// open, a scrim over the room takes any tap outside the sheet, puts the booklet down with
+// it and swallows it whole. Follows the src/ui pattern (own element, own style, colours
+// from COLORS).
 
 const STYLE_ID = 'skruv-booklet';
 const css = (hex) => `#${hex.toString(16).padStart(6, '0')}`;
@@ -216,9 +217,9 @@ export function createBookletSheet({ pages }) {
     render();
   };
 
-  // The scrim is up whenever the booklet is open. Put down by a tap on the room, it stays
-  // `linger` ms past the lift, so the click a touch synthesises lands on it too rather than
-  // on a button underneath.
+  // The scrim is up whenever the booklet is open. Put down by a tap, on the room or the
+  // sheet, it stays `linger` ms past the lift, so the click a touch synthesises lands on
+  // it too rather than on a button underneath.
   function showScrim(shown, linger = 0) {
     clearTimeout(lingering);
     if (shown || linger === 0) scrim.hidden = !shown;
@@ -231,7 +232,7 @@ export function createBookletSheet({ pages }) {
     showScrim(open, byRoomTap ? BOOKLET_UI.scrimLingerMs : 0);
     render();
     // Into the sheet on a control that can take focus (a disabled one can't, on the last
-    // or first page), back to the thumb on close — unless the close was a tap on the room.
+    // or first page), back to the thumb on close — unless the close was a tap.
     if (byRoomTap) return;
     const inside = [next, prev, handle].find((control) => !control.disabled);
     (open ? inside : thumb).focus({ preventScroll: true });
@@ -252,6 +253,28 @@ export function createBookletSheet({ pages }) {
     if (!pressed.delete(event.pointerId) || !open) return;
     setOpen(false, { byRoomTap: true });
   });
+
+  // A tap on the sheet puts it down too, exactly as a tap on the room does: a primary press
+  // off its buttons (handle, arrows — they keep their own job, disabled or not) that lifts
+  // within the GESTURE tap thresholds. Anything that travels further is a swipe — a flip, a
+  // close, or nothing — never a tap.
+  let sheetPress = null;
+  element.addEventListener('pointerdown', (event) => {
+    const onButton = event.target.closest('button');
+    sheetPress = event.button === 0 && !onButton
+      ? { id: event.pointerId, x: event.clientX, y: event.clientY, t: event.timeStamp }
+      : null;
+  });
+  const endSheetPress = (event) => {
+    if (!sheetPress || event.pointerId !== sheetPress.id) return;
+    const { x, y, t } = sheetPress;
+    sheetPress = null;
+    if (event.type !== 'pointerup' || !open) return;
+    const still = Math.hypot(event.clientX - x, event.clientY - y) <= GESTURE.tapMaxDistance;
+    if (still && event.timeStamp - t <= GESTURE.tapMaxMs) setOpen(false, { byRoomTap: true });
+  };
+  element.addEventListener('pointerup', endSheetPress);
+  element.addEventListener('pointercancel', endSheetPress);
 
   thumb.addEventListener('click', () => setOpen(true));
   handle.addEventListener('click', () => setOpen(false));

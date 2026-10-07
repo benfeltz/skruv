@@ -146,3 +146,21 @@ describe('boot with the manual up; tap off to put it down (1.6.1)', () => {
     expect(scrimRule).not.toMatch(/transform|transition/);
   });
 });
+
+describe('tap the open manual to put it down, swipe to flip (1.6.2)', () => {
+  const booklet = read('src/ui/booklet.js');
+  const sheetTap = booklet.slice(booklet.indexOf('let sheetPress = null;'), booklet.indexOf("thumb.addEventListener('click'"));
+
+  it('tells a tap from a swipe by the GESTURE tap thresholds, never a number of its own', () => {
+    expect(booklet).toMatch(/import \{[^}]*\bGESTURE\b[^}]*\} from '\.\.\/constants\.js';/);
+    expect(sheetTap).toMatch(/<= GESTURE\.tapMaxDistance/);
+    expect(sheetTap).toMatch(/<= GESTURE\.tapMaxMs/);
+    expect(sheetTap).not.toMatch(/swipeDistance/);
+    expect(sheetTap.replace(/event\.button === 0/, '')).not.toMatch(/\b\d+\b/);
+  });
+
+  it("leaves every button on the sheet its own job, and closes as the room's tap does", () => {
+    expect(sheetTap).toMatch(/event\.target\.closest\('button'\)/);
+    expect(sheetTap).toMatch(/setOpen\(false, \{ byRoomTap: true \}\)/);
+  });
+});
