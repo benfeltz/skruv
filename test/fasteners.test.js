@@ -1,18 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { COMPATIBLE, CONNECTOR, KIND, kindOf } from '../tools/validate/lib/vocabulary.js';
 import { FASTENER } from '../src/constants.js';
-import { CONNECTOR } from '../src/game/catalog.js';
-import { COMPATIBLE } from '../src/game/snapMath.js';
-import {
-  canRelease,
-  createFastener,
-  isEngaged,
-  isFastened,
-  isTapKind,
-  KIND,
-  kindOf,
-  STATE,
-  transition,
-} from '../src/game/fasteners.js';
+import { canRelease, createFastener, isEngaged, isFastened, isTapKind, STATE, transition } from '../src/game/fasteners.js';
 
 const TAP = { type: 'tap' };
 const PULL = { type: 'pull' };

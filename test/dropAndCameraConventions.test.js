@@ -3,11 +3,11 @@
 // layout and shipped constants. Feel (drag, pinch, orbit) is manual — see Test Plan.md.
 
 import { describe, expect, it } from 'vitest';
+import { rotateVector } from '../tools/validate/lib/geometry.js';
 import { CAMERA, CAMERA_LIMITS, DECAL, DROP, ROOM } from '../src/constants.js';
-import { PART_TYPES } from '../src/game/catalog.js';
+import { PART_TYPES } from '../src/game/item.js';
 import { decalPlacements, socketUnder } from '../src/game/decals.js';
-import { createPackedWorldLayout } from '../src/game/packedLayout.js';
-import { rotateVector } from '../src/game/snapMath.js';
+import { createPackedWorldLayout } from '../src/game/boxLayout.js';
 import { clampCamera, clampTarget, clampTargetAlongView, panSpeedAt, seatOnFloor } from '../src/scene/cameraLimits.js';
 
 const add = (a, b) => a.map((v, i) => v + b[i]);

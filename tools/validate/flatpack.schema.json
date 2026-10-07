@@ -1,0 +1,203 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://skruv.site/flatpack/1/flatpack.schema.json",
+  "title": "Flatpack item, format 1",
+  "description": "One flat-packed item: its parts, the finished assembly, the instruction booklet and the packed box. Metres, kilograms, radians; positions part-local from the part's centre; quaternions [x, y, z, w]. Joints are never written here: they are derived from the assembled poses.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "identity", "vocabulary", "parts", "assembled", "manual", "packing"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "format": { "const": 1 },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["product", "maker", "documentCode"],
+      "properties": {
+        "product": { "$ref": "#/definitions/name" },
+        "maker": { "$ref": "#/definitions/name" },
+        "documentCode": { "$ref": "#/definitions/name" },
+        "description": { "type": "string" }
+      }
+    },
+    "vocabulary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["connectors", "fasteners"],
+      "properties": {
+        "connectors": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/definitions/connectorType" } },
+        "fasteners": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/definitions/fastenerKind" } }
+      }
+    },
+    "parts": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "#/definitions/key" },
+      "additionalProperties": { "$ref": "#/definitions/part" }
+    },
+    "assembled": { "type": "array", "items": { "$ref": "#/definitions/assembledInstance" } },
+    "manual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pages"],
+      "properties": { "pages": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/page" } } }
+    },
+    "packing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["boxInner", "wall", "floor", "lid", "placements"],
+      "properties": {
+        "boxInner": { "$ref": "#/definitions/size" },
+        "wall": { "$ref": "#/definitions/positive" },
+        "floor": { "$ref": "#/definitions/positive" },
+        "lid": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["thickness", "partNumber", "mass", "color"],
+          "properties": {
+            "thickness": { "$ref": "#/definitions/positive" },
+            "partNumber": { "$ref": "#/definitions/partNumber" },
+            "mass": { "$ref": "#/definitions/positive" },
+            "color": { "$ref": "#/definitions/key" }
+          }
+        },
+        "boxArt": { "$ref": "#/definitions/asset" },
+        "placements": { "type": "array", "items": { "$ref": "#/definitions/pose" } }
+      }
+    },
+    "tuning": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z]+\\.[A-Za-z]+$" },
+      "additionalProperties": { "type": "number" }
+    }
+  },
+  "definitions": {
+    "name": { "type": "string", "minLength": 1 },
+    "key": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
+    "instanceId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*-[1-9][0-9]*$" },
+    "connectorId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9-]*$" },
+    "connectorRef": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*-[1-9][0-9]*/[A-Za-z][A-Za-z0-9-]*$" },
+    "pair": {
+      "description": "A fastener end and the hole it seats in: [\"<instance>/<connector>\", \"<instance>/<connector>\"].",
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "$ref": "#/definitions/connectorRef" }
+    },
+    "asset": { "type": "string", "pattern": "^assets/[^\\\\]+\\.(glb|gltf|png|svg)$" },
+    "partNumber": { "type": "string", "pattern": "^[0-9]{5}$" },
+    "positive": { "type": "number", "exclusiveMinimum": 0 },
+    "vector": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
+    "size": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "$ref": "#/definitions/positive" } },
+    "quaternion": { "type": "array", "minItems": 4, "maxItems": 4, "items": { "type": "number" } },
+    "connectorType": {
+      "enum": [
+        "dowelHole", "camBoltHole", "camLockRecess", "shelfPinHole", "backFittingHole",
+        "dowelEnd", "boltThread", "boltHead", "camLockBody", "pinTip", "backFittingTip",
+        "wrenchTip", "camSlot", "screwdriverTip"
+      ]
+    },
+    "fastenerKind": { "enum": ["dowel", "pin", "fitting", "bolt", "cam", "tool"] },
+    "connector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "position", "axis"],
+      "properties": {
+        "id": { "$ref": "#/definitions/connectorId" },
+        "type": { "$ref": "#/definitions/connectorType" },
+        "position": { "$ref": "#/definitions/vector" },
+        "axis": { "$ref": "#/definitions/vector" }
+      }
+    },
+    "part": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["partNumber", "box", "mass", "color", "quantity", "connectors"],
+      "properties": {
+        "partNumber": { "$ref": "#/definitions/partNumber" },
+        "box": { "$ref": "#/definitions/size" },
+        "mesh": { "$ref": "#/definitions/asset" },
+        "mass": { "$ref": "#/definitions/positive" },
+        "color": { "$ref": "#/definitions/key" },
+        "quantity": { "type": "integer", "minimum": 1 },
+        "spares": { "type": "integer", "minimum": 1 },
+        "connectors": { "type": "array", "items": { "$ref": "#/definitions/connector" } }
+      }
+    },
+    "pose": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "position", "rotation"],
+      "properties": {
+        "id": { "$ref": "#/definitions/instanceId" },
+        "position": { "$ref": "#/definitions/vector" },
+        "rotation": { "$ref": "#/definitions/quaternion" }
+      }
+    },
+    "assembledInstance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "position", "rotation"],
+      "properties": {
+        "id": { "$ref": "#/definitions/instanceId" },
+        "role": { "$ref": "#/definitions/key" },
+        "position": { "$ref": "#/definitions/vector" },
+        "rotation": { "$ref": "#/definitions/quaternion" }
+      }
+    },
+    "page": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["cover", "warning", "doDont", "inventory", "step", "special", "back"] },
+        "art": { "$ref": "#/definitions/asset" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "enum": ["cover", "inventory", "back"] } } },
+          "then": { "additionalProperties": false, "properties": { "kind": {}, "art": {} } }
+        },
+        {
+          "if": { "properties": { "kind": { "enum": ["warning", "doDont"] } } },
+          "then": {
+            "additionalProperties": false,
+            "required": ["subject"],
+            "properties": { "kind": {}, "art": {}, "subject": { "$ref": "#/definitions/key" } }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "step" } } },
+          "then": {
+            "additionalProperties": false,
+            "required": ["number", "pose"],
+            "properties": {
+              "kind": {},
+              "art": {},
+              "number": { "type": "integer", "minimum": 1 },
+              "pose": { "$ref": "#/definitions/drawingPose" },
+              "parts": { "type": "array", "items": { "$ref": "#/definitions/instanceId" } },
+              "fasten": { "type": "array", "items": { "$ref": "#/definitions/pair" } },
+              "turn": { "type": "array", "items": { "$ref": "#/definitions/pair" } },
+              "tool": { "$ref": "#/definitions/key" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "special" } } },
+          "then": {
+            "additionalProperties": false,
+            "required": ["number", "pose", "special"],
+            "properties": {
+              "kind": {},
+              "art": {},
+              "number": { "type": "integer", "minimum": 1 },
+              "pose": { "$ref": "#/definitions/drawingPose" },
+              "special": { "enum": ["tipUpright"] }
+            }
+          }
+        }
+      ]
+    },
+    "drawingPose": { "enum": ["parts", "lying", "faceDown", "upright"] }
+  }
+}

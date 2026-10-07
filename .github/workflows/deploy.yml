@@ -24,6 +24,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix tools/validate
+      - run: node tools/validate/index.js items/johnny
       - run: npx vitest run
       - run: npm run build
       - uses: actions/configure-pages@v5

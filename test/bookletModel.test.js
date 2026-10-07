@@ -1,22 +1,22 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { createAssembledLayout } from '../src/game/assembledLayout.js';
-import { createBooklet, createBuildSteps } from '../src/game/buildSteps.js';
-import { MANIFEST, MANIFEST_QUANTITIES, PART_TYPES } from '../src/game/catalog.js';
-import { KIND } from '../src/game/fasteners.js';
+import { KIND } from '../tools/validate/lib/vocabulary.js';
+import { createBooklet, createBuildSteps } from '../src/game/bookletModel.js';
+import { ASSEMBLED, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../src/game/item.js';
 
 // Page coverage: the booklet tells the whole build — every joint on exactly one page, every
 // panel brought in once, hardware counts that add up to the box. A stale page (a fastener
 // type renamed, a hole added) fails here rather than silently in the booklet.
 
-const layout = createAssembledLayout();
-const steps = createBuildSteps(layout);
-const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+const layout = ASSEMBLED;
+const model = { layout, manifest: MANIFEST, partTypes: PART_TYPES, resolve: resolveConnector };
+const steps = createBuildSteps(MANUAL.pages, model);
 const SPARES = { dowel: 2, camLock: 2 };
 const TOOLS = ['allenWrench', 'screwdriver'];
+const MANIFEST_QUANTITIES = Object.fromEntries(Object.keys(PART_TYPES).filter((type) => MANIFEST.some((p) => p.type === type)).map((type) => [type, MANIFEST.filter((p) => p.type === type).length]));
 const typeOf = (id) => layout.parts.find((p) => p.id === id).type;
 
-describe('createBuildSteps', () => {
+describe('createBuildSteps (from the pack\'s manual pages)', () => {
   it('runs the adapted real order: twelve numbered steps', () => {
     expect(steps.map((s) => s.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   });
@@ -161,14 +161,14 @@ describe('createBuildSteps', () => {
     expect(new Set(steps.at(-1).shown)).toEqual(new Set(layout.parts.map((p) => p.id)));
   });
 
-  it('only names part types the catalog knows', () => {
+  it('only names part types the pack knows', () => {
     for (const s of steps) for (const id of s.parts) expect(PART_TYPES).toHaveProperty(typeOf(id));
     for (const s of steps) for (const type of s.types) expect(PART_TYPES).toHaveProperty(type);
   });
 });
 
 describe('createBooklet', () => {
-  const booklet = createBooklet(MANIFEST, layout);
+  const booklet = createBooklet(MANUAL.pages, model);
 
   it('runs cover, warnings, inventory, the twelve steps, back cover', () => {
     expect(booklet.map((p) => p.kind)).toEqual([
@@ -190,9 +190,11 @@ describe('createBooklet', () => {
 });
 
 describe('no validation anywhere (Ben, 2026-10-04)', () => {
+  const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+
   it('keeps the booklet data out of the engine — pages are reference, never a gate', () => {
     for (const path of ['src/game/assembly.js', 'src/game/fasteners.js', 'src/scene/gestureRouter.js']) {
-      expect(read(path)).not.toMatch(/buildSteps|assembledLayout|createBooklet/);
+      expect(read(path)).not.toMatch(/bookletModel|createBooklet|\bMANUAL\b|\bASSEMBLED\b/);
     }
   });
 });

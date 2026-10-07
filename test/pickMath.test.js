@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PICK } from '../src/constants.js';
-import { PART_TYPES } from '../src/game/catalog.js';
+import { PART_TYPES } from '../src/game/item.js';
 import { isSmallPart, preferHit, rayBoxGap, rayBoxReach } from '../src/game/pickMath.js';
 
 const panel = { id: 'sidePanel-1' };

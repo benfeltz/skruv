@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { CONNECTOR } from '../tools/validate/lib/vocabulary.js';
+import { rotateVector } from '../tools/validate/lib/geometry.js';
 import { GESTURE, SNAP } from '../src/constants.js';
-import { CONNECTOR, PART_TYPES } from '../src/game/catalog.js';
-import { createPackedWorldLayout } from '../src/game/packedLayout.js';
+import { PART_TYPES } from '../src/game/item.js';
+import { createPackedWorldLayout } from '../src/game/boxLayout.js';
 import { createGestureState } from '../src/game/gestureState.js';
 import * as snapMath from '../src/game/snapMath.js';
-import { applyTransform, findSnap, rotateVector } from '../src/game/snapMath.js';
+import { applyTransform, findSnap } from '../src/game/snapMath.js';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
@@ -105,17 +107,8 @@ describe('rotation defaults', () => {
 
 describe('snapping scope', () => {
   it('carries type-level compatibility only — no instance-level mating API', () => {
-    expect(Object.keys(snapMath).sort()).toEqual(
-      [
-        'COMPATIBLE',
-        'applyTransform',
-        'areCompatible',
-        'findSnap',
-        'multiplyQuaternions',
-        'rotateVector',
-        'rotationBetween',
-      ].sort(),
-    );
+    // Type-level compatibility itself is the Flatpack vocabulary's (tools/validate/lib).
+    expect(Object.keys(snapMath).sort()).toEqual(['applyTransform', 'findSnap']);
   });
 
   it('keeps the placed hold only until the first fastener engages (its 1.3 removal condition)', () => {

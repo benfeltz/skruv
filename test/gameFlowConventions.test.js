@@ -76,12 +76,12 @@ describe('no audio (0.0.1)', () => {
 });
 
 describe('branding (decision 4)', () => {
-  // What a player sees: the booklet, its sheet, and the brand constants.
+  // What a player sees: the booklet, its sheet, and the pack's identity (1.7).
   it('names JOHNNY by SKRUV, and no real maker or document number, on anything the player sees', () => {
-    const constants = read('src/constants.js');
-    expect(constants).toMatch(/product: 'JOHNNY'/);
-    expect(constants).toMatch(/maker: 'SKRUV'/);
-    for (const path of ['src/constants.js', 'src/scene/bookletPages.js', 'src/ui/booklet.js', 'src/ui/resetButton.js', 'src/game/buildSteps.js']) {
+    const { identity } = JSON.parse(read('items/johnny/flatpack.json'));
+    expect(identity.product).toBe('JOHNNY');
+    expect(identity.maker).toBe('SKRUV');
+    for (const path of ['items/johnny/flatpack.json', 'src/constants.js', 'src/scene/bookletPages.js', 'src/ui/booklet.js', 'src/ui/resetButton.js', 'src/game/bookletModel.js', 'index.html']) {
       expect(read(path)).not.toMatch(/IKEA|Billy|BILLY|AA-\d/);
     }
   });

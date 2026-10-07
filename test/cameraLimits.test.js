@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CAMERA, CAMERA_LIMITS, ROOM } from '../src/constants.js';
-import { PART_TYPES } from '../src/game/catalog.js';
-import { createPackedWorldLayout } from '../src/game/packedLayout.js';
+import { PART_TYPES } from '../src/game/item.js';
+import { createPackedWorldLayout } from '../src/game/boxLayout.js';
 import { clampCamera, clampTarget, clampTargetAlongView, panSpeedAt, seatOnFloor } from '../src/scene/cameraLimits.js';
 
 const room = { width: 10, depth: 8, height: 3 };

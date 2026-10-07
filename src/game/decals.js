@@ -4,8 +4,8 @@
 // marking laid just proud of the face its hole opens on.
 
 import { DECAL } from '../constants.js';
-import { CONNECTOR } from './catalog.js';
-import { rotationBetween } from './snapMath.js';
+import { CONNECTOR } from '../../tools/validate/lib/vocabulary.js';
+import { rotationBetween } from '../../tools/validate/lib/geometry.js';
 
 // Sockets that open on a part's surface. Fastener ends (tips, threads, bodies) and the
 // sockets that ride on hardware (bolt heads, cam slots) get no decal.

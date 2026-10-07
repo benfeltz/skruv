@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { placeLayout } from '../tools/validate/lib/geometry.js';
 import { DISPLAY, PHYSICS } from '../src/constants.js';
-import { createAssembledLayout, placeLayout } from '../src/game/assembledLayout.js';
 import { createAssembly, seatHome } from '../src/game/assembly.js';
-import { PART_TYPES } from '../src/game/catalog.js';
-import { createPackedWorldLayout, lidRest, respawnSpots } from '../src/game/packedLayout.js';
+import { ASSEMBLED, PART_TYPES } from '../src/game/item.js';
+import { createPackedWorldLayout, lidRest, respawnSpots } from '../src/game/boxLayout.js';
 import { createPhysicsWorld } from '../src/physics/world.js';
 
 // Headless Rapier runs of the 1.5 start state — the real physics module, no renderer.
@@ -42,7 +42,7 @@ describe('the packed flatpack under physics', () => {
 describe('the display shelf under physics', () => {
   it('stands: every part within 2 mm of its assembled pose, shelves on their pins', async () => {
     const physics = await createPhysicsWorld();
-    const layout = createAssembledLayout();
+    const layout = ASSEMBLED;
     const half = DISPLAY.yaw / 2;
     const posed = placeLayout(layout.parts, { position: DISPLAY.position, rotation: [0, Math.sin(half), 0, Math.cos(half)] });
     const parts = spawn(physics, posed);

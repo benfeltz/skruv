@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { KIND } from '../tools/validate/lib/vocabulary.js';
+import { connectorInWorld, rotateVector } from '../tools/validate/lib/geometry.js';
 import { FASTENER } from '../src/constants.js';
-import { PART_TYPES } from '../src/game/catalog.js';
-import { capture, carryPose, connectorInWorld, createAssembly, relativePose, seatHome } from '../src/game/assembly.js';
-import { createAssembledLayout } from '../src/game/assembledLayout.js';
-import { KIND, STATE } from '../src/game/fasteners.js';
-import { rotateVector } from '../src/game/snapMath.js';
+import { ASSEMBLED, PART_TYPES } from '../src/game/item.js';
+import { capture, carryPose, createAssembly, relativePose, seatHome } from '../src/game/assembly.js';
+import { STATE } from '../src/game/fasteners.js';
 
 const typeOf = (id) => id.replace(/-\d+$/, '');
 const expectVec = (actual, expected, digits = 9) => actual.forEach((v, i) => expect(v).toBeCloseTo(expected[i], digits));
@@ -291,7 +291,7 @@ describe('relativePose', () => {
 });
 
 describe('drive and seatHome: a part set put in already fastened (1.5 display shelf)', () => {
-  const layout = createAssembledLayout();
+  const layout = ASSEMBLED;
   const typeById = new Map(layout.parts.map((p) => [p.id, p.type]));
   const poseOf = (id) => layout.parts.find((p) => p.id === id);
   const build = () => {

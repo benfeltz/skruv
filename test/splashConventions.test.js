@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { BOOKLET, BOOKLET_UI, BRAND, COLORS } from '../src/constants.js';
-import { createBooklet } from '../src/game/buildSteps.js';
+import { BOOKLET, BOOKLET_UI, COLORS } from '../src/constants.js';
+import { IDENTITY, MANUAL } from '../src/game/item.js';
 
 // 1.6.1: index.html's pre-splash is plain CSS, so it can't import the constants the real
 // booklet sheet is built from — these checks keep the two from drifting, or the handoff
@@ -32,12 +32,12 @@ describe('pre-splash (1.6.1)', () => {
   it("prints the cover's wordmark in the page's own coordinates and font", () => {
     expect(html).toContain(`viewBox="0 0 ${pageW} ${pageH}"`);
     expect(html).toContain(`font-family='${BOOKLET.font}'`);
-    expect(html).toMatch(new RegExp(`>${BRAND.product}</text>`));
-    expect(html).toMatch(new RegExp(`>${BRAND.maker}</text>`));
+    expect(html).toMatch(new RegExp(`>${IDENTITY.product}</text>`));
+    expect(html).toMatch(new RegExp(`>${IDENTITY.maker}</text>`));
   });
 
   it("counts the booklet's real pages", () => {
-    expect(html).toContain(`<span class="pre-splash-count">1 / ${createBooklet().length}</span>`);
+    expect(html).toContain(`<span class="pre-splash-count">1 / ${MANUAL.pages.length}</span>`);
   });
 
   it("is removed in the frame that first paints the real sheet, once that sheet is mounted", () => {

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { BOX, COLORS } from '../constants.js';
-import { PART_TYPES } from '../game/catalog.js';
-import { boxPlacement, lidRest } from '../game/packedLayout.js';
+import { COLORS } from '../constants.js';
+import { PACKING, PART_TYPES } from '../game/item.js';
+import { boxPlacement, lidRest } from '../game/boxLayout.js';
 import { createPartMesh } from '../game/partMesh.js';
 
 /**
@@ -9,7 +9,7 @@ import { createPartMesh } from '../game/partMesh.js';
  * and four thin walls, each a static physics slab, so a panel slid out of it scrapes over
  * the wall the way a real one does — and its lid, a normal physics part (`{ id, type,
  * mesh, body }`) closed on top, for the gesture router to grab like any other. Builds once;
- * the poses are src/game/packedLayout.js's.
+ * the poses are src/game/boxLayout.js's.
  */
 export function createFlatpack(physics) {
   const { position, rotation } = boxPlacement();
@@ -19,8 +19,8 @@ export function createFlatpack(physics) {
   box.position.set(...position);
   box.quaternion.copy(quaternion);
 
-  const [width, height, length] = BOX.inner;
-  const { wall, floor } = BOX;
+  const [width, height, length] = PACKING.boxInner;
+  const { wall, floor } = PACKING;
   const outerW = width + 2 * wall;
   const slabs = [
     { size: [outerW, floor, length + 2 * wall], at: [0, floor / 2, 0] },

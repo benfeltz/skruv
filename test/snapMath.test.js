@@ -1,14 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { areCompatible, COMPATIBLE, CONNECTOR } from '../tools/validate/lib/vocabulary.js';
+import { rotateVector } from '../tools/validate/lib/geometry.js';
 import { SNAP } from '../src/constants.js';
-import { CONNECTOR } from '../src/game/catalog.js';
-import {
-  applyTransform,
-  areCompatible,
-  COMPATIBLE,
-  findSnap,
-  rotateVector,
-  rotationBetween,
-} from '../src/game/snapMath.js';
+import { applyTransform, findSnap } from '../src/game/snapMath.js';
 
 const DEG = Math.PI / 180;
 const TOL = { maxDistance: 0.05, maxAngle: 30 * DEG };
@@ -118,12 +112,6 @@ describe('applyTransform', () => {
     const transform = { rotation: quarterY, translation: [0, 0, 0] };
     const { rotation } = applyTransform(transform, { position: [0, 0, 0], rotation: quarterY });
     expectVec(rotateVector(rotation, [1, 0, 0]), [-1, 0, 0]);
-  });
-});
-
-describe('rotationBetween', () => {
-  it('handles exactly opposite vectors', () => {
-    expectVec(rotateVector(rotationBetween([0, 1, 0], [0, -1, 0]), [0, 1, 0]), [0, -1, 0]);
   });
 });
 

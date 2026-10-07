@@ -1,13 +1,13 @@
 import { HAPTICS, PICK, RENDER, RESET, ROOM, TUNE } from './constants.js';
 import { createAssembly } from './game/assembly.js';
 import { ANY, createBus, EVENT, fpsEvent, recoveryEvent, resetEvent, sessionEvent, tuneEvent } from './game/events.js';
-import { KIND } from './game/fasteners.js';
+import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
 import { createTunables, LIVE_KNOBS } from './game/tunables.js';
-import { PART_TYPES } from './game/catalog.js';
+import { PART_TYPES } from './game/item.js';
 import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
-import { createPackedWorldLayout, lidRest, respawnSpots } from './game/packedLayout.js';
+import { createPackedWorldLayout, lidRest, respawnSpots } from './game/boxLayout.js';
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';

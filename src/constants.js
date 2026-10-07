@@ -1,6 +1,8 @@
 // Every tunable lives here — modules import names, never literals.
 // Units: metres, seconds, radians.
 
+import { CONTRACT } from '../tools/validate/lib/vocabulary.js';
+
 export const ROOM = {
   width: 10,
   depth: 10,
@@ -8,15 +10,6 @@ export const ROOM = {
   // low enough that zooming out lifts the camera over the walls (dollhouse view), where
   // their inward faces vanish from outside.
   height: 3,
-};
-
-// The product and the company on the box and the booklet. A parody of flatpack furniture
-// in general — never any real maker's name, marks or document numbers.
-export const BRAND = {
-  product: 'JOHNNY',
-  maker: 'SKRUV',
-  // Printed on the booklet's back cover, where a real manual carries its document code.
-  documentCode: 'SK-0000451-1',
 };
 
 export const COLORS = {
@@ -154,18 +147,11 @@ export const CAMERA_LIMITS = {
   dampingFactor: 0.1,
 };
 
-// The flatpack the game opens on (src/game/packedLayout.js, src/scene/flatpack.js): a
-// thin-walled cardboard box lying on the floor, its lid closed on top. Box-local frame:
-// length along z, origin on the floor at its centre.
+// Where the flatpack the game opens on stands (src/game/boxLayout.js, src/scene/flatpack.js):
+// a thin-walled cardboard box lying on the floor, its lid closed on top. Its inside, walls
+// and lid are the item's (items/johnny `packing`). Box-local frame: length along z,
+// origin on the floor at its centre.
 export const BOX = {
-  // Inside, [across, height, length]: the 2 m panels lie along it, the hardboard back
-  // only just fits across.
-  inner: [0.84, 0.07, 2.08],
-  // Cardboard walls and bottom, as physics slabs this thick (thin enough to read as
-  // cardboard, thick enough that a sliding panel can't tunnel through).
-  wall: 0.01,
-  floor: 0.01,
-  lidThickness: 0.008,
   // On the floor in front of the start view, turned so its length runs across it.
   position: [0, 0, 0.6],
   yaw: Math.PI / 2,
@@ -195,14 +181,6 @@ export const RESET = {
   // deep, running the box's length, a gap between pieces; each dropped from this clearance
   // above the floor. Pieces that don't fit go in again `layerHeight` higher, to land on top.
   respawn: { offset: 0.35, depth: 2.5, gap: 0.05, height: 0.25, layerHeight: 0.1 },
-};
-
-// Packing inside the box (src/game/packedLayout.js).
-export const PACK = {
-  // Between neighbouring panels in a layer, and between a panel and the wall.
-  gap: 0.01,
-  // Loose hardware lies this far apart on top — a fingertip between pieces.
-  hardwareGap: 0.045,
 };
 
 export const PHYSICS = {
@@ -346,10 +324,11 @@ export const FASTENER = {
   screwRadians: 4 * Math.PI,
   // Screwdriver turn from an open cam lock to a locked one.
   quarterTurn: Math.PI / 2,
-  // A cam catches any screwed bolt head this close to its recess (Design: instance-agnostic).
-  captureRadius: 0.015,
-  // How deep each fastener sits in its hole once fully home, along its axis.
-  sinkDepth: { dowel: 0.015, pin: 0.008, fitting: 0.012, bolt: 0.011, cam: 0.012 },
+  // A cam catches any screwed bolt head this close to its recess, and how deep each
+  // fastener sits in its hole once fully home — the Flatpack contract's, so the game and
+  // the validator never disagree (tools/validate/lib/vocabulary.js).
+  captureRadius: CONTRACT.captureRadius,
+  sinkDepth: CONTRACT.sinkDepth,
   // Crank motion this close (CSS px) to the fastener's on-screen centre is ignored — the
   // angle swings wildly there.
   crankDeadzone: 12,

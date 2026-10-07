@@ -2,16 +2,15 @@ import * as THREE from 'three';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
-import { BOOKLET, BRAND, COLORS } from '../constants.js';
-import { createAssembledLayout } from '../game/assembledLayout.js';
-import { createBooklet } from '../game/buildSteps.js';
-import { PART_TYPES } from '../game/catalog.js';
+import { BOOKLET, COLORS } from '../constants.js';
+import { createBooklet } from '../game/bookletModel.js';
+import { ASSEMBLED, IDENTITY, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../game/item.js';
 
 // The booklet's pages, drawn from the same part models the room uses, so a page can never
 // disagree with the geometry. Wordless, as the real thing is: a big step numeral, an
 // outline drawing (this page's parts bold, what is already built pale), hardware count
 // bubbles with their part numbers, and pictogram warning pages with faceless figures.
-// WHAT each page shows is src/game/buildSteps.js's; this module only draws. Branding is
+// WHAT each page shows is src/game/bookletModel.js's; this module only draws. Branding is
 // JOHNNY by SKRUV — black on white, no borrowed marks.
 
 const css = (hex) => `#${hex.toString(16).padStart(6, '0')}`;
@@ -43,8 +42,8 @@ const TO_SRGB = Uint8ClampedArray.from({ length: 256 }, (_, i) => {
  * WebGL context) into an offscreen target and restores its state after every page.
  */
 export function createBookletPages(renderer) {
-  const layout = createAssembledLayout();
-  const pages = createBooklet();
+  const layout = ASSEMBLED;
+  const pages = createBooklet(MANUAL.pages, { layout, manifest: MANIFEST, partTypes: PART_TYPES, resolve: resolveConnector });
   const [pageW, pageH] = BOOKLET.pageSize;
   const cache = new Map();
   const views = createViewRenderer(renderer);
@@ -86,9 +85,9 @@ export function createBookletPages(renderer) {
     ctx.fillStyle = INK;
     ctx.textBaseline = 'alphabetic';
     ctx.font = font(124, 800);
-    ctx.fillText(BRAND.product, m, m + 110);
+    ctx.fillText(IDENTITY.product, m, m + 110);
     ctx.font = font(30, 600);
-    ctx.fillText(BRAND.maker, m + 4, m + 158);
+    ctx.fillText(IDENTITY.maker, m + 4, m + 158);
     const all = new Set(layout.parts.map((p) => p.id));
     drawView(ctx, itemsFor(all, all), [m, 240, pageW - 2 * m, pageH - 240 - m]);
   }
@@ -97,9 +96,9 @@ export function createBookletPages(renderer) {
     const m = BOOKLET.margin;
     ctx.fillStyle = INK;
     ctx.font = font(34, 800);
-    ctx.fillText(BRAND.maker, m, pageH - m - 40);
+    ctx.fillText(IDENTITY.maker, m, pageH - m - 40);
     ctx.font = font(20, 500);
-    ctx.fillText(BRAND.documentCode, m, pageH - m);
+    ctx.fillText(IDENTITY.documentCode, m, pageH - m);
   }
 
   // Two panels side by side: what goes wrong (crossed) and what goes right (ticked).

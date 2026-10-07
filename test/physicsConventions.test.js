@@ -63,11 +63,13 @@ describe('placeholders and headers', () => {
     expect(read('src/main.js')).toMatch(/createPackedWorldLayout\(\)/);
   });
 
-  it('documents catalog.js as data, not tunables, and keeps mating out', () => {
-    const catalog = read('src/game/catalog.js');
-    expect(catalog).toMatch(/as DATA/);
-    expect(catalog).toMatch(/not behaviour tunables/);
-    expect(catalog).not.toMatch(/\bMATING\b|\bmates\s*:/);
+  // The item is data in its Flatpack (1.7): parts, poses, pages, packing — never a mating
+  // table (joints are derived from the poses) and never a script (behaviour is the engine's).
+  it('keeps the item as data in its pack, mating and scripting out', () => {
+    const pack = read('items/johnny/flatpack.json');
+    expect(Object.keys(JSON.parse(pack))).toEqual(['$schema', 'format', 'identity', 'vocabulary', 'parts', 'assembled', 'manual', 'packing', 'tuning']);
+    expect(pack).not.toMatch(/"(joints|mates|mating|script|scripts)"\s*:/);
+    expect(read('src/game/item.js')).toMatch(/deriveJoints\(pack\)/);
   });
 });
 
