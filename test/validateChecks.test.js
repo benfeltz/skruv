@@ -47,6 +47,14 @@ describe('checkPack on JOHNNY', () => {
     for (const e of errors) expect(RULES).toContain(e.rule);
   });
 
+  it('[packing] points at the real placement, even after one with an unknown id', () => {
+    const pack = copy();
+    pack.packing.placements[3].id = 'dowel-99';
+    pack.packing.placements[10].position = [...pack.packing.placements[9].position];
+    const overlaps = checkPack(pack).filter((e) => e.rule === 'packing' && /passes through/.test(e.message));
+    expect(overlaps.map((e) => e.path)).toEqual(['packing.placements[10]']);
+  });
+
   it('[assets] rejects a mesh that is not beside the pack', () => {
     const pack = copy();
     pack.parts.sidePanel.mesh = 'assets/side.glb';

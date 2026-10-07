@@ -306,9 +306,12 @@ function packing({ pack, manifest, typeOf }) {
   for (const { id } of manifest) {
     if (count.get(id) !== 1) errors.push(error('packing', 'packing.placements', `${id} is packed ${count.get(id) ?? 0}×, not once`));
   }
+  // Paths index `placements` itself, so an unknown id (reported by `references`) never
+  // shifts the ones after it.
   const boxes = placements
-    .filter((p) => typeOf.has(p.id))
-    .map((p, i) => ({ id: p.id, path: `packing.placements[${i}]`, ...aabb(pack.parts[typeOf.get(p.id)].box, p) }));
+    .map((p, i) => ({ p, path: `packing.placements[${i}]` }))
+    .filter(({ p }) => typeOf.has(p.id))
+    .map(({ p, path }) => ({ id: p.id, path, ...aabb(pack.parts[typeOf.get(p.id)].box, p) }));
   for (const b of boxes) {
     const outside =
       b.min[0] < -width / 2 - EPS || b.max[0] > width / 2 + EPS || b.min[2] < -length / 2 - EPS || b.max[2] > length / 2 + EPS || b.min[1] < floor - EPS || b.max[1] > floor + height + EPS;
