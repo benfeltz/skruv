@@ -1,0 +1,1266 @@
+{
+  "$schema": "../../tools/validate/flatpack.schema.json",
+  "format": 1,
+  "identity": {
+    "product": "JOHNNY",
+    "maker": "SKRUV",
+    "documentCode": "SK-0000451-1",
+    "description": "Bookcase, about 80 × 28 × 202 cm"
+  },
+  "vocabulary": {
+    "connectors": ["dowelHole", "camBoltHole", "camLockRecess", "shelfPinHole", "backFittingHole", "dowelEnd", "boltThread", "boltHead", "camLockBody", "pinTip", "backFittingTip", "wrenchTip", "camSlot", "screwdriverTip"],
+    "fasteners": ["dowel", "pin", "fitting", "bolt", "cam", "tool"]
+  },
+  "parts": {
+    "sidePanel": {
+      "partNumber": "10334",
+      "box": [0.016, 2.02, 0.28],
+      "mass": 6,
+      "color": "partPanel",
+      "quantity": 2,
+      "connectors": [
+        {
+          "id": "dowelHole-1",
+          "type": "dowelHole",
+          "position": [0.008, -0.942, -0.09],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "dowelHole-2",
+          "type": "dowelHole",
+          "position": [0.008, -0.942, 0.09],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "camBoltHole-1",
+          "type": "camBoltHole",
+          "position": [0.008, -0.942, 0],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "dowelHole-3",
+          "type": "dowelHole",
+          "position": [0.008, 0, -0.11],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "dowelHole-4",
+          "type": "dowelHole",
+          "position": [0.008, 0, 0.11],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "camBoltHole-2",
+          "type": "camBoltHole",
+          "position": [0.008, 0, -0.04],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "camBoltHole-3",
+          "type": "camBoltHole",
+          "position": [0.008, 0, 0.04],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "dowelHole-5",
+          "type": "dowelHole",
+          "position": [0.008, 1.002, -0.09],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "dowelHole-6",
+          "type": "dowelHole",
+          "position": [0.008, 1.002, 0.09],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "camBoltHole-4",
+          "type": "camBoltHole",
+          "position": [0.008, 1.002, 0],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "shelfPinHole-1",
+          "type": "shelfPinHole",
+          "position": [0.008, -0.512, -0.09],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "shelfPinHole-2",
+          "type": "shelfPinHole",
+          "position": [0.008, -0.512, 0.09],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "shelfPinHole-3",
+          "type": "shelfPinHole",
+          "position": [0.008, 0.488, -0.09],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "shelfPinHole-4",
+          "type": "shelfPinHole",
+          "position": [0.008, 0.488, 0.09],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "dowelHole-7",
+          "type": "dowelHole",
+          "position": [0.008, -0.98, 0.132],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "dowelHole-8",
+          "type": "dowelHole",
+          "position": [0.008, -0.98, -0.132],
+          "axis": [1, 0, 0]
+        }
+      ]
+    },
+    "topBottomPanel": {
+      "partNumber": "10335",
+      "box": [0.768, 0.016, 0.28],
+      "mass": 2.3,
+      "color": "partPanel",
+      "quantity": 2,
+      "connectors": [
+        {
+          "id": "dowelHole-1",
+          "type": "dowelHole",
+          "position": [-0.384, 0, -0.09],
+          "axis": [-1, 0, 0]
+        },
+        {
+          "id": "dowelHole-2",
+          "type": "dowelHole",
+          "position": [-0.384, 0, 0.09],
+          "axis": [-1, 0, 0]
+        },
+        {
+          "id": "camLockRecess-1",
+          "type": "camLockRecess",
+          "position": [-0.35, -0.008, 0],
+          "axis": [0, -1, 0]
+        },
+        {
+          "id": "dowelHole-3",
+          "type": "dowelHole",
+          "position": [0.384, 0, -0.09],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "dowelHole-4",
+          "type": "dowelHole",
+          "position": [0.384, 0, 0.09],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "camLockRecess-2",
+          "type": "camLockRecess",
+          "position": [0.35, -0.008, 0],
+          "axis": [0, -1, 0]
+        }
+      ]
+    },
+    "fixedShelf": {
+      "partNumber": "10336",
+      "box": [0.768, 0.016, 0.28],
+      "mass": 2.3,
+      "color": "partPanel",
+      "quantity": 1,
+      "connectors": [
+        {
+          "id": "dowelHole-1",
+          "type": "dowelHole",
+          "position": [-0.384, 0, -0.11],
+          "axis": [-1, 0, 0]
+        },
+        {
+          "id": "dowelHole-2",
+          "type": "dowelHole",
+          "position": [-0.384, 0, 0.11],
+          "axis": [-1, 0, 0]
+        },
+        {
+          "id": "camLockRecess-1",
+          "type": "camLockRecess",
+          "position": [-0.35, -0.008, -0.04],
+          "axis": [0, -1, 0]
+        },
+        {
+          "id": "camLockRecess-2",
+          "type": "camLockRecess",
+          "position": [-0.35, -0.008, 0.04],
+          "axis": [0, -1, 0]
+        },
+        {
+          "id": "dowelHole-3",
+          "type": "dowelHole",
+          "position": [0.384, 0, -0.11],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "dowelHole-4",
+          "type": "dowelHole",
+          "position": [0.384, 0, 0.11],
+          "axis": [1, 0, 0]
+        },
+        {
+          "id": "camLockRecess-3",
+          "type": "camLockRecess",
+          "position": [0.35, -0.008, -0.04],
+          "axis": [0, -1, 0]
+        },
+        {
+          "id": "camLockRecess-4",
+          "type": "camLockRecess",
+          "position": [0.35, -0.008, 0.04],
+          "axis": [0, -1, 0]
+        }
+      ]
+    },
+    "adjustableShelf": {
+      "partNumber": "10337",
+      "box": [0.764, 0.016, 0.26],
+      "mass": 2.1,
+      "color": "partPanel",
+      "quantity": 2,
+      "connectors": []
+    },
+    "plinth": {
+      "partNumber": "10338",
+      "box": [0.768, 0.06, 0.016],
+      "mass": 0.6,
+      "color": "partPanel",
+      "quantity": 1,
+      "connectors": [
+        {
+          "id": "dowelHole-1",
+          "type": "dowelHole",
+          "position": [-0.384, 0, 0],
+          "axis": [-1, 0, 0]
+        },
+        {
+          "id": "dowelHole-2",
+          "type": "dowelHole",
+          "position": [0.384, 0, 0],
+          "axis": [1, 0, 0]
+        }
+      ]
+    },
+    "backPanel": {
+      "partNumber": "10339",
+      "box": [0.79, 2, 0.003],
+      "mass": 4.3,
+      "color": "partHardboard",
+      "quantity": 1,
+      "connectors": [
+        {
+          "id": "backFittingHole-1",
+          "type": "backFittingHole",
+          "position": [-0.387, -0.952, -0.0015],
+          "axis": [0, 0, -1]
+        },
+        {
+          "id": "backFittingHole-2",
+          "type": "backFittingHole",
+          "position": [0.387, -0.952, -0.0015],
+          "axis": [0, 0, -1]
+        },
+        {
+          "id": "backFittingHole-3",
+          "type": "backFittingHole",
+          "position": [-0.387, 0.992, -0.0015],
+          "axis": [0, 0, -1]
+        },
+        {
+          "id": "backFittingHole-4",
+          "type": "backFittingHole",
+          "position": [0.387, 0.992, -0.0015],
+          "axis": [0, 0, -1]
+        },
+        {
+          "id": "backFittingHole-5",
+          "type": "backFittingHole",
+          "position": [-0.387, -0.010000000000000009, -0.0015],
+          "axis": [0, 0, -1]
+        },
+        {
+          "id": "backFittingHole-6",
+          "type": "backFittingHole",
+          "position": [0.387, -0.010000000000000009, -0.0015],
+          "axis": [0, 0, -1]
+        },
+        {
+          "id": "backFittingHole-7",
+          "type": "backFittingHole",
+          "position": [0, -0.952, -0.0015],
+          "axis": [0, 0, -1]
+        },
+        {
+          "id": "backFittingHole-8",
+          "type": "backFittingHole",
+          "position": [0, 0.992, -0.0015],
+          "axis": [0, 0, -1]
+        }
+      ]
+    },
+    "dowel": {
+      "partNumber": "10106",
+      "box": [0.008, 0.03, 0.008],
+      "mass": 0.0015,
+      "color": "partDowel",
+      "quantity": 14,
+      "spares": 2,
+      "connectors": [
+        {
+          "id": "dowelEnd-1",
+          "type": "dowelEnd",
+          "position": [0, -0.015, 0],
+          "axis": [0, -1, 0]
+        },
+        {
+          "id": "dowelEnd-2",
+          "type": "dowelEnd",
+          "position": [0, 0.015, 0],
+          "axis": [0, 1, 0]
+        }
+      ]
+    },
+    "camLockBolt": {
+      "partNumber": "11902",
+      "box": [0.007, 0.035, 0.007],
+      "mass": 0.004,
+      "color": "partMetal",
+      "quantity": 8,
+      "connectors": [
+        {
+          "id": "boltThread-1",
+          "type": "boltThread",
+          "position": [0, -0.0175, 0],
+          "axis": [0, -1, 0]
+        },
+        {
+          "id": "boltHead-1",
+          "type": "boltHead",
+          "position": [0, 0.0175, 0],
+          "axis": [0, 1, 0]
+        }
+      ]
+    },
+    "camLock": {
+      "partNumber": "11701",
+      "box": [0.015, 0.012, 0.015],
+      "mass": 0.005,
+      "color": "partMetal",
+      "quantity": 8,
+      "spares": 2,
+      "connectors": [
+        {
+          "id": "camLockBody-1",
+          "type": "camLockBody",
+          "position": [0, -0.006, 0],
+          "axis": [0, -1, 0]
+        },
+        {
+          "id": "camSlot-1",
+          "type": "camSlot",
+          "position": [0, 0.006, 0],
+          "axis": [0, 1, 0]
+        }
+      ]
+    },
+    "shelfPin": {
+      "partNumber": "10221",
+      "box": [0.005, 0.016, 0.005],
+      "mass": 0.001,
+      "color": "partMetal",
+      "quantity": 8,
+      "connectors": [
+        {
+          "id": "pinTip-1",
+          "type": "pinTip",
+          "position": [0, -0.008, 0],
+          "axis": [0, -1, 0]
+        }
+      ]
+    },
+    "backFitting": {
+      "partNumber": "12614",
+      "box": [0.008, 0.016, 0.008],
+      "mass": 0.001,
+      "color": "partFitting",
+      "quantity": 8,
+      "connectors": [
+        {
+          "id": "backFittingTip-1",
+          "type": "backFittingTip",
+          "position": [0, -0.008, 0],
+          "axis": [0, -1, 0]
+        }
+      ]
+    },
+    "allenWrench": {
+      "partNumber": "10067",
+      "box": [0.07, 0.004, 0.025],
+      "mass": 0.015,
+      "color": "partWrench",
+      "quantity": 1,
+      "connectors": [
+        {
+          "id": "wrenchTip-1",
+          "type": "wrenchTip",
+          "position": [0.035, 0, 0.0125],
+          "axis": [0, 0, 1]
+        }
+      ]
+    },
+    "screwdriver": {
+      "partNumber": "10093",
+      "box": [0.022, 0.2, 0.022],
+      "mass": 0.08,
+      "color": "partScrewdriver",
+      "quantity": 1,
+      "connectors": [
+        {
+          "id": "screwdriverTip-1",
+          "type": "screwdriverTip",
+          "position": [0, -0.1, 0],
+          "axis": [0, -1, 0]
+        }
+      ]
+    }
+  },
+  "assembled": [
+    {
+      "id": "sidePanel-1",
+      "role": "leftSide",
+      "position": [-0.392, 1.01, 0],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "id": "sidePanel-2",
+      "role": "rightSide",
+      "position": [0.392, 1.01, 0],
+      "rotation": [0, 1, 0, 0]
+    },
+    {
+      "id": "plinth-1",
+      "role": "plinth",
+      "position": [0, 0.030000000000000027, 0.132],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "id": "topBottomPanel-1",
+      "role": "bottom",
+      "position": [0, 0.06800000000000006, 0],
+      "rotation": [0, 0, 1, 0]
+    },
+    {
+      "id": "fixedShelf-1",
+      "role": "fixed",
+      "position": [0, 1.01, 0],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "id": "topBottomPanel-2",
+      "role": "top",
+      "position": [0, 2.012, 0],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "id": "backPanel-1",
+      "role": "back",
+      "position": [0, 1.02, -0.14150000000000001],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "id": "dowel-1",
+      "role": "hardware",
+      "position": [-0.384, 0.030000000000000027, 0.132],
+      "rotation": [0, 0, 0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "dowel-2",
+      "role": "hardware",
+      "position": [0.384, 0.030000000000000027, 0.132],
+      "rotation": [0, 0, -0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "dowel-3",
+      "role": "hardware",
+      "position": [0.384, 0.06800000000000006, -0.09],
+      "rotation": [0, 0, -0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "dowel-4",
+      "role": "hardware",
+      "position": [0.384, 0.06800000000000006, 0.09],
+      "rotation": [0, 0, -0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "dowel-5",
+      "role": "hardware",
+      "position": [-0.384, 0.06800000000000006, -0.09],
+      "rotation": [0, 0, 0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "dowel-6",
+      "role": "hardware",
+      "position": [-0.384, 0.06800000000000006, 0.09],
+      "rotation": [0, 0, 0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "dowel-7",
+      "role": "hardware",
+      "position": [-0.384, 1.01, -0.11],
+      "rotation": [0, 0, 0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "dowel-8",
+      "role": "hardware",
+      "position": [-0.384, 1.01, 0.11],
+      "rotation": [0, 0, 0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "dowel-9",
+      "role": "hardware",
+      "position": [0.384, 1.01, -0.11],
+      "rotation": [0, 0, -0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "dowel-10",
+      "role": "hardware",
+      "position": [0.384, 1.01, 0.11],
+      "rotation": [0, 0, -0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "dowel-11",
+      "role": "hardware",
+      "position": [-0.384, 2.012, -0.09],
+      "rotation": [0, 0, 0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "dowel-12",
+      "role": "hardware",
+      "position": [-0.384, 2.012, 0.09],
+      "rotation": [0, 0, 0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "dowel-13",
+      "role": "hardware",
+      "position": [0.384, 2.012, -0.09],
+      "rotation": [0, 0, -0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "dowel-14",
+      "role": "hardware",
+      "position": [0.384, 2.012, 0.09],
+      "rotation": [0, 0, -0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "camLockBolt-1",
+      "role": "hardware",
+      "position": [-0.3775, 0.06800000000000006, 0],
+      "rotation": [0, 0, -0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "camLockBolt-2",
+      "role": "hardware",
+      "position": [-0.3775, 1.01, -0.04],
+      "rotation": [0, 0, -0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "camLockBolt-3",
+      "role": "hardware",
+      "position": [-0.3775, 1.01, 0.04],
+      "rotation": [0, 0, -0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "camLockBolt-4",
+      "role": "hardware",
+      "position": [-0.3775, 2.012, 0],
+      "rotation": [0, 0, -0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "camLockBolt-5",
+      "role": "hardware",
+      "position": [0.3775, 0.06800000000000006, 0],
+      "rotation": [0, 0, 0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "camLockBolt-6",
+      "role": "hardware",
+      "position": [0.3775, 1.01, 0.04],
+      "rotation": [0, 0, 0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "camLockBolt-7",
+      "role": "hardware",
+      "position": [0.3775, 1.01, -0.04],
+      "rotation": [0, 0, 0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "camLockBolt-8",
+      "role": "hardware",
+      "position": [0.3775, 2.012, 0],
+      "rotation": [0, 0, 0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "camLock-1",
+      "role": "hardware",
+      "position": [0.35, 0.07000000000000008, 0],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "id": "camLock-2",
+      "role": "hardware",
+      "position": [-0.35, 0.07000000000000008, 0],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "id": "camLock-3",
+      "role": "hardware",
+      "position": [-0.35, 1.008, -0.04],
+      "rotation": [0, 0, 1, 0]
+    },
+    {
+      "id": "camLock-4",
+      "role": "hardware",
+      "position": [-0.35, 1.008, 0.04],
+      "rotation": [0, 0, 1, 0]
+    },
+    {
+      "id": "camLock-5",
+      "role": "hardware",
+      "position": [0.35, 1.008, -0.04],
+      "rotation": [0, 0, 1, 0]
+    },
+    {
+      "id": "camLock-6",
+      "role": "hardware",
+      "position": [0.35, 1.008, 0.04],
+      "rotation": [0, 0, 1, 0]
+    },
+    {
+      "id": "camLock-7",
+      "role": "hardware",
+      "position": [-0.35, 2.0100000000000002, 0],
+      "rotation": [0, 0, 1, 0]
+    },
+    {
+      "id": "camLock-8",
+      "role": "hardware",
+      "position": [0.35, 2.0100000000000002, 0],
+      "rotation": [0, 0, 1, 0]
+    },
+    {
+      "id": "shelfPin-1",
+      "role": "hardware",
+      "position": [-0.384, 0.498, -0.09],
+      "rotation": [0, 0, -0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "shelfPin-2",
+      "role": "hardware",
+      "position": [-0.384, 0.498, 0.09],
+      "rotation": [0, 0, -0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "shelfPin-3",
+      "role": "hardware",
+      "position": [-0.384, 1.498, -0.09],
+      "rotation": [0, 0, -0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "shelfPin-4",
+      "role": "hardware",
+      "position": [-0.384, 1.498, 0.09],
+      "rotation": [0, 0, -0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "shelfPin-5",
+      "role": "hardware",
+      "position": [0.384, 0.498, 0.09],
+      "rotation": [0, 0, 0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "shelfPin-6",
+      "role": "hardware",
+      "position": [0.384, 0.498, -0.09],
+      "rotation": [0, 0, 0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "shelfPin-7",
+      "role": "hardware",
+      "position": [0.384, 1.498, 0.09],
+      "rotation": [0, 0, 0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "shelfPin-8",
+      "role": "hardware",
+      "position": [0.384, 1.498, -0.09],
+      "rotation": [0, 0, 0.7071067811865475, 0.7071067811865475]
+    },
+    {
+      "id": "backFitting-1",
+      "role": "hardware",
+      "position": [-0.387, 0.06800000000000006, -0.139],
+      "rotation": [-0.7071067811865475, 0, 0, 0.7071067811865475]
+    },
+    {
+      "id": "backFitting-2",
+      "role": "hardware",
+      "position": [0.387, 0.06800000000000006, -0.139],
+      "rotation": [-0.7071067811865475, 0, 0, 0.7071067811865475]
+    },
+    {
+      "id": "backFitting-3",
+      "role": "hardware",
+      "position": [-0.387, 2.012, -0.139],
+      "rotation": [-0.7071067811865475, 0, 0, 0.7071067811865475]
+    },
+    {
+      "id": "backFitting-4",
+      "role": "hardware",
+      "position": [0.387, 2.012, -0.139],
+      "rotation": [-0.7071067811865475, 0, 0, 0.7071067811865475]
+    },
+    {
+      "id": "backFitting-5",
+      "role": "hardware",
+      "position": [-0.387, 1.01, -0.139],
+      "rotation": [-0.7071067811865475, 0, 0, 0.7071067811865475]
+    },
+    {
+      "id": "backFitting-6",
+      "role": "hardware",
+      "position": [0.387, 1.01, -0.139],
+      "rotation": [-0.7071067811865475, 0, 0, 0.7071067811865475]
+    },
+    {
+      "id": "backFitting-7",
+      "role": "hardware",
+      "position": [0, 0.06800000000000006, -0.139],
+      "rotation": [-0.7071067811865475, 0, 0, 0.7071067811865475]
+    },
+    {
+      "id": "backFitting-8",
+      "role": "hardware",
+      "position": [0, 2.012, -0.139],
+      "rotation": [-0.7071067811865475, 0, 0, 0.7071067811865475]
+    },
+    {
+      "id": "adjustableShelf-1",
+      "role": "shelf",
+      "position": [0, 0.5085, 0.010000000000000009],
+      "rotation": [0, 0, 0, 1]
+    },
+    {
+      "id": "adjustableShelf-2",
+      "role": "shelf",
+      "position": [0, 1.5085, 0.010000000000000009],
+      "rotation": [0, 0, 0, 1]
+    }
+  ],
+  "manual": {
+    "pages": [
+      {
+        "kind": "cover"
+      },
+      {
+        "kind": "warning",
+        "subject": "twoPeople"
+      },
+      {
+        "kind": "doDont",
+        "subject": "protectFloor"
+      },
+      {
+        "kind": "doDont",
+        "subject": "noPowerTools"
+      },
+      {
+        "kind": "inventory"
+      },
+      {
+        "kind": "step",
+        "number": 1,
+        "pose": "parts",
+        "parts": ["plinth-1", "topBottomPanel-1", "fixedShelf-1", "topBottomPanel-2"],
+        "fasten": [
+          ["dowel-1/dowelEnd-1", "plinth-1/dowelHole-1"],
+          ["dowel-2/dowelEnd-1", "plinth-1/dowelHole-2"],
+          ["dowel-3/dowelEnd-1", "topBottomPanel-1/dowelHole-1"],
+          ["dowel-4/dowelEnd-1", "topBottomPanel-1/dowelHole-2"],
+          ["dowel-5/dowelEnd-1", "topBottomPanel-1/dowelHole-3"],
+          ["dowel-6/dowelEnd-1", "topBottomPanel-1/dowelHole-4"],
+          ["dowel-7/dowelEnd-1", "fixedShelf-1/dowelHole-1"],
+          ["dowel-8/dowelEnd-1", "fixedShelf-1/dowelHole-2"],
+          ["dowel-9/dowelEnd-1", "fixedShelf-1/dowelHole-3"],
+          ["dowel-10/dowelEnd-1", "fixedShelf-1/dowelHole-4"],
+          ["dowel-11/dowelEnd-1", "topBottomPanel-2/dowelHole-1"],
+          ["dowel-12/dowelEnd-1", "topBottomPanel-2/dowelHole-2"],
+          ["dowel-13/dowelEnd-1", "topBottomPanel-2/dowelHole-3"],
+          ["dowel-14/dowelEnd-1", "topBottomPanel-2/dowelHole-4"]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 2,
+        "pose": "parts",
+        "parts": ["sidePanel-1", "sidePanel-2"],
+        "fasten": [
+          ["camLockBolt-1/boltThread-1", "sidePanel-1/camBoltHole-1"],
+          ["camLockBolt-2/boltThread-1", "sidePanel-1/camBoltHole-2"],
+          ["camLockBolt-3/boltThread-1", "sidePanel-1/camBoltHole-3"],
+          ["camLockBolt-4/boltThread-1", "sidePanel-1/camBoltHole-4"],
+          ["camLockBolt-5/boltThread-1", "sidePanel-2/camBoltHole-1"],
+          ["camLockBolt-6/boltThread-1", "sidePanel-2/camBoltHole-2"],
+          ["camLockBolt-7/boltThread-1", "sidePanel-2/camBoltHole-3"],
+          ["camLockBolt-8/boltThread-1", "sidePanel-2/camBoltHole-4"]
+        ],
+        "tool": "allenWrench"
+      },
+      {
+        "kind": "step",
+        "number": 3,
+        "pose": "lying",
+        "fasten": [
+          ["dowel-1/dowelEnd-2", "sidePanel-1/dowelHole-7"],
+          ["dowel-5/dowelEnd-2", "sidePanel-1/dowelHole-1"],
+          ["dowel-6/dowelEnd-2", "sidePanel-1/dowelHole-2"],
+          ["dowel-7/dowelEnd-2", "sidePanel-1/dowelHole-3"],
+          ["dowel-8/dowelEnd-2", "sidePanel-1/dowelHole-4"],
+          ["dowel-11/dowelEnd-2", "sidePanel-1/dowelHole-5"],
+          ["dowel-12/dowelEnd-2", "sidePanel-1/dowelHole-6"]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 4,
+        "pose": "lying",
+        "fasten": [
+          ["camLock-2/camLockBody-1", "topBottomPanel-1/camLockRecess-2"],
+          ["camLock-3/camLockBody-1", "fixedShelf-1/camLockRecess-1"],
+          ["camLock-4/camLockBody-1", "fixedShelf-1/camLockRecess-2"],
+          ["camLock-7/camLockBody-1", "topBottomPanel-2/camLockRecess-1"]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 5,
+        "pose": "lying",
+        "turn": [
+          ["camLock-2/camLockBody-1", "topBottomPanel-1/camLockRecess-2"],
+          ["camLock-3/camLockBody-1", "fixedShelf-1/camLockRecess-1"],
+          ["camLock-4/camLockBody-1", "fixedShelf-1/camLockRecess-2"],
+          ["camLock-7/camLockBody-1", "topBottomPanel-2/camLockRecess-1"]
+        ],
+        "tool": "screwdriver"
+      },
+      {
+        "kind": "step",
+        "number": 6,
+        "pose": "lying",
+        "fasten": [
+          ["dowel-2/dowelEnd-2", "sidePanel-2/dowelHole-8"],
+          ["dowel-3/dowelEnd-2", "sidePanel-2/dowelHole-2"],
+          ["dowel-4/dowelEnd-2", "sidePanel-2/dowelHole-1"],
+          ["dowel-9/dowelEnd-2", "sidePanel-2/dowelHole-4"],
+          ["dowel-10/dowelEnd-2", "sidePanel-2/dowelHole-3"],
+          ["dowel-13/dowelEnd-2", "sidePanel-2/dowelHole-6"],
+          ["dowel-14/dowelEnd-2", "sidePanel-2/dowelHole-5"]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 7,
+        "pose": "lying",
+        "fasten": [
+          ["camLock-1/camLockBody-1", "topBottomPanel-1/camLockRecess-1"],
+          ["camLock-5/camLockBody-1", "fixedShelf-1/camLockRecess-3"],
+          ["camLock-6/camLockBody-1", "fixedShelf-1/camLockRecess-4"],
+          ["camLock-8/camLockBody-1", "topBottomPanel-2/camLockRecess-2"]
+        ],
+        "turn": [
+          ["camLock-1/camLockBody-1", "topBottomPanel-1/camLockRecess-1"],
+          ["camLock-5/camLockBody-1", "fixedShelf-1/camLockRecess-3"],
+          ["camLock-6/camLockBody-1", "fixedShelf-1/camLockRecess-4"],
+          ["camLock-8/camLockBody-1", "topBottomPanel-2/camLockRecess-2"]
+        ],
+        "tool": "screwdriver"
+      },
+      {
+        "kind": "step",
+        "number": 8,
+        "pose": "faceDown",
+        "parts": ["backPanel-1"]
+      },
+      {
+        "kind": "step",
+        "number": 9,
+        "pose": "faceDown",
+        "fasten": [
+          ["backFitting-1/backFittingTip-1", "backPanel-1/backFittingHole-1"],
+          ["backFitting-2/backFittingTip-1", "backPanel-1/backFittingHole-2"],
+          ["backFitting-3/backFittingTip-1", "backPanel-1/backFittingHole-3"],
+          ["backFitting-4/backFittingTip-1", "backPanel-1/backFittingHole-4"],
+          ["backFitting-5/backFittingTip-1", "backPanel-1/backFittingHole-5"],
+          ["backFitting-6/backFittingTip-1", "backPanel-1/backFittingHole-6"],
+          ["backFitting-7/backFittingTip-1", "backPanel-1/backFittingHole-7"],
+          ["backFitting-8/backFittingTip-1", "backPanel-1/backFittingHole-8"]
+        ]
+      },
+      {
+        "kind": "special",
+        "number": 10,
+        "pose": "upright",
+        "special": "tipUpright"
+      },
+      {
+        "kind": "step",
+        "number": 11,
+        "pose": "upright",
+        "fasten": [
+          ["shelfPin-1/pinTip-1", "sidePanel-1/shelfPinHole-1"],
+          ["shelfPin-2/pinTip-1", "sidePanel-1/shelfPinHole-2"],
+          ["shelfPin-3/pinTip-1", "sidePanel-1/shelfPinHole-3"],
+          ["shelfPin-4/pinTip-1", "sidePanel-1/shelfPinHole-4"],
+          ["shelfPin-5/pinTip-1", "sidePanel-2/shelfPinHole-1"],
+          ["shelfPin-6/pinTip-1", "sidePanel-2/shelfPinHole-2"],
+          ["shelfPin-7/pinTip-1", "sidePanel-2/shelfPinHole-3"],
+          ["shelfPin-8/pinTip-1", "sidePanel-2/shelfPinHole-4"]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 12,
+        "pose": "upright",
+        "parts": ["adjustableShelf-1", "adjustableShelf-2"]
+      },
+      {
+        "kind": "back"
+      }
+    ]
+  },
+  "packing": {
+    "boxInner": [0.84, 0.07, 2.08],
+    "wall": 0.01,
+    "floor": 0.01,
+    "lid": {
+      "thickness": 0.008,
+      "partNumber": "10001",
+      "mass": 0.9,
+      "color": "cardboard"
+    },
+    "placements": [
+      {
+        "id": "sidePanel-1",
+        "position": [-0.14500000000000002, 0.018000000000000002, -0.020000000000000018],
+        "rotation": [0.5000000000000001, 0.5000000000000001, 0.5000000000000001, 0.5000000000000001]
+      },
+      {
+        "id": "sidePanel-2",
+        "position": [0.14500000000000002, 0.018000000000000002, -0.020000000000000018],
+        "rotation": [0.5000000000000001, 0.5000000000000001, 0.5000000000000001, 0.5000000000000001]
+      },
+      {
+        "id": "topBottomPanel-1",
+        "position": [0, 0.037000000000000005, -0.89],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "topBottomPanel-2",
+        "position": [0, 0.037000000000000005, -0.6],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "fixedShelf-1",
+        "position": [0, 0.037000000000000005, -0.30999999999999994],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "adjustableShelf-1",
+        "position": [0, 0.037000000000000005, -0.029999999999999916],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "adjustableShelf-2",
+        "position": [0, 0.037000000000000005, 0.2400000000000001],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "plinth-1",
+        "position": [0, 0.037000000000000005, 0.41000000000000014],
+        "rotation": [0.7071067811865476, 0, 0, 0.7071067811865476]
+      },
+      {
+        "id": "backPanel-1",
+        "position": [0, 0.027500000000000004, -0.030000000000000027],
+        "rotation": [0.7071067811865476, 0, 0, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-1",
+        "position": [-0.32625000000000004, 0.049, -1.0035],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-2",
+        "position": [-0.25125, 0.049, -1.0035],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-3",
+        "position": [-0.17625, 0.049, -1.0035],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-4",
+        "position": [-0.10124999999999999, 0.049, -1.0035],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-5",
+        "position": [-0.026249999999999996, 0.049, -1.0035],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-6",
+        "position": [0.04875, 0.049, -1.0035],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-7",
+        "position": [0.12375, 0.049, -1.0035],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-8",
+        "position": [0.19875, 0.049, -1.0035],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-9",
+        "position": [0.27375000000000005, 0.049, -1.0035],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-10",
+        "position": [0.34875, 0.049, -1.0035],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-11",
+        "position": [-0.33625000000000005, 0.049, -0.9505],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-12",
+        "position": [-0.26125, 0.049, -0.9505],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-13",
+        "position": [-0.18625, 0.049, -0.9505],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-14",
+        "position": [-0.11125, 0.049, -0.9505],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-15",
+        "position": [-0.036250000000000004, 0.049, -0.9505],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "dowel-16",
+        "position": [0.03874999999999999, 0.049, -0.9505],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "camLockBolt-1",
+        "position": [0.11624999999999999, 0.0485, -0.9510000000000001],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "camLockBolt-2",
+        "position": [0.19625, 0.0485, -0.9510000000000001],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "camLockBolt-3",
+        "position": [0.27625, 0.0485, -0.9510000000000001],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "camLockBolt-4",
+        "position": [0.35625000000000007, 0.0485, -0.9510000000000001],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "camLockBolt-5",
+        "position": [-0.31875, 0.0485, -0.898],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "camLockBolt-6",
+        "position": [-0.23875, 0.0485, -0.898],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "camLockBolt-7",
+        "position": [-0.15874999999999997, 0.0485, -0.898],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "camLockBolt-8",
+        "position": [-0.07874999999999999, 0.0485, -0.898],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "camLock-1",
+        "position": [-0.008749999999999987, 0.051, -0.894],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "camLock-2",
+        "position": [0.05125000000000001, 0.051, -0.894],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "camLock-3",
+        "position": [0.11125000000000002, 0.051, -0.894],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "camLock-4",
+        "position": [0.17125, 0.051, -0.894],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "camLock-5",
+        "position": [0.23125, 0.051, -0.894],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "camLock-6",
+        "position": [0.29125, 0.051, -0.894],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "camLock-7",
+        "position": [0.35125000000000006, 0.051, -0.894],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "camLock-8",
+        "position": [-0.35375, 0.051, -0.834],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "camLock-9",
+        "position": [-0.29374999999999996, 0.051, -0.834],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "camLock-10",
+        "position": [-0.23374999999999999, 0.051, -0.834],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "shelfPin-1",
+        "position": [-0.17325, 0.0475, -0.839],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "shelfPin-2",
+        "position": [-0.11224999999999999, 0.0475, -0.839],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "shelfPin-3",
+        "position": [-0.05125, 0.0475, -0.839],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "shelfPin-4",
+        "position": [0.009750000000000002, 0.0475, -0.839],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "shelfPin-5",
+        "position": [0.07075000000000001, 0.0475, -0.839],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "shelfPin-6",
+        "position": [0.13175, 0.0475, -0.839],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "shelfPin-7",
+        "position": [0.19275, 0.0475, -0.839],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "shelfPin-8",
+        "position": [0.25375000000000003, 0.0475, -0.839],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "backFitting-1",
+        "position": [0.31475, 0.049, -0.8374999999999999],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "backFitting-2",
+        "position": [0.37575000000000003, 0.049, -0.8374999999999999],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "backFitting-3",
+        "position": [-0.32125, 0.049, -0.7774999999999999],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "backFitting-4",
+        "position": [-0.26025, 0.049, -0.7774999999999999],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "backFitting-5",
+        "position": [-0.19924999999999998, 0.049, -0.7774999999999999],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "backFitting-6",
+        "position": [-0.13824999999999998, 0.049, -0.7774999999999999],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "backFitting-7",
+        "position": [-0.07724999999999999, 0.049, -0.7774999999999999],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "backFitting-8",
+        "position": [-0.016249999999999994, 0.049, -0.7774999999999999],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      },
+      {
+        "id": "allenWrench-1",
+        "position": [0.07175000000000001, 0.047, -0.7689999999999999],
+        "rotation": [0, 0, 0, 1]
+      },
+      {
+        "id": "screwdriver-1",
+        "position": [0.25175000000000003, 0.055999999999999994, -0.7704999999999999],
+        "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476]
+      }
+    ]
+  },
+  "tuning": {}
+}
