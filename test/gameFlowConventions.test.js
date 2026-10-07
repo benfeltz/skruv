@@ -106,3 +106,43 @@ describe('booklet focus (PR #12 review)', () => {
     expect(booklet).not.toMatch(/handle\.disabled\s*=/);
   });
 });
+
+describe('boot with the manual up; tap off to put it down (1.6.1)', () => {
+  const booklet = read('src/ui/booklet.js');
+
+  it('opens on the cover, without moving focus onto a control', () => {
+    expect(booklet).toMatch(/let page = 0;\s*let open = true;/);
+  });
+
+  it('puts the scrim over the room and the sheet over the scrim, mounted by main', () => {
+    expect(booklet).toMatch(/\.booklet-scrim \{[^}]*position: fixed;[^}]*inset: 0;[^}]*z-index: 1;/);
+    expect(booklet.slice(booklet.indexOf('    .booklet {'), booklet.indexOf(".booklet[data-open='true'] {"))).toMatch(/z-index: 2;/);
+    expect(main).toMatch(/document\.body\.append\(booklet\.scrim, booklet\.thumb, booklet\.element\)/);
+  });
+
+  it('swallows the put-down tap in the booklet, never in the gesture router', () => {
+    const scrimUp = booklet.slice(booklet.indexOf("scrim.addEventListener('pointerup'"), booklet.indexOf("thumb.addEventListener('click'"));
+    expect(booklet).toMatch(/pointerdown', \(event\) => \{\s*pressed\.add\(event\.pointerId\);/);
+    // Only a press that began on the scrim, and only while open (PR #17 review, test plan).
+    expect(scrimUp).toMatch(/if \(!pressed\.delete\(event\.pointerId\) \|\| !open\) return;\s*setOpen\(false, \{ byRoomTap: true \}\);/);
+    expect(router).not.toMatch(/booklet|splash|scrim/i);
+  });
+
+  it('raises the scrim on every open and drops it on every close', () => {
+    const setOpen = booklet.slice(booklet.indexOf('function setOpen('), booklet.indexOf('// The tap that puts'));
+    expect(setOpen).toMatch(/showScrim\(open, byRoomTap \? BOOKLET_UI\.scrimLingerMs : 0\);/);
+  });
+
+  it('grows the docked thumbnail to a readable quarter of the screen under a mouse only — never a sticky hover on touch', () => {
+    const hover = booklet.slice(booklet.indexOf('@media (hover: hover)'), booklet.indexOf('.booklet-scrim {'));
+    expect(hover).toMatch(/\.booklet-thumb:hover \{\s*width: min\(\$\{BOOKLET_UI\.thumbHoverShare \* 100\}vw, \$\{BOOKLET_UI\.thumbHoverShare \* 100\}vh \* \$\{pageW\} \/ \$\{pageH\}\);/);
+    // Grown from its corner (it is anchored left/bottom), animated, and drawn at full page
+    // resolution so it reads when grown.
+    const thumbRule = booklet.slice(booklet.indexOf('    .booklet-thumb {'), booklet.indexOf('@media (hover: hover)'));
+    expect(thumbRule).toMatch(/transition: width 160ms ease-out;/);
+    expect(booklet).toMatch(/const thumbCanvas = pageCanvas\(pageW, pageH\);/);
+    // Nothing transforms the scrim (PR #17 round-4 review).
+    const scrimRule = booklet.slice(booklet.indexOf('.booklet-scrim {'), booklet.indexOf('.booklet-thumb canvas'));
+    expect(scrimRule).not.toMatch(/transform|transition/);
+  });
+});

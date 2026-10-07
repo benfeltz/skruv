@@ -100,6 +100,12 @@ export const BOOKLET_UI = {
   // The open sheet never grows wider than this, nor taller than this share of the screen.
   maxWidth: 520,
   maxHeight: 0.92,
+  // After a tap on the room puts the booklet down, the scrim stays this long to catch the
+  // click a touch synthesises after the lift.
+  scrimLingerMs: 400,
+  // A mouse over the docked thumbnail grows it to fit this share of the screen's width and
+  // height (a quarter of the screen), big enough to read the page.
+  thumbHoverShare: 0.5,
 };
 
 export const LIGHTS = {

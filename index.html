@@ -38,10 +38,103 @@
         height: 100%;
         touch-action: none;
       }
+      /* The pre-splash: the booklet sheet open on its cover, drawn before any script runs so a
+         cold load never shows the bare void. It mirrors src/ui/booklet.js's open sheet and
+         the cover page of src/scene/bookletPages.js (the outline drawing joins it when the
+         real sheet takes over); main.js removes it on that sheet's first paint.
+         test/splashConventions.test.js pins these values to src/constants.js. */
+      .pre-splash {
+        position: fixed;
+        left: 50%;
+        bottom: 0;
+        transform: translate(-50%, 0);
+        width: min(100vw, 520px);
+        max-height: 92dvh;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        box-sizing: border-box;
+        padding: 8px 16px calc(14px + env(safe-area-inset-bottom));
+        border-radius: 18px 18px 0 0;
+        background: #2a2d34;
+        color: #f1eee6;
+        font: 600 15px/1 system-ui, -apple-system, sans-serif;
+        box-shadow: 0 -8px 30px #0008;
+        pointer-events: none;
+      }
+      /* A div, not the sheet's button: centred the way a button centres its content. */
+      .pre-splash-handle {
+        align-self: center;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        width: 64px;
+        height: 28px;
+      }
+      .pre-splash-handle::before {
+        content: '';
+        display: block;
+        width: 44px;
+        height: 5px;
+        margin: 0 auto;
+        border-radius: 3px;
+        background: #f1eee666;
+      }
+      .pre-splash-page {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        justify-content: center;
+      }
+      /* The page canvas's own fit: its 720 × 1000 shrunk to the sheet's width or the height
+         cap, whichever bites first (an svg's width and height don't shrink as a canvas's do). */
+      .pre-splash-page svg {
+        display: block;
+        width: min(100%, 720px, calc((92dvh - 120px) * 720 / 1000));
+        height: auto;
+        aspect-ratio: 720 / 1000;
+        border-radius: 6px;
+        background: #ffffff;
+      }
+      .pre-splash-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .pre-splash-controls button {
+        min-width: 44px;
+        min-height: 44px;
+        border: 2px solid #f1eee633;
+        border-radius: 22px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-size: 20px;
+      }
+      .pre-splash-controls button:first-child {
+        opacity: 0.3;
+      }
+      .pre-splash-count {
+        font-variant-numeric: tabular-nums;
+      }
     </style>
   </head>
   <body>
     <div id="app"></div>
+    <section class="pre-splash" id="pre-splash" aria-hidden="true">
+      <div class="pre-splash-handle"></div>
+      <div class="pre-splash-page">
+        <svg viewBox="0 0 720 1000" fill="#1c1c1c" font-family='system-ui, -apple-system, "Segoe UI", sans-serif'>
+          <text x="44" y="154" font-size="124" font-weight="800">JOHNNY</text>
+          <text x="48" y="202" font-size="30" font-weight="600">SKRUV</text>
+        </svg>
+      </div>
+      <div class="pre-splash-controls">
+        <button type="button" tabindex="-1">‹</button>
+        <span class="pre-splash-count">1 / 18</span>
+        <button type="button" tabindex="-1">›</button>
+      </div>
+    </section>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

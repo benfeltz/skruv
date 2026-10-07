@@ -4,7 +4,9 @@ import { BOOKLET, BOOKLET_UI, COLORS } from '../constants.js';
 // open page in the corner — the only thing it puts under a finger, so the room stays
 // free. Tapped, it opens: one page at a time, flipped by a horizontal swipe, the arrow
 // buttons or the arrow keys, closed by its handle, a swipe down, or Escape. It flips
-// freely, front to back and back again: reference, never a checklist. Follows the src/ui
+// freely, front to back and back again: reference, never a checklist. The game opens with
+// it in hand, on its cover. While it is open, a scrim over the room takes any tap outside
+// the sheet, puts the booklet down with it and swallows it whole. Follows the src/ui
 // pattern (own element, own style, colours from COLORS).
 
 const STYLE_ID = 'skruv-booklet';
@@ -31,6 +33,21 @@ function injectStyle() {
       cursor: pointer;
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
+      transition: width 160ms ease-out;
+    }
+    /* A mouse over the docked thumbnail grows it from its corner to a readable page,
+       about a quarter of the screen. Hover-capable pointers only: a touch never hovers. */
+    @media (hover: hover) {
+      .booklet-thumb:hover {
+        width: min(${BOOKLET_UI.thumbHoverShare * 100}vw, ${BOOKLET_UI.thumbHoverShare * 100}vh * ${pageW} / ${pageH});
+      }
+    }
+    .booklet-scrim {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
     }
     .booklet-thumb canvas { display: block; width: 100%; height: 100%; }
     .booklet-thumb:focus-visible, .booklet button:focus-visible {
@@ -56,6 +73,7 @@ function injectStyle() {
       box-shadow: 0 -8px 30px #0008;
       transition: transform 220ms ease-out, visibility 0s linear 220ms;
       visibility: hidden;
+      z-index: 2;
     }
     .booklet[data-open='true'] {
       transform: translate(-50%, 0);
@@ -63,7 +81,7 @@ function injectStyle() {
       visibility: visible;
     }
     @media (prefers-reduced-motion: reduce) {
-      .booklet, .booklet[data-open='true'] { transition: none; }
+      .booklet, .booklet[data-open='true'], .booklet-thumb { transition: none; }
     }
     .booklet-handle {
       align-self: center;
@@ -126,21 +144,29 @@ function injectStyle() {
 
 /**
  * The booklet sheet for `pages` (`{ count, canvas(index) }`, src/scene/bookletPages.js).
- * Returns `{ thumb, element, currentPage, expanded, onChange(fn) }`: mount both elements;
- * `onChange(fn)` calls `fn({ page, expanded })` whenever either changes. State is the
- * module's own and read-only outside it.
+ * Returns `{ scrim, thumb, element, currentPage, expanded, onChange(fn) }`: mount all three
+ * elements; `onChange(fn)` calls `fn({ page, expanded })` whenever either changes. Starts
+ * open on page 0, the cover. State is the module's own and read-only outside it.
  */
 export function createBookletSheet({ pages }) {
   injectStyle();
   const listeners = new Set();
   let page = 0;
-  let open = false;
+  let open = true;
+  let lingering = null;
+
+  // Over the whole room — canvas and buttons alike — and under the sheet, while the
+  // booklet is open.
+  const scrim = document.createElement('div');
+  scrim.className = 'booklet-scrim';
+  scrim.setAttribute('aria-hidden', 'true');
 
   const thumb = document.createElement('button');
   thumb.type = 'button';
   thumb.className = 'booklet-thumb';
   thumb.setAttribute('aria-label', 'Open the instructions');
-  const thumbCanvas = pageCanvas(Math.round(pageW / 4), Math.round(pageH / 4));
+  // Full page resolution: hovered, the thumbnail is read at up to a quarter of the screen.
+  const thumbCanvas = pageCanvas(pageW, pageH);
   thumb.append(thumbCanvas);
 
   const element = document.createElement('section');
@@ -190,15 +216,42 @@ export function createBookletSheet({ pages }) {
     render();
   };
 
-  function setOpen(value) {
+  // The scrim is up whenever the booklet is open. Put down by a tap on the room, it stays
+  // `linger` ms past the lift, so the click a touch synthesises lands on it too rather than
+  // on a button underneath.
+  function showScrim(shown, linger = 0) {
+    clearTimeout(lingering);
+    if (shown || linger === 0) scrim.hidden = !shown;
+    else lingering = setTimeout(() => (scrim.hidden = true), linger);
+  }
+
+  function setOpen(value, { byRoomTap = false } = {}) {
     if (open === value) return;
     open = value;
+    showScrim(open, byRoomTap ? BOOKLET_UI.scrimLingerMs : 0);
     render();
     // Into the sheet on a control that can take focus (a disabled one can't, on the last
-    // or first page), back to the thumb on close.
+    // or first page), back to the thumb on close — unless the close was a tap on the room.
+    if (byRoomTap) return;
     const inside = [next, prev, handle].find((control) => !control.disabled);
     (open ? inside : thumb).focus({ preventScroll: true });
   }
+
+  // The tap that puts the booklet down. Captured, so a finger that slides onto the sheet
+  // still ends here; the room never sees its pointerdown, so nothing is grabbed or orbited.
+  // Only a press that began on the scrim counts: a mouse pressed on the sheet and released
+  // off it lifts over the scrim too, uncaptured. A tap while the scrim lingers over the
+  // closed booklet is swallowed and does nothing.
+  const pressed = new Set();
+  scrim.addEventListener('pointerdown', (event) => {
+    pressed.add(event.pointerId);
+    scrim.setPointerCapture(event.pointerId);
+  });
+  scrim.addEventListener('pointercancel', (event) => pressed.delete(event.pointerId));
+  scrim.addEventListener('pointerup', (event) => {
+    if (!pressed.delete(event.pointerId) || !open) return;
+    setOpen(false, { byRoomTap: true });
+  });
 
   thumb.addEventListener('click', () => setOpen(true));
   handle.addEventListener('click', () => setOpen(false));
@@ -233,6 +286,7 @@ export function createBookletSheet({ pages }) {
   render();
 
   return {
+    scrim,
     thumb,
     element,
     get currentPage() {
