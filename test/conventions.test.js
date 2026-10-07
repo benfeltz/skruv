@@ -10,8 +10,8 @@ import viteConfig from '../vite.config.js';
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
 describe('GitHub Pages deploy', () => {
-  it("serves from the /skruv/ project path so assets don't 404", () => {
-    expect(viteConfig.base).toBe('/skruv/');
+  it("serves from the domain root (custom domain skruv.site) so assets don't 404", () => {
+    expect(viteConfig.base).toBe('/');
   });
 
   it('deploys dist on pushes to main', () => {
@@ -279,7 +279,7 @@ describe('PWA install (1.6)', () => {
     return { signature: bytes.subarray(1, 4).toString(), width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
   };
 
-  // Off the base, the installed app opens on a 404 (Pages serves the game at /skruv/).
+  // Off the base, the installed app opens on a 404 (the site serves at the domain root).
   it('starts and scopes the installed app at the Pages base', () => {
     expect(manifest.start_url).toBe(viteConfig.base);
     expect(manifest.scope).toBe(viteConfig.base);

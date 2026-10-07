@@ -85,8 +85,8 @@ function devStream() {
 }
 
 export default defineConfig({
-  // GitHub Pages serves the project at /skruv/ — without this every asset 404s.
-  base: '/skruv/',
+  // Served at the domain root (custom domain skruv.site) — a non-root base 404s every asset.
+  base: '/',
   plugins: [devStream()],
   test: {
     include: ['test/**/*.test.js'],
