@@ -108,9 +108,11 @@ const gizmo = createGizmo({
 scene.add(gizmo.object);
 
 // The booklet: pages drawn from the same models, flipped freely — reference, never a gate.
+// The game opens with it in hand, on its cover; the first tap outside the sheet puts it down
+// and does nothing else.
 const bookletPages = createBookletPages(renderer);
 const booklet = createBookletSheet({ pages: bookletPages });
-document.body.append(booklet.thumb, booklet.element);
+document.body.append(booklet.scrim, booklet.thumb, booklet.element);
 
 // While the booklet is open, the open page's parts glow — the player's own set only, never
 // the display shelf or the box lid.

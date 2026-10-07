@@ -4,7 +4,9 @@ import { BOOKLET, BOOKLET_UI, COLORS } from '../constants.js';
 // open page in the corner — the only thing it puts under a finger, so the room stays
 // free. Tapped, it opens: one page at a time, flipped by a horizontal swipe, the arrow
 // buttons or the arrow keys, closed by its handle, a swipe down, or Escape. It flips
-// freely, front to back and back again: reference, never a checklist. Follows the src/ui
+// freely, front to back and back again: reference, never a checklist. The game opens with
+// it in hand, on its cover: until it is first put down, a scrim over the room takes any tap
+// outside the sheet, closes the booklet with it and swallows it whole. Follows the src/ui
 // pattern (own element, own style, colours from COLORS).
 
 const STYLE_ID = 'skruv-booklet';
@@ -32,6 +34,14 @@ function injectStyle() {
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
     }
+    .booklet-scrim {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .booklet[data-splash='true'] { z-index: 2; }
     .booklet-thumb canvas { display: block; width: 100%; height: 100%; }
     .booklet-thumb:focus-visible, .booklet button:focus-visible {
       outline: 2px solid ${css(COLORS.uiAccent)};
@@ -126,15 +136,22 @@ function injectStyle() {
 
 /**
  * The booklet sheet for `pages` (`{ count, canvas(index) }`, src/scene/bookletPages.js).
- * Returns `{ thumb, element, currentPage, expanded, onChange(fn) }`: mount both elements;
- * `onChange(fn)` calls `fn({ page, expanded })` whenever either changes. State is the
- * module's own and read-only outside it.
+ * Returns `{ scrim, thumb, element, currentPage, expanded, onChange(fn) }`: mount all three
+ * elements; `onChange(fn)` calls `fn({ page, expanded })` whenever either changes. Starts
+ * open on page 0, the cover. State is the module's own and read-only outside it.
  */
 export function createBookletSheet({ pages }) {
   injectStyle();
   const listeners = new Set();
   let page = 0;
-  let open = false;
+  let open = true;
+  let splash = true;
+
+  // Over the whole room — canvas and buttons alike — and under the sheet, while the
+  // booklet is still in hand from boot.
+  const scrim = document.createElement('div');
+  scrim.className = 'booklet-scrim';
+  scrim.setAttribute('aria-hidden', 'true');
 
   const thumb = document.createElement('button');
   thumb.type = 'button';
@@ -146,6 +163,7 @@ export function createBookletSheet({ pages }) {
   const element = document.createElement('section');
   element.className = 'booklet';
   element.setAttribute('aria-label', 'Instructions');
+  element.dataset.splash = 'true';
 
   const handle = document.createElement('button');
   handle.type = 'button';
@@ -190,15 +208,36 @@ export function createBookletSheet({ pages }) {
     render();
   };
 
-  function setOpen(value) {
+  // The booklet is down for the first time: the sheet drops back to its normal stacking and
+  // the scrim goes — after `linger` ms, if it took the tap, so the click a touch synthesises
+  // after the lift lands on it too rather than on a button underneath.
+  function endSplash(linger = 0) {
+    if (!splash) return;
+    splash = false;
+    delete element.dataset.splash;
+    if (linger > 0) setTimeout(() => scrim.remove(), linger);
+    else scrim.remove();
+  }
+
+  function setOpen(value, { focus = true } = {}) {
     if (open === value) return;
     open = value;
+    if (!open) endSplash();
     render();
     // Into the sheet on a control that can take focus (a disabled one can't, on the last
-    // or first page), back to the thumb on close.
+    // or first page), back to the thumb on close — unless the close was a tap on the room.
+    if (!focus) return;
     const inside = [next, prev, handle].find((control) => !control.disabled);
     (open ? inside : thumb).focus({ preventScroll: true });
   }
+
+  // The tap that puts the booklet down. Captured, so a finger that slides onto the sheet
+  // still ends here; the room never sees its pointerdown, so nothing is grabbed or orbited.
+  scrim.addEventListener('pointerdown', (event) => scrim.setPointerCapture(event.pointerId));
+  scrim.addEventListener('pointerup', () => {
+    endSplash(BOOKLET_UI.splashLingerMs);
+    setOpen(false, { focus: false });
+  });
 
   thumb.addEventListener('click', () => setOpen(true));
   handle.addEventListener('click', () => setOpen(false));
@@ -233,6 +272,7 @@ export function createBookletSheet({ pages }) {
   render();
 
   return {
+    scrim,
     thumb,
     element,
     get currentPage() {

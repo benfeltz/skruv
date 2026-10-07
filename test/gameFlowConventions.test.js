@@ -106,3 +106,32 @@ describe('booklet focus (PR #12 review)', () => {
     expect(booklet).not.toMatch(/handle\.disabled\s*=/);
   });
 });
+
+describe('boot with the manual up (1.6.1)', () => {
+  const booklet = read('src/ui/booklet.js');
+
+  it('opens on the cover, without moving focus onto a control', () => {
+    expect(booklet).toMatch(/let page = 0;\s*let open = true;/);
+    expect(booklet).toMatch(/element\.dataset\.splash = 'true'/);
+  });
+
+  it('puts the scrim over the room and under the sheet, mounted by main', () => {
+    expect(booklet).toMatch(/\.booklet-scrim \{[^}]*position: fixed;[^}]*inset: 0;[^}]*z-index: 1;/);
+    expect(booklet).toMatch(/\.booklet\[data-splash='true'\] \{ z-index: 2; \}/);
+    expect(main).toMatch(/document\.body\.append\(booklet\.scrim, booklet\.thumb, booklet\.element\)/);
+  });
+
+  it('swallows the dismiss tap in the booklet, never in the gesture router', () => {
+    const scrimUp = booklet.slice(booklet.indexOf("scrim.addEventListener('pointerup'"), booklet.indexOf("thumb.addEventListener('click'"));
+    expect(scrimUp).toMatch(/endSplash\(BOOKLET_UI\.splashLingerMs\);\s*setOpen\(false, \{ focus: false \}\);/);
+    expect(router).not.toMatch(/booklet|splash|scrim/i);
+  });
+
+  it('ends the splash on any close, so the booklet is ordinary from then on', () => {
+    const setOpen = booklet.slice(booklet.indexOf('function setOpen('), booklet.indexOf('// The tap that puts'));
+    expect(setOpen).toMatch(/if \(!open\) endSplash\(\);/);
+    const endSplash = booklet.slice(booklet.indexOf('function endSplash('), booklet.indexOf('function setOpen('));
+    expect(endSplash).toMatch(/if \(!splash\) return;/);
+    expect(endSplash).toMatch(/scrim\.remove\(\)/);
+  });
+});
