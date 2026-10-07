@@ -348,3 +348,45 @@ describe('tap the sheet to put it down, swipe to flip (1.6.2)', () => {
     expect(booklet.expanded).toBe(false);
   });
 });
+
+describe('tap to put down, from the 1.6.2 test plan', () => {
+  const view = (booklet) => booklet.element.children[1];
+
+  it('reopened after a tap on the sheet, it flips by swipe and by arrow, and taps down again', () => {
+    const { booklet, next, count } = mount();
+    press(view(booklet));
+    vi.runAllTimers();
+    booklet.thumb.fire('click');
+    press(view(booklet), { dx: -BOOKLET_UI.swipeDistance });
+    next.fire('click');
+    expect(booklet.currentPage).toBe(2);
+    expect(count.textContent).toBe(`3 / ${COUNT}`);
+    expect(booklet.expanded).toBe(true);
+    press(view(booklet));
+    expect(booklet.expanded).toBe(false);
+    expect(booklet.currentPage).toBe(2);
+  });
+
+  it('puts the booklet down once for a two-finger tap on the sheet', () => {
+    const { booklet, changes } = mount();
+    view(booklet).fire('pointerdown', { pointerId: 1 });
+    view(booklet).fire('pointerdown', { pointerId: 2 });
+    view(booklet).fire('pointerup', { pointerId: 1 });
+    view(booklet).fire('pointerup', { pointerId: 2 });
+    expect(changes).toEqual([{ page: 0, expanded: false }]);
+  });
+
+  it('a mouse pressed on the sheet and released over the scrim closes nothing', () => {
+    const { booklet } = mount();
+    view(booklet).fire('pointerdown', { pointerId: 1 });
+    booklet.scrim.fire('pointerup', { pointerId: 1 });
+    expect(booklet.expanded).toBe(true);
+  });
+
+  it('a tap on the sheet while it is down does nothing', () => {
+    const { booklet, changes } = mount();
+    press(view(booklet));
+    press(view(booklet), { pointerId: 2 });
+    expect(changes).toEqual([{ page: 0, expanded: false }]);
+  });
+});
