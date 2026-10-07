@@ -3,8 +3,8 @@ import { BOOKLET_UI } from '../src/constants.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
 
 // The real booklet sheet (src/ui/booklet.js), driven headlessly on a minimal fake DOM:
-// the boot splash — open on the cover, the first tap on the room puts it down and nothing
-// else — and an ordinary booklet from then on. How it feels on a phone is the manual plan.
+// it boots open on the cover, and whenever it is open a tap on the room puts it down and
+// does nothing else. How it feels on a phone is the manual plan.
 
 class FakeElement {
   constructor(tag) {
@@ -86,8 +86,8 @@ function mount() {
   const [prev, , next] = controls.children;
   const count = controls.children[1];
   const key = (k) => dom.windowListeners.get('keydown').forEach((fn) => fn({ key: k }));
-  const mounted = () => dom.body.children.includes(booklet.scrim);
-  return { booklet, changes, handle, prev, next, count, key, mounted };
+  const scrimUp = () => dom.body.children.includes(booklet.scrim) && !booklet.scrim.hidden;
+  return { booklet, changes, handle, prev, next, count, key, scrimUp };
 }
 
 // A tap on the room: pressed and lifted on the scrim.
@@ -96,30 +96,57 @@ const tapRoom = (scrim, pointerId = 1) => {
   scrim.fire('pointerup', { pointerId });
 };
 
-describe('boot splash: the booklet in hand on its cover (1.6.1)', () => {
-  it('boots open on page 1, the scrim over the room, the sheet over the scrim, focus untouched', () => {
-    const { booklet, count, mounted } = mount();
+describe('boot: the booklet in hand on its cover (1.6.1)', () => {
+  it('boots open on page 1, the scrim up over the room, focus untouched', () => {
+    const { booklet, count, scrimUp } = mount();
     expect(booklet.expanded).toBe(true);
     expect(booklet.currentPage).toBe(0);
     expect(booklet.element.dataset.open).toBe('true');
-    expect(booklet.element.dataset.splash).toBe('true');
     expect(booklet.thumb.hidden).toBe(true);
     expect(count.textContent).toBe(`1 / ${COUNT}`);
-    expect(mounted()).toBe(true);
+    expect(scrimUp()).toBe(true);
+    expect(dom.focused).toBe(null);
+  });
+});
+
+describe('tap off to put it down — every time it is open (1.6.1)', () => {
+  // Open at boot, and open again from the thumb after a first put-down.
+  const openings = [
+    ['at boot', () => {}],
+    [
+      'reopened from the thumb',
+      ({ booklet }) => {
+        tapRoom(booklet.scrim);
+        vi.runAllTimers();
+        booklet.thumb.fire('click');
+      },
+    ],
+  ];
+
+  it.each(openings)('puts the booklet down on one tap on the room, and only that (%s)', (_, open) => {
+    const sheet = mount();
+    open(sheet);
+    const { booklet, changes } = sheet;
+    const before = changes.length;
+    dom.focused = null;
+    tapRoom(booklet.scrim);
+    expect(booklet.expanded).toBe(false);
+    expect(booklet.element.dataset.open).toBe('false');
+    expect(booklet.thumb.hidden).toBe(false);
+    expect(changes.slice(before)).toEqual([{ page: 0, expanded: false }]);
+    // A tap on the room is not a reason to move focus onto the thumb.
     expect(dom.focused).toBe(null);
   });
 
-  it('puts the booklet down on one tap on the room, and only that', () => {
-    const { booklet, changes } = mount();
-    tapRoom(booklet.scrim);
-    expect(booklet.expanded).toBe(false);
-    expect(booklet.currentPage).toBe(0);
-    expect(booklet.element.dataset.open).toBe('false');
-    expect(booklet.element.dataset.splash).toBeUndefined();
-    expect(booklet.thumb.hidden).toBe(false);
-    expect(changes).toEqual([{ page: 0, expanded: false }]);
-    // A tap on the room is not a reason to move focus onto the thumb.
-    expect(dom.focused).toBe(null);
+  it.each(openings)('keeps the scrim exactly scrimLingerMs after the lift, then drops it (%s)', (_, open) => {
+    const sheet = mount();
+    open(sheet);
+    tapRoom(sheet.booklet.scrim);
+    expect(sheet.scrimUp()).toBe(true);
+    vi.advanceTimersByTime(BOOKLET_UI.scrimLingerMs - 1);
+    expect(sheet.scrimUp()).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(sheet.scrimUp()).toBe(false);
   });
 
   it('captures the pressed pointer, so a finger sliding onto the sheet still ends on the scrim', () => {
@@ -128,23 +155,12 @@ describe('boot splash: the booklet in hand on its cover (1.6.1)', () => {
     expect(booklet.scrim.captured).toEqual([7]);
   });
 
-  it('keeps the scrim for splashLingerMs after the lift, to catch the synthesised click', () => {
-    const { booklet, mounted } = mount();
-    tapRoom(booklet.scrim);
-    expect(mounted()).toBe(true);
-    vi.advanceTimersByTime(BOOKLET_UI.splashLingerMs - 1);
-    expect(mounted()).toBe(true);
-    vi.advanceTimersByTime(1);
-    expect(mounted()).toBe(false);
-  });
-
   it('ignores a lift whose press began elsewhere — a mouse pressed on the sheet, released off it', () => {
-    const { booklet, mounted } = mount();
+    const { booklet, scrimUp } = mount();
     booklet.scrim.fire('pointerup', { pointerId: 3 });
     expect(booklet.expanded).toBe(true);
-    expect(booklet.element.dataset.splash).toBe('true');
     vi.runAllTimers();
-    expect(mounted()).toBe(true);
+    expect(scrimUp()).toBe(true);
   });
 
   it('ignores a lift after the press was cancelled', () => {
@@ -165,37 +181,55 @@ describe('boot splash: the booklet in hand on its cover (1.6.1)', () => {
     expect(changes).toEqual([{ page: 0, expanded: false }]);
   });
 
+  it('swallows a tap while the scrim lingers over the closed booklet, and does nothing with it', () => {
+    const { booklet, changes } = mount();
+    tapRoom(booklet.scrim);
+    tapRoom(booklet.scrim, 2);
+    expect(booklet.expanded).toBe(false);
+    expect(changes).toEqual([{ page: 0, expanded: false }]);
+  });
+
+  it('reopened inside the linger: the scrim stays up past it, and the next tap off closes again', () => {
+    const { booklet, scrimUp } = mount();
+    tapRoom(booklet.scrim);
+    // Keyboard: Enter on the thumb clicks it.
+    booklet.thumb.fire('click');
+    vi.runAllTimers();
+    expect(booklet.expanded).toBe(true);
+    expect(scrimUp()).toBe(true);
+    tapRoom(booklet.scrim, 2);
+    expect(booklet.expanded).toBe(false);
+  });
+
   it.each([
     ['the handle', ({ handle }) => handle.fire('click')],
     ['Escape', ({ key }) => key('Escape')],
-  ])('ends the splash at once when closed by %s, focus back on the thumb', (_, close) => {
+  ])('drops the scrim at once when closed by %s, focus back on the thumb', (_, close) => {
     const sheet = mount();
     close(sheet);
     expect(sheet.booklet.expanded).toBe(false);
-    expect(sheet.booklet.element.dataset.splash).toBeUndefined();
-    expect(sheet.mounted()).toBe(false);
+    expect(sheet.scrimUp()).toBe(false);
     expect(dom.focused).toBe(sheet.booklet.thumb);
   });
 
-  it('flips during the splash like any open booklet, and the splash survives it', () => {
-    const { booklet, next, key, count } = mount();
+  it('flips with the scrim up, the scrim staying', () => {
+    const { booklet, next, key, count, scrimUp } = mount();
     next.fire('click');
     key('ArrowRight');
     expect(booklet.currentPage).toBe(2);
     expect(count.textContent).toBe(`3 / ${COUNT}`);
-    expect(booklet.element.dataset.splash).toBe('true');
+    expect(scrimUp()).toBe(true);
   });
 });
 
-describe('after the splash: an ordinary booklet (1.6.1)', () => {
-  it('reopens from the thumb on the same page, flips, and closes — with no splash again', () => {
-    const { booklet, handle, next, changes, mounted } = mount();
+describe('the rest of the booklet, unchanged (1.6.1)', () => {
+  it('reopens from the thumb on the same page, flips, and closes by the handle', () => {
+    const { booklet, handle, next, changes, scrimUp } = mount();
     tapRoom(booklet.scrim);
     vi.runAllTimers();
     booklet.thumb.fire('click');
     expect(booklet.expanded).toBe(true);
-    expect(booklet.element.dataset.splash).toBeUndefined();
-    expect(mounted()).toBe(false);
+    expect(scrimUp()).toBe(true);
     expect(dom.focused).toBe(next);
     next.fire('click');
     handle.fire('click');
@@ -206,12 +240,11 @@ describe('after the splash: an ordinary booklet (1.6.1)', () => {
       { page: 1, expanded: false },
     ]);
     expect(dom.focused).toBe(booklet.thumb);
+    expect(scrimUp()).toBe(false);
   });
 
   it('swipes down to close and across to flip, as before', () => {
-    const { booklet } = mount();
-    tapRoom(booklet.scrim);
-    booklet.thumb.fire('click');
+    const { booklet, scrimUp } = mount();
     const view = booklet.element.children[1];
     view.fire('pointerdown', { clientX: 100, clientY: 100 });
     view.fire('pointerup', { clientX: 100 - BOOKLET_UI.swipeDistance, clientY: 100 });
@@ -219,17 +252,6 @@ describe('after the splash: an ordinary booklet (1.6.1)', () => {
     view.fire('pointerdown', { clientX: 100, clientY: 100 });
     view.fire('pointerup', { clientX: 100, clientY: 100 + BOOKLET_UI.swipeDistance });
     expect(booklet.expanded).toBe(false);
-  });
-
-  it('closes only the splash: a tap still swallowed by the lingering scrim never closes a reopened booklet', () => {
-    const { booklet, changes, mounted } = mount();
-    tapRoom(booklet.scrim);
-    // Reopened inside the linger (keyboard: Enter on the thumb clicks it), then a second
-    // tap on the room while the scrim is still up.
-    booklet.thumb.fire('click');
-    expect(mounted()).toBe(true);
-    tapRoom(booklet.scrim, 2);
-    expect(booklet.expanded).toBe(true);
-    expect(changes.at(-1)).toEqual({ page: 0, expanded: true });
+    expect(scrimUp()).toBe(false);
   });
 });

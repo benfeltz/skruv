@@ -107,35 +107,33 @@ describe('booklet focus (PR #12 review)', () => {
   });
 });
 
-describe('boot with the manual up (1.6.1)', () => {
+describe('boot with the manual up; tap off to put it down (1.6.1)', () => {
   const booklet = read('src/ui/booklet.js');
 
   it('opens on the cover, without moving focus onto a control', () => {
     expect(booklet).toMatch(/let page = 0;\s*let open = true;/);
-    expect(booklet).toMatch(/element\.dataset\.splash = 'true'/);
   });
 
-  it('puts the scrim over the room and under the sheet, mounted by main', () => {
+  it('puts the scrim over the room and the sheet over the scrim, mounted by main', () => {
     expect(booklet).toMatch(/\.booklet-scrim \{[^}]*position: fixed;[^}]*inset: 0;[^}]*z-index: 1;/);
-    expect(booklet).toMatch(/\.booklet\[data-splash='true'\] \{ z-index: 2; \}/);
+    expect(booklet.slice(booklet.indexOf('    .booklet {'), booklet.indexOf(".booklet[data-open='true'] {"))).toMatch(/z-index: 2;/);
     expect(main).toMatch(/document\.body\.append\(booklet\.scrim, booklet\.thumb, booklet\.element\)/);
   });
 
-  it('swallows the dismiss tap in the booklet, never in the gesture router', () => {
+  it('swallows the put-down tap in the booklet, never in the gesture router', () => {
     const scrimUp = booklet.slice(booklet.indexOf("scrim.addEventListener('pointerup'"), booklet.indexOf("thumb.addEventListener('click'"));
     expect(booklet).toMatch(/pointerdown', \(event\) => \{\s*pressed\.add\(event\.pointerId\);/);
-    expect(scrimUp).toMatch(/endSplash\(BOOKLET_UI\.splashLingerMs\);\s*setOpen\(false, \{ focus: false \}\);/);
-    // Only a press that began on the scrim: a mouse pressed on the sheet and released off it
-    // must not put the booklet down (PR #17 review).
-    expect(scrimUp).toMatch(/if \(!pressed\.delete\(event\.pointerId\) \|\| !splash\) return;\s*endSplash\(/);
+    // Only a press that began on the scrim, and only while open (PR #17 review, test plan).
+    expect(scrimUp).toMatch(/if \(!pressed\.delete\(event\.pointerId\) \|\| !open\) return;\s*setOpen\(false, \{ byRoomTap: true \}\);/);
     expect(router).not.toMatch(/booklet|splash|scrim/i);
   });
 
-  it('ends the splash on any close, so the booklet is ordinary from then on', () => {
+  it('raises the scrim on every open and drops it on every close', () => {
     const setOpen = booklet.slice(booklet.indexOf('function setOpen('), booklet.indexOf('// The tap that puts'));
-    expect(setOpen).toMatch(/if \(!open\) endSplash\(\);/);
-    const endSplash = booklet.slice(booklet.indexOf('function endSplash('), booklet.indexOf('function setOpen('));
-    expect(endSplash).toMatch(/if \(!splash\) return;/);
-    expect(endSplash).toMatch(/scrim\.remove\(\)/);
+    expect(setOpen).toMatch(/showScrim\(open, byRoomTap \? BOOKLET_UI\.scrimLingerMs : 0\);/);
+  });
+
+  it('grows the thumbnail under a mouse only — never a sticky hover on touch', () => {
+    expect(booklet).toMatch(/@media \(hover: hover\) \{\s*\.booklet-thumb:hover \{ transform: scale\(\$\{BOOKLET_UI\.thumbHoverScale\}\); \}/);
   });
 });
