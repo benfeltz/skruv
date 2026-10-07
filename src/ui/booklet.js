@@ -33,6 +33,14 @@ function injectStyle() {
       cursor: pointer;
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
+      transition: width 160ms ease-out;
+    }
+    /* A mouse over the docked thumbnail grows it from its corner to a readable page,
+       about a quarter of the screen. Hover-capable pointers only: a touch never hovers. */
+    @media (hover: hover) {
+      .booklet-thumb:hover {
+        width: min(${BOOKLET_UI.thumbHoverShare * 100}vw, ${BOOKLET_UI.thumbHoverShare * 100}vh * ${pageW} / ${pageH});
+      }
     }
     .booklet-scrim {
       position: fixed;
@@ -40,11 +48,6 @@ function injectStyle() {
       z-index: 1;
       touch-action: none;
       -webkit-tap-highlight-color: transparent;
-      transform-origin: left bottom;
-      transition: transform 140ms ease-out;
-    }
-    @media (hover: hover) {
-      .booklet-thumb:hover { transform: scale(${BOOKLET_UI.thumbHoverScale}); }
     }
     .booklet-thumb canvas { display: block; width: 100%; height: 100%; }
     .booklet-thumb:focus-visible, .booklet button:focus-visible {
@@ -162,7 +165,8 @@ export function createBookletSheet({ pages }) {
   thumb.type = 'button';
   thumb.className = 'booklet-thumb';
   thumb.setAttribute('aria-label', 'Open the instructions');
-  const thumbCanvas = pageCanvas(Math.round(pageW / 4), Math.round(pageH / 4));
+  // Full page resolution: hovered, the thumbnail is read at up to a quarter of the screen.
+  const thumbCanvas = pageCanvas(pageW, pageH);
   thumb.append(thumbCanvas);
 
   const element = document.createElement('section');

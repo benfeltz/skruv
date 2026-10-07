@@ -133,7 +133,16 @@ describe('boot with the manual up; tap off to put it down (1.6.1)', () => {
     expect(setOpen).toMatch(/showScrim\(open, byRoomTap \? BOOKLET_UI\.scrimLingerMs : 0\);/);
   });
 
-  it('grows the thumbnail under a mouse only — never a sticky hover on touch', () => {
-    expect(booklet).toMatch(/@media \(hover: hover\) \{\s*\.booklet-thumb:hover \{ transform: scale\(\$\{BOOKLET_UI\.thumbHoverScale\}\); \}/);
+  it('grows the docked thumbnail to a readable quarter of the screen under a mouse only — never a sticky hover on touch', () => {
+    const hover = booklet.slice(booklet.indexOf('@media (hover: hover)'), booklet.indexOf('.booklet-scrim {'));
+    expect(hover).toMatch(/\.booklet-thumb:hover \{\s*width: min\(\$\{BOOKLET_UI\.thumbHoverShare \* 100\}vw, \$\{BOOKLET_UI\.thumbHoverShare \* 100\}vh \* \$\{pageW\} \/ \$\{pageH\}\);/);
+    // Grown from its corner (it is anchored left/bottom), animated, and drawn at full page
+    // resolution so it reads when grown.
+    const thumbRule = booklet.slice(booklet.indexOf('    .booklet-thumb {'), booklet.indexOf('@media (hover: hover)'));
+    expect(thumbRule).toMatch(/transition: width 160ms ease-out;/);
+    expect(booklet).toMatch(/const thumbCanvas = pageCanvas\(pageW, pageH\);/);
+    // Nothing transforms the scrim (PR #17 round-4 review).
+    const scrimRule = booklet.slice(booklet.indexOf('.booklet-scrim {'), booklet.indexOf('.booklet-thumb canvas'));
+    expect(scrimRule).not.toMatch(/transform|transition/);
   });
 });
