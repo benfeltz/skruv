@@ -1,6 +1,6 @@
 // Fat-finger picking: which part a press means when small hardware sits near a panel.
 // Pure: plain [x, y, z] arrays and hit records in, a hit out, so Vitest covers it
-// headlessly. src/scene/gestureRouter.js raycasts the real meshes and each small part's
+// headlessly. src/scene/gestureRouter.ts raycasts the real meshes and each small part's
 // invisible, oversized hit proxy, measures how far the ray passes from the real part, and
 // asks `preferHit` which one the finger meant.
 

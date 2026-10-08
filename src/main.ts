@@ -27,6 +27,9 @@ import { createScene } from './scene/scene.js';
 import { createSprue } from './scene/sprue.js';
 import { createBookletPages } from './scene/bookletPages.js';
 import { createBookletSheet } from './ui/booklet.js';
+import type { PartId } from './game/assembly.js';
+import type { Part } from './game/partMesh.js';
+import type { Pose, Vec3 } from '../tools/validate/lib/geometry.js';
 import { createResetButton } from './ui/resetButton.js';
 import { createToggleButton } from './ui/toggleButton.js';
 
@@ -45,7 +48,8 @@ events.emit(sessionEvent('start'));
 // Backgrounded and back: a session that ends hidden is an abandon.
 document.addEventListener('visibilitychange', () => events.emit(sessionEvent(document.visibilityState)));
 
-const { renderer, scene, camera, startPose } = createScene(document.getElementById('app'));
+// index.html carries the #app mount.
+const { renderer, scene, camera, startPose } = createScene(document.getElementById('app')!);
 scene.add(createRoom());
 
 const cameraControls = createCameraControls(camera, renderer.domElement);
@@ -74,8 +78,10 @@ for (const { id, type, position, rotation } of createPackedWorldLayout()) {
   const part = PART_TYPES[type];
   const mesh = createPartMesh(part);
   const body = physics.register(mesh, {
-    halfExtents: part.size.map((d) => d / 2),
-    mass: part.mass,
+    // map keeps the length; TS widens a mapped tuple to number[].
+    halfExtents: part.size.map((d) => d / 2) as Vec3,
+    // Every packed part is the pack's, with its mass.
+    mass: part.mass!,
     position,
     rotation,
   });
@@ -90,7 +96,7 @@ parts.push(...display.parts);
 
 // What is seated on and fastened to what — every type-compatible pair, right or wrong.
 const typeById = new Map(parts.map(({ id, type }) => [id, type]));
-const assembly = createAssembly((id) => typeById.get(id));
+const assembly = createAssembly((id) => typeById.get(id)!);
 // The display shelf goes in fastened, through the graph's own events.
 display.fasten(assembly);
 // Manipulation goes through this seam so a fastened compound moves as one.
@@ -138,7 +144,7 @@ const sprue = createSprue();
 scene.add(sprue.object);
 
 // The box drags but never takes the gizmo: tapping it is tapping the room.
-function select(part) {
+function select(part: Part | null) {
   if (!part || part === flatpack.base) {
     gizmo.hide();
     sprue.hide();
@@ -185,9 +191,9 @@ function repack() {
   const box = boxPose();
   const upright = baseRest(box);
   physics.place(flatpack.base.body, upright.position, upright.rotation);
-  const packedPose = new Map([[flatpack.lid.id, lidRest(box)], ...createPackedWorldLayout(box).map((p) => [p.id, p])]);
+  const packedPose = new Map<PartId, Pose>([[flatpack.lid.id, lidRest(box)], ...createPackedWorldLayout(box).map((p): [PartId, Pose] => [p.id, p])]);
   for (const { id, body } of [...playerParts, flatpack.lid]) {
-    const { position, rotation } = packedPose.get(id);
+    const { position, rotation } = packedPose.get(id)!;
     physics.place(body, position, rotation);
   }
 }
@@ -199,7 +205,7 @@ document.body.append(createResetButton({ onReset: repack }).element);
 // the player may have built on since.
 let sweepIn = RESET.sweepInterval;
 let lastBox = boxPlacement();
-function sweep(delta) {
+function sweep(delta: number) {
   sweepIn -= delta;
   if (sweepIn > 0) return;
   sweepIn = RESET.sweepInterval;
@@ -222,7 +228,7 @@ function sweep(delta) {
 
 // Android haptics, off the event stream: a tick on a seat, a double tick on a cam lock.
 // navigator.vibrate is absent on iOS; a 0 ms knob turns one off.
-const vibrate = (pattern) => navigator.vibrate?.(pattern);
+const vibrate = (pattern: number | number[]) => navigator.vibrate?.(pattern);
 events.on(EVENT.SEAT, () => {
   if (HAPTICS.seatMs > 0) vibrate(HAPTICS.seatMs);
 });

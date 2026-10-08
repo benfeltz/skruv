@@ -11,7 +11,7 @@ import { BOOKLET, BOOKLET_UI, COLORS, GESTURE } from '../constants.js';
 // from COLORS).
 
 const STYLE_ID = 'skruv-booklet';
-const css = (hex) => `#${hex.toString(16).padStart(6, '0')}`;
+const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 const [pageW, pageH] = BOOKLET.pageSize;
 
 function injectStyle() {
@@ -144,17 +144,17 @@ function injectStyle() {
 }
 
 /**
- * The booklet sheet for `pages` (`{ count, canvas(index) }`, src/scene/bookletPages.js).
+ * The booklet sheet for `pages` (`{ count, canvas(index) }`, src/scene/bookletPages.ts).
  * Returns `{ scrim, thumb, element, currentPage, expanded, onChange(fn) }`: mount all three
  * elements; `onChange(fn)` calls `fn({ page, expanded })` whenever either changes. Starts
  * open on page 0, the cover. State is the module's own and read-only outside it.
  */
-export function createBookletSheet({ pages }) {
+export function createBookletSheet({ pages }: { pages: { count: number; canvas(index: number): CanvasImageSource } }) {
   injectStyle();
-  const listeners = new Set();
+  const listeners = new Set<(state: { page: number; expanded: boolean }) => void>();
   let page = 0;
   let open = true;
-  let lingering = null;
+  let lingering: ReturnType<typeof setTimeout> | null = null;
 
   // Over the whole room — canvas and buttons alike — and under the sheet, while the
   // booklet is open.
@@ -198,7 +198,8 @@ export function createBookletSheet({ pages }) {
   function render() {
     const source = pages.canvas(page);
     for (const target of open ? [viewCanvas, thumbCanvas] : [thumbCanvas]) {
-      const ctx = target.getContext('2d');
+      // A canvas always gives a 2D context the first time it is asked.
+      const ctx = target.getContext('2d')!;
       ctx.drawImage(source, 0, 0, target.width, target.height);
     }
     count.textContent = `${page + 1} / ${pages.count}`;
@@ -210,7 +211,7 @@ export function createBookletSheet({ pages }) {
     for (const fn of listeners) fn({ page, expanded: open });
   }
 
-  const flip = (by) => {
+  const flip = (by: number) => {
     const to = Math.min(pages.count - 1, Math.max(0, page + by));
     if (to === page) return;
     page = to;
@@ -220,13 +221,13 @@ export function createBookletSheet({ pages }) {
   // The scrim is up whenever the booklet is open. Put down by a tap, on the room or the
   // sheet, it stays `linger` ms past the lift, so the click a touch synthesises lands on
   // it too rather than on a button underneath.
-  function showScrim(shown, linger = 0) {
-    clearTimeout(lingering);
+  function showScrim(shown: boolean, linger = 0) {
+    clearTimeout(lingering ?? undefined);
     if (shown || linger === 0) scrim.hidden = !shown;
     else lingering = setTimeout(() => (scrim.hidden = true), linger);
   }
 
-  function setOpen(value, { byRoomTap = false } = {}) {
+  function setOpen(value: boolean, { byRoomTap = false } = {}) {
     if (open === value) return;
     open = value;
     showScrim(open, byRoomTap ? BOOKLET_UI.scrimLingerMs : 0);
@@ -235,7 +236,8 @@ export function createBookletSheet({ pages }) {
     // or first page), back to the thumb on close — unless the close was a tap.
     if (byRoomTap) return;
     const inside = [next, prev, handle].find((control) => !control.disabled);
-    (open ? inside : thumb).focus({ preventScroll: true });
+    // The handle is never disabled, so there is always one.
+    (open ? inside! : thumb).focus({ preventScroll: true });
   }
 
   // The tap that puts the booklet down. Captured, so a finger that slides onto the sheet
@@ -243,7 +245,7 @@ export function createBookletSheet({ pages }) {
   // Only a press that began on the scrim counts: a mouse pressed on the sheet and released
   // off it lifts over the scrim too, uncaptured. A tap while the scrim lingers over the
   // closed booklet is swallowed and does nothing.
-  const pressed = new Set();
+  const pressed = new Set<number>();
   scrim.addEventListener('pointerdown', (event) => {
     pressed.add(event.pointerId);
     scrim.setPointerCapture(event.pointerId);
@@ -258,14 +260,15 @@ export function createBookletSheet({ pages }) {
   // off its buttons (handle, arrows — they keep their own job, disabled or not) that lifts
   // within the GESTURE tap thresholds. Anything that travels further is a swipe — a flip, a
   // close, or nothing — never a tap.
-  let sheetPress = null;
+  let sheetPress: { id: number; x: number; y: number; t: number } | null = null;
   element.addEventListener('pointerdown', (event) => {
-    const onButton = event.target.closest('button');
+    // A pointer event on the sheet comes from an element inside it.
+    const onButton = (event.target as Element).closest('button');
     sheetPress = event.button === 0 && !onButton
       ? { id: event.pointerId, x: event.clientX, y: event.clientY, t: event.timeStamp }
       : null;
   });
-  const endSheetPress = (event) => {
+  const endSheetPress = (event: PointerEvent) => {
     if (!sheetPress || event.pointerId !== sheetPress.id) return;
     const { x, y, t } = sheetPress;
     sheetPress = null;
@@ -282,12 +285,12 @@ export function createBookletSheet({ pages }) {
   next.addEventListener('click', () => flip(1));
 
   // Swipe on the page: across flips, down closes.
-  let swipe = null;
+  let swipe: { id: number; x: number; y: number } | null = null;
   view.addEventListener('pointerdown', (event) => {
     swipe = { id: event.pointerId, x: event.clientX, y: event.clientY };
     view.setPointerCapture(event.pointerId);
   });
-  const endSwipe = (event) => {
+  const endSwipe = (event: PointerEvent) => {
     if (!swipe || event.pointerId !== swipe.id) return;
     const dx = event.clientX - swipe.x;
     const dy = event.clientY - swipe.y;
@@ -318,21 +321,21 @@ export function createBookletSheet({ pages }) {
     get expanded() {
       return open;
     },
-    onChange(fn) {
+    onChange(fn: (state: { page: number; expanded: boolean }) => void) {
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
   };
 }
 
-function pageCanvas(width, height) {
+function pageCanvas(width: number, height: number) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   return canvas;
 }
 
-function button(label, name) {
+function button(label: string, name: string) {
   const element = document.createElement('button');
   element.type = 'button';
   element.textContent = label;

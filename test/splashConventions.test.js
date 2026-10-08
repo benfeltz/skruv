@@ -8,7 +8,7 @@ import { IDENTITY, MANUAL } from '../src/game/item.js';
 // would visibly jump. The handoff itself is a manual device check.
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const html = read('index.html');
-const main = read('src/main.js');
+const main = read('src/main.ts');
 const css = (hex) => `#${hex.toString(16).padStart(6, '0')}`;
 const [pageW, pageH] = BOOKLET.pageSize;
 

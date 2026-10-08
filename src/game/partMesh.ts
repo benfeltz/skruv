@@ -2,6 +2,19 @@ import * as THREE from 'three';
 import { COLORS, DECAL } from '../constants.js';
 import { decalPlacements } from './decals.js';
 import type { GamePartType } from './item.js';
+import type { PartId } from './assembly.js';
+import type { Body } from '../physics/world.js';
+
+/** A part's mesh: one box (or the box base's merged slabs) in a standard material. */
+export type PartMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+
+/** A physics part, as the registry holds it: its instance id and type, mesh and body. */
+export interface Part {
+  id: PartId;
+  type: string;
+  mesh: PartMesh;
+  body: Body;
+}
 
 /**
  * Box mesh for a catalog part type, sized and coloured from its catalog entry, with a

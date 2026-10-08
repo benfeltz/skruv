@@ -86,7 +86,7 @@ describe('CLAUDE.md', () => {
 });
 
 describe('hit proxies (1.4.1)', () => {
-  const router = read('src/scene/gestureRouter.js');
+  const router = read('src/scene/gestureRouter.ts');
   const proxy = router.slice(router.indexOf('function addHitProxy('));
 
   it('are invisible and shadowless', () => {
@@ -97,7 +97,7 @@ describe('hit proxies (1.4.1)', () => {
 
   it('are never registered with physics', () => {
     expect(proxy).not.toMatch(/physics\./);
-    expect(read('src/main.js')).not.toMatch(/register\([^)]*proxy/i);
+    expect(read('src/main.ts')).not.toMatch(/register\([^)]*proxy/i);
   });
 
   it('leave the pick decision to the pure preference rule', () => {
@@ -107,7 +107,7 @@ describe('hit proxies (1.4.1)', () => {
 });
 
 describe('seat assist and flash (1.4.1)', () => {
-  const router = read('src/scene/gestureRouter.js');
+  const router = read('src/scene/gestureRouter.ts');
   const assist = router.slice(router.indexOf('function assist('), router.indexOf('}', router.indexOf('function assist(')));
 
   it('pulls only while a seat is on offer — never in free space', () => {
@@ -116,14 +116,14 @@ describe('seat assist and flash (1.4.1)', () => {
   });
 
   it('plays no audio anywhere (dropped for 0.0.1)', () => {
-    for (const path of ['src/main.js', 'src/scene/gestureRouter.js', 'src/scene/sprue.js', 'src/game/partMesh.ts']) {
+    for (const path of ['src/main.ts', 'src/scene/gestureRouter.ts', 'src/scene/sprue.ts', 'src/game/partMesh.ts']) {
       expect(read(path)).not.toMatch(/\bAudio(Context|Listener)?\b|PositionalAudio|\.play\(/);
     }
   });
 });
 
 describe('Shift-lift never skews a crank or a pull (1.4.1 review)', () => {
-  const router = read('src/scene/gestureRouter.js');
+  const router = read('src/scene/gestureRouter.ts');
   const moveDrag = router.slice(router.indexOf('function moveDrag('), router.indexOf('function apply('));
 
   it('cranks and pulls on the real pointer, not the lift-adjusted one', () => {
@@ -134,10 +134,10 @@ describe('Shift-lift never skews a crank or a pull (1.4.1 review)', () => {
 });
 
 describe('drop guide (1.4.1, Ben)', () => {
-  const router = read('src/scene/gestureRouter.js');
+  const router = read('src/scene/gestureRouter.ts');
 
   it('renders only — where it lands and which hole lights are the router raycast and decals.js', () => {
-    const guide = read('src/scene/dropGuide.js');
+    const guide = read('src/scene/dropGuide.ts');
     const imports = guide.match(/^import .*$/gm).join('\n');
     expect(imports).not.toMatch(/physics|\/game\//);
     expect(guide).not.toMatch(/\.intersectObjects?\(|physics\./);
@@ -157,7 +157,7 @@ describe('drop guide (1.4.1, Ben)', () => {
 });
 
 describe('seat flash hands back to the drop glow (1.4.1 review)', () => {
-  const router = read('src/scene/gestureRouter.js');
+  const router = read('src/scene/gestureRouter.ts');
   const fade = router.slice(router.indexOf('function fadeFlashes('), router.indexOf('// --- pull'));
 
   it('restores the glow, not dark, when a flash ends on the hole still lit', () => {
@@ -166,7 +166,7 @@ describe('seat flash hands back to the drop glow (1.4.1 review)', () => {
 });
 
 describe('the wall clamp never shrinks the orbit (1.4.1 review)', () => {
-  const controls = read('src/scene/cameraControls.js');
+  const controls = read('src/scene/cameraControls.ts');
   const update = controls.slice(controls.indexOf('update(deltaSeconds) {'), controls.indexOf('enable() {'));
 
   it('runs every OrbitControls update — per frame and event-fired — from its unclamped pose, clamping after', () => {
@@ -229,7 +229,7 @@ describe('the deployed bundle carries no dev stream (1.6)', () => {
 });
 
 describe('dev stream wiring (1.6)', () => {
-  const main = read('src/main.js');
+  const main = read('src/main.ts');
 
   it('reaches the client only through a DEV-guarded dynamic import', () => {
     expect(main.match(/dev\/wsClient/g)).toHaveLength(1);
@@ -239,9 +239,9 @@ describe('dev stream wiring (1.6)', () => {
 
   it('keeps src/dev to the one client file, imported by nothing else', () => {
     const dir = fileURLToPath(new URL('../src/dev', import.meta.url));
-    expect(readdirSync(dir)).toEqual(['wsClient.js']);
+    expect(readdirSync(dir)).toEqual(['wsClient.ts']);
     const others = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true })
-      .filter((path) => /\.[jt]s$/.test(path) && path !== 'main.js' && !path.startsWith('dev'));
+      .filter((path) => path.endsWith('.ts') && path !== 'main.ts' && !path.startsWith('dev'));
     for (const path of others) expect(read(`src/${path}`), path).not.toMatch(/(import\(|from )['"][^'"]*\/dev\//);
   });
 
@@ -275,7 +275,7 @@ describe('Flatpack pack code (1.7)', () => {
   const modules = readdirSync(lib).filter((name) => name.endsWith('.ts'));
 
   it('is loaded by the game in exactly one place, src/game/item.ts', () => {
-    const sources = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true }).filter((p) => /\.[jt]s$/.test(p));
+    const sources = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true }).filter((p) => p.endsWith('.ts'));
     const naming = sources.filter((p) => /from ['"][^'"]*\/items\//.test(read(`src/${p}`)));
     expect(naming).toEqual(['game/item.ts']);
     for (const path of sources) expect(read(`src/${path}`), path).not.toMatch(/from ['"][^'"]*tools\/validate\/(index\.js|flatpack\.schema\.json)|from ['"]ajv/);
@@ -323,13 +323,13 @@ describe('PWA install (1.6)', () => {
   });
 
   it('registers no service worker (manifest-only)', () => {
-    const sources = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true }).filter((p) => /\.[jt]s$/.test(p));
+    const sources = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true }).filter((p) => p.endsWith('.ts'));
     for (const path of [...sources.map((p) => `src/${p}`), 'index.html']) expect(read(path), path).not.toMatch(/serviceWorker/);
   });
 });
 
 describe('telemetry pairs every grab with a release of its mode (1.6 review)', () => {
-  const router = read('src/scene/gestureRouter.js');
+  const router = read('src/scene/gestureRouter.ts');
   const pull = router.slice(router.indexOf('function pullTo('), router.indexOf('// --- crank'));
 
   it('reports a pull that frees its part as a pull released and a move grabbed', () => {
@@ -339,12 +339,12 @@ describe('telemetry pairs every grab with a release of its mode (1.6 review)', (
 
 describe('the fps guard measures true frame time (1.6 review)', () => {
   it('is fed the loop raw delta, never the clamped game step', () => {
-    expect(read('src/main.js')).toMatch(/createLoop\(\(delta, rawDelta\) => \{[\s\S]*fps\.frame\(rawDelta\)/);
+    expect(read('src/main.ts')).toMatch(/createLoop\(\(delta, rawDelta\) => \{[\s\S]*fps\.frame\(rawDelta\)/);
   });
 });
 
 describe('tuning drawer downloads survive Safari (1.6 review)', () => {
   it('revokes a download URL only after TUNE.downloadRevokeMs', () => {
-    expect(read('src/ui/tunePanel.js')).toMatch(/setTimeout\(\(\) => URL\.revokeObjectURL\(url\), TUNE\.downloadRevokeMs\)/);
+    expect(read('src/ui/tunePanel.ts')).toMatch(/setTimeout\(\(\) => URL\.revokeObjectURL\(url\), TUNE\.downloadRevokeMs\)/);
   });
 });

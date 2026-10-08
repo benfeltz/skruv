@@ -3,14 +3,14 @@ import { createServer } from 'vite';
 import WebSocket from 'ws';
 import { DEV_WS } from '../src/constants.js';
 
-// The dev stream's hub on a real Vite dev server (vite.config.js): who may connect, and
+// The dev stream's hub on a real Vite dev server (vite.config.ts): who may connect, and
 // what it relays. Headless — no page, the game's end is played by a socket.
 let server;
 let url;
 
 beforeAll(async () => {
   server = await createServer({
-    configFile: new URL('../vite.config.js', import.meta.url).pathname,
+    configFile: new URL('../vite.config.ts', import.meta.url).pathname,
     logLevel: 'silent',
     server: { port: 0, host: '127.0.0.1' },
     optimizeDeps: { noDiscovery: true, include: [] },

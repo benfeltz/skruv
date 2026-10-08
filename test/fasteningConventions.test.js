@@ -46,7 +46,7 @@ describe('every fastener is bidirectional (decision 2)', () => {
   });
 
   it('has no abstract undo or detach anywhere in the fastening code', () => {
-    for (const path of ['src/game/assembly.ts', 'src/game/fasteners.ts', 'src/scene/gestureRouter.js']) {
+    for (const path of ['src/game/assembly.ts', 'src/game/fasteners.ts', 'src/scene/gestureRouter.ts']) {
       expect(read(path)).not.toMatch(/\b(undo|detach)\w*\s*\(/i);
     }
   });
@@ -60,7 +60,7 @@ describe('joint fidelity tunables (decision 8)', () => {
   });
 
   it('drives the play joint from FASTENER with a zero-stiffness (slump, not spring) motor', () => {
-    const world = read('src/physics/world.js');
+    const world = read('src/physics/world.ts');
     expect(world).toMatch(/FASTENER\.angularPlayDegrees/);
     expect(world).toMatch(/jointConfigureMotor\(joint\.handle, axis, 0, 0, 0, FASTENER\.playDamping\)/);
   });
@@ -174,7 +174,7 @@ describe('a fastened compound moves as one (compoundPhysics seam)', () => {
   });
 
   it('is what both the router and the gizmo are handed in main.js', () => {
-    const main = read('src/main.js');
+    const main = read('src/main.ts');
     expect(main).toMatch(/createCompoundPhysics\(physics, parts, assembly\)/);
     expect(main.match(/physics: manipulation/g)).toHaveLength(2);
   });

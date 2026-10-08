@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOOKLET_UI, GESTURE } from '../src/constants.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
 
-// The real booklet sheet (src/ui/booklet.js), driven headlessly on a minimal fake DOM:
+// The real booklet sheet (src/ui/booklet.ts), driven headlessly on a minimal fake DOM:
 // it boots open on the cover, and whenever it is open a tap on the room puts it down and
 // does nothing else; so does a tap on the sheet, while a swipe flips (1.6.2). How it feels
 // on a phone is the manual plan.

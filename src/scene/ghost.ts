@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { COLORS, SNAP } from '../constants.js';
+import type { Pose } from '../../tools/validate/lib/geometry.js';
 
 /**
  * Translucent preview of where a dragged part will seat if released now. Shares the
@@ -20,7 +21,7 @@ export function createGhost() {
   return {
     object,
     /** Shows `mesh`'s shape at `{ position, rotation }` ([x, y, z], [x, y, z, w]). */
-    show(mesh, { position, rotation }) {
+    show(mesh: THREE.Mesh, { position, rotation }: Pose) {
       object.geometry = mesh.geometry;
       object.position.set(...position);
       object.quaternion.set(...rotation);

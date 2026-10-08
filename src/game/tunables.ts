@@ -3,7 +3,7 @@
 // straight through to the shared object and the game feels it on its next read — no
 // module reads through this registry. Values baked into live engine objects when they are
 // made (damping and friction on bodies, play on joints, the renderer's pixel ratio) need
-// an applier: the engine side subscribes and re-applies (src/physics/world.js `retune`).
+// an applier: the engine side subscribes and re-applies (src/physics/world.ts `retune`).
 // Pure: imports constants only.
 //
 // Knob keys are a shared contract (1.0.0 R6): the Godot build exposes the same names, so a
@@ -193,3 +193,5 @@ export function createTunables(knobs: Readonly<Record<string, Knob>> = LIVE_KNOB
 
   return { list, get, set, reset, subscribe, toProfile, applyProfile };
 }
+
+export type Tunables = ReturnType<typeof createTunables>;

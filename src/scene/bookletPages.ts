@@ -5,6 +5,9 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import { BOOKLET, COLORS } from '../constants.js';
 import { createBooklet } from '../game/bookletModel.js';
 import { ASSEMBLED, IDENTITY, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../game/item.js';
+import type { BuildStep, PartCount } from '../game/bookletModel.js';
+import type { InstanceId } from '../../tools/validate/lib/pack.js';
+import type { Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
 
 // The booklet's pages, drawn from the same part models the room uses, so a page can never
 // disagree with the geometry. Wordless, as the real thing is: a big step numeral, an
@@ -13,7 +16,27 @@ import { ASSEMBLED, IDENTITY, MANIFEST, MANUAL, PART_TYPES, resolveConnector } f
 // WHAT each page shows is src/game/bookletModel.ts's; this module only draws. Branding is
 // JOHNNY by SKRUV — black on white, no borrowed marks.
 
-const css = (hex) => `#${hex.toString(16).padStart(6, '0')}`;
+type Ctx = CanvasRenderingContext2D;
+// A pictogram drawn into the rectangle [x, y, w, h].
+type Draw = (ctx: Ctx, x: number, y: number, w: number, h: number) => void;
+type Rect = [number, number, number, number];
+type Weight = 'bold' | 'faint';
+
+/** One part in an outline drawing: its type, its pose, and how heavily it is drawn. */
+interface ViewItem {
+  type: string;
+  position: Vec3;
+  rotation: Quat;
+  weight: Weight;
+}
+
+/** A page being drawn: its canvas and that canvas's context. */
+interface Sheet {
+  canvas: HTMLCanvasElement;
+  ctx: Ctx;
+}
+
+const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 const INK = css(COLORS.bookletInk);
 const FAINT = css(COLORS.bookletFaint);
 const PAPER = css(COLORS.bookletPaper);
@@ -26,8 +49,8 @@ const UPRIGHT = new THREE.Quaternion();
 const ORIENTATION = { lying: LYING, faceDown: FACE_DOWN, upright: UPRIGHT };
 // A loose panel is drawn lying on its largest face: the quarter turn that brings its
 // thinnest axis (x, y or z) up.
-const LAY_FLAT = [LYING, UPRIGHT, new THREE.Quaternion(-QUARTER_TURN, 0, 0, QUARTER_TURN)];
-const font = (size, weight = 700) => `${weight} ${size}px ${BOOKLET.font}`;
+const LAY_FLAT: THREE.Quaternion[] = [LYING, UPRIGHT, new THREE.Quaternion(-QUARTER_TURN, 0, 0, QUARTER_TURN)];
+const font = (size: number, weight = 700) => `${weight} ${size}px ${BOOKLET.font}`;
 
 // Render targets come back linear; the page canvas wants sRGB bytes.
 const TO_SRGB = Uint8ClampedArray.from({ length: 256 }, (_, i) => {
@@ -41,15 +64,15 @@ const TO_SRGB = Uint8ClampedArray.from({ length: 256 }, (_, i) => {
  * the first frame never waits on the booklet. Renders through `renderer` (the room's own
  * WebGL context) into an offscreen target and restores its state after every page.
  */
-export function createBookletPages(renderer) {
+export function createBookletPages(renderer: THREE.WebGLRenderer) {
   const layout = ASSEMBLED;
   const pages = createBooklet(MANUAL.pages, { layout, manifest: MANIFEST, partTypes: PART_TYPES, resolve: resolveConnector });
   const [pageW, pageH] = BOOKLET.pageSize;
-  const cache = new Map();
+  const cache = new Map<number, HTMLCanvasElement>();
   const views = createViewRenderer(renderer);
 
   const partById = new Map(layout.parts.map((p) => [p.id, p]));
-  const boldOf = (step) => {
+  const boldOf = (step: BuildStep) => {
     const ids = new Set(step.parts);
     for (const i of [...step.joints, ...step.turns]) {
       ids.add(layout.joints[i].hardware);
@@ -58,11 +81,12 @@ export function createBookletPages(renderer) {
     return ids;
   };
 
-  function newPage() {
+  function newPage(): Sheet {
     const canvas = document.createElement('canvas');
     canvas.width = pageW;
     canvas.height = pageH;
-    const ctx = canvas.getContext('2d');
+    // A canvas always gives a 2D context the first time it is asked.
+    const ctx = canvas.getContext('2d')!;
     ctx.fillStyle = PAPER;
     ctx.fillRect(0, 0, pageW, pageH);
     ctx.lineCap = 'round';
@@ -71,16 +95,17 @@ export function createBookletPages(renderer) {
   }
 
   // An outline drawing of `items` into the rectangle [x, y, w, h] of the page.
-  function drawView(ctx, items, [x, y, w, h], orientation = UPRIGHT) {
+  function drawView(ctx: Ctx, items: ViewItem[], [x, y, w, h]: Rect, orientation = UPRIGHT) {
     ctx.drawImage(views.render(items, Math.round(w), Math.round(h), orientation), x, y, w, h);
   }
 
-  const itemsFor = (ids, bold) =>
-    [...ids].map((id) => ({ ...partById.get(id), weight: bold.has(id) ? 'bold' : 'faint' }));
+  const itemsFor = (ids: Set<InstanceId>, bold: Set<InstanceId>): ViewItem[] =>
+    // Every id drawn is a part of the layout.
+    [...ids].map((id) => ({ ...partById.get(id)!, weight: bold.has(id) ? 'bold' : 'faint' }));
 
   // --- page kinds ---
 
-  function cover({ ctx }) {
+  function cover({ ctx }: Sheet) {
     const m = BOOKLET.margin;
     ctx.fillStyle = INK;
     ctx.textBaseline = 'alphabetic';
@@ -92,7 +117,7 @@ export function createBookletPages(renderer) {
     drawView(ctx, itemsFor(all, all), [m, 240, pageW - 2 * m, pageH - 240 - m]);
   }
 
-  function backCover({ ctx }) {
+  function backCover({ ctx }: Sheet) {
     const m = BOOKLET.margin;
     ctx.fillStyle = INK;
     ctx.font = font(34, 800);
@@ -102,10 +127,10 @@ export function createBookletPages(renderer) {
   }
 
   // Two panels side by side: what goes wrong (crossed) and what goes right (ticked).
-  function doDontPanels(ctx, drawBad, drawGood, solo = null) {
+  function doDontPanels(ctx: Ctx, drawBad: Draw, drawGood: Draw, solo = null) {
     const m = BOOKLET.margin;
     const half = (pageH - 3 * m) / 2;
-    const frames = solo ? [[m, m, pageW - 2 * m, pageH - 2 * m]] : [[m, m, pageW - 2 * m, half], [m, 2 * m + half, pageW - 2 * m, half]];
+    const frames: Rect[] = solo ? [[m, m, pageW - 2 * m, pageH - 2 * m]] : [[m, m, pageW - 2 * m, half], [m, 2 * m + half, pageW - 2 * m, half]];
     frames.forEach(([x, y, w, h], i) => {
       ctx.strokeStyle = INK;
       ctx.lineWidth = 3;
@@ -116,7 +141,7 @@ export function createBookletPages(renderer) {
     });
   }
 
-  function warning({ ctx }) {
+  function warning({ ctx }: Sheet) {
     // One person wrestling a long panel alone; two people carrying it together.
     doDontPanels(
       ctx,
@@ -137,7 +162,7 @@ export function createBookletPages(renderer) {
 
   const doDont = {
     // A panel laid on the bare floor (scratched), and on its flattened box.
-    protectFloor: (ctx) =>
+    protectFloor: (ctx: Ctx) =>
       doDontPanels(
         ctx,
         (c, x, y, w, h) => {
@@ -154,7 +179,7 @@ export function createBookletPages(renderer) {
         },
       ),
     // A power drill, crossed; the screwdriver turned by hand, ticked.
-    noPowerTools: (ctx) =>
+    noPowerTools: (ctx: Ctx) =>
       doDontPanels(
         ctx,
         (c, x, y, w, h) => drill(c, x + w * 0.5, y + h * 0.55),
@@ -165,7 +190,7 @@ export function createBookletPages(renderer) {
       ),
   };
 
-  function inventory({ ctx }, { items }) {
+  function inventory({ ctx }: Sheet, { items }: { items: PartCount[] }) {
     const m = BOOKLET.margin;
     const cols = 3;
     const cellW = (pageW - 2 * m) / cols;
@@ -184,7 +209,7 @@ export function createBookletPages(renderer) {
     });
   }
 
-  function step({ ctx }, page) {
+  function step({ ctx }: Sheet, page: BuildStep) {
     const m = BOOKLET.margin;
     ctx.fillStyle = INK;
     ctx.textBaseline = 'alphabetic';
@@ -211,7 +236,7 @@ export function createBookletPages(renderer) {
       drawView(ctx, [single(page.tool)], [bx - r * 0.7, m + r * 0.3, r * 1.4, r * 1.4]);
     }
 
-    const frame = [m, m + 2 * r + 80, pageW - 2 * m, pageH - (2 * m + 2 * r + 80)];
+    const frame: Rect = [m, m + 2 * r + 80, pageW - 2 * m, pageH - (2 * m + 2 * r + 80)];
     if (page.pose === 'parts') drawView(ctx, looseParts(page), frame);
     else drawView(ctx, itemsFor(new Set(page.shown), page.tip ? new Set() : boldOf(page)), frame, ORIENTATION[page.pose]);
     if (page.turns.length) turnArrow(ctx, frame[0] + frame[2] - 80, frame[1] + 70, 46);
@@ -225,11 +250,11 @@ export function createBookletPages(renderer) {
 
   // A loose-parts page: each panel the page works on laid flat with its own hardware in it,
   // the panels fanned out one behind another.
-  function looseParts(page) {
+  function looseParts(page: BuildStep) {
     const panels = [...new Set(page.joints.map((i) => layout.joints[i].host)), ...page.parts].filter(
       (id, i, all) => all.indexOf(id) === i,
     );
-    const items = [];
+    const items: ViewItem[] = [];
     const pose = new THREE.Matrix4();
     const local = new THREE.Matrix4();
     const inverse = new THREE.Matrix4();
@@ -238,11 +263,11 @@ export function createBookletPages(renderer) {
     const s = new THREE.Vector3();
     let offset = 0;
     for (const id of panels) {
-      const panel = partById.get(id);
+      const panel = partById.get(id)!;
       const size = PART_TYPES[panel.type].size;
       const flat = LAY_FLAT[size.indexOf(Math.min(...size))];
       inverse.compose(p.set(...panel.position), q.set(...panel.rotation), s.set(1, 1, 1)).invert();
-      const hardware = page.joints.map((i) => layout.joints[i]).filter((j) => j.host === id).map((j) => partById.get(j.hardware));
+      const hardware = page.joints.map((i) => layout.joints[i]).filter((j) => j.host === id).map((j) => partById.get(j.hardware)!);
       // Flat extent across the fan: this panel starts half of it past the last one's edge.
       const depth = Math.min(...size.filter((d) => d !== Math.min(...size)));
       offset += depth / 2;
@@ -257,28 +282,29 @@ export function createBookletPages(renderer) {
     return items;
   }
 
-  const single = (type) => ({ id: type, type, position: [0, 0, 0], rotation: [0, 0, 0, 1], weight: 'bold' });
+  const single = (type: string): ViewItem & { id: string } => ({ id: type, type, position: [0, 0, 0], rotation: [0, 0, 0, 1], weight: 'bold' });
 
-  function draw(index) {
+  function draw(index: number) {
     const page = pages[index];
     const sheet = newPage();
     if (page.kind === 'cover') cover(sheet);
     else if (page.kind === 'backCover') backCover(sheet);
     else if (page.kind === 'warning') warning(sheet);
-    else if (page.kind === 'doDont') doDont[page.subject](sheet.ctx);
+    // A doDont page's subject is one of these (the schema's key; the pack names it).
+    else if (page.kind === 'doDont') doDont[page.subject as keyof typeof doDont](sheet.ctx);
     else if (page.kind === 'inventory') inventory(sheet, page);
     else step(sheet, page);
     return sheet.canvas;
   }
 
-  function canvas(index) {
+  function canvas(index: number) {
     if (!cache.has(index)) cache.set(index, draw(index));
-    return cache.get(index);
+    return cache.get(index)!;
   }
 
   function prerender() {
-    const idle = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 1));
-    const next = (i) => {
+    const idle: (fn: () => void) => unknown = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 1));
+    const next = (i: number) => {
       if (i >= pages.length) return;
       idle(() => {
         canvas(i);
@@ -293,7 +319,7 @@ export function createBookletPages(renderer) {
 
 // Hidden-line outline renders: every part a white box (faces hide what lies behind) with
 // its edges drawn as fat lines, bold or faint. Geometry is built once per part type.
-function createViewRenderer(renderer) {
+function createViewRenderer(renderer: THREE.WebGLRenderer) {
   const fill = new THREE.MeshBasicMaterial({
     color: COLORS.bookletPaper,
     polygonOffset: true,
@@ -304,20 +330,20 @@ function createViewRenderer(renderer) {
     bold: new LineMaterial({ color: COLORS.bookletInk, linewidth: BOOKLET.boldLine }),
     faint: new LineMaterial({ color: COLORS.bookletFaint, linewidth: BOOKLET.faintLine }),
   };
-  const geometries = new Map();
-  const geometryOf = (type) => {
+  const geometries = new Map<string, { box: THREE.BoxGeometry; edges: LineSegmentsGeometry }>();
+  const geometryOf = (type: string) => {
     if (!geometries.has(type)) {
       const box = new THREE.BoxGeometry(...PART_TYPES[type].size);
       geometries.set(type, { box, edges: new LineSegmentsGeometry().fromEdgesGeometry(new THREE.EdgesGeometry(box)) });
     }
-    return geometries.get(type);
+    return geometries.get(type)!;
   };
   const camera = new THREE.OrthographicCamera();
   const direction = new THREE.Vector3(...BOOKLET.viewDirection).normalize();
   const corner = new THREE.Vector3();
   const clearColor = new THREE.Color();
 
-  function render(items, width, height, orientation) {
+  function render(items: ViewItem[], width: number, height: number, orientation: THREE.Quaternion) {
     const scene = new THREE.Group();
     const root = new THREE.Group();
     root.quaternion.copy(orientation);
@@ -339,7 +365,8 @@ function createViewRenderer(renderer) {
     camera.updateMatrixWorld(true);
     const view = new THREE.Box3();
     for (const part of root.children) {
-      const half = part.children[0].geometry.parameters;
+      // Each part's first child is its box.
+      const half = (part.children[0] as THREE.Mesh<THREE.BoxGeometry>).geometry.parameters;
       for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
         corner.set((sx * half.width) / 2, (sy * half.height) / 2, (sz * half.depth) / 2);
         view.expandByPoint(corner.applyMatrix4(part.matrixWorld).applyMatrix4(camera.matrixWorldInverse));
@@ -389,7 +416,7 @@ function createViewRenderer(renderer) {
         image.data[to + 3] = 255;
       }
     }
-    out.getContext('2d').putImageData(image, 0, 0);
+    out.getContext('2d')!.putImageData(image, 0, 0);
     return out;
   }
 
@@ -398,12 +425,12 @@ function createViewRenderer(renderer) {
 
 // --- pictograms, canvas 2D ---
 
-function roundRect(ctx, x, y, w, h, r) {
+function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
 }
 
-function bubble(ctx, x, y, r) {
+function bubble(ctx: Ctx, x: number, y: number, r: number) {
   ctx.strokeStyle = INK;
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -412,7 +439,7 @@ function bubble(ctx, x, y, r) {
 }
 
 // A ticked or crossed circle: the do / don't marks.
-function mark(ctx, x, y, kind) {
+function mark(ctx: Ctx, x: number, y: number, kind: 'tick' | 'cross') {
   const r = 38;
   ctx.lineWidth = 6;
   ctx.strokeStyle = INK;
@@ -436,7 +463,7 @@ function mark(ctx, x, y, kind) {
 }
 
 // A faceless figure standing with its feet at (x, y): round blank head, rounded body.
-function figure(ctx, x, y, scale, { lean = 0, flip = false } = {}) {
+function figure(ctx: Ctx, x: number, y: number, scale: number, { lean = 0, flip = false } = {}) {
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(flip ? -scale : scale, scale);
@@ -465,7 +492,7 @@ function figure(ctx, x, y, scale, { lean = 0, flip = false } = {}) {
   ctx.restore();
 }
 
-function panelBar(ctx, x0, y0, x1, y1) {
+function panelBar(ctx: Ctx, x0: number, y0: number, x1: number, y1: number) {
   ctx.strokeStyle = INK;
   ctx.lineWidth = 16;
   ctx.beginPath();
@@ -477,7 +504,7 @@ function panelBar(ctx, x0, y0, x1, y1) {
   ctx.stroke();
 }
 
-function floorLine(ctx, x, y, w, h) {
+function floorLine(ctx: Ctx, x: number, y: number, w: number, h: number) {
   ctx.strokeStyle = INK;
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -486,7 +513,7 @@ function floorLine(ctx, x, y, w, h) {
   ctx.stroke();
 }
 
-function panelSlab(ctx, x, y, w) {
+function panelSlab(ctx: Ctx, x: number, y: number, w: number) {
   ctx.fillStyle = PAPER;
   ctx.strokeStyle = INK;
   ctx.lineWidth = 3;
@@ -500,7 +527,7 @@ function panelSlab(ctx, x, y, w) {
   ctx.stroke();
 }
 
-function scratches(ctx, x, y) {
+function scratches(ctx: Ctx, x: number, y: number) {
   ctx.strokeStyle = INK;
   ctx.lineWidth = 2.5;
   ctx.beginPath();
@@ -511,7 +538,7 @@ function scratches(ctx, x, y) {
   ctx.stroke();
 }
 
-function drill(ctx, x, y) {
+function drill(ctx: Ctx, x: number, y: number) {
   ctx.fillStyle = PAPER;
   ctx.strokeStyle = INK;
   ctx.lineWidth = 4;
@@ -535,7 +562,7 @@ function drill(ctx, x, y) {
 }
 
 // A fist round a screwdriver handle, blade down.
-function hand(ctx, x, y) {
+function hand(ctx: Ctx, x: number, y: number) {
   ctx.fillStyle = PAPER;
   ctx.strokeStyle = INK;
   ctx.lineWidth = 4;
@@ -552,7 +579,7 @@ function hand(ctx, x, y) {
 }
 
 // A curved arrow: turn it this way.
-function turnArrow(ctx, x, y, r) {
+function turnArrow(ctx: Ctx, x: number, y: number, r: number) {
   ctx.strokeStyle = INK;
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -569,7 +596,7 @@ function turnArrow(ctx, x, y, r) {
 }
 
 // A long arc over the drawing: tip it up.
-function tipArrow(ctx, x, y, r) {
+function tipArrow(ctx: Ctx, x: number, y: number, r: number) {
   ctx.strokeStyle = INK;
   ctx.lineWidth = 6;
   ctx.beginPath();

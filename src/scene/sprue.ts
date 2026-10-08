@@ -1,13 +1,21 @@
 import * as THREE from 'three';
 import { COLORS, SPRUE } from '../constants.js';
+import type { Part } from '../game/partMesh.js';
+import type { Vec3 } from '../../tools/validate/lib/geometry.js';
+
+/** A press on the handle: where, and how far along the ray. */
+export interface HandleHit {
+  point: Vec3;
+  distance: number;
+}
 
 const SEGMENTS = 16;
 
 /**
  * Model-kit sprue: a stick and ball rising straight up from the selected small part's top,
  * a fat handle to drag millimetre hardware by. It renders and hit-tests; showing it for
- * small parts only is the caller's call (src/main.js), and a press on the ball is a press
- * on its part (src/scene/gestureRouter.js's `sprue` hook) — so dragging the ball is the
+ * small parts only is the caller's call (src/main.ts), and a press on the ball is a press
+ * on its part (src/scene/gestureRouter.ts's `sprue` hook) — so dragging the ball is the
  * part's normal drag.
  */
 export function createSprue() {
@@ -24,10 +32,10 @@ export function createSprue() {
   hitBall.visible = false;
   object.add(stick, ball, hitBall);
 
-  let part = null;
+  let part: Part | null = null;
   const top = new THREE.Box3();
 
-  function show(next) {
+  function show(next: Part) {
     part = next;
     object.visible = true;
     update();
@@ -44,11 +52,11 @@ export function createSprue() {
     const { mesh } = part;
     mesh.updateWorldMatrix(true, false);
     if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
-    top.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrixWorld);
+    top.copy(mesh.geometry.boundingBox!).applyMatrix4(mesh.matrixWorld);
     object.position.set(mesh.position.x, top.max.y, mesh.position.z);
   }
 
-  function hitTest(raycaster) {
+  function hitTest(raycaster: THREE.Raycaster): HandleHit | null {
     if (!part) return null;
     object.updateMatrixWorld();
     const [first] = raycaster.intersectObject(hitBall, false);

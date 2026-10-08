@@ -3,6 +3,10 @@ import { seatHome } from '../game/assembly.js';
 import { placeLayout } from '../../tools/validate/lib/geometry.js';
 import { ASSEMBLED, PART_TYPES } from '../game/item.js';
 import { createPartMesh } from '../game/partMesh.js';
+import type { Part } from '../game/partMesh.js';
+import type { Assembly, PartId } from '../game/assembly.js';
+import type { PhysicsWorld } from '../physics/world.js';
+import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 
 /**
  * The display JOHNNY: a second set of parts at the assembled layout's poses, standing
@@ -17,33 +21,36 @@ import { createPartMesh } from '../game/partMesh.js';
  * so there is no spawn-only joint path: what the graph made, the player's tools unmake.
  * Adjustable shelves just rest on their pins, as in a real one.
  */
-export function createDisplayShelf(physics) {
+export function createDisplayShelf(physics: PhysicsWorld) {
   const layout = ASSEMBLED;
   const half = DISPLAY.yaw / 2;
   const posed = placeLayout(layout.parts, { position: DISPLAY.position, rotation: [0, Math.sin(half), 0, Math.cos(half)] });
-  const idOf = (id) => (id === null ? null : `${DISPLAY.idPrefix}${id}`);
+  const idOf = (id: PartId | null) => (id === null ? null : `${DISPLAY.idPrefix}${id}`);
 
-  const parts = posed.map(({ id, type, position, rotation }) => {
+  const parts = posed.map(({ id, type, position, rotation }): Part => {
     const part = PART_TYPES[type];
     const mesh = createPartMesh(part);
     const body = physics.register(mesh, {
-      halfExtents: part.size.map((d) => d / 2),
-      mass: part.mass,
+      // map keeps the length; TS widens a mapped tuple to number[].
+      halfExtents: part.size.map((d) => d / 2) as Vec3,
+      // Every assembled part is the pack's, with its mass.
+      mass: part.mass!,
       position,
       rotation,
     });
-    return { id: idOf(id), type, mesh, body };
+    return { id: idOf(id)!, type, mesh, body };
   });
 
-  function fasten(assembly) {
+  function fasten(assembly: Assembly) {
     seatHome(
       assembly,
+      // A joint's hardware, host and mover are always set.
       layout.joints.map((j) => ({
-        partA: idOf(j.hardware),
+        partA: idOf(j.hardware)!,
         connectorA: j.hardwareConnector,
-        partB: idOf(j.host),
+        partB: idOf(j.host)!,
         connectorB: j.hostConnector,
-        mover: idOf(j.mover),
+        mover: idOf(j.mover)!,
         ctx: { through: idOf(j.through), captured: idOf(j.captured) },
       })),
     );

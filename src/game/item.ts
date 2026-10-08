@@ -23,7 +23,7 @@ export type GamePartType = Omit<PartType, 'partNumber' | 'mass'> & Partial<Pick<
  * Part types by name, engine-shaped (`{ size, partNumber, mass, color, connectors }`,
  * connectors in index order, each keeping its pack `id`) — plus the flatpack's lid and
  * base: not furniture and never in the manifest, but parts like any other, grabbed, lifted
- * and dropped (src/scene/flatpack.js). The lid is sized to close over the box's walls; the
+ * and dropped (src/scene/flatpack.ts). The lid is sized to close over the box's walls; the
  * base is the open box itself, bottom and walls, with no part number of its own and its
  * mass a tunable (BOX.mass).
  */

@@ -2,7 +2,7 @@
 // `manual.pages`): which parts, which seated pairs and how much hardware each page shows.
 // The pages name their fastener-to-hole pairs; everything a drawing needs beyond that —
 // count bubbles, the part types to highlight, what is already on the carcass — is computed
-// here. Pure: the pages are drawn by src/scene/bookletPages.js and read by the per-page
+// here. Pure: the pages are drawn by src/scene/bookletPages.ts and read by the per-page
 // highlight; nothing here (or anywhere) checks a player's build against them. The booklet
 // is reference; the player judges.
 
@@ -20,7 +20,7 @@ export interface BookletLayout {
 export interface PartCount {
   type: string;
   count: number;
-  partNumber: string | undefined;
+  partNumber: string;
 }
 
 /** One build page — see `createBuildSteps`. */
@@ -42,7 +42,8 @@ export type BookletPage =
   | ({ kind: 'step' } & BuildStep)
   | { kind: 'inventory'; items: PartCount[] }
   | { kind: 'backCover' }
-  | { kind: 'warning' | 'doDont'; subject: string }
+  | { kind: 'warning'; subject: string }
+  | { kind: 'doDont'; subject: string }
   | { kind: 'cover' };
 
 type PartTypes = Readonly<Record<string, Pick<GamePartType, 'partNumber'>>>;
@@ -142,7 +143,8 @@ function shownBy(pages: Pick<BuildStep, 'number' | 'pose' | 'parts' | 'joints'>[
 function countHardware(pieces: InstanceId[], typeOf: (id: InstanceId) => string, partTypes: PartTypes): PartCount[] {
   const counts = new Map<string, number>();
   for (const id of pieces) counts.set(typeOf(id), (counts.get(typeOf(id)) ?? 0) + 1);
-  return [...counts].map(([type, count]) => ({ type, count, partNumber: partTypes[type].partNumber }));
+  // Hardware is the pack's, every type with a part number.
+  return [...counts].map(([type, count]) => ({ type, count, partNumber: partTypes[type].partNumber! }));
 }
 
 /**
@@ -165,7 +167,8 @@ export function createBooklet(
       case 'inventory': {
         const counts = new Map<string, number>();
         for (const { type } of manifest) counts.set(type, (counts.get(type) ?? 0) + 1);
-        return { kind: 'inventory', items: [...counts].map(([type, count]) => ({ type, count, partNumber: partTypes[type].partNumber })) };
+        // Everything in the box is the pack's, every type with a part number.
+        return { kind: 'inventory', items: [...counts].map(([type, count]) => ({ type, count, partNumber: partTypes[type].partNumber! })) };
       }
       case 'back':
         return { kind: 'backCover' };

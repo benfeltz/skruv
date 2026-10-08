@@ -1,4 +1,5 @@
 import { COLORS, TUNE } from '../constants.js';
+import type { Knob, Tunables } from '../game/tunables.js';
 
 // The tuning drawer, only on a ?tune URL: a gear tab top-left opens a bottom sheet of
 // sliders over the running game, one per live knob, grouped as the registry groups them.
@@ -8,7 +9,7 @@ import { COLORS, TUNE } from '../constants.js';
 // element, own style, colours from COLORS).
 
 const STYLE_ID = 'skruv-tune-panel';
-const css = (hex) => `#${hex.toString(16).padStart(6, '0')}`;
+const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 const DEGREES_PER_RADIAN = 180 / Math.PI;
 
 function injectStyle() {
@@ -103,15 +104,15 @@ function injectStyle() {
 }
 
 // Enough decimals to show one slider step.
-const decimals = (step) => Math.max(0, Math.min(6, Math.ceil(-Math.log10(step))));
+const decimals = (step: number) => Math.max(0, Math.min(6, Math.ceil(-Math.log10(step))));
 
 // Radians read as degrees; every other unit as stored.
-function format(value, { unit, step }) {
+function format(value: number, { unit, step }: Pick<Knob, 'unit' | 'step'>) {
   if (unit === 'rad') return `${(value * DEGREES_PER_RADIAN).toFixed(decimals(step * DEGREES_PER_RADIAN))}°`;
   return `${value.toFixed(decimals(step))}${unit ? ` ${unit}` : ''}`;
 }
 
-function download(name, json) {
+function download(name: string, json: string) {
   const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
   const link = Object.assign(document.createElement('a'), { href: url, download: name });
   document.body.append(link);
@@ -122,7 +123,7 @@ function download(name, json) {
 
 const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
 
-function button(label, onClick) {
+function button(label: string, onClick: () => void) {
   const element = document.createElement('button');
   element.type = 'button';
   element.textContent = label;
@@ -134,7 +135,7 @@ function button(label, onClick) {
  * `{ tab, element }` to mount. `tunables` is the registry (src/game/tunables.ts);
  * `exportSession()` returns the session buffer's JSON for download.
  */
-export function createTunePanel({ tunables, exportSession }) {
+export function createTunePanel({ tunables, exportSession }: { tunables: Tunables; exportSession: () => string }) {
   injectStyle();
 
   const element = document.createElement('section');
@@ -152,18 +153,19 @@ export function createTunePanel({ tunables, exportSession }) {
   const status = document.createElement('p');
   status.className = 'tune-status';
   status.setAttribute('role', 'status');
-  const say = (text) => (status.textContent = text);
+  const say = (text: string) => (status.textContent = text);
 
   const fileInput = Object.assign(document.createElement('input'), { type: 'file', accept: 'application/json,.json', hidden: true });
   fileInput.addEventListener('change', async () => {
-    const [file] = fileInput.files;
+    // A file input always has a file list.
+    const [file] = fileInput.files!;
     fileInput.value = '';
     if (!file) return;
     try {
       const { skipped } = tunables.applyProfile(JSON.parse(await file.text()));
       say(skipped.length ? `Profile loaded; skipped ${skipped.join(', ')}` : 'Profile loaded');
     } catch (error) {
-      say(`Not loaded: ${error.message}`);
+      say(`Not loaded: ${(error as Error).message}`);
     }
   });
 
@@ -184,10 +186,10 @@ export function createTunePanel({ tunables, exportSession }) {
   );
 
   // One row per knob: name, readout, slider, description.
-  const rows = new Map();
+  const rows = new Map<string, { row: HTMLDivElement; output: HTMLOutputElement; input: HTMLInputElement; knob: ReturnType<Tunables['list']>[number] }>();
   const knobs = document.createElement('div');
   knobs.className = 'tune-knobs';
-  const groups = new Map();
+  const groups = new Map<string, HTMLFieldSetElement>();
   for (const knob of tunables.list()) {
     if (!groups.has(knob.group)) {
       const fieldset = document.createElement('fieldset');
@@ -206,12 +208,12 @@ export function createTunePanel({ tunables, exportSession }) {
     const desc = Object.assign(document.createElement('small'), { textContent: knob.desc });
     input.addEventListener('input', () => tunables.set(knob.key, Number(input.value)));
     row.append(label, output, input, desc);
-    groups.get(knob.group).append(row);
+    groups.get(knob.group)!.append(row);
     rows.set(knob.key, { row, output, input, knob });
   }
 
-  function show(key, value) {
-    const { row, output, input, knob } = rows.get(key);
+  function show(key: string, value: number) {
+    const { row, output, input, knob } = rows.get(key)!;
     input.value = String(value);
     output.textContent = format(value, knob);
     row.dataset.changed = String(value !== knob.default);
@@ -222,7 +224,7 @@ export function createTunePanel({ tunables, exportSession }) {
 
   element.append(bar, status, knobs, fileInput);
 
-  function setOpen(open) {
+  function setOpen(open: boolean) {
     element.dataset.open = String(open);
     tab.setAttribute('aria-expanded', String(open));
     if (open) say('');

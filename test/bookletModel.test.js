@@ -193,7 +193,7 @@ describe('no validation anywhere (Ben, 2026-10-04)', () => {
   const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
   it('keeps the booklet data out of the engine — pages are reference, never a gate', () => {
-    for (const path of ['src/game/assembly.ts', 'src/game/fasteners.ts', 'src/scene/gestureRouter.js']) {
+    for (const path of ['src/game/assembly.ts', 'src/game/fasteners.ts', 'src/scene/gestureRouter.ts']) {
       expect(read(path)).not.toMatch(/bookletModel|createBooklet|\bMANUAL\b|\bASSEMBLED\b/);
     }
   });

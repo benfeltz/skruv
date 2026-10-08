@@ -5,7 +5,7 @@ import { COLORS } from '../constants.js';
 // No framework; the caller decides where to mount it.
 
 const STYLE_ID = 'skruv-toggle-button';
-const css = (hex) => `#${hex.toString(16).padStart(6, '0')}`;
+const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 
 function injectStyle() {
   if (document.getElementById(STYLE_ID)) return;
@@ -44,7 +44,7 @@ function injectStyle() {
  * A pressed/unpressed button. `onChange(pressed)` fires on every toggle; the pressed
  * state shows as the accent fill and `aria-pressed`.
  */
-export function createToggleButton({ label, pressed = false, onChange }) {
+export function createToggleButton({ label, pressed = false, onChange }: { label: string; pressed?: boolean; onChange?: (pressed: boolean) => void }) {
   injectStyle();
   const element = document.createElement('button');
   element.type = 'button';

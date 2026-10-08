@@ -37,7 +37,7 @@ export const COLORS = {
   uiSurface: 0x2a2d34,
   uiText: 0xf1eee6,
   uiAccent: 0xe0a64a,
-  // Snap preview (src/scene/ghost.js).
+  // Snap preview (src/scene/ghost.ts).
   ghost: 0xe0a64a,
   // Hole markings (src/game/decals.ts) and the flash when a fastener seats in one.
   decal: 0x3a3029,
@@ -46,18 +46,18 @@ export const COLORS = {
   dropGuide: 0xe0a64a,
   // Emissive off: what a decal glows when it isn't flashing.
   unlit: 0x000000,
-  // Sprue handle on a selected small part (src/scene/sprue.js): model-kit plastic grey.
+  // Sprue handle on a selected small part (src/scene/sprue.ts): model-kit plastic grey.
   sprue: 0x8f9a93,
-  // Booklet pages (src/scene/bookletPages.js): black line art on white paper, earlier
+  // Booklet pages (src/scene/bookletPages.ts): black line art on white paper, earlier
   // steps' parts in a pale grey.
   bookletPaper: 0xffffff,
   bookletInk: 0x1c1c1c,
   bookletFaint: 0xbdbdbd,
-  // Per-page highlight (src/scene/highlight.js): the warm accent, glowing softly.
+  // Per-page highlight (src/scene/highlight.ts): the warm accent, glowing softly.
   highlight: 0xe0a64a,
 };
 
-// Per-page highlight (src/scene/highlight.js): the parts the open booklet page is about
+// Per-page highlight (src/scene/highlight.ts): the parts the open booklet page is about
 // glow up and down — an aid for matching page to room, never a gate.
 export const HIGHLIGHT = {
   // Seconds per glow cycle, and the peak emissive intensity — subtle.
@@ -65,16 +65,16 @@ export const HIGHLIGHT = {
   intensity: 0.35,
 };
 
-// Booklet pages (src/scene/bookletPages.js), in page-canvas pixels: a portrait sheet drawn
+// Booklet pages (src/scene/bookletPages.ts), in page-canvas pixels: a portrait sheet drawn
 // at twice the size it shows on a phone, so lines and numerals stay crisp.
 export const BOOKLET = {
-  pageSize: [720, 1000],
+  pageSize: [720, 1000] satisfies [number, number],
   margin: 44,
   // Line weights of the outline renders: this page's parts, and earlier ones.
   boldLine: 3.2,
   faintLine: 1.6,
   // Isometric-ish view the outline renders are drawn from (towards the origin).
-  viewDirection: [1.1, 0.9, 1.5],
+  viewDirection: [1.1, 0.9, 1.5] satisfies Vec3,
   // Space left round the drawing inside its frame, as a fraction.
   framePadding: 0.08,
   // Room between loose panels fanned out on a loose-parts page, in metres of the drawing.
@@ -84,7 +84,7 @@ export const BOOKLET = {
   font: 'system-ui, -apple-system, "Segoe UI", sans-serif',
 };
 
-// The booklet in hand (src/ui/booklet.js): CSS pixels.
+// The booklet in hand (src/ui/booklet.ts): CSS pixels.
 export const BOOKLET_UI = {
   // The collapsed thumbnail of the open page, bottom-left — small enough to leave the room
   // to the fingers.
@@ -105,7 +105,7 @@ export const BOOKLET_UI = {
 export const LIGHTS = {
   hemisphereIntensity: 1.2,
   sunIntensity: 1.6,
-  sunPosition: [-4, 7, 2],
+  sunPosition: [-4, 7, 2] satisfies Vec3,
   shadowMapSize: 1024,
   shadowExtent: 6,
   // Offsets shadow lookups along the normal so millimetre-thin parts don't self-shadow
@@ -118,15 +118,15 @@ export const CAMERA = {
   // Close enough to zoom in on millimetre hardware without clipping it.
   near: 0.02,
   far: 100,
-  startPosition: [2, 1.8, 2.4],
-  startTarget: [0, 0.6, 0],
+  startPosition: [2, 1.8, 2.4] satisfies Vec3,
+  startTarget: [0, 0.6, 0] satisfies Vec3,
   // A phone (coarse pointer) starts this many times further from startTarget along the
   // same view, so a cold load frames the room without pinching out first. Dialed on
   // device through ?tune (camera.mobileStartScale) before freezing.
   mobileStartScale: 1.4,
 };
 
-// Orbit limits (src/scene/cameraLimits.ts, applied by src/scene/cameraControls.js). The
+// Orbit limits (src/scene/cameraLimits.ts, applied by src/scene/cameraControls.ts). The
 // orbit target roams the whole floor so the camera can get right up to any part; the
 // camera is clamped inside the walls and above the floor every frame, and may rise over
 // the wall tops when zoomed out (dollhouse view).
@@ -152,7 +152,7 @@ export const CAMERA_LIMITS = {
   dampingFactor: 0.1,
 };
 
-// Where the flatpack the game opens on stands (src/game/boxLayout.ts, src/scene/flatpack.js):
+// Where the flatpack the game opens on stands (src/game/boxLayout.ts, src/scene/flatpack.ts):
 // a thin-walled cardboard box lying on the floor, its lid closed on top. Its inside, walls
 // and lid are the item's (items/johnny `packing`). Box-local frame: length along z,
 // origin on the floor at its centre.
@@ -166,18 +166,18 @@ export const BOX = {
   friction: 1,
 };
 
-// The display JOHNNY (src/scene/displayShelf.js): a second, already-built shelf standing
+// The display JOHNNY (src/scene/displayShelf.ts): a second, already-built shelf standing
 // against the back wall, left of the start view — the exhibit, and a disassembly
 // playground. `position`/`yaw` place the assembled layout's frame (floor under the carcass
 // centre, front +z); its back panel's rear face is ~0.143 m behind that centre.
 export const DISPLAY = {
-  position: [-1.6, 0, -ROOM.depth / 2 + 0.165],
+  position: [-1.6, 0, -ROOM.depth / 2 + 0.165] satisfies Vec3,
   yaw: 0,
   // Its parts' ids: the manifest's, prefixed, so they never collide with the player's set.
   idPrefix: 'display/',
 };
 
-// Repack and recovery (src/ui/resetButton.js, src/main.js).
+// Repack and recovery (src/ui/resetButton.ts, src/main.ts).
 export const RESET = {
   // The repack button arms on a first tap and repacks only on a second within this many
   // ms — cheap insurance against a fat finger wiping a build.
@@ -193,7 +193,7 @@ export const RESET = {
 };
 
 export const PHYSICS = {
-  gravity: [0, -9.81, 0],
+  gravity: [0, -9.81, 0] satisfies Vec3,
   // Fixed simulation step; the render loop banks frame time and runs whole steps.
   timestep: 1 / 60,
   // Pairs with RENDER.maxFrameDelta: a clamped 1/15 s frame needs exactly 4 steps.
@@ -241,7 +241,7 @@ export const GESTURE = {
   ceilingMargin: 0.1,
 };
 
-// Rotate gizmo (src/scene/gizmo.js): rings sized from the selected part's bounding sphere.
+// Rotate gizmo (src/scene/gizmo.ts): rings sized from the selected part's bounding sphere.
 export const GIZMO = {
   radiusPadding: 1.15,
   // Hardware is millimetres long; rings never shrink below a fingertip-sized target.
@@ -258,7 +258,7 @@ export const GIZMO = {
   arrowAngle: Math.PI / 4,
 };
 
-// Drop guide (src/scene/dropGuide.js): a line from a dragged part straight down to where it
+// Drop guide (src/scene/dropGuide.ts): a line from a dragged part straight down to where it
 // would land, a ring there, and the hole marking under it lit when it is a free hole that
 // takes the part.
 export const DROP = {
@@ -272,7 +272,7 @@ export const DROP = {
   glowIntensity: 0.6,
 };
 
-// Fat-finger picking (src/game/pickMath.ts, src/scene/gestureRouter.js). Hardware is
+// Fat-finger picking (src/game/pickMath.ts, src/scene/gestureRouter.ts). Hardware is
 // millimetres across; an invisible proxy box never thinner than proxyMinSize surrounds each
 // small part, and the preference rule decides when a press on it means the part.
 export const PICK = {
@@ -284,7 +284,7 @@ export const PICK = {
   fingerRadius: 0.025,
 };
 
-// Sprue handle (src/scene/sprue.js) on a selected small part. The ball stands far enough
+// Sprue handle (src/scene/sprue.ts) on a selected small part. The ball stands far enough
 // above the part to clear its gizmo rings (the screwdriver's are the widest, ~0.12 m), so a
 // press on it is never a ring's.
 export const SPRUE = {
@@ -331,7 +331,7 @@ export const DECAL = {
 };
 
 // Fasteners (src/game/fasteners.ts, src/game/assembly.ts) and the joints that follow them
-// (src/physics/world.js). Distances in metres unless marked CSS px; angles in radians.
+// (src/physics/world.ts). Distances in metres unless marked CSS px; angles in radians.
 export const FASTENER = {
   // A dowel, pin or back fitting comes back out when dragged this far (CSS px) along its axis.
   pullDistance: 40,
@@ -361,7 +361,7 @@ export const TUNE = {
   // The session buffer keeps this many of the latest events for export — a long session's
   // worth of grabs, seats and fps samples.
   sessionBufferSize: 5000,
-  // The tuning drawer (src/ui/tunePanel.js) exists only on a URL carrying this query flag
+  // The tuning drawer (src/ui/tunePanel.ts) exists only on a URL carrying this query flag
   // (…/skruv/?tune); the plain URL is the teaser, untouched.
   queryFlag: 'tune',
   // The drawer, in CSS pixels: never wider than this, nor taller than this share of the
@@ -397,8 +397,8 @@ export const HAPTICS = {
 };
 
 // Dev stream (dev server only — never in a build): the socket a dev session streams its
-// events out of and takes knob sets in through. The hub is a plugin in vite.config.js, the
-// game's end src/dev/wsClient.js, and tools/agent-bridge the agent's. Every message is
+// events out of and takes knob sets in through. The hub is a plugin in vite.config.ts, the
+// game's end src/dev/wsClient.ts, and tools/agent-bridge the agent's. Every message is
 // JSON `{ kind, ... }`, one of `kinds`:
 //   hello       any → hub      `{ role }`: 'game' for the page; anything else is a tool
 //   event       game → tools   `{ event }`: one bus event (src/game/events.ts)

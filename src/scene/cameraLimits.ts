@@ -7,6 +7,7 @@
 // the wall tops — the dollhouse view).
 
 import type { CAMERA_LIMITS, ROOM } from '../constants.js';
+import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 
 type Room = Pick<typeof ROOM, 'width' | 'depth'>;
 type Limits = typeof CAMERA_LIMITS;
@@ -14,12 +15,13 @@ type Limits = typeof CAMERA_LIMITS;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /** `position` pulled back from `target` along the same view, `scale` times as far. */
-export function startPosition(position: number[], target: number[], scale: number) {
-  return position.map((v, i) => target[i] + (v - target[i]) * scale);
+export function startPosition(position: Vec3, target: Vec3, scale: number): Vec3 {
+  // map keeps the length; TS widens a mapped tuple to number[].
+  return position.map((v, i) => target[i] + (v - target[i]) * scale) as Vec3;
 }
 
 /** The orbit target, held over the floor and inside the walls. */
-export function clampTarget([x, y, z]: number[], room: Room, limits: Pick<Limits, 'targetMargin' | 'targetHeight'>) {
+export function clampTarget([x, y, z]: Vec3, room: Room, limits: Pick<Limits, 'targetMargin' | 'targetHeight'>): Vec3 {
   const reachX = room.width / 2 - limits.targetMargin;
   const reachZ = room.depth / 2 - limits.targetMargin;
   const [low, high] = limits.targetHeight;
@@ -27,7 +29,7 @@ export function clampTarget([x, y, z]: number[], room: Room, limits: Pick<Limits
 }
 
 /** The camera, held inside the walls horizontally and above the floor. */
-export function clampCamera([x, y, z]: number[], room: Room, limits: Pick<Limits, 'wallMargin' | 'floorClearance'>) {
+export function clampCamera([x, y, z]: Vec3, room: Room, limits: Pick<Limits, 'wallMargin' | 'floorClearance'>): Vec3 {
   const reachX = room.width / 2 - limits.wallMargin;
   const reachZ = room.depth / 2 - limits.wallMargin;
   return [clamp(x, -reachX, reachX), Math.max(limits.floorClearance, y), clamp(z, -reachZ, reachZ)];
@@ -48,14 +50,15 @@ export function panSpeedAt(distance: number, { panReference, maxPanBoost }: Pick
  * along the line of sight from `eye` to the bound it crossed — so the view direction holds
  * and a zoom toward the fingers near the floor neither tilts the view nor drifts it.
  */
-export function clampTargetAlongView(target: number[], eye: number[], room: Room, limits: Pick<Limits, 'targetMargin' | 'targetHeight'>) {
+export function clampTargetAlongView(target: Vec3, eye: Vec3, room: Room, limits: Pick<Limits, 'targetMargin' | 'targetHeight'>): Vec3 {
   const [low, high] = limits.targetHeight;
   const y = target[1];
   const bound = y < low ? low : y > high ? high : null;
   // Only when the eye is on the near side of the bound is there a crossing to slide to.
   if (bound !== null && (eye[1] - bound) * (y - bound) < 0) {
     const t = (eye[1] - bound) / (eye[1] - y);
-    return clampTarget(eye.map((v, i) => v + (target[i] - v) * t), room, limits);
+    // map keeps the length; TS widens a mapped tuple to number[].
+    return clampTarget(eye.map((v, i) => v + (target[i] - v) * t) as Vec3, room, limits);
   }
   return clampTarget(target, room, limits);
 }
@@ -67,7 +70,7 @@ export function clampTargetAlongView(target: number[], eye: number[], room: Room
  * all the way in on parts lying there instead of stalling at a point hanging in the air.
  * Looking level or upward, or at floor out of reach, the target stays where it is.
  */
-export function seatOnFloor(eye: number[], target: number[], limits: Pick<Limits, 'targetHeight' | 'maxDistance'>) {
+export function seatOnFloor(eye: Vec3, target: Vec3, limits: Pick<Limits, 'targetHeight' | 'maxDistance'>): Vec3 {
   const toward = target.map((v, i) => v - eye[i]);
   const length = Math.hypot(...toward);
   const floor = limits.targetHeight[0];
@@ -76,5 +79,6 @@ export function seatOnFloor(eye: number[], target: number[], limits: Pick<Limits
   if (down <= 1e-6) return target;
   const reach = (eye[1] - floor) / down;
   if (reach > limits.maxDistance) return target;
-  return eye.map((v, i) => v + (toward[i] / length) * reach);
+  // map keeps the length; TS widens a mapped tuple to number[].
+  return eye.map((v, i) => v + (toward[i] / length) * reach) as Vec3;
 }

@@ -24,15 +24,15 @@ describe('Rapier boundary', () => {
     expect(dependencies).not.toHaveProperty('@dimforge/rapier3d');
   });
 
-  it('is imported by src/physics/world.js and nothing else', () => {
+  it('is imported by src/physics/world.ts and nothing else', () => {
     const importers = sourceFiles('src')
       .filter((path) => RAPIER_IMPORT.test(read(path)))
       .map((path) => relative(root, join(root, path)));
-    expect(importers).toEqual(['src/physics/world.js']);
+    expect(importers).toEqual(['src/physics/world.ts']);
   });
 
   it('imports only the compat package', () => {
-    expect(read('src/physics/world.js')).toMatch(/from\s+['"]@dimforge\/rapier3d-compat['"]/);
+    expect(read('src/physics/world.ts')).toMatch(/from\s+['"]@dimforge\/rapier3d-compat['"]/);
   });
 });
 
@@ -53,14 +53,14 @@ describe('physics timing', () => {
 describe('placeholders and headers', () => {
   it('retires the test box once parts spawn', () => {
     expect(constants).not.toHaveProperty('TEST_BOX');
-    expect(read('src/scene/room.js')).not.toMatch(/createTestBox/);
-    expect(read('src/main.js')).not.toMatch(/createTestBox/);
+    expect(read('src/scene/room.ts')).not.toMatch(/createTestBox/);
+    expect(read('src/main.ts')).not.toMatch(/createTestBox/);
   });
 
   it('retires the temporary dev floor layout now the flatpack replaces it (1.5)', () => {
     expect(existsSync(new URL('../src/game/devLayout.ts', import.meta.url))).toBe(false);
-    expect(read('src/main.js')).not.toMatch(/devLayout|DEV_LAYOUT/);
-    expect(read('src/main.js')).toMatch(/createPackedWorldLayout\(\)/);
+    expect(read('src/main.ts')).not.toMatch(/devLayout|DEV_LAYOUT/);
+    expect(read('src/main.ts')).toMatch(/createPackedWorldLayout\(\)/);
   });
 
   // The item is data in its Flatpack (1.7): parts, poses, pages, packing — never a mating
@@ -74,7 +74,7 @@ describe('placeholders and headers', () => {
 });
 
 describe('stable stacks and supports (1.5)', () => {
-  const world = read('src/physics/world.js');
+  const world = read('src/physics/world.ts');
 
   // Bodies born asleep never get their resting contacts, and a packed stack sank 2–3 cm
   // through the box and room floors once anything touched it.

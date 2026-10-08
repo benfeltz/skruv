@@ -11,5 +11,5 @@
     "allowJs": true,
     "checkJs": false
   },
-  "include": ["src", "test", "tools/validate"]
+  "include": ["src", "test", "tools/validate", "vite.config.ts"]
 }

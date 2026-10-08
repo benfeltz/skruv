@@ -85,7 +85,7 @@ describe('startPosition (1.7.1 mobile start zoom)', () => {
   });
 
   it('frames a phone through startPosition and leaves the desktop start untouched', () => {
-    const scene = readFileSync(new URL('../src/scene/scene.js', import.meta.url), 'utf8');
+    const scene = readFileSync(new URL('../src/scene/scene.ts', import.meta.url), 'utf8');
     expect(scene).toMatch(/matchMedia\('\(pointer: coarse\)'\)\.matches/);
     expect(scene).toMatch(/coarse \? startPosition\(CAMERA\.startPosition, CAMERA\.startTarget, CAMERA\.mobileStartScale\) : CAMERA\.startPosition/);
   });

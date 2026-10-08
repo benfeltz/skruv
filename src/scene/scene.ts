@@ -8,7 +8,7 @@ import { clampPixelRatio } from './clamp.js';
  * `startPose()` is where the camera starts on this device — `{ position, target }`, a
  * phone's pulled back by CAMERA.mobileStartScale — read again when that knob turns.
  */
-export function createScene(container) {
+export function createScene(container: HTMLElement) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;

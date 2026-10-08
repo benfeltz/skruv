@@ -1,24 +1,57 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { FASTENER, PHYSICS, ROOM } from '../constants.js';
 import { createAccumulator } from './stepping.js';
+import type { Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
+import type { BondMode, JointFrame } from '../game/assembly.js';
 
-const toVector = ([x, y, z]) => ({ x, y, z });
-const toRotation = ([x, y, z, w]) => ({ x, y, z, w });
+// Rapier's types, for the modules that hold bodies and joints — they import them from here,
+// never from Rapier.
+export type Body = RAPIER.RigidBody;
+export type PhysicsJoint = RAPIER.ImpulseJoint;
+
+/** What a body's pose is copied onto each step: a Three object, as far as this module cares. */
+export interface PoseTarget {
+  position: { set(x: number, y: number, z: number): unknown };
+  quaternion: { set(x: number, y: number, z: number, w: number): unknown };
+}
+
+/** One cuboid of a body's shape, offset in the body frame. */
+export interface ColliderShape {
+  halfExtents: Vec3;
+  offset: Vec3;
+}
+
+/** What `register` takes — see there. */
+export interface BodySpec {
+  halfExtents?: Vec3;
+  colliders?: ColliderShape[];
+  mass: number;
+  friction?: number;
+  position: Vec3;
+  rotation: Quat;
+}
+
+const toVector = ([x, y, z]: number[]) => ({ x, y, z });
+const toRotation = ([x, y, z, w]: number[]) => ({ x, y, z, w });
 const ZERO = { x: 0, y: 0, z: 0 };
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
 const DEGREES = Math.PI / 180;
 // Collision groups: membership in nothing, interested in nothing — collides with nothing.
 const NO_COLLISIONS = 0;
 const ALL_COLLISIONS = 0xffffffff;
-const ANGULAR_AXES = [RAPIER.JointAxis.AngX, RAPIER.JointAxis.AngY, RAPIER.JointAxis.AngZ];
+// The raw joint set (setPlay) takes the WASM build's own axis enum: the same numbers as JointAxis.
+type RawJointAxis = Parameters<RAPIER.World['impulseJoints']['raw']['jointSetLimits']>[1];
+const ANGULAR_AXES = [RAPIER.JointAxis.AngX, RAPIER.JointAxis.AngY, RAPIER.JointAxis.AngZ] as unknown as RawJointAxis[];
+// Likewise its motor model enum: the same numbers as MotorModel.
+type RawMotorModel = Parameters<RAPIER.World['impulseJoints']['raw']['jointConfigureMotorModel']>[2];
 
 /** Static slabs just outside the visible floor and walls, so surfaces line up exactly. */
-function addRoomColliders(world) {
+function addRoomColliders(world: RAPIER.World) {
   const half = PHYSICS.roomColliderThickness / 2;
   const halfW = ROOM.width / 2;
   const halfD = ROOM.depth / 2;
   const halfH = ROOM.height / 2;
-  const slabs = [
+  const slabs: { halfExtents: Vec3; center: Vec3 }[] = [
     { halfExtents: [halfW + 2 * half, half, halfD + 2 * half], center: [0, -half, 0] },
     { halfExtents: [halfW + 2 * half, halfH, half], center: [0, halfH, -halfD - half] },
     { halfExtents: [halfW + 2 * half, halfH, half], center: [0, halfH, halfD + half] },
@@ -53,7 +86,7 @@ export async function createPhysicsWorld() {
   addRoomColliders(world);
 
   const accumulator = createAccumulator(PHYSICS.timestep, PHYSICS.maxStepsPerFrame);
-  const bodies = [];
+  const bodies: { body: Body; mesh: PoseTarget; friction: number | undefined }[] = [];
 
   /**
    * Glues `mesh` to a new dynamic body at `position`/`rotation`. Its shape is one cuboid
@@ -61,7 +94,7 @@ export async function createPhysicsWorld() {
    * in the body frame), the mass shared between them by volume. `friction` overrides
    * PHYSICS.friction for this body, and survives `retune`.
    */
-  function register(mesh, { halfExtents, colliders = [{ halfExtents, offset: [0, 0, 0] }], mass, friction, position, rotation }) {
+  function register(mesh: PoseTarget, { halfExtents, colliders = [{ halfExtents: halfExtents!, offset: [0, 0, 0] }], mass, friction, position, rotation }: BodySpec) {
     const body = world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(...position)
@@ -89,7 +122,7 @@ export async function createPhysicsWorld() {
     return body;
   }
 
-  function step(delta) {
+  function step(delta: number) {
     const steps = accumulator.consume(delta);
     if (steps === 0) return;
     for (let i = 0; i < steps; i++) world.step();
@@ -105,26 +138,26 @@ export async function createPhysicsWorld() {
   }
 
   /** Takes a body out of the simulation: it follows `move` and pushes dynamic bodies aside. */
-  function grab(body) {
+  function grab(body: Body) {
     body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
   }
 
   /** Sets a grabbed body's pose for the next step; `rotation` ([x, y, z, w]) is optional. */
-  function move(body, position, rotation) {
+  function move(body: Body, position: Vec3, rotation?: Quat) {
     body.setNextKinematicTranslation(toVector(position));
     if (rotation) body.setNextKinematicRotation(toRotation(rotation));
     body.wakeUp();
   }
 
   /** Hands a grabbed body back to the simulation at rest, so it drops rather than flies. */
-  function release(body) {
+  function release(body: Body) {
     body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
     body.setLinvel(ZERO, true);
     body.setAngvel(ZERO, true);
   }
 
   /** Sets a body down at a pose, at rest and under the simulation — a repack or a respawn. */
-  function place(body, position, rotation) {
+  function place(body: Body, position: Vec3, rotation: Quat) {
     body.setBodyType(RAPIER.RigidBodyType.Dynamic, false);
     body.setTranslation(toVector(position), false);
     body.setRotation(toRotation(rotation), false);
@@ -132,10 +165,10 @@ export async function createPhysicsWorld() {
     body.setAngvel(ZERO, true);
   }
 
-  const joints = new Map(); // handle → { mode, bodyB }
-  const embedded = new Map(); // body → embedding joints holding it
+  const joints = new Map<PhysicsJoint, { mode: BondMode; bodyB: Body }>(); // handle → { mode, bodyB }
+  const embedded = new Map<Body, number>(); // body → embedding joints holding it
 
-  function setCollisions(body, groups) {
+  function setCollisions(body: Body, groups: number) {
     for (let i = 0; i < body.numColliders(); i++) body.collider(i).setCollisionGroups(groups);
   }
 
@@ -148,7 +181,7 @@ export async function createPhysicsWorld() {
    *   'play'   rigid in translation, FASTENER.angularPlayDegrees of angular play about the
    *            pivot, heavily damped: it slumps to the limit and stays — no spring, no bounce
    */
-  function join(bodyA, bodyB, { anchorA, anchorB, rotation }, mode) {
+  function join(bodyA: Body, bodyB: Body, { anchorA, anchorB, rotation }: JointFrame, mode: BondMode) {
     const play = mode === 'play';
     const data = play
       ? RAPIER.JointData.spherical(toVector(anchorA), toVector(anchorB))
@@ -170,12 +203,12 @@ export async function createPhysicsWorld() {
 
   // The play joint's angular limit and damping, from FASTENER. The spherical joint has no
   // typed limit/motor wrapper in this Rapier build; the raw joint set takes them per axis.
-  function setPlay(joint) {
+  function setPlay(joint: PhysicsJoint) {
     const raw = world.impulseJoints.raw;
     const limit = FASTENER.angularPlayDegrees * DEGREES;
     for (const axis of ANGULAR_AXES) {
       raw.jointSetLimits(joint.handle, axis, -limit, limit);
-      raw.jointConfigureMotorModel(joint.handle, axis, RAPIER.MotorModel.ForceBased);
+      raw.jointConfigureMotorModel(joint.handle, axis, RAPIER.MotorModel.ForceBased as unknown as RawMotorModel);
       // Zero stiffness, pure damping: resists the slump's speed, never pushes back.
       raw.jointConfigureMotor(joint.handle, axis, 0, 0, 0, FASTENER.playDamping);
     }
@@ -203,12 +236,12 @@ export async function createPhysicsWorld() {
   }
 
   /** Removes a joint from `join`; both bodies wake, and embedded hardware collides again. */
-  function unjoin(joint) {
+  function unjoin(joint: PhysicsJoint) {
     const record = joints.get(joint);
     if (!record) return;
     joints.delete(joint);
     if (record.mode === 'embed') {
-      const count = embedded.get(record.bodyB) - 1;
+      const count = embedded.get(record.bodyB)! - 1;
       if (count > 0) embedded.set(record.bodyB, count);
       else {
         embedded.delete(record.bodyB);
@@ -220,3 +253,5 @@ export async function createPhysicsWorld() {
 
   return { register, step, grab, move, release, place, join, unjoin, retune };
 }
+
+export type PhysicsWorld = Awaited<ReturnType<typeof createPhysicsWorld>>;

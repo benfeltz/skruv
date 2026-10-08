@@ -39,9 +39,9 @@
         touch-action: none;
       }
       /* The pre-splash: the booklet sheet open on its cover, drawn before any script runs so a
-         cold load never shows the bare void. It mirrors src/ui/booklet.js's open sheet and
-         the cover page of src/scene/bookletPages.js (the outline drawing joins it when the
-         real sheet takes over); main.js removes it on that sheet's first paint.
+         cold load never shows the bare void. It mirrors src/ui/booklet.ts's open sheet and
+         the cover page of src/scene/bookletPages.ts (the outline drawing joins it when the
+         real sheet takes over); main.ts removes it on that sheet's first paint.
          test/splashConventions.test.js pins these values to src/constants.ts. */
       .pre-splash {
         position: fixed;
@@ -135,6 +135,6 @@
         <button type="button" tabindex="-1">›</button>
       </div>
     </section>
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

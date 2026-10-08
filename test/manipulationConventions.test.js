@@ -12,7 +12,7 @@ import { applyTransform, findSnap } from '../src/game/snapMath.js';
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
 describe('camera seam (1.1 camera unchanged when no part is touched)', () => {
-  const router = read('src/scene/gestureRouter.js');
+  const router = read('src/scene/gestureRouter.ts');
 
   it('drives the camera only through enable()/disable(), never OrbitControls', () => {
     expect(router).not.toMatch(/import[^;]*OrbitControls/);
@@ -69,20 +69,20 @@ describe('camera seam (1.1 camera unchanged when no part is touched)', () => {
 });
 
 describe('physics boundary', () => {
-  const world = read('src/physics/world.js');
+  const world = read('src/physics/world.ts');
 
   it('keeps register/step as they were and adds grab/move/release', () => {
     // 1.7.1 extends register's options (colliders, friction) without changing a caller.
-    expect(world).toMatch(/function register\(mesh, \{ halfExtents, colliders = \[\{ halfExtents, offset: \[0, 0, 0\] \}\], mass, friction, position, rotation \}\)/);
-    expect(world).toMatch(/function step\(delta\)/);
-    expect(world).toMatch(/function grab\(body\)/);
-    expect(world).toMatch(/function move\(body, position, rotation\)/);
-    expect(world).toMatch(/function release\(body\)/);
+    expect(world).toMatch(/function register\(mesh: PoseTarget, \{ halfExtents, colliders = \[\{ halfExtents: halfExtents!, offset: \[0, 0, 0\] \}\], mass, friction, position, rotation \}: BodySpec\)/);
+    expect(world).toMatch(/function step\(delta: number\)/);
+    expect(world).toMatch(/function grab\(body: Body\)/);
+    expect(world).toMatch(/function move\(body: Body, position: Vec3, rotation\?: Quat\)/);
+    expect(world).toMatch(/function release\(body: Body\)/);
   });
 
   it('adds join/unjoin (1.4), retune (1.6) and exposes exactly that API', () => {
-    expect(world).toMatch(/function join\(bodyA, bodyB, \{ anchorA, anchorB, rotation \}, mode\)/);
-    expect(world).toMatch(/function unjoin\(joint\)/);
+    expect(world).toMatch(/function join\(bodyA: Body, bodyB: Body, \{ anchorA, anchorB, rotation \}: JointFrame, mode: BondMode\)/);
+    expect(world).toMatch(/function unjoin\(joint: PhysicsJoint\)/);
     expect(world).toMatch(/function retune\(\)/);
     expect(world).toMatch(/return \{ register, step, grab, move, release, place, join, unjoin, retune \};/);
   });
@@ -90,11 +90,11 @@ describe('physics boundary', () => {
   // 1.7.1: the box is a part — one dynamic multi-collider body — so the 1.5 static slabs went.
   it('registers the flatpack box as one dynamic body, never static slabs', () => {
     expect(world).not.toMatch(/addStatic/);
-    expect(read('src/scene/flatpack.js')).toMatch(/physics\.register\(box, \{\n\s+colliders:/);
+    expect(read('src/scene/flatpack.ts')).toMatch(/physics\.register\(box, \{\n\s+colliders:/);
   });
 
   it('lets the box drag but never takes it into the gizmo, the highlight or the repack', () => {
-    const main = read('src/main.js');
+    const main = read('src/main.ts');
     expect(main).toMatch(/const parts = \[flatpack\.base, flatpack\.lid\];/);
     expect(main).toMatch(/part !== flatpack\.base && part !== flatpack\.lid\);/);
     expect(main).toMatch(/if \(!part \|\| part === flatpack\.base\) \{/);
@@ -107,10 +107,10 @@ describe('rotation defaults', () => {
   });
 
   it('starts the snap-rotate toggle off, so rotation is free until it turns detents on', () => {
-    const main = read('src/main.js');
+    const main = read('src/main.ts');
     expect(main).toMatch(/createToggleButton\(\{ label: 'Snap rotate' \}\)/);
     expect(main).toMatch(/isFree: \(\) => !snapRotate\.pressed/);
-    expect(read('src/scene/gizmo.js')).toMatch(/quantizeAngle\([^)]*isFree\(\) \? 0 : GESTURE\.detentStep\)/);
+    expect(read('src/scene/gizmo.ts')).toMatch(/quantizeAngle\([^)]*isFree\(\) \? 0 : GESTURE\.detentStep\)/);
   });
 });
 
@@ -121,7 +121,7 @@ describe('snapping scope', () => {
   });
 
   it('keeps the placed hold only until the first fastener engages (its 1.3 removal condition)', () => {
-    const router = read('src/scene/gestureRouter.js');
+    const router = read('src/scene/gestureRouter.ts');
     const hold = router.slice(router.indexOf('if (snapped)'), router.indexOf('} else {', router.indexOf('if (snapped)')));
     expect(hold).not.toMatch(/physics\.release/);
     expect(hold).toMatch(/placed\.add\(part\)/);

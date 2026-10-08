@@ -1,13 +1,38 @@
 import * as THREE from 'three';
 import { COLORS, GESTURE, GIZMO, ROOM } from '../constants.js';
 import { arcDelta, clampToRoom, quantizeAngle, rotatedHalfExtents } from '../game/dragMath.js';
+import type { ScreenPoint } from '../game/dragMath.js';
+import type { Part } from '../game/partMesh.js';
+import type { PhysicsWorld } from '../physics/world.js';
+import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 
-const AXES = {
+/** A world axis a ring turns about. */
+export type Axis = 'x' | 'y' | 'z';
+
+/** A press on a ring: which axis, and how far along the ray. */
+export interface RingHit {
+  axis: Axis;
+  distance: number;
+}
+
+// A turn in progress.
+interface Turning {
+  axis: THREE.Vector3;
+  sign: number;
+  centre: ScreenPoint;
+  last: ScreenPoint;
+  swept: number;
+  startRotation: THREE.Quaternion;
+  startPosition: Vec3;
+  grabbed: boolean;
+}
+
+const AXES: Record<Axis, { vector: THREE.Vector3; color: number; turn: Vec3 }> = {
   x: { vector: new THREE.Vector3(1, 0, 0), color: COLORS.gizmoX, turn: [0, Math.PI / 2, 0] },
   y: { vector: new THREE.Vector3(0, 1, 0), color: COLORS.gizmoY, turn: [Math.PI / 2, 0, 0] },
   z: { vector: new THREE.Vector3(0, 0, 1), color: COLORS.gizmoZ, turn: [0, 0, 0] },
 };
-const RING_SEGMENTS = [12, 64];
+const RING_SEGMENTS: [number, number] = [12, 64];
 const ARROW_SEGMENTS = 12;
 
 /**
@@ -20,15 +45,25 @@ const ARROW_SEGMENTS = 12;
  * Each ring carries a pair of arrowheads pointing the way a counter-clockwise screen sweep
  * turns the part, flipped per frame by which side of the axis the camera is on.
  *
- * Plugs into src/scene/gestureRouter.js as its `rings` hook. `isFree()` is true unless the
+ * Plugs into src/scene/gestureRouter.ts as its `rings` hook. `isFree()` is true unless the
  * snap-rotate toggle has turned detents (GESTURE.detentStep) on.
  */
-export function createGizmo({ camera, domElement, physics, isFree }) {
+export function createGizmo({
+  camera,
+  domElement,
+  physics,
+  isFree,
+}: {
+  camera: THREE.Camera;
+  domElement: HTMLElement;
+  physics: Pick<PhysicsWorld, 'grab' | 'move' | 'release'>;
+  isFree: () => boolean;
+}) {
   const object = new THREE.Group();
   object.visible = false;
-  const rings = [];
-  const hitBands = [];
-  const arrows = [];
+  const rings: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>[] = [];
+  const hitBands: THREE.Mesh[] = [];
+  const arrows: { cone: THREE.Mesh; vector: THREE.Vector3; facing: number }[] = [];
   const arrowGeometry = new THREE.ConeGeometry(GIZMO.arrowRadius, GIZMO.arrowLength, ARROW_SEGMENTS);
 
   for (const [axis, { vector, color, turn }] of Object.entries(AXES)) {
@@ -65,18 +100,18 @@ export function createGizmo({ camera, domElement, physics, isFree }) {
     }
   }
 
-  let part = null;
-  let turning = null;
+  let part: Part | null = null;
+  let turning: Turning | null = null;
   const quaternion = new THREE.Quaternion();
   const step = new THREE.Quaternion();
   const toCamera = new THREE.Vector3();
   const projected = new THREE.Vector3();
 
-  function show(next) {
+  function show(next: Part) {
     part = next;
     const { geometry } = part.mesh;
     if (!geometry.boundingSphere) geometry.computeBoundingSphere();
-    object.scale.setScalar(Math.max(GIZMO.minRadius, geometry.boundingSphere.radius * GIZMO.radiusPadding));
+    object.scale.setScalar(Math.max(GIZMO.minRadius, geometry.boundingSphere!.radius * GIZMO.radiusPadding));
     object.visible = true;
     update();
   }
@@ -99,24 +134,25 @@ export function createGizmo({ camera, domElement, physics, isFree }) {
     }
   }
 
-  function hitTest(raycaster) {
+  function hitTest(raycaster: THREE.Raycaster): RingHit | null {
     if (!part) return null;
     const [first] = raycaster.intersectObjects(hitBands, false);
     return first ? { axis: first.object.userData.axis, distance: first.distance } : null;
   }
 
-  function screenCentre() {
-    projected.copy(part.mesh.position).project(camera);
+  function screenCentre(): ScreenPoint {
+    projected.copy(part!.mesh.position).project(camera);
     const rect = domElement.getBoundingClientRect();
     return [rect.left + ((projected.x + 1) / 2) * rect.width, rect.top + ((1 - projected.y) / 2) * rect.height];
   }
 
   function halfSizes() {
-    const { width, height, depth } = part.mesh.geometry.parameters;
+    // A part the rings turn is one box.
+    const { width, height, depth } = (part!.mesh.geometry as THREE.BoxGeometry).parameters;
     return [width / 2, height / 2, depth / 2];
   }
 
-  function start({ axis }, { x, y }) {
+  function start({ axis }: Pick<RingHit, 'axis'>, { x, y }: { x: number; y: number }) {
     if (!part) return;
     const { vector } = AXES[axis];
     toCamera.copy(camera.position).sub(part.mesh.position);
@@ -134,7 +170,7 @@ export function createGizmo({ camera, domElement, physics, isFree }) {
     rings.forEach((ring, i) => (ring.material.opacity = hitBands[i].userData.axis === axis ? 1 : GIZMO.opacity / 3));
   }
 
-  function move({ x, y }) {
+  function move({ x, y }: { x: number; y: number }) {
     if (!turning) return;
     turning.swept += arcDelta(turning.centre, turning.last, [x, y]);
     turning.last = [x, y];
@@ -143,7 +179,7 @@ export function createGizmo({ camera, domElement, physics, isFree }) {
     // ring that rotates nothing never lifts or unseats the part (a seated part stays put).
     if (!turning.grabbed) {
       if (angle === 0) return;
-      physics.grab(part.body);
+      physics.grab(part!.body);
       turning.grabbed = true;
     }
     step.setFromAxisAngle(turning.axis, angle);
@@ -152,7 +188,7 @@ export function createGizmo({ camera, domElement, physics, isFree }) {
     const [hx, hy, hz] = rotatedHalfExtents(halfSizes(), rotation);
     const [px, py, pz] = turning.startPosition;
     const lifted = [px, Math.max(py, hy) + GESTURE.hoverLift, pz];
-    physics.move(part.body, clampToRoom(lifted, [hx, hz], ROOM, GESTURE.wallMargin), rotation);
+    physics.move(part!.body, clampToRoom(lifted, [hx, hz], ROOM, GESTURE.wallMargin), rotation);
   }
 
   function end() {
@@ -160,7 +196,7 @@ export function createGizmo({ camera, domElement, physics, isFree }) {
     const { grabbed } = turning;
     turning = null;
     rings.forEach((ring) => (ring.material.opacity = GIZMO.opacity));
-    if (grabbed) physics.release(part.body);
+    if (grabbed) physics.release(part!.body);
   }
 
   const cancel = end;

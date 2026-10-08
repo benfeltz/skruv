@@ -154,3 +154,5 @@ export function createBus({ now = () => 0, onError = (error: unknown) => console
 
   return { on, off, emit };
 }
+
+export type Bus = ReturnType<typeof createBus>;

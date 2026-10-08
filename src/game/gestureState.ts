@@ -1,6 +1,6 @@
 // Pointer-gesture state machine: decides who owns each touch — the camera, a part drag,
 // or a gizmo ring — and classifies taps vs drags. Pure: it consumes plain pointer records
-// `{ id, x, y, t, hit, button }` (CSS px, ms) built by src/scene/gestureRouter.js, where
+// `{ id, x, y, t, hit, button }` (CSS px, ms) built by src/scene/gestureRouter.ts, where
 // `hit` is null (empty space) or `{ kind: 'part' | 'ring', ... }` passed through untouched,
 // and `button` is the pressed button (0 = primary: every touch and pen; default 0).
 
@@ -31,7 +31,9 @@ export interface PointerRecord<H extends GestureHit = GestureHit> {
 
 /** What `down`/`move`/`up`/`cancel`/`wheel` hand the router — see `createGestureState`. */
 export type GestureEffect<H extends GestureHit = GestureHit> =
-  | { type: 'dragStart' | 'dragMove' | 'dragEnd'; owner: Owner | null; hit: H | null; x: number; y: number }
+  | { type: 'dragStart'; owner: Owner | null; hit: H | null; x: number; y: number }
+  | { type: 'dragMove'; owner: Owner | null; hit: H | null; x: number; y: number }
+  | { type: 'dragEnd'; owner: Owner | null; hit: H | null; x: number; y: number }
   | { type: 'dragCancel'; owner: Owner | null; hit: H | null }
   | { type: 'tap'; hit: H | null; x: number; y: number }
   | { type: 'lift'; owner: Owner | null; hit: H | null; dy: number; x?: number; y?: number };

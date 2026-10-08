@@ -1,12 +1,15 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
+import type { Plugin } from 'vite';
 import { WebSocketServer } from 'ws';
+import type { WebSocket } from 'ws';
 import { DEV_WS } from './src/constants.js';
 
 // The upgrade's Host must name this machine, as Vite requires of its own HMR socket — else
 // a site whose DNS rebinds to 127.0.0.1 sends a Host (and Origin) of its own and passes the
 // Origin check below. An IP literal (a phone on the LAN), localhost and *.localhost always
 // pass; any other name only if server.allowedHosts lets it in.
-function allowedHost(host, allowedHosts) {
+function allowedHost(host: string | undefined, allowedHosts: string[] | true | undefined) {
   let hostname;
   try {
     ({ hostname } = new URL(`http://${host}`));
@@ -23,7 +26,7 @@ function allowedHost(host, allowedHosts) {
 
 // A browser always sends Origin on a WebSocket upgrade, and CORS never applies to one: only
 // a page served by this dev server may connect. Tools (websocat, the agent bridge) send none.
-function allowedOrigin({ origin, host }) {
+function allowedOrigin({ origin, host }: { origin?: string; host?: string }) {
   if (origin === undefined) return true;
   try {
     return new URL(origin).host === host;
@@ -37,18 +40,18 @@ function allowedOrigin({ origin, host }) {
 // agent bridge) and the tools' to every game page. Dev server only — `apply: 'serve'`, so a
 // build never sees it. Another site open in the same browser is refused (allowedHost,
 // allowedOrigin).
-function devStream() {
+function devStream(): Plugin {
   return {
     name: 'skruv-dev-stream',
     apply: 'serve',
     configureServer(server) {
       if (!server.httpServer) return;
       const wss = new WebSocketServer({ noServer: true });
-      const games = new Set();
-      const tools = new Set();
+      const games = new Set<WebSocket>();
+      const tools = new Set<WebSocket>();
       // Vite's own HMR socket upgrades on its own path; only ours is taken here.
       server.httpServer.on('upgrade', (request, socket, head) => {
-        if (new URL(request.url, 'http://localhost').pathname !== DEV_WS.path) return;
+        if (new URL(request.url!, 'http://localhost').pathname !== DEV_WS.path) return;
         if (!allowedHost(request.headers.host, server.config.server.allowedHosts) || !allowedOrigin(request.headers)) {
           socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
           return;

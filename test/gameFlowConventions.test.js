@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 // 1.5 game-flow rules that live in wiring (main.js) and DOM/scene modules — checked at the
 // source, since the behaviour itself is a manual device check.
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
-const main = read('src/main.js');
-const router = read('src/scene/gestureRouter.js');
+const main = read('src/main.ts');
+const router = read('src/scene/gestureRouter.ts');
 
 describe('repack reset (decision 9)', () => {
   const repack = main.slice(main.indexOf('function repack()'), main.indexOf('document.body.append(createResetButton'));
@@ -29,7 +29,7 @@ describe('repack reset (decision 9)', () => {
   });
 
   it('asks for a confirming second tap, inside the RESET window', () => {
-    const button = read('src/ui/resetButton.js');
+    const button = read('src/ui/resetButton.ts');
     expect(button).toMatch(/setTimeout\(\(\) => arm\(false\), RESET\.confirmMs\)/);
     expect(button).toMatch(/if \(element\.dataset\.armed !== 'true'\) return arm\(true\);/);
   });
@@ -63,20 +63,20 @@ describe('highlight and booklet stay aids (decision 8)', () => {
   });
 
   it('keeps the highlight out of the booklet DOM — main passes the page', () => {
-    const highlight = read('src/scene/highlight.js');
+    const highlight = read('src/scene/highlight.ts');
     expect(highlight).not.toMatch(/from '[^']*booklet/);
     expect(highlight).not.toMatch(/\b(document|window)\./);
   });
 
   it('never feeds the booklet or highlight back into the assembly', () => {
-    for (const path of ['src/ui/booklet.js', 'src/scene/highlight.js', 'src/scene/bookletPages.js']) {
+    for (const path of ['src/ui/booklet.ts', 'src/scene/highlight.ts', 'src/scene/bookletPages.ts']) {
       expect(read(path)).not.toMatch(/assembly|\.seat\(|\.apply\(|\.tap\(/);
     }
   });
 });
 
 describe('no audio (0.0.1)', () => {
-  it.each(['src/main.js', 'src/ui/booklet.js', 'src/ui/resetButton.js', 'src/scene/highlight.js', 'src/scene/flatpack.js', 'src/scene/displayShelf.js', 'src/scene/bookletPages.js'])(
+  it.each(['src/main.ts', 'src/ui/booklet.ts', 'src/ui/resetButton.ts', 'src/scene/highlight.ts', 'src/scene/flatpack.ts', 'src/scene/displayShelf.ts', 'src/scene/bookletPages.ts'])(
     '%s plays nothing',
     (path) => {
       expect(read(path)).not.toMatch(/\bAudio(Context|Listener)?\b|PositionalAudio|\.play\(/);
@@ -90,7 +90,7 @@ describe('branding (decision 4)', () => {
     const { identity } = JSON.parse(read('items/johnny/flatpack.json'));
     expect(identity.product).toBe('JOHNNY');
     expect(identity.maker).toBe('SKRUV');
-    for (const path of ['items/johnny/flatpack.json', 'src/constants.ts', 'src/scene/bookletPages.js', 'src/ui/booklet.js', 'src/ui/resetButton.js', 'src/game/bookletModel.ts', 'index.html']) {
+    for (const path of ['items/johnny/flatpack.json', 'src/constants.ts', 'src/scene/bookletPages.ts', 'src/ui/booklet.ts', 'src/ui/resetButton.ts', 'src/game/bookletModel.ts', 'index.html']) {
       expect(read(path)).not.toMatch(/IKEA|Billy|BILLY|AA-\d/);
     }
   });
@@ -105,7 +105,7 @@ describe('repack frees the player\'s parts from anything holding them (PR #12 re
 });
 
 describe('booklet focus (PR #12 review)', () => {
-  const booklet = read('src/ui/booklet.js');
+  const booklet = read('src/ui/booklet.ts');
   const setOpen = booklet.slice(booklet.indexOf('function setOpen('), booklet.indexOf("thumb.addEventListener('click'"));
 
   it('opens onto a control that is never disabled at that moment, the handle as the last resort', () => {
@@ -117,7 +117,7 @@ describe('booklet focus (PR #12 review)', () => {
 });
 
 describe('boot with the manual up; tap off to put it down (1.6.1)', () => {
-  const booklet = read('src/ui/booklet.js');
+  const booklet = read('src/ui/booklet.ts');
 
   it('opens on the cover, without moving focus onto a control', () => {
     expect(booklet).toMatch(/let page = 0;\s*let open = true;/);
@@ -157,8 +157,8 @@ describe('boot with the manual up; tap off to put it down (1.6.1)', () => {
 });
 
 describe('tap the open manual to put it down, swipe to flip (1.6.2)', () => {
-  const booklet = read('src/ui/booklet.js');
-  const sheetTap = booklet.slice(booklet.indexOf('let sheetPress = null;'), booklet.indexOf("thumb.addEventListener('click'"));
+  const booklet = read('src/ui/booklet.ts');
+  const sheetTap = booklet.slice(booklet.indexOf('let sheetPress: '), booklet.indexOf("thumb.addEventListener('click'"));
 
   it('tells a tap from a swipe by the GESTURE tap thresholds, never a number of its own', () => {
     expect(booklet).toMatch(/import \{[^}]*\bGESTURE\b[^}]*\} from '\.\.\/constants\.js';/);
@@ -169,7 +169,7 @@ describe('tap the open manual to put it down, swipe to flip (1.6.2)', () => {
   });
 
   it("leaves every button on the sheet its own job, and closes as the room's tap does", () => {
-    expect(sheetTap).toMatch(/event\.target\.closest\('button'\)/);
+    expect(sheetTap).toMatch(/\(event\.target as Element\)\.closest\('button'\)/);
     expect(sheetTap).toMatch(/setOpen\(false, \{ byRoomTap: true \}\)/);
   });
 });

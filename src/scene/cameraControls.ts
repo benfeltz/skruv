@@ -1,4 +1,6 @@
 import { MOUSE, TOUCH, Vector3 } from 'three';
+import type { Camera } from 'three';
+import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CAMERA, CAMERA_LIMITS, ROOM } from '../constants.js';
 import { clampCamera, clampTargetAlongView, panSpeedAt, seatOnFloor } from './cameraLimits.js';
@@ -12,7 +14,7 @@ import { clampCamera, clampTargetAlongView, panSpeedAt, seatOnFloor } from './ca
  * `enable()`/`disable()` is the seam the gesture router drives to hand touches to part
  * manipulation — callers never reach into OrbitControls directly.
  */
-export function createCameraControls(camera, domElement) {
+export function createCameraControls(camera: Camera, domElement: HTMLElement) {
   const controls = new OrbitControls(camera, domElement);
 
   controls.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN };
@@ -63,7 +65,7 @@ export function createCameraControls(camera, domElement) {
 
   return {
     /** Call once per frame — applies damping. */
-    update(deltaSeconds) {
+    update(deltaSeconds: number) {
       controls.panSpeed = panSpeedAt(free.distanceTo(controls.target), CAMERA_LIMITS);
       controls.update(deltaSeconds);
     },
@@ -77,7 +79,7 @@ export function createCameraControls(camera, domElement) {
       return controls.enabled;
     },
     /** Puts the camera at `position` looking at `target` — a re-frame, e.g. a retuned start. */
-    frame({ position, target }) {
+    frame({ position, target }: { position: Vec3; target: Vec3 }) {
       free.set(...position);
       controls.target.set(...target);
       controls.update();
@@ -87,3 +89,5 @@ export function createCameraControls(camera, domElement) {
     },
   };
 }
+
+export type CameraControls = ReturnType<typeof createCameraControls>;

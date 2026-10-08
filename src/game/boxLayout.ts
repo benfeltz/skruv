@@ -1,7 +1,7 @@
 // The flatpack in the room: where the box and its lid sit, where every packed part lies,
 // and where a recovered part is set down again. Pure — the pack's packing and the room's
-// constants in, plain poses out — so Vitest checks it headlessly; src/scene/flatpack.js
-// builds the box and main.js spawns the parts at these poses. The packed placements
+// constants in, plain poses out — so Vitest checks it headlessly; src/scene/flatpack.ts
+// builds the box and main.ts spawns the parts at these poses. The packed placements
 // themselves are the pack's (items/johnny `packing.placements`), in the box-local frame:
 // origin on the floor at the box's centre, its length along z, height along y.
 //
@@ -218,7 +218,7 @@ function spotsBeside(types: string[], pose: Pose, side: number, respawn: Respawn
 }
 
 /**
- * Every part in a box at `pose` as the pack packs it, carried into the room — what main.js
+ * Every part in a box at `pose` as the pack packs it, carried into the room — what main.ts
  * spawns and repacks to: `{ id, type, position, rotation }` per manifest instance, spares
  * included.
  */

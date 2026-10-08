@@ -5,7 +5,7 @@ import { COLORS, RESET } from '../constants.js';
 // arm lapses on its own. Follows the src/ui pattern (own element, own style).
 
 const STYLE_ID = 'skruv-reset-button';
-const css = (hex) => `#${hex.toString(16).padStart(6, '0')}`;
+const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 const LABEL = 'Repack';
 const ARMED_LABEL = 'Tap again to repack';
 
@@ -42,15 +42,15 @@ function injectStyle() {
 }
 
 /** `{ element }`; `onReset()` runs on the confirming second tap. */
-export function createResetButton({ onReset }) {
+export function createResetButton({ onReset }: { onReset: () => void }) {
   injectStyle();
   const element = document.createElement('button');
   element.type = 'button';
   element.className = 'reset-button';
-  let timer = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
 
-  function arm(armed) {
-    clearTimeout(timer);
+  function arm(armed: boolean) {
+    clearTimeout(timer ?? undefined);
     timer = armed ? setTimeout(() => arm(false), RESET.confirmMs) : null;
     element.dataset.armed = String(armed);
     element.textContent = armed ? ARMED_LABEL : LABEL;
