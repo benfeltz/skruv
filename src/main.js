@@ -7,7 +7,7 @@ import { createTunables, LIVE_KNOBS } from './game/tunables.js';
 import { PART_TYPES } from './game/item.js';
 import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
-import { baseRest, boxPoseOf, createPackedWorldLayout, lidRest, respawnSpots } from './game/boxLayout.js';
+import { baseRest, boxPlacement, boxPoseOf, createPackedWorldLayout, lidRest, respawnSpots } from './game/boxLayout.js';
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
@@ -195,9 +195,10 @@ document.body.append(createResetButton({ onReset: repack }).element);
 
 // Recovery: a loose player part that has left the room (through a slab, off a wall) is set
 // down again beside the box. Bonded parts go back only with a repack. The box itself goes
-// back where it stood at boot.
-const baseHome = baseRest();
+// back to where it last sat in the room — floor it held a moment ago, not the boot spot
+// the player may have built on since.
 let sweepIn = RESET.sweepInterval;
+let lastBox = boxPlacement();
 function sweep(delta) {
   sweepIn -= delta;
   if (sweepIn > 0) return;
@@ -206,10 +207,14 @@ function sweep(delta) {
     const { x, y, z } = body.translation();
     return hasEscaped([x, y, z], ROOM, RESET.escapeMargin) && assembly.compoundOf(id).size === 1;
   });
+  if (!escaped.includes(flatpack.base)) lastBox = boxPose();
   if (escaped.length === 0) return;
   events.emit(recoveryEvent(escaped.map(({ id }) => id)));
-  // The box goes home first, so the rest are set down beside it there.
-  if (escaped.includes(flatpack.base)) physics.place(flatpack.base.body, baseHome.position, baseHome.rotation);
+  // The box goes back first, so the rest are set down beside it there.
+  if (escaped.includes(flatpack.base)) {
+    const back = baseRest(lastBox);
+    physics.place(flatpack.base.body, back.position, back.rotation);
+  }
   const loose = escaped.filter((part) => part !== flatpack.base);
   const spots = respawnSpots(loose.map((part) => part.type), boxPose());
   loose.forEach(({ body }, i) => physics.place(body, spots[i].position, spots[i].rotation));

@@ -50,8 +50,9 @@ describe('recovery sweep (Feedback #9)', () => {
     expect(sweep).toMatch(/respawnSpots\(loose\.map\(\(part\) => part\.type\), boxPose\(\)\)/);
   });
 
-  it('sends an escaped box back where it stood at boot, not into the respawn patch (1.7.1)', () => {
-    expect(sweep).toMatch(/physics\.place\(flatpack\.base\.body, baseHome\.position, baseHome\.rotation\)/);
+  it('sends an escaped box back where it last sat in the room, not into the respawn patch (1.7.1)', () => {
+    expect(sweep).toMatch(/if \(!escaped\.includes\(flatpack\.base\)\) lastBox = boxPose\(\);/);
+    expect(sweep).toMatch(/const back = baseRest\(lastBox\);\n\s+physics\.place\(flatpack\.base\.body, back\.position, back\.rotation\);/);
   });
 });
 
