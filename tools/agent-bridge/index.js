@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Skruv agent bridge: an MCP stdio server proxying the dev stream (DEV_WS in
-// src/constants.js), so an agent can watch a dev session and tune its knobs live. Observe
+// src/constants.ts), so an agent can watch a dev session and tune its knobs live. Observe
 // everything, write only knobs — it cannot move parts or trigger gestures (1.0.0 R3).
 // Plain node + the MCP SDK; no game imports, so the protocol strings below mirror DEV_WS
-// (test/conventions.test.js pins them equal).
+// (test/conventions.test.ts pins them equal).
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';

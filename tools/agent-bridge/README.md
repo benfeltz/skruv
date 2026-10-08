@@ -4,7 +4,7 @@ An MCP server (stdio) that lets an agent watch and tune a **dev** session of the
 the 0.0.1 dress rehearsal for 1.0.0's R3. Observe everything, write only knobs.
 
 It proxies the dev stream: the WebSocket hub the Vite dev server runs at `/__skruv-dev`
-(protocol: `DEV_WS` in `src/constants.js`). Nothing here exists in a production build.
+(protocol: `DEV_WS` in `src/constants.ts`). Nothing here exists in a production build.
 
 | Tool | Does |
 |------|------|

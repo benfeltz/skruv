@@ -7,12 +7,12 @@ engine honours. Two layers:
    run with ajv: structure, required fields, vocabulary enums, vector and quaternion
    arities, numeric ranges, `format: 1`. A pack that names it in `$schema` gets editor
    autocomplete and inline errors.
-2. **Semantic checks** — [`lib/checks.js`](lib/checks.js): the geometry JSON Schema cannot
+2. **Semantic checks** — [`lib/checks.ts`](lib/checks.ts): the geometry JSON Schema cannot
    express (rules below).
 
 ```sh
 npm ci --prefix tools/validate          # once: installs ajv for the CLI
-node tools/validate/index.js items/johnny
+npx tsx tools/validate/index.ts items/johnny
 ```
 
 Prints `ok <file>` or every error as `[rule] path: message`; exits 1 on any error, 2 on bad
@@ -20,17 +20,18 @@ usage. Runs on every PR (`.github/workflows/ci.yml`) and before every deploy.
 
 ## `lib/` — the one pack implementation
 
-Pure, dependency-free, browser-safe ES modules. The game imports them (through
-`src/game/item.js`); the CLI imports them and adds only ajv. Nothing in `lib/` imports from
-`src/`, Three, Rapier, the DOM or Node (pinned by `test/conventions.test.js`).
+Pure, dependency-free, browser-safe TypeScript modules. Each exports the types of the data it
+owns — together, the Flatpack format's TypeScript mirror of the schema. The game imports them (through
+`src/game/item.ts`); the CLI imports them and adds only ajv. Nothing in `lib/` imports from
+`src/`, Three, Rapier, the DOM or Node (pinned by `test/conventions.test.ts`).
 
 | Module | What it holds |
 |--------|---------------|
-| `vocabulary.js` | Connector types, which end fits which hole, the fastener machines' names, and `CONTRACT` (sink depths, cam capture radius, mate reach and tolerance) |
-| `geometry.js` | Quaternion and pose maths: `rotateVector`, `connectorInWorld`, `contains`, `placeLayout` |
-| `pack.js` | `loadPack(json)`: engine-shaped part types (connectors in file order, each keeping its `id`), the manifest with spares numbered last, `resolve("<instance>/<connector>") → { part, connector: index }` |
-| `joints.js` | `deriveJoints(pack)`: joints from the assembled poses — a fastener end its sink depth down a compatible, facing hole; a cam's `captured` bolt; a back fitting's `through` panel |
-| `checks.js` | `checkPack(json, { assetExists })`: the semantic rules |
+| `vocabulary.ts` | Connector types (`ConnectorType`), which end fits which hole, the fastener machines' names (`FastenerKind`), and `CONTRACT` (sink depths, cam capture radius, mate reach and tolerance) |
+| `geometry.ts` | `Vec3`, `Quat`, `Pose`; quaternion and pose maths: `rotateVector`, `connectorInWorld`, `contains`, `placeLayout` |
+| `pack.ts` | The file's types (`FlatpackFile` and its parts, pages, packing) and the engine's (`Pack`, `PartType`, `Connector`); `loadPack(json)`: engine-shaped part types (connectors in file order, each keeping its `id`), the manifest with spares numbered last, `resolve("<instance>/<connector>") → { part, connector: index }` |
+| `joints.ts` | `Joint`; `deriveJoints(pack)`: joints from the assembled poses — a fastener end its sink depth down a compatible, facing hole; a cam's `captured` bolt; a back fitting's `through` panel |
+| `checks.ts` | `CheckError`, `Rule`; `checkPack(json, { assetExists })`: the semantic rules |
 
 Joints are never authored: an item's mating is whatever its assembled poses make coincide.
 Behaviour (how a cam turns, how a dowel feels) is the engine's; a pack only names it. There
@@ -58,7 +59,7 @@ is no scripting in format 1.
 
 ## Conformance fixture seeds (R6)
 
-The mutations in `test/validateChecks.test.js` — one per rule, each applied to the shipped
+The mutations in `test/validateChecks.test.ts` — one per rule, each applied to the shipped
 JOHNNY — are the seeds of the conformance fixtures the Godot build must reject for the same
 rule:
 
@@ -82,4 +83,4 @@ rule:
 
 Schema-layer seeds (missing connector id, unknown connector type or fastener kind,
 `format: 2`, a three-component quaternion, a scripted page) are in
-`test/flatpackSchema.test.js`.
+`test/flatpackSchema.test.ts`.
