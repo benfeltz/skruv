@@ -84,6 +84,6 @@ describe('stable stacks and supports (1.5)', () => {
 
   it('simulates no body lighter than PHYSICS.minBodyMass, keeping catalog masses true', () => {
     expect(PHYSICS.minBodyMass).toBeGreaterThan(0);
-    expect(world).toMatch(/\.setMass\(Math\.max\(mass, PHYSICS\.minBodyMass\)\)/);
+    expect(world).toMatch(/\.setMass\(\(Math\.max\(mass, PHYSICS\.minBodyMass\) \* volumes\[i\]\) \/ volume\)/);
   });
 });

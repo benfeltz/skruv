@@ -72,7 +72,8 @@ describe('physics boundary', () => {
   const world = read('src/physics/world.js');
 
   it('keeps register/step as they were and adds grab/move/release', () => {
-    expect(world).toMatch(/function register\(mesh, \{ halfExtents, mass, position, rotation \}\)/);
+    // 1.7.1 extends register's options (colliders, friction) without changing a caller.
+    expect(world).toMatch(/function register\(mesh, \{ halfExtents, colliders = \[\{ halfExtents, offset: \[0, 0, 0\] \}\], mass, friction, position, rotation \}\)/);
     expect(world).toMatch(/function step\(delta\)/);
     expect(world).toMatch(/function grab\(body\)/);
     expect(world).toMatch(/function move\(body, position, rotation\)/);
