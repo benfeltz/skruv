@@ -168,7 +168,7 @@ const router = createGestureRouter({
 // The display shelf's physics joints, made by the same reconcile every tap and turn runs.
 router.sync();
 
-// Where the box sits now: its base body's live pose, as the box frame the layout hangs off.
+// Where the box sits now, as the level, in-room box frame the layout hangs off.
 function boxPose() {
   const { x, y, z } = flatpack.base.body.translation();
   const r = flatpack.base.body.rotation();
@@ -176,14 +176,15 @@ function boxPose() {
 }
 
 // Repack: the player's parts come apart by the normal teardown and go back into the box
-// as packed, lid on — wherever the box has been dragged to. The display shelf is never
-// touched.
-const baseHome = baseRest();
+// as packed, lid on — wherever the box has been dragged to, stood upright there first if
+// it was left tilted. The display shelf is never touched.
 function repack() {
   events.emit(resetEvent());
   router.unseatAll(playerParts.map((part) => part.id));
   select(null);
   const box = boxPose();
+  const upright = baseRest(box);
+  physics.place(flatpack.base.body, upright.position, upright.rotation);
   const packedPose = new Map([[flatpack.lid.id, lidRest(box)], ...createPackedWorldLayout(box).map((p) => [p.id, p])]);
   for (const { id, body } of [...playerParts, flatpack.lid]) {
     const { position, rotation } = packedPose.get(id);
@@ -195,6 +196,7 @@ document.body.append(createResetButton({ onReset: repack }).element);
 // Recovery: a loose player part that has left the room (through a slab, off a wall) is set
 // down again beside the box. Bonded parts go back only with a repack. The box itself goes
 // back where it stood at boot.
+const baseHome = baseRest();
 let sweepIn = RESET.sweepInterval;
 function sweep(delta) {
   sweepIn -= delta;

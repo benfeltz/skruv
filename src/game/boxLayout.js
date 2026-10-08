@@ -10,8 +10,8 @@
 // (`boxPlacement()`), or wherever it sits now (`boxPoseOf` its body's pose).
 
 import { multiplyQuaternions, placeLayout, rotateVector } from '../../tools/validate/lib/geometry.js';
-import { BOX, RESET, ROOM } from '../constants.js';
-import { rotatedHalfExtents } from './dragMath.js';
+import { BOX, GESTURE, RESET, ROOM } from '../constants.js';
+import { clampToRoom, rotatedHalfExtents } from './dragMath.js';
 import { MANIFEST, PACKING, PART_TYPES } from './item.js';
 
 /**
@@ -122,10 +122,21 @@ export function baseRest(pose = boxPlacement()) {
   return { position: rest.position, rotation: rest.rotation };
 }
 
-/** The box pose (its box-local frame) of a box base body at `{ position, rotation }` — `baseRest`'s inverse. */
-export function boxPoseOf({ position, rotation }) {
-  const centre = rotateVector(rotation, BASE_CENTRE);
-  return { position: position.map((v, i) => v - centre[i]), rotation };
+/**
+ * The box pose to lay out against for a box base body at `{ position, rotation }`: the box
+ * stood upright on the floor where the body is, turned by the body's yaw alone, and held
+ * inside the walls. A box left tilted (propped on a panel) or half through a wall still
+ * gives a level frame in the room, so nothing is packed or respawned under the floor or
+ * through a wall. For an upright box in the room it is exactly `baseRest`'s inverse.
+ */
+export function boxPoseOf({ position, rotation: [, qy, , qw] }) {
+  // The twist about vertical: the yaw part of the rotation (swing-twist decomposition).
+  const norm = Math.hypot(qy, qw);
+  const yaw = norm > 1e-9 ? [0, qy / norm, 0, qw / norm] : IDENTITY;
+  const [hx, , hz] = rotatedHalfExtents(PART_TYPES.boxBase.size.map((d) => d / 2), yaw);
+  const centre = rotateVector(yaw, BASE_CENTRE);
+  const [x, , z] = clampToRoom(position.map((v, i) => v - centre[i]), [hx, hz], ROOM, GESTURE.wallMargin);
+  return { position: [x, 0, z], rotation: yaw };
 }
 
 /** The lid's pose closed on the walls' top edges of a box at `pose`. */

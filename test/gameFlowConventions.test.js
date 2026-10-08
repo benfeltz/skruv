@@ -24,6 +24,10 @@ describe('repack reset (decision 9)', () => {
     expect(repack).toMatch(/physics\.place\(body, position, rotation\)/);
   });
 
+  it('stands a tilted box upright where it is before repacking into it (1.7.1)', () => {
+    expect(repack).toMatch(/const upright = baseRest\(box\);\n\s+physics\.place\(flatpack\.base\.body, upright\.position, upright\.rotation\);/);
+  });
+
   it('asks for a confirming second tap, inside the RESET window', () => {
     const button = read('src/ui/resetButton.js');
     expect(button).toMatch(/setTimeout\(\(\) => arm\(false\), RESET\.confirmMs\)/);

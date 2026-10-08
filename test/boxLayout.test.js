@@ -189,6 +189,26 @@ describe('the layout follows the box wherever it is dragged (1.7.1)', () => {
     });
   });
 
+  // PR #23 review: a box left tilted (propped on a panel) or half through a wall.
+  it('lays out against a tilted box level on the floor, turned by its yaw alone', () => {
+    const tilt = [Math.sin(0.1), 0, 0, Math.cos(0.1)]; // ~11° about box-local x
+    const body = baseRest(moved);
+    const tilted = { position: body.position.map((v, i) => v + [0, 0.05, 0][i]), rotation: multiplyQuaternions(moved.rotation, tilt) };
+    const pose = boxPoseOf(tilted);
+    expect(pose.position[1]).toBe(0);
+    pose.rotation.forEach((v, i) => expect(v).toBeCloseTo(moved.rotation[i], 12));
+    for (const [i, spot] of respawnSpots(types, pose).entries()) {
+      const [, hy] = rotatedHalfExtents(PART_TYPES[types[i]].size.map((d) => d / 2), spot.rotation);
+      expect(spot.position[1] - hy, types[i]).toBeGreaterThanOrEqual(RESET.respawn.height - EPS);
+    }
+  });
+
+  it('holds the layout frame inside the walls for a box half through one', () => {
+    const through = { position: [ROOM.width / 2 + 0.2, 0, 0], rotation: [0, 0, 0, 1] };
+    const { position: [x] } = boxPoseOf(baseRest(through));
+    expect(x + width / 2 + BOX.wall).toBeLessThanOrEqual(ROOM.width / 2);
+  });
+
   it('falls back to the boot patch when the box is wedged in a corner and neither side fits', () => {
     const inCorner = { position: [ROOM.width / 2 - 0.6, 0, ROOM.depth / 2 - length / 2 - BOX.wall - 0.01], rotation: [0, 0, 0, 1] };
     expect(respawnSpots(types, inCorner)).toEqual(respawnSpots(types));
