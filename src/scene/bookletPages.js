@@ -10,7 +10,7 @@ import { ASSEMBLED, IDENTITY, MANIFEST, MANUAL, PART_TYPES, resolveConnector } f
 // disagree with the geometry. Wordless, as the real thing is: a big step numeral, an
 // outline drawing (this page's parts bold, what is already built pale), hardware count
 // bubbles with their part numbers, and pictogram warning pages with faceless figures.
-// WHAT each page shows is src/game/bookletModel.js's; this module only draws. Branding is
+// WHAT each page shows is src/game/bookletModel.ts's; this module only draws. Branding is
 // JOHNNY by SKRUV — black on white, no borrowed marks.
 
 const css = (hex) => `#${hex.toString(16).padStart(6, '0')}`;

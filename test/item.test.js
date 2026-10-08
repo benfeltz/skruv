@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { deriveJoints } from '../tools/validate/lib/joints.js';
 import { ASSEMBLED, IDENTITY, MANIFEST, MANUAL, PACKING, PART_TYPES, resolveConnector, SPARES } from '../src/game/item.js';
 
-describe('src/game/item.js', () => {
+describe('src/game/item.ts', () => {
   it('names every connector, in index order', () => {
     for (const part of Object.values(PART_TYPES)) for (const c of part.connectors) expect(c.id).toMatch(/^[A-Za-z]+-\d+$/);
     expect(resolveConnector('sidePanel-2/dowelHole-3')).toEqual({ part: 'sidePanel-2', connector: PART_TYPES.sidePanel.connectors.findIndex((c) => c.id === 'dowelHole-3') });

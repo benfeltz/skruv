@@ -22,7 +22,7 @@ usage. Runs on every PR (`.github/workflows/ci.yml`) and before every deploy.
 
 Pure, dependency-free, browser-safe TypeScript modules. Each exports the types of the data it
 owns — together, the Flatpack format's TypeScript mirror of the schema. The game imports them (through
-`src/game/item.js`); the CLI imports them and adds only ajv. Nothing in `lib/` imports from
+`src/game/item.ts`); the CLI imports them and adds only ajv. Nothing in `lib/` imports from
 `src/`, Three, Rapier, the DOM or Node (pinned by `test/conventions.test.js`).
 
 | Module | What it holds |

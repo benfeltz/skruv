@@ -95,6 +95,9 @@ export interface SpecialPage extends PageBase {
 /** A booklet page, by `kind`. */
 export type Page = PlainPage | SubjectPage | StepPage | SpecialPage;
 
+/** Any page, every kind's own fields optional — how code that walks all pages reads one. */
+export type PageFields = Page & Partial<Omit<StepPage, 'kind'> & Omit<SpecialPage, 'kind'> & Omit<SubjectPage, 'kind'>>;
+
 export interface Manual {
   pages: Page[];
 }

@@ -3,6 +3,18 @@ import { TUNE } from '../constants.js';
 // Frame deltas summed over a sample fall a hair short of whole seconds.
 const EPSILON = 1e-9;
 
+/** One frame-rate sample: the loop's rate, and whether render skipping is engaged. */
+export interface FpsSample {
+  fps: number;
+  skipping: boolean;
+}
+
+/** Whether to render this frame, and the sample it closed, if any. */
+export interface FrameDecision {
+  render: boolean;
+  sample: FpsSample | null;
+}
+
 /**
  * Samples the loop's frame rate and decides, frame by frame, whether to render it. Under
  * sustained load (below `fpsFloor` for `fpsWindow` seconds) it renders every other frame;
@@ -39,7 +51,7 @@ export function createFpsGuard(config = TUNE) {
   let lastRendered = true;
   let odd = false;
 
-  function engage(fps, seconds) {
+  function engage(fps: number, seconds: number) {
     const floor = config.fpsFloor;
     if (fps >= floor) futile = false;
     const low = floor > 0 && !futile && fps < floor;
@@ -49,7 +61,7 @@ export function createFpsGuard(config = TUNE) {
     held = 0;
   }
 
-  function release(seconds) {
+  function release(seconds: number) {
     const floor = config.fpsFloor;
     const rendered = renderedCount ? renderedTime / renderedCount : 0;
     const skipped = skippedCount ? skippedTime / skippedCount : 0;
@@ -73,7 +85,7 @@ export function createFpsGuard(config = TUNE) {
     renderedTime = renderedCount = skippedTime = skippedCount = 0;
   }
 
-  function frame(delta) {
+  function frame(delta: number): FrameDecision {
     if (delta > config.fpsMaxGap) {
       resetSample();
       odd = !odd;
@@ -91,7 +103,7 @@ export function createFpsGuard(config = TUNE) {
         skippedCount++;
       }
     }
-    let sample = null;
+    let sample: FpsSample | null = null;
     if (elapsed >= config.fpsSampleSeconds - EPSILON) {
       const fps = frames / elapsed;
       if (skipping) release(elapsed);

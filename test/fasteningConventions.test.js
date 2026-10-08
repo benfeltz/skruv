@@ -16,7 +16,7 @@ const ALONG_X = [0, 0, -Math.SQRT1_2, Math.SQRT1_2]; // a rod's local +y onto wo
 
 describe('no correctness gate in the engine (decision 1)', () => {
   it('keeps the graph and fastener machines blind to the intended assembly', () => {
-    for (const path of ['src/game/assembly.js', 'src/game/fasteners.js']) {
+    for (const path of ['src/game/assembly.ts', 'src/game/fasteners.ts']) {
       expect(read(path)).not.toMatch(/\bMANIFEST\b|\bASSEMBLED\b|\bMANUAL\b|devLayout|boxLayout|bookletModel|booklet\s*\(/);
     }
   });
@@ -46,7 +46,7 @@ describe('every fastener is bidirectional (decision 2)', () => {
   });
 
   it('has no abstract undo or detach anywhere in the fastening code', () => {
-    for (const path of ['src/game/assembly.js', 'src/game/fasteners.js', 'src/scene/gestureRouter.js']) {
+    for (const path of ['src/game/assembly.ts', 'src/game/fasteners.ts', 'src/scene/gestureRouter.js']) {
       expect(read(path)).not.toMatch(/\b(undo|detach)\w*\s*\(/i);
     }
   });

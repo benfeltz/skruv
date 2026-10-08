@@ -14,6 +14,7 @@
 
 import { FASTENER } from '../constants.js';
 import { KIND } from '../../tools/validate/lib/vocabulary.js';
+import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 
 export const STATE = Object.freeze({
   SEATED: 'seated',
@@ -22,26 +23,49 @@ export const STATE = Object.freeze({
   LOCKED: 'locked',
 });
 
+export type FastenerState = (typeof STATE)[keyof typeof STATE];
+
+/** One seated pair's machine: its kind, where it stands, and how far home (0..1). */
+export interface Fastener {
+  kind: FastenerKind;
+  state: FastenerState;
+  progress: number;
+}
+
+/** What a machine is fed: a tap, a pull, or signed crank radians (positive tightens). */
+export type FastenerEvent = { type: 'tap' } | { type: 'pull' } | { type: 'crank'; radians: number };
+
+/** What the graph knows about a pair — see `transition`. */
+export interface FastenerContext {
+  captured?: boolean;
+  held?: boolean;
+}
+
+interface TurnLimits {
+  canFasten: boolean;
+  canLoosen: boolean;
+}
+
 /** Kinds pushed home by a tap and pulled back out along their axis. */
-export const isTapKind = (kind) => kind === KIND.DOWEL || kind === KIND.PIN || kind === KIND.FITTING;
+export const isTapKind = (kind: FastenerKind) => kind === KIND.DOWEL || kind === KIND.PIN || kind === KIND.FITTING;
 
 /** Kinds turned by a tool. */
-export const isCrankKind = (kind) => kind === KIND.BOLT || kind === KIND.CAM;
+export const isCrankKind = (kind: FastenerKind) => kind === KIND.BOLT || kind === KIND.CAM;
 
-export const createFastener = (kind) => ({ kind, state: STATE.SEATED, progress: 0 });
+export const createFastener = (kind: FastenerKind): Fastener => ({ kind, state: STATE.SEATED, progress: 0 });
 
 /** Past seated: the joint holds and physics should bond it. */
-export const isFastened = (f) => f.state !== STATE.SEATED;
+export const isFastened = (f: Fastener) => f.state !== STATE.SEATED;
 
 /** Fastened, or partway in (a half-turned bolt grips its threads): the part is stuck. */
-export const isEngaged = (f) => isFastened(f) || f.progress > 0;
+export const isEngaged = (f: Fastener) => isFastened(f) || f.progress > 0;
 
 /** A part pulls free only when every fastener on it is back to plain seated. */
-export const canRelease = (fasteners) => fasteners.every((f) => !isEngaged(f));
+export const canRelease = (fasteners: Fastener[]) => fasteners.every((f) => !isEngaged(f));
 
-const clamp01 = (v) => Math.min(1, Math.max(0, v));
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
-function tapPull(f, type) {
+function tapPull(f: Fastener, type: FastenerEvent['type']): Fastener {
   if (type === 'tap' && f.state === STATE.SEATED) return { ...f, state: STATE.PRESSED, progress: 1 };
   if (type === 'pull' && f.state === STATE.PRESSED) return { ...f, state: STATE.SEATED, progress: 0 };
   return f;
@@ -49,7 +73,7 @@ function tapPull(f, type) {
 
 // Turned fasteners hysterese: one fastens on reaching 1 and lets go only back at 0, so a
 // jiggle at the end of a turn never flips it.
-function turned(f, radians, span, { canFasten, canLoosen }, fastenedState) {
+function turned(f: Fastener, radians: number, span: number, { canFasten, canLoosen }: TurnLimits, fastenedState: FastenerState): Fastener {
   if (radians < 0 && !canLoosen) return f;
   const progress = clamp01(f.progress + radians / span);
   let { state } = f;
@@ -66,7 +90,7 @@ function turned(f, radians, span, { canFasten, canLoosen }, fastenedState) {
  *   captured — a cam's recess has a screwed bolt head within reach (lock needs it)
  *   held     — a bolt's head is caught by a locked cam (it cannot back out)
  */
-export function transition(f, event, ctx = {}) {
+export function transition(f: Fastener, event: FastenerEvent, ctx: FastenerContext = {}): Fastener {
   switch (f.kind) {
     case KIND.DOWEL:
     case KIND.PIN:

@@ -2,6 +2,8 @@
 // exported as one JSON file (the ?tune panel's session export). Local only — nothing
 // is sent anywhere. Pure.
 
+import type { GameEvent } from './events.js';
+
 /** Bumped whenever the export's shape changes, so old exports stay readable. */
 export const SESSION_FORMAT = 1;
 
@@ -11,11 +13,11 @@ export const SESSION_FORMAT = 1;
  * `{ format, session, startedAt, dropped, events }` — `dropped` counts events the ring
  * has let go of, so a truncated trace says so.
  */
-export function createSessionBuffer({ size, session, startedAt }) {
-  const ring = new Array(size);
+export function createSessionBuffer({ size, session, startedAt }: { size: number; session: string; startedAt: string }) {
+  const ring = new Array<GameEvent>(size);
   let count = 0;
 
-  function push(event) {
+  function push(event: GameEvent) {
     ring[count % size] = event;
     count++;
   }

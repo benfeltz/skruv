@@ -58,7 +58,7 @@ describe('placeholders and headers', () => {
   });
 
   it('retires the temporary dev floor layout now the flatpack replaces it (1.5)', () => {
-    expect(existsSync(new URL('../src/game/devLayout.js', import.meta.url))).toBe(false);
+    expect(existsSync(new URL('../src/game/devLayout.ts', import.meta.url))).toBe(false);
     expect(read('src/main.js')).not.toMatch(/devLayout|DEV_LAYOUT/);
     expect(read('src/main.js')).toMatch(/createPackedWorldLayout\(\)/);
   });
@@ -69,7 +69,7 @@ describe('placeholders and headers', () => {
     const pack = read('items/johnny/flatpack.json');
     expect(Object.keys(JSON.parse(pack))).toEqual(['$schema', 'format', 'identity', 'vocabulary', 'parts', 'assembled', 'manual', 'packing', 'tuning']);
     expect(pack).not.toMatch(/"(joints|mates|mating|script|scripts)"\s*:/);
-    expect(read('src/game/item.js')).toMatch(/deriveJoints\(pack\)/);
+    expect(read('src/game/item.ts')).toMatch(/deriveJoints\(pack\)/);
   });
 });
 

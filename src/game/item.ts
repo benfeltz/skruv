@@ -4,14 +4,20 @@
 
 import { deriveJoints } from '../../tools/validate/lib/joints.js';
 import { loadPack } from '../../tools/validate/lib/pack.js';
+import type { FlatpackFile, PartType } from '../../tools/validate/lib/pack.js';
 import johnny from '../../items/johnny/flatpack.json';
 
-const pack = loadPack(johnny);
+// A JSON import types its enums and tuples as plain strings and arrays; the file is
+// schema-valid by CI's validator, so it is the format's type.
+const pack = loadPack(johnny as unknown as FlatpackFile);
 
 /** The box's inside and walls, and the lid that closes it, as the pack packs them. */
 export const PACKING = pack.packing;
 
 const { boxInner, wall, floor, lid } = PACKING;
+
+/** A part type as the game holds it: the pack's, or the box base — which has no part number or mass of its own. */
+export type GamePartType = Omit<PartType, 'partNumber' | 'mass'> & Partial<Pick<PartType, 'partNumber' | 'mass'>>;
 
 /**
  * Part types by name, engine-shaped (`{ size, partNumber, mass, color, connectors }`,
@@ -21,7 +27,7 @@ const { boxInner, wall, floor, lid } = PACKING;
  * base is the open box itself, bottom and walls, with no part number of its own and its
  * mass a tunable (BOX.mass).
  */
-export const PART_TYPES = Object.freeze({
+export const PART_TYPES: Readonly<Record<string, GamePartType>> = Object.freeze({
   ...pack.partTypes,
   boxLid: {
     size: [boxInner[0] + 2 * wall, lid.thickness, boxInner[2] + 2 * wall],
@@ -51,12 +57,12 @@ export const IDENTITY = pack.identity;
  * the display shelf and the booklet.
  *   parts  — `{ id, type, role, position, rotation }`, one per instance built into it; frame
  *            on the floor under the carcass centre, front +z
- *   joints — derived from those poses (tools/validate/lib/joints.js): `{ hardware,
+ *   joints — derived from those poses (tools/validate/lib/joints.ts): `{ hardware,
  *            hardwareConnector, host, hostConnector, kind, mover, through, captured }`
  */
 export const ASSEMBLED = Object.freeze({ parts: pack.assembled, joints: deriveJoints(pack) });
 
-/** The booklet as the pack writes it: `{ pages }`, cover to back (src/game/bookletModel.js). */
+/** The booklet as the pack writes it: `{ pages }`, cover to back (src/game/bookletModel.ts). */
 export const MANUAL = pack.manual;
 
 /** `resolveConnector('dowel-1/dowelEnd-2') → { part: 'dowel-1', connector: 1 }`. */

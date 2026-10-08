@@ -12,6 +12,43 @@ export const OWNER = Object.freeze({
   GIZMO_RING: 'gizmoRing',
 });
 
+export type Owner = (typeof OWNER)[keyof typeof OWNER];
+
+/** What a press landed on: a part or a gizmo ring, the rest passed through untouched. */
+export interface GestureHit {
+  kind: 'part' | 'ring';
+}
+
+/** A pointer record, as the router builds it (CSS px, ms). */
+export interface PointerRecord<H extends GestureHit = GestureHit> {
+  id: number;
+  x: number;
+  y: number;
+  t: number;
+  hit?: H | null;
+  button?: number;
+}
+
+/** What `down`/`move`/`up`/`cancel`/`wheel` hand the router — see `createGestureState`. */
+export type GestureEffect<H extends GestureHit = GestureHit> =
+  | { type: 'dragStart' | 'dragMove' | 'dragEnd'; owner: Owner | null; hit: H | null; x: number; y: number }
+  | { type: 'dragCancel'; owner: Owner | null; hit: H | null }
+  | { type: 'tap'; hit: H | null; x: number; y: number }
+  | { type: 'lift'; owner: Owner | null; hit: H | null; dy: number; x?: number; y?: number };
+
+// The pointer that started the gesture.
+interface Primary<H> {
+  id: number;
+  hit: H | null;
+  startX: number;
+  startY: number;
+  startT: number;
+  dragging: boolean;
+  lastY: number;
+  spentY: number;
+  canTap: boolean;
+}
+
 const OWNER_FOR_HIT = { part: OWNER.DRAG_PART, ring: OWNER.GIZMO_RING };
 
 /**
@@ -21,11 +58,14 @@ const OWNER_FOR_HIT = { part: OWNER.DRAG_PART, ring: OWNER.GIZMO_RING };
  * selected part's own face drags it (stand a panel up, then carry it off); a band in front
  * of it still turns it.
  */
-export function resolveHit(ringHit, partHit) {
+export function resolveHit<R extends { distance: number }, P extends { distance: number }>(
+  ringHit: R | null,
+  partHit: P | null,
+): ({ kind: 'ring' } & R) | ({ kind: 'part' } & P) | null {
   if (ringHit && (!partHit || ringHit.distance <= partHit.distance)) {
-    return { kind: 'ring', ...ringHit };
+    return { kind: 'ring' as const, ...ringHit };
   }
-  return partHit ? { kind: 'part', ...partHit } : null;
+  return partHit ? { kind: 'part' as const, ...partHit } : null;
 }
 
 /**
@@ -54,19 +94,19 @@ export function resolveHit(ringHit, partHit) {
  * `cameraEnabled` is false only while a part or ring gesture is live; the router mirrors
  * it onto the camera after every event, so every end path hands the camera back.
  */
-export function createGestureState(thresholds = GESTURE) {
+export function createGestureState<H extends GestureHit = GestureHit>(thresholds: { tapMaxDistance: number; tapMaxMs: number } = GESTURE) {
   const { tapMaxDistance, tapMaxMs } = thresholds;
 
-  let owner = null;
-  let primary = null; // { id, hit, startX, startY, startT, dragging }
-  let lift = null; // { id, y } — the second finger of a part gesture
+  let owner: Owner | null = null;
+  let primary: Primary<H> | null = null; // { id, hit, startX, startY, startT, dragging }
+  let lift: { id: number; y: number } | null = null; // { id, y } — the second finger of a part gesture
   // Keyboard state, not pointer state: it outlives every gesture until the router clears it.
   let modifierHeld = false;
-  const cameraPointers = new Set();
+  const cameraPointers = new Set<number>();
   let cameraMulti = false;
 
-  const movedTooFar = (p, x, y) => Math.hypot(x - p.startX, y - p.startY) > tapMaxDistance;
-  const isTap = (p, { x, y, t }) => p.canTap && !movedTooFar(p, x, y) && t - p.startT <= tapMaxMs;
+  const movedTooFar = (p: Primary<H>, x: number, y: number) => Math.hypot(x - p.startX, y - p.startY) > tapMaxDistance;
+  const isTap = (p: Primary<H>, { x, y, t }: PointerRecord<H>) => p.canTap && !movedTooFar(p, x, y) && t - p.startT <= tapMaxMs;
 
   function reset() {
     owner = null;
@@ -76,14 +116,14 @@ export function createGestureState(thresholds = GESTURE) {
     cameraMulti = false;
   }
 
-  function down({ id, x, y, t, hit, button = 0 }) {
+  function down({ id, x, y, t, hit, button = 0 }: PointerRecord<H>): GestureEffect<H> | null {
     if (owner === null) {
       // Only the primary button picks up parts or rings; mouse right/middle presses are
       // the camera's pan and zoom.
       owner = (button === 0 && hit && OWNER_FOR_HIT[hit.kind]) || OWNER.CAMERA;
       primary = {
         id,
-        hit: owner === OWNER.CAMERA ? null : hit,
+        hit: owner === OWNER.CAMERA ? null : (hit ?? null),
         startX: x,
         startY: y,
         startT: t,
@@ -109,10 +149,10 @@ export function createGestureState(thresholds = GESTURE) {
     return null;
   }
 
-  const liftEffect = (dy) =>
+  const liftEffect = (dy: number): Extract<GestureEffect<H>, { type: 'lift' }> | null =>
     primary && primary.dragging && dy !== 0 ? { type: 'lift', owner, hit: primary.hit, dy } : null;
 
-  function move({ id, x, y }) {
+  function move({ id, x, y }: PointerRecord<H>): GestureEffect<H> | null {
     if (lift && id === lift.id) {
       const dy = lift.y - y;
       lift.y = y;
@@ -133,12 +173,13 @@ export function createGestureState(thresholds = GESTURE) {
     primary.lastY = y;
     if (modifierHeld && owner === OWNER.DRAG_PART && dy !== 0) {
       primary.spentY += dy;
-      return { ...liftEffect(-dy), x, y: y - primary.spentY };
+      // Dragging, and dy is non-zero: there is a lift.
+      return { ...liftEffect(-dy)!, x, y: y - primary.spentY };
     }
     return { type: 'dragMove', owner, hit: primary.hit, x, y: y - primary.spentY };
   }
 
-  function up(event) {
+  function up(event: PointerRecord<H>): GestureEffect<H> | null {
     const { id, x, y } = event;
     if (owner === OWNER.CAMERA) {
       if (!cameraPointers.delete(id)) return null;
@@ -159,7 +200,7 @@ export function createGestureState(thresholds = GESTURE) {
     return tapped ? { type: 'tap', hit: ended.hit, x, y } : null;
   }
 
-  function cancel({ id }) {
+  function cancel({ id }: Pick<PointerRecord<H>, 'id'>): GestureEffect<H> | null {
     if (owner === OWNER.CAMERA) {
       if (!cameraPointers.delete(id)) return null;
       // A cancelled finger can never complete a tap.
@@ -176,18 +217,18 @@ export function createGestureState(thresholds = GESTURE) {
   }
 
   /** Desktop lift: wheel delta (CSS px, positive = scroll down) while a part is dragged. */
-  function wheel({ dy }) {
+  function wheel({ dy }: { dy: number }): GestureEffect<H> | null {
     return owner === OWNER.DRAG_PART ? liftEffect(-dy) : null;
   }
 
   /** Desktop lift modifier (Shift): whether it is held, fed by the router. */
-  function modifier(held) {
+  function modifier(held: boolean) {
     modifierHeld = held;
   }
 
   /** Abandon whatever is live (page hidden, focus lost). */
-  function cancelAll() {
-    const effect =
+  function cancelAll(): GestureEffect<H> | null {
+    const effect: GestureEffect<H> | null =
       primary && primary.dragging && owner !== OWNER.CAMERA
         ? { type: 'dragCancel', owner, hit: primary.hit }
         : null;

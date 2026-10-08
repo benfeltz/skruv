@@ -42,8 +42,8 @@ function addRoomColliders(world) {
  * advances the simulation by whole fixed steps and copies body poses onto their meshes.
  * `grab`/`move`/`release` hand a registered body between the simulation and direct
  * control (part manipulation). `join`/`unjoin` add and remove the joints fastener state
- * calls for (src/game/assembly.js `bonds()`). `retune` re-applies the live-tunable values
- * baked in at creation (src/game/tunables.js) to every body, collider and joint.
+ * calls for (src/game/assembly.ts `bonds()`). `retune` re-applies the live-tunable values
+ * baked in at creation (src/game/tunables.ts) to every body, collider and joint.
  */
 export async function createPhysicsWorld() {
   await RAPIER.init();

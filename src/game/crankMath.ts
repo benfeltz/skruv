@@ -3,6 +3,7 @@
 
 import { FASTENER } from '../constants.js';
 import { arcDelta } from './dragMath.js';
+import type { ScreenPoint } from './dragMath.js';
 
 /**
  * Accumulates the clockwise-positive angle a pointer sweeps about a centre that may move
@@ -10,13 +11,13 @@ import { arcDelta } from './dragMath.js';
  * centre given with it. Motion within `deadzone` px of the centre is dropped — the angle
  * swings wildly there — and the sweep picks up afresh once the pointer leaves it.
  */
-export function createCrank(deadzone = FASTENER.crankDeadzone) {
-  let last = null;
+export function createCrank(deadzone: number = FASTENER.crankDeadzone) {
+  let last: ScreenPoint | null = null;
   let total = 0;
 
   return {
     /** Radians swept since the previous point (clockwise on screen positive). */
-    move(center, point) {
+    move(center: ScreenPoint, point: ScreenPoint) {
       if (Math.hypot(point[0] - center[0], point[1] - center[1]) < deadzone) {
         last = null;
         return 0;
@@ -37,7 +38,7 @@ export function createCrank(deadzone = FASTENER.crankDeadzone) {
  * into-the-hole direction, so screen clockwise is clockwise seen from the head (a right-hand
  * thread). −1 when it looks from the far side. Both directions are world [x, y, z].
  */
-export function tightenSign(intoHole, viewDirection) {
+export function tightenSign(intoHole: number[], viewDirection: number[]) {
   const d = intoHole[0] * viewDirection[0] + intoHole[1] * viewDirection[1] + intoHole[2] * viewDirection[2];
   return d >= 0 ? 1 : -1;
 }

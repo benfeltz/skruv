@@ -6,15 +6,20 @@
 // horizontally, `floorClearance` above the floor, unbounded above (zoomed out it rises over
 // the wall tops — the dollhouse view).
 
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+import type { CAMERA_LIMITS, ROOM } from '../constants.js';
+
+type Room = Pick<typeof ROOM, 'width' | 'depth'>;
+type Limits = typeof CAMERA_LIMITS;
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /** `position` pulled back from `target` along the same view, `scale` times as far. */
-export function startPosition(position, target, scale) {
+export function startPosition(position: number[], target: number[], scale: number) {
   return position.map((v, i) => target[i] + (v - target[i]) * scale);
 }
 
 /** The orbit target, held over the floor and inside the walls. */
-export function clampTarget([x, y, z], room, limits) {
+export function clampTarget([x, y, z]: number[], room: Room, limits: Pick<Limits, 'targetMargin' | 'targetHeight'>) {
   const reachX = room.width / 2 - limits.targetMargin;
   const reachZ = room.depth / 2 - limits.targetMargin;
   const [low, high] = limits.targetHeight;
@@ -22,7 +27,7 @@ export function clampTarget([x, y, z], room, limits) {
 }
 
 /** The camera, held inside the walls horizontally and above the floor. */
-export function clampCamera([x, y, z], room, limits) {
+export function clampCamera([x, y, z]: number[], room: Room, limits: Pick<Limits, 'wallMargin' | 'floorClearance'>) {
   const reachX = room.width / 2 - limits.wallMargin;
   const reachZ = room.depth / 2 - limits.wallMargin;
   return [clamp(x, -reachX, reachX), Math.max(limits.floorClearance, y), clamp(z, -reachZ, reachZ)];
@@ -33,7 +38,7 @@ export function clampCamera([x, y, z], room, limits) {
  * proportion to that distance, which crawls once zoomed in on hardware; closer than
  * `panReference` the pan is boosted by panReference / distance, up to `maxPanBoost`.
  */
-export function panSpeedAt(distance, { panReference, maxPanBoost }) {
+export function panSpeedAt(distance: number, { panReference, maxPanBoost }: Pick<Limits, 'panReference' | 'maxPanBoost'>) {
   if (!(distance > 0)) return maxPanBoost;
   return Math.min(maxPanBoost, Math.max(1, panReference / distance));
 }
@@ -43,7 +48,7 @@ export function panSpeedAt(distance, { panReference, maxPanBoost }) {
  * along the line of sight from `eye` to the bound it crossed — so the view direction holds
  * and a zoom toward the fingers near the floor neither tilts the view nor drifts it.
  */
-export function clampTargetAlongView(target, eye, room, limits) {
+export function clampTargetAlongView(target: number[], eye: number[], room: Room, limits: Pick<Limits, 'targetMargin' | 'targetHeight'>) {
   const [low, high] = limits.targetHeight;
   const y = target[1];
   const bound = y < low ? low : y > high ? high : null;
@@ -62,7 +67,7 @@ export function clampTargetAlongView(target, eye, room, limits) {
  * all the way in on parts lying there instead of stalling at a point hanging in the air.
  * Looking level or upward, or at floor out of reach, the target stays where it is.
  */
-export function seatOnFloor(eye, target, limits) {
+export function seatOnFloor(eye: number[], target: number[], limits: Pick<Limits, 'targetHeight' | 'maxDistance'>) {
   const toward = target.map((v, i) => v - eye[i]);
   const length = Math.hypot(...toward);
   const floor = limits.targetHeight[0];

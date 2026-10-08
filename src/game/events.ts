@@ -33,7 +33,9 @@
 //   recovery       parts              parts that left the room were set down by the box
 //   fps            fps, skipping      a sampled frame rate, and whether the render-skip
 //                                      fallback is engaged
-//   tune           key, value         a live knob was set (src/game/tunables.js)
+//   tune           key, value         a live knob was set (src/game/tunables.ts)
+
+import type { AssemblyJoint, PartId } from './assembly.js';
 
 export const EVENT = Object.freeze({
   SESSION: 'session',
@@ -50,9 +52,25 @@ export const EVENT = Object.freeze({
   TUNE: 'tune',
 });
 
+export type EventType = (typeof EVENT)[keyof typeof EVENT];
+
+/** An event as built: its type and exactly its schema's fields, null where left out. */
+export interface GameEvent {
+  type: EventType;
+  [field: string]: unknown;
+}
+
+/** An event as the bus delivers it: stamped with its time (ms) and emit order. */
+export interface StampedEvent extends GameEvent {
+  t: number;
+  seq: number;
+}
+
+export type Listener = (event: StampedEvent) => void;
+
 const JOINT_FIELDS = ['joint', 'kind', 'hardware', 'host'];
 
-export const EVENT_FIELDS = Object.freeze({
+export const EVENT_FIELDS: Readonly<Record<EventType, string[]>> = Object.freeze({
   [EVENT.SESSION]: ['phase'],
   [EVENT.GRAB]: ['part', 'mode'],
   [EVENT.RELEASE]: ['part', 'mode', 'seated', 'cancelled'],
@@ -68,35 +86,35 @@ export const EVENT_FIELDS = Object.freeze({
 });
 
 // Exactly the schema's fields, in its order; one an emitter left out is null, never absent.
-function build(type, fields = {}) {
-  const event = { type };
+function build(type: EventType, fields: Record<string, unknown> = {}): GameEvent {
+  const event: GameEvent = { type };
   for (const name of EVENT_FIELDS[type]) event[name] = fields[name] ?? null;
   return event;
 }
 
-// The joint fields of an assembly joint record (src/game/assembly.js).
-const jointFields = ({ id, kind, hardware, host }) => ({ joint: id, kind, hardware, host });
+// The joint fields of an assembly joint record (src/game/assembly.ts).
+const jointFields = ({ id, kind, hardware, host }: AssemblyJoint) => ({ joint: id, kind, hardware, host });
 
-export const sessionEvent = (phase) => build(EVENT.SESSION, { phase });
-export const grabEvent = (part, mode) => build(EVENT.GRAB, { part, mode });
-export const releaseEvent = (part, mode, { seated = false, cancelled = false } = {}) =>
+export const sessionEvent = (phase: string) => build(EVENT.SESSION, { phase });
+export const grabEvent = (part: PartId, mode: string) => build(EVENT.GRAB, { part, mode });
+export const releaseEvent = (part: PartId, mode: string, { seated = false, cancelled = false } = {}) =>
   build(EVENT.RELEASE, { part, mode, seated, cancelled });
 /** `offer` is a snapMath snap (`{ from, to }` world connectors), or null when withdrawn. */
-export const snapCandidateEvent = (part, offer) =>
+export const snapCandidateEvent = (part: PartId, offer: { from: { index: number }; to: { part: { id: PartId }; index: number } } | null) =>
   build(EVENT.SNAP_CANDIDATE, {
     part,
     target: offer?.to.part.id,
     connector: offer?.from.index,
     targetConnector: offer?.to.index,
   });
-export const seatEvent = (joint) => build(EVENT.SEAT, jointFields(joint));
-export const unseatEvent = (joint) => build(EVENT.UNSEAT, jointFields(joint));
-export const fastenEvent = (joint) => build(EVENT.FASTEN, { ...jointFields(joint), state: joint.fastener.state });
-export const unfastenEvent = (joint) => build(EVENT.UNFASTEN, jointFields(joint));
+export const seatEvent = (joint: AssemblyJoint) => build(EVENT.SEAT, jointFields(joint));
+export const unseatEvent = (joint: AssemblyJoint) => build(EVENT.UNSEAT, jointFields(joint));
+export const fastenEvent = (joint: AssemblyJoint) => build(EVENT.FASTEN, { ...jointFields(joint), state: joint.fastener.state });
+export const unfastenEvent = (joint: AssemblyJoint) => build(EVENT.UNFASTEN, jointFields(joint));
 export const resetEvent = () => build(EVENT.RESET);
-export const recoveryEvent = (parts) => build(EVENT.RECOVERY, { parts: [...parts] });
-export const fpsEvent = (fps, skipping) => build(EVENT.FPS, { fps, skipping });
-export const tuneEvent = (key, value) => build(EVENT.TUNE, { key, value });
+export const recoveryEvent = (parts: Iterable<PartId>) => build(EVENT.RECOVERY, { parts: [...parts] });
+export const fpsEvent = (fps: number, skipping: boolean) => build(EVENT.FPS, { fps, skipping });
+export const tuneEvent = (key: string, value: number) => build(EVENT.TUNE, { key, value });
 
 /** Subscribe to every event type at once. */
 export const ANY = '*';
@@ -106,23 +124,23 @@ export const ANY = '*';
  * stamps `t` from `now()` and `seq`, then calls the type's listeners and ANY's. A listener
  * that throws is reported and skipped — an observer never breaks the gesture that emitted.
  */
-export function createBus({ now = () => 0, onError = (error) => console.error(error) } = {}) {
-  const listeners = new Map();
+export function createBus({ now = () => 0, onError = (error: unknown) => console.error(error) }: { now?: () => number; onError?: (error: unknown) => void } = {}) {
+  const listeners = new Map<EventType | typeof ANY, Set<Listener>>();
   let seq = 0;
 
-  function on(type, fn) {
+  function on(type: EventType | typeof ANY, fn: Listener) {
     if (!listeners.has(type)) listeners.set(type, new Set());
-    listeners.get(type).add(fn);
+    listeners.get(type)!.add(fn);
     return () => off(type, fn);
   }
 
-  function off(type, fn) {
+  function off(type: EventType | typeof ANY, fn: Listener) {
     listeners.get(type)?.delete(fn);
   }
 
-  function emit(event) {
+  function emit(event: GameEvent): StampedEvent {
     const stamped = { ...event, t: now(), seq: seq++ };
-    for (const type of [stamped.type, ANY]) {
+    for (const type of [stamped.type, ANY] as const) {
       for (const fn of [...(listeners.get(type) ?? [])]) {
         try {
           fn(stamped);

@@ -1,4 +1,4 @@
-// Live tuning: a curated set of feel knobs over the constants in src/constants.js. Every
+// Live tuning: a curated set of feel knobs over the constants in src/constants.ts. Every
 // module reads those constants objects' properties at use time, so a knob set here writes
 // straight through to the shared object and the game feels it on its next read — no
 // module reads through this registry. Values baked into live engine objects when they are
@@ -18,12 +18,33 @@ export const PROFILE_FORMAT = 1;
 
 const DEGREE = Math.PI / 180;
 
+/** One knob: the constants object and numeric property it writes through to, and how it is presented. */
+export interface Knob {
+  object: Record<string, unknown>;
+  prop: string;
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
+  group: string;
+  desc: string;
+}
+
+/** `fn(key, value)`, told after every change. */
+export type KnobSubscriber = (key: string, value: number) => void;
+
+/** A saved feel profile: `{ format, knobs: { key: value } }`. */
+export interface FeelProfile {
+  format: number;
+  knobs: Record<string, number>;
+}
+
 /**
  * key → `{ object, prop, min, max, step, unit, group, desc }`: the constants object and
  * property it writes through to, its range (every set is clamped into it), the slider
  * step, and how it is presented.
  */
-export const LIVE_KNOBS = Object.freeze({
+export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
   'snap.maxDistance': {
     object: SNAP, prop: 'maxDistance', min: 0.01, max: 0.2, step: 0.005, unit: 'm', group: 'snap',
     desc: 'How near a connector must come to a free hole before a seat is offered',
@@ -108,21 +129,22 @@ export const LIVE_KNOBS = Object.freeze({
  *                        throws before any is set); keys this build doesn't have
  *                        (another engine's, a newer build's) are skipped and returned
  */
-export function createTunables(knobs = LIVE_KNOBS) {
-  const defaults = new Map(Object.entries(knobs).map(([key, { object, prop }]) => [key, object[prop]]));
-  const subscribers = new Set();
+export function createTunables(knobs: Readonly<Record<string, Knob>> = LIVE_KNOBS) {
+  // Every knob's property holds a number.
+  const defaults = new Map(Object.entries(knobs).map(([key, { object, prop }]) => [key, object[prop] as number]));
+  const subscribers = new Set<KnobSubscriber>();
 
-  function knob(key) {
+  function knob(key: string) {
     if (!Object.hasOwn(knobs, key)) throw new Error(`unknown knob: ${key}`);
     return knobs[key];
   }
 
-  const get = (key) => {
+  const get = (key: string) => {
     const { object, prop } = knob(key);
-    return object[prop];
+    return object[prop] as number;
   };
 
-  function set(key, value) {
+  function set(key: string, value: unknown) {
     const { object, prop, min, max } = knob(key);
     if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`knob ${key} takes a number, got ${value}`);
     const applied = Math.min(max, Math.max(min, value));
@@ -132,11 +154,11 @@ export function createTunables(knobs = LIVE_KNOBS) {
     return applied;
   }
 
-  function reset(key) {
+  function reset(key?: string) {
     for (const k of key === undefined ? [...defaults.keys()] : [key]) set(k, defaults.get(k));
   }
 
-  function subscribe(fn) {
+  function subscribe(fn: KnobSubscriber) {
     subscribers.add(fn);
     return () => subscribers.delete(fn);
   }
@@ -154,9 +176,9 @@ export function createTunables(knobs = LIVE_KNOBS) {
       desc,
     }));
 
-  const toProfile = () => ({ format: PROFILE_FORMAT, knobs: Object.fromEntries(Object.keys(knobs).map((key) => [key, get(key)])) });
+  const toProfile = (): FeelProfile => ({ format: PROFILE_FORMAT, knobs: Object.fromEntries(Object.keys(knobs).map((key) => [key, get(key)])) });
 
-  function applyProfile(profile) {
+  function applyProfile(profile: { format?: unknown; knobs?: unknown } | null | undefined) {
     if (profile?.format !== PROFILE_FORMAT || typeof profile.knobs !== 'object' || profile.knobs === null) {
       throw new Error(`not a format ${PROFILE_FORMAT} feel profile`);
     }

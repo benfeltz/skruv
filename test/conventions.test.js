@@ -24,25 +24,25 @@ describe('GitHub Pages deploy', () => {
 describe('pure-logic modules', () => {
   // Kept headless so Vitest covers them — see CLAUDE.md.
   const pureModules = [
-    'src/scene/clamp.js',
-    'src/scene/cameraLimits.js',
-    'src/scene/loop.js',
-    'src/physics/stepping.js',
-    'src/game/item.js',
-    'src/game/boxLayout.js',
-    'src/game/gestureState.js',
-    'src/game/dragMath.js',
-    'src/game/snapMath.js',
-    'src/game/fasteners.js',
-    'src/game/assembly.js',
-    'src/game/crankMath.js',
-    'src/game/decals.js',
-    'src/game/pickMath.js',
-    'src/game/bookletModel.js',
-    'src/game/events.js',
-    'src/game/sessionBuffer.js',
-    'src/game/tunables.js',
-    'src/scene/fpsGuard.js',
+    'src/scene/clamp.ts',
+    'src/scene/cameraLimits.ts',
+    'src/scene/loop.ts',
+    'src/physics/stepping.ts',
+    'src/game/item.ts',
+    'src/game/boxLayout.ts',
+    'src/game/gestureState.ts',
+    'src/game/dragMath.ts',
+    'src/game/snapMath.ts',
+    'src/game/fasteners.ts',
+    'src/game/assembly.ts',
+    'src/game/crankMath.ts',
+    'src/game/decals.ts',
+    'src/game/pickMath.ts',
+    'src/game/bookletModel.ts',
+    'src/game/events.ts',
+    'src/game/sessionBuffer.ts',
+    'src/game/tunables.ts',
+    'src/scene/fpsGuard.ts',
   ];
 
   it.each(pureModules)('%s imports neither Three nor Rapier', (path) => {
@@ -50,24 +50,24 @@ describe('pure-logic modules', () => {
   });
 
   it.each([
-    'src/scene/clamp.js',
-    'src/scene/cameraLimits.js',
-    'src/physics/stepping.js',
-    'src/game/item.js',
-    'src/game/boxLayout.js',
-    'src/game/gestureState.js',
-    'src/game/dragMath.js',
-    'src/game/snapMath.js',
-    'src/game/fasteners.js',
-    'src/game/assembly.js',
-    'src/game/crankMath.js',
-    'src/game/decals.js',
-    'src/game/pickMath.js',
-    'src/game/bookletModel.js',
-    'src/game/events.js',
-    'src/game/sessionBuffer.js',
-    'src/game/tunables.js',
-    'src/scene/fpsGuard.js',
+    'src/scene/clamp.ts',
+    'src/scene/cameraLimits.ts',
+    'src/physics/stepping.ts',
+    'src/game/item.ts',
+    'src/game/boxLayout.ts',
+    'src/game/gestureState.ts',
+    'src/game/dragMath.ts',
+    'src/game/snapMath.ts',
+    'src/game/fasteners.ts',
+    'src/game/assembly.ts',
+    'src/game/crankMath.ts',
+    'src/game/decals.ts',
+    'src/game/pickMath.ts',
+    'src/game/bookletModel.ts',
+    'src/game/events.ts',
+    'src/game/sessionBuffer.ts',
+    'src/game/tunables.ts',
+    'src/scene/fpsGuard.ts',
   ])(
     '%s touches no DOM globals',
     (path) => {
@@ -116,7 +116,7 @@ describe('seat assist and flash (1.4.1)', () => {
   });
 
   it('plays no audio anywhere (dropped for 0.0.1)', () => {
-    for (const path of ['src/main.js', 'src/scene/gestureRouter.js', 'src/scene/sprue.js', 'src/game/partMesh.js']) {
+    for (const path of ['src/main.js', 'src/scene/gestureRouter.js', 'src/scene/sprue.js', 'src/game/partMesh.ts']) {
       expect(read(path)).not.toMatch(/\bAudio(Context|Listener)?\b|PositionalAudio|\.play\(/);
     }
   });
@@ -241,7 +241,7 @@ describe('dev stream wiring (1.6)', () => {
     const dir = fileURLToPath(new URL('../src/dev', import.meta.url));
     expect(readdirSync(dir)).toEqual(['wsClient.js']);
     const others = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true })
-      .filter((path) => path.endsWith('.js') && path !== 'main.js' && !path.startsWith('dev'));
+      .filter((path) => /\.[jt]s$/.test(path) && path !== 'main.js' && !path.startsWith('dev'));
     for (const path of others) expect(read(`src/${path}`), path).not.toMatch(/(import\(|from )['"][^'"]*\/dev\//);
   });
 
@@ -274,10 +274,10 @@ describe('Flatpack pack code (1.7)', () => {
   const lib = fileURLToPath(new URL('../tools/validate/lib', import.meta.url));
   const modules = readdirSync(lib).filter((name) => name.endsWith('.ts'));
 
-  it('is loaded by the game in exactly one place, src/game/item.js', () => {
-    const sources = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true }).filter((p) => p.endsWith('.js'));
+  it('is loaded by the game in exactly one place, src/game/item.ts', () => {
+    const sources = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true }).filter((p) => /\.[jt]s$/.test(p));
     const naming = sources.filter((p) => /from ['"][^'"]*\/items\//.test(read(`src/${p}`)));
-    expect(naming).toEqual(['game/item.js']);
+    expect(naming).toEqual(['game/item.ts']);
     for (const path of sources) expect(read(`src/${path}`), path).not.toMatch(/from ['"][^'"]*tools\/validate\/(index\.js|flatpack\.schema\.json)|from ['"]ajv/);
   });
 
@@ -323,7 +323,7 @@ describe('PWA install (1.6)', () => {
   });
 
   it('registers no service worker (manifest-only)', () => {
-    const sources = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true }).filter((p) => p.endsWith('.js'));
+    const sources = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true }).filter((p) => /\.[jt]s$/.test(p));
     for (const path of [...sources.map((p) => `src/${p}`), 'index.html']) expect(read(path), path).not.toMatch(/serviceWorker/);
   });
 });

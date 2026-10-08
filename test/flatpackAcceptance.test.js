@@ -125,7 +125,7 @@ describe('spares', () => {
 });
 
 describe('no survivors of the retired data modules', () => {
-  it.each(['src/game/catalog.js', 'src/game/assembledLayout.js', 'src/game/buildSteps.js', 'src/game/packedLayout.js', 'scripts/extractJohnny.js'])(
+  it.each(['src/game/catalog.ts', 'src/game/assembledLayout.ts', 'src/game/buildSteps.ts', 'src/game/packedLayout.ts', 'scripts/extractJohnny.js'])(
     '%s is gone',
     (path) => {
       expect(existsSync(new URL(path, root))).toBe(false);

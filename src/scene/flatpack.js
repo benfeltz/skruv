@@ -10,7 +10,7 @@ import { createPartMesh } from '../game/partMesh.js';
  * and four thin walls glued into one heavy dynamic body, so a panel slid out of it scrapes
  * over the wall the way a real one does and the empty box can be dragged aside — and its
  * lid closed on top. Both are normal physics parts (`{ id, type, mesh, body }`) for the
- * gesture router to grab like any other. Builds once; the poses are src/game/boxLayout.js's.
+ * gesture router to grab like any other. Builds once; the poses are src/game/boxLayout.ts's.
  */
 export function createFlatpack(physics) {
   const slabs = boxSlabs();

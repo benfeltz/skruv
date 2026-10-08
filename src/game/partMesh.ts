@@ -1,16 +1,18 @@
 import * as THREE from 'three';
 import { COLORS, DECAL } from '../constants.js';
 import { decalPlacements } from './decals.js';
+import type { GamePartType } from './item.js';
 
 /**
  * Box mesh for a catalog part type, sized and coloured from its catalog entry, with a
- * marking on every socket (src/game/decals.js). `mesh.userData.decals` maps connector
+ * marking on every socket (src/game/decals.ts). `mesh.userData.decals` maps connector
  * index → that socket's decal mesh, so a seat can flash the hole it went into.
  */
-export function createPartMesh({ size, color, connectors = [] }) {
+export function createPartMesh({ size, color, connectors = [] }: Pick<GamePartType, 'size' | 'color'> & Partial<Pick<GamePartType, 'connectors'>>) {
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(...size),
-    new THREE.MeshStandardMaterial({ color: COLORS[color] }),
+    // A part's `color` names a COLORS key (the pack's palette).
+    new THREE.MeshStandardMaterial({ color: COLORS[color as keyof typeof COLORS] }),
   );
   mesh.castShadow = true;
   mesh.receiveShadow = true;

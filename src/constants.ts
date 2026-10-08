@@ -2,6 +2,7 @@
 // Units: metres, seconds, radians.
 
 import { CONTRACT } from '../tools/validate/lib/vocabulary.js';
+import type { Vec3 } from '../tools/validate/lib/geometry.js';
 
 export const ROOM = {
   width: 10,
@@ -38,7 +39,7 @@ export const COLORS = {
   uiAccent: 0xe0a64a,
   // Snap preview (src/scene/ghost.js).
   ghost: 0xe0a64a,
-  // Hole markings (src/game/decals.js) and the flash when a fastener seats in one.
+  // Hole markings (src/game/decals.ts) and the flash when a fastener seats in one.
   decal: 0x3a3029,
   decalFlash: 0xe0a64a,
   // Drop line under a dragged part, and the glow on the hole it would drop onto.
@@ -125,7 +126,7 @@ export const CAMERA = {
   mobileStartScale: 1.4,
 };
 
-// Orbit limits (src/scene/cameraLimits.js, applied by src/scene/cameraControls.js). The
+// Orbit limits (src/scene/cameraLimits.ts, applied by src/scene/cameraControls.js). The
 // orbit target roams the whole floor so the camera can get right up to any part; the
 // camera is clamped inside the walls and above the floor every frame, and may rise over
 // the wall tops when zoomed out (dollhouse view).
@@ -151,13 +152,13 @@ export const CAMERA_LIMITS = {
   dampingFactor: 0.1,
 };
 
-// Where the flatpack the game opens on stands (src/game/boxLayout.js, src/scene/flatpack.js):
+// Where the flatpack the game opens on stands (src/game/boxLayout.ts, src/scene/flatpack.js):
 // a thin-walled cardboard box lying on the floor, its lid closed on top. Its inside, walls
 // and lid are the item's (items/johnny `packing`). Box-local frame: length along z,
 // origin on the floor at its centre.
 export const BOX = {
   // On the floor in front of the start view, turned so its length runs across it.
-  position: [0, 0, 0.6],
+  position: [0, 0, 0.6] satisfies Vec3,
   yaw: Math.PI / 2,
   // The box is a part the player can drag: heavy and grippy, so a panel slid out over a
   // wall scrapes past it rather than skating it across the floor (kg; Rapier friction).
@@ -218,8 +219,8 @@ export const RENDER = {
   maxFrameDelta: 1 / 15,
 };
 
-// Pointer gestures: who owns a touch (src/game/gestureState.js) and how a dragged part
-// moves (src/game/dragMath.js). Distances in CSS pixels where noted, else metres.
+// Pointer gestures: who owns a touch (src/game/gestureState.ts) and how a dragged part
+// moves (src/game/dragMath.ts). Distances in CSS pixels where noted, else metres.
 export const GESTURE = {
   // A press that moves no further than this (CSS px) and lifts within tapMaxMs is a tap;
   // moving further starts a drag. Generous enough for a fingertip's wobble.
@@ -271,7 +272,7 @@ export const DROP = {
   glowIntensity: 0.6,
 };
 
-// Fat-finger picking (src/game/pickMath.js, src/scene/gestureRouter.js). Hardware is
+// Fat-finger picking (src/game/pickMath.ts, src/scene/gestureRouter.js). Hardware is
 // millimetres across; an invisible proxy box never thinner than proxyMinSize surrounds each
 // small part, and the preference rule decides when a press on it means the part.
 export const PICK = {
@@ -294,7 +295,7 @@ export const SPRUE = {
   hitRadius: 0.03,
 };
 
-// Connector snapping (src/game/snapMath.js). Generous first, per the Design doc: a snap
+// Connector snapping (src/game/snapMath.ts). Generous first, per the Design doc: a snap
 // that fires too eagerly is a nuisance, one that never fires reads as broken. Tighten
 // from playtest feedback.
 export const SNAP = {
@@ -311,7 +312,7 @@ export const SNAP = {
   flashMs: 450,
 };
 
-// Hole markings (src/game/decals.js, drawn by src/game/partMesh.js). Radii are keyed by
+// Hole markings (src/game/decals.ts, drawn by src/game/partMesh.ts). Radii are keyed by
 // the catalog's socket connector type and sized a touch wider than what fills them, so a
 // seated fastener still shows a rim.
 export const DECAL = {
@@ -329,7 +330,7 @@ export const DECAL = {
   segments: 24,
 };
 
-// Fasteners (src/game/fasteners.js, src/game/assembly.js) and the joints that follow them
+// Fasteners (src/game/fasteners.ts, src/game/assembly.ts) and the joints that follow them
 // (src/physics/world.js). Distances in metres unless marked CSS px; angles in radians.
 export const FASTENER = {
   // A dowel, pin or back fitting comes back out when dragged this far (CSS px) along its axis.
@@ -354,8 +355,8 @@ export const FASTENER = {
 };
 
 
-// Telemetry and live tuning (src/game/events.js, src/game/sessionBuffer.js,
-// src/game/tunables.js).
+// Telemetry and live tuning (src/game/events.ts, src/game/sessionBuffer.ts,
+// src/game/tunables.ts).
 export const TUNE = {
   // The session buffer keeps this many of the latest events for export — a long session's
   // worth of grabs, seats and fps samples.
@@ -370,7 +371,7 @@ export const TUNE = {
   // A download's object URL is let go only after this many ms: Safari starts blob
   // downloads asynchronously and fails on a URL already revoked (FileSaver.js waits as long).
   downloadRevokeMs: 40_000,
-  // Frame-rate fallback (src/scene/fpsGuard.js): the loop's rate is sampled every
+  // Frame-rate fallback (src/scene/fpsGuard.ts): the loop's rate is sampled every
   // fpsSampleSeconds. Below fpsFloor for fpsWindow seconds running, the room renders every
   // other frame — a steady half rate rather than a stutter — while physics and gestures
   // keep every frame. It renders every frame again once a fully rendered rate would hold at
@@ -400,7 +401,7 @@ export const HAPTICS = {
 // game's end src/dev/wsClient.js, and tools/agent-bridge the agent's. Every message is
 // JSON `{ kind, ... }`, one of `kinds`:
 //   hello       any → hub      `{ role }`: 'game' for the page; anything else is a tool
-//   event       game → tools   `{ event }`: one bus event (src/game/events.js)
+//   event       game → tools   `{ event }`: one bus event (src/game/events.ts)
 //   list        tool → game    `{ id }`: asks for the knobs
 //   knobs       game → tools   `{ id, knobs }`: tunables.list(), answering list or set
 //   set         tool → game    `{ id, key, value }`: a knob set, clamped by the registry

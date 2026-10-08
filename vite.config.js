@@ -32,7 +32,7 @@ function allowedOrigin({ origin, host }) {
   }
 }
 
-// The dev stream's hub (protocol: DEV_WS in src/constants.js): a WebSocket endpoint on the
+// The dev stream's hub (protocol: DEV_WS in src/constants.ts): a WebSocket endpoint on the
 // dev server that relays the game page's messages to every tool connected (a websocat, the
 // agent bridge) and the tools' to every game page. Dev server only — `apply: 'serve'`, so a
 // build never sees it. Another site open in the same browser is refused (allowedHost,

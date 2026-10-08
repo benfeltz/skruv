@@ -12,7 +12,7 @@ const ARROW_SEGMENTS = 12;
 
 /**
  * Rotate gizmo: three world-axis rings around the selected part, drawn on top. It renders
- * and hit-tests; the angle math (pointer arc, detents) is src/game/dragMath.js. Rotation
+ * and hit-tests; the angle math (pointer arc, detents) is src/game/dragMath.ts. Rotation
  * goes through physics `grab`/`move`/`release`, lifting the part so its new lowest point
  * clears the floor and clamping its turned footprint inside the walls (a kinematic body
  * passes through them), and drops it back under physics when the ring is let go.

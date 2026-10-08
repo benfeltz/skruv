@@ -32,7 +32,7 @@ const PULL_AXIS_PROBE = 0.05;
 
 /**
  * Thin DOM adapter between pointer events and part manipulation. It raycasts, feeds
- * src/game/gestureState.js, and acts on the effects it returns; every decision (tap vs
+ * src/game/gestureState.ts, and acts on the effects it returns; every decision (tap vs
  * drag, who owns a touch) is the state machine's.
  *
  * The camera is driven only through cameraControls' `enable()`/`disable()` seam, mirrored
@@ -40,7 +40,7 @@ const PULL_AXIS_PROBE = 0.05;
  * camera exactly as before, and every end path (up, cancel, lost capture, page hidden)
  * hands it back.
  *
- * Fastening translates gestures into assembly events (src/game/assembly.js); which joint
+ * Fastening translates gestures into assembly events (src/game/assembly.ts); which joint
  * does what is the graph's and the fastener machines' call:
  *   snap      seats the pair; the dragged part is held where it seated
  *   tap       pushes home the dowels/pins/back fittings touching the tapped part (else selects it);
@@ -61,7 +61,7 @@ const PULL_AXIS_PROBE = 0.05;
  *   sprue  — `{ selected, hitTest(raycaster) }` handle on a selected small part
  *            (src/scene/sprue.js); a press on it nearer than anything else is a press on
  *            its part, so dragging it is the part's own drag.
- *   events — `{ emit(event) }` bus (src/game/events.js): grabs, releases, seat offers,
+ *   events — `{ emit(event) }` bus (src/game/events.ts): grabs, releases, seat offers,
  *            seats and fastenings are reported as they happen. Reporting only — nothing
  *            here reads it back.
  * Call `update(delta)` once per frame after the physics step: it draws fastener progress,

@@ -90,7 +90,7 @@ describe('branding (decision 4)', () => {
     const { identity } = JSON.parse(read('items/johnny/flatpack.json'));
     expect(identity.product).toBe('JOHNNY');
     expect(identity.maker).toBe('SKRUV');
-    for (const path of ['items/johnny/flatpack.json', 'src/constants.js', 'src/scene/bookletPages.js', 'src/ui/booklet.js', 'src/ui/resetButton.js', 'src/game/bookletModel.js', 'index.html']) {
+    for (const path of ['items/johnny/flatpack.json', 'src/constants.ts', 'src/scene/bookletPages.js', 'src/ui/booklet.js', 'src/ui/resetButton.js', 'src/game/bookletModel.ts', 'index.html']) {
       expect(read(path)).not.toMatch(/IKEA|Billy|BILLY|AA-\d/);
     }
   });

@@ -131,7 +131,7 @@ function button(label, onClick) {
 }
 
 /**
- * `{ tab, element }` to mount. `tunables` is the registry (src/game/tunables.js);
+ * `{ tab, element }` to mount. `tunables` is the registry (src/game/tunables.ts);
  * `exportSession()` returns the session buffer's JSON for download.
  */
 export function createTunePanel({ tunables, exportSession }) {

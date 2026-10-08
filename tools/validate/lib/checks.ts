@@ -11,11 +11,8 @@ import type { Pose, Size, Vec3 } from './geometry.js';
 import { deriveJoints, isHardwareType, seatedPoint } from './joints.js';
 import type { Joint } from './joints.js';
 import { expandManifest, shapeParts } from './pack.js';
-import type { ConnectorName, ConnectorRef, FlatpackFile, InstanceId, Page, PartType, StepPage } from './pack.js';
+import type { ConnectorName, ConnectorRef, FlatpackFile, InstanceId, PageFields, PartType, StepPage } from './pack.js';
 import { COMPATIBLE, CONTRACT, isFastenerEnd, KIND, kindOf } from './vocabulary.js';
-
-/** Any page, every step field optional — how the rules that walk all pages read one. */
-type PageView = Page & Partial<Omit<StepPage, 'kind'>>;
 
 /** One semantic error: which rule, where in the pack (a JSON path), and what is wrong. */
 export interface CheckError {
@@ -59,7 +56,7 @@ function context(pack: FlatpackFile) {
   };
   const spares = new Set(manifest.filter((p) => p.spare).map((p) => p.id));
   const joints = partTypes ? deriveJoints({ partTypes, assembled }) : null;
-  const pages = pack.manual.pages.map((page: PageView, index) => ({ page, path: `manual.pages[${index}]` }));
+  const pages = pack.manual.pages.map((page: PageFields, index) => ({ page, path: `manual.pages[${index}]` }));
   const steps = pages.filter((p): p is { page: StepPage; path: string } => p.page.kind === 'step');
   return { pack, manifest, typeOf, partTypes, resolve, assembled, isTool, spares, joints, pages, steps };
 }

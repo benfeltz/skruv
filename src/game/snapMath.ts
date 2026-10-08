@@ -4,19 +4,41 @@
 //
 // Compatibility is type-level only (a dowel end fits a dowel hole; the vocabulary's
 // COMPATIBLE). Which instance
-// mates with which is the assembly graph's (src/game/assembly.js), not this module's.
+// mates with which is the assembly graph's (src/game/assembly.ts), not this module's.
 
 import { areCompatible } from '../../tools/validate/lib/vocabulary.js';
 import { multiplyQuaternions, normalizeQuaternion, rotateVector, rotationBetween } from '../../tools/validate/lib/geometry.js';
+import type { Frame, Pose, Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
+import type { ConnectorType } from '../../tools/validate/lib/vocabulary.js';
 
-const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const length = (a) => Math.sqrt(dot(a, a));
-const negate = (a) => [-a[0], -a[1], -a[2]];
+/** A world-space connector record; callers carry their own fields alongside. */
+export interface WorldConnector extends Frame {
+  type: ConnectorType;
+}
+
+/** A rigid transform x ↦ rotation·x + translation. */
+export interface SnapTransform {
+  rotation: Quat;
+  translation: Vec3;
+}
+
+/** A snap on offer: the pair, how far apart and how skewed, and the transform that seats it. */
+export interface Snap<F extends WorldConnector = WorldConnector, T extends WorldConnector = WorldConnector> {
+  from: F;
+  to: T;
+  distance: number;
+  angle: number;
+  transform: SnapTransform;
+}
+
+const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const length = (a: Vec3) => Math.sqrt(dot(a, a));
+const negate = (a: Vec3): Vec3 => [-a[0], -a[1], -a[2]];
 
 /** Angle between the dragged axis and the target's reversed axis (0 = seated head-on). */
-const misalignment = (a, b) => Math.acos(Math.min(1, Math.max(-1, -dot(a, b))));
+const misalignment = (a: Vec3, b: Vec3) => Math.acos(Math.min(1, Math.max(-1, -dot(a, b))));
 
 /**
  * Best compatible pair within `maxDistance` (metres) and `maxAngle` (radians) of axis
@@ -24,8 +46,12 @@ const misalignment = (a, b) => Math.acos(Math.min(1, Math.max(-1, -dot(a, b))));
  * `{ rotation, translation }` maps world points x ↦ rotation·x + translation, carrying
  * `from` onto `to` with its axis reversed against `to`'s.
  */
-export function findSnap(draggedConnectors, otherConnectors, { maxDistance, maxAngle }) {
-  let best = null;
+export function findSnap<F extends WorldConnector, T extends WorldConnector>(
+  draggedConnectors: Iterable<F>,
+  otherConnectors: Iterable<T>,
+  { maxDistance, maxAngle }: { maxDistance: number; maxAngle: number },
+): Snap<F, T> | null {
+  let best: Omit<Snap<F, T>, 'transform'> | null = null;
   for (const from of draggedConnectors) {
     for (const to of otherConnectors) {
       if (!areCompatible(from.type, to.type)) continue;
@@ -44,7 +70,7 @@ export function findSnap(draggedConnectors, otherConnectors, { maxDistance, maxA
 }
 
 /** A body pose `{ position, rotation }` carried by a snap transform. */
-export function applyTransform({ rotation, translation }, pose) {
+export function applyTransform({ rotation, translation }: SnapTransform, pose: Pose): Pose {
   return {
     position: add(rotateVector(rotation, pose.position), translation),
     rotation: normalizeQuaternion(multiplyQuaternions(rotation, pose.rotation)),
