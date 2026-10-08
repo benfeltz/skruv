@@ -5,8 +5,8 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import { BOOKLET, COLORS } from '../constants.js';
 import { createBooklet } from '../game/bookletModel.js';
 import { ASSEMBLED, IDENTITY, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../game/item.js';
+import type { InstanceId } from '../game/item.js';
 import type { BuildStep, PartCount } from '../game/bookletModel.js';
-import type { InstanceId } from '../../tools/validate/lib/pack.js';
 import type { Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
 
 // The booklet's pages, drawn from the same part models the room uses, so a page can never

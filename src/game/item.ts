@@ -5,6 +5,10 @@
 import { deriveJoints } from '../../tools/validate/lib/joints.js';
 import { loadPack } from '../../tools/validate/lib/pack.js';
 import type { FlatpackFile, PartType } from '../../tools/validate/lib/pack.js';
+
+// The pack format's types, for the rest of the game: they reach it only through here.
+export type { Connector, ConnectorName, DrawingPose, InstanceId, ManifestEntry, PageFields, Resolver } from '../../tools/validate/lib/pack.js';
+export type { Joint } from '../../tools/validate/lib/joints.js';
 import johnny from '../../items/johnny/flatpack.json';
 
 // A JSON import types its enums and tuples as plain strings and arrays; the file is

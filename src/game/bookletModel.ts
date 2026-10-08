@@ -6,9 +6,7 @@
 // highlight; nothing here (or anywhere) checks a player's build against them. The booklet
 // is reference; the player judges.
 
-import type { Joint } from '../../tools/validate/lib/joints.js';
-import type { ConnectorName, DrawingPose, InstanceId, ManifestEntry, PageFields, Resolver } from '../../tools/validate/lib/pack.js';
-import type { GamePartType } from './item.js';
+import type { ConnectorName, DrawingPose, GamePartType, InstanceId, Joint, ManifestEntry, PageFields, Resolver } from './item.js';
 
 /** The assembled item the booklet draws: its parts and derived joints (item.ts ASSEMBLED). */
 export interface BookletLayout {

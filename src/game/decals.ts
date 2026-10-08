@@ -7,7 +7,7 @@ import { DECAL } from '../constants.js';
 import { CONNECTOR } from '../../tools/validate/lib/vocabulary.js';
 import { rotationBetween } from '../../tools/validate/lib/geometry.js';
 import type { Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
-import type { Connector } from '../../tools/validate/lib/pack.js';
+import type { Connector } from './item.js';
 import type { ConnectorType } from '../../tools/validate/lib/vocabulary.js';
 
 export type DecalKind = 'hole' | 'recess';
