@@ -95,15 +95,15 @@ display.fasten(assembly);
 // Manipulation goes through this seam so a fastened compound moves as one.
 const manipulation = createCompoundPhysics(physics, parts, assembly);
 
-// 90° detents are the default; the toggle frees rotation.
-const freeRotate = createToggleButton({ label: 'Free rotate' });
-document.body.append(freeRotate.element);
+// Rotation is free by default; the toggle turns 90° detents on.
+const snapRotate = createToggleButton({ label: 'Snap rotate' });
+document.body.append(snapRotate.element);
 
 const gizmo = createGizmo({
   camera,
   domElement: renderer.domElement,
   physics: manipulation,
-  isFree: () => freeRotate.pressed,
+  isFree: () => !snapRotate.pressed,
 });
 scene.add(gizmo.object);
 

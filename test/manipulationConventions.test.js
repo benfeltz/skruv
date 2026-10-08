@@ -93,14 +93,14 @@ describe('physics boundary', () => {
 });
 
 describe('rotation defaults', () => {
-  it('uses 90° detents by default', () => {
+  it('keeps the detent at 90° behind the toggle', () => {
     expect(GESTURE.detentStep).toBeCloseTo(Math.PI / 2);
   });
 
-  it('starts the free-rotate toggle off and feeds it to the gizmo as the only way out of detents', () => {
+  it('starts the snap-rotate toggle off, so rotation is free until it turns detents on', () => {
     const main = read('src/main.js');
-    expect(main).toMatch(/createToggleButton\(\{ label: 'Free rotate' \}\)/);
-    expect(main).toMatch(/isFree: \(\) => freeRotate\.pressed/);
+    expect(main).toMatch(/createToggleButton\(\{ label: 'Snap rotate' \}\)/);
+    expect(main).toMatch(/isFree: \(\) => !snapRotate\.pressed/);
     expect(read('src/scene/gizmo.js')).toMatch(/quantizeAngle\([^)]*isFree\(\) \? 0 : GESTURE\.detentStep\)/);
   });
 });

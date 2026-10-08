@@ -221,7 +221,7 @@ export const GESTURE = {
   hoverLift: 0.03,
   // Dragged parts stay this far inside the walls.
   wallMargin: 0.05,
-  // Rotate-gizmo detent — the default; the free-rotate toggle turns it off.
+  // Rotate-gizmo detent — behind the snap-rotate toggle; rotation is free by default.
   detentStep: Math.PI / 2,
   // Lift channel (second finger on a phone): metres per CSS px of travel.
   liftRate: 0.004,
