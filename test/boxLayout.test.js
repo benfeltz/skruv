@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { rotateVector } from '../tools/validate/lib/geometry.js';
+import { multiplyQuaternions, placeLayout, rotateVector } from '../tools/validate/lib/geometry.js';
 import { CAMERA_LIMITS, RESET, ROOM } from '../src/constants.js';
-import { boxPlacement, createPackedWorldLayout, lidRest, PACKED_BOX as BOX, respawnSpots } from '../src/game/boxLayout.js';
+import { rotatedHalfExtents } from '../src/game/dragMath.js';
+import {
+  baseRest,
+  boxPlacement,
+  boxPoseOf,
+  createPackedWorldLayout,
+  lidRest,
+  PACKED_BOX as BOX,
+  respawnSpots,
+} from '../src/game/boxLayout.js';
 import { MANIFEST, PACKING, PART_TYPES } from '../src/game/item.js';
 
 // The flatpack in the room: the pack's packed placements carried to where the box stands,
@@ -113,5 +122,75 @@ describe('respawnSpots (1.5 recovery; PR #12 review)', () => {
     for (let i = 0; i < boxes.length; i++) {
       for (let j = i + 1; j < boxes.length; j++) expect(overlap3(boxes[i], boxes[j]), `${types[i]} vs ${types[j]}`).toBe(false);
     }
+  });
+});
+
+describe('the layout follows the box wherever it is dragged (1.7.1)', () => {
+  const yawed = (yaw) => [0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)];
+  const inverse = ([x, y, z, w]) => [-x, -y, -z, w];
+  const toBoxLocal = (pose, p) => rotateVector(inverse(pose.rotation), p.map((v, i) => v - pose.position[i]));
+  const typeOf = new Map(MANIFEST.map(({ id, type }) => [id, type]));
+  const types = [...MANIFEST.map((p) => p.type), 'boxLid'];
+  const moved = { position: [-2.5, 0, -1.2], rotation: yawed(0.7) };
+
+  it('defaults to the box where it stands at boot: today\'s layout, exactly', () => {
+    const boot = { position: [0, 0, 0.6], rotation: yawed(Math.PI / 2) };
+    const local = PACKING.placements.map(({ id, position, rotation }) => ({ id, type: typeOf.get(id), position, rotation }));
+    expect(createPackedWorldLayout()).toEqual(placeLayout(local, boot));
+    const lidTop = BOX.floor + height + BOX.lidThickness / 2;
+    expect(lidRest()).toEqual(placeLayout([{ position: [0, lidTop, 0], rotation: [0, 0, 0, 1] }], boot).map(({ position, rotation }) => ({ position, rotation }))[0]);
+  });
+
+  it('reads the box pose back off its base body, so a box at its boot spot repacks byte-identically', () => {
+    const live = boxPoseOf(baseRest());
+    expect(live).toEqual(boxPlacement());
+    expect(createPackedWorldLayout(live)).toEqual(createPackedWorldLayout());
+    expect(lidRest(live)).toEqual(lidRest());
+    expect(respawnSpots(types, live)).toEqual(respawnSpots(types));
+  });
+
+  it('inverts baseRest for a moved, yawed box', () => {
+    const back = boxPoseOf(baseRest(moved));
+    back.position.forEach((v, i) => expect(v).toBeCloseTo(moved.position[i], 12));
+    expect(back.rotation).toEqual(moved.rotation);
+  });
+
+  it('packs every part into a moved, yawed box at the same box-local pose', () => {
+    const world = createPackedWorldLayout(moved);
+    expect(world.map(({ id, type }) => ({ id, type }))).toEqual(MANIFEST);
+    PACKING.placements.forEach((local, i) => {
+      toBoxLocal(moved, world[i].position).forEach((v, k) => expect(v).toBeCloseTo(local.position[k], 9));
+      multiplyQuaternions(moved.rotation, local.rotation).forEach((v, k) => expect(world[i].rotation[k]).toBeCloseTo(v, 12));
+    });
+    const lid = lidRest(moved);
+    toBoxLocal(moved, lid.position).forEach((v, k) => expect(v).toBeCloseTo([0, BOX.floor + height + BOX.lidThickness / 2, 0][k], 9));
+    expect(lid.rotation).toEqual(moved.rotation);
+  });
+
+  it('sets recovered parts down beside a moved, yawed box, on its +x long side', () => {
+    const spots = respawnSpots(types, moved);
+    spots.forEach((spot, i) => {
+      const [hx] = rotatedHalfExtents(PART_TYPES[types[i]].size.map((d) => d / 2), multiplyQuaternions(inverse(moved.rotation), spot.rotation));
+      expect(toBoxLocal(moved, spot.position)[0] - hx, types[i]).toBeGreaterThan(width / 2 + BOX.wall - EPS);
+    });
+  });
+
+  it('moves the patch to the other long side when the box is dragged against a wall', () => {
+    const atWall = { position: [ROOM.width / 2 - 0.6, 0, 0], rotation: [0, 0, 0, 1] };
+    const spots = respawnSpots(types, atWall);
+    spots.forEach((spot, i) => {
+      const [hx, , hz] = rotatedHalfExtents(PART_TYPES[types[i]].size.map((d) => d / 2), spot.rotation);
+      // In the patch on the box's −x side — beside the moved box, not back at the boot spot.
+      const [x] = toBoxLocal(atWall, spot.position);
+      expect(x + hx, types[i]).toBeLessThan(-(width / 2 + BOX.wall) + EPS);
+      expect(x - hx, types[i]).toBeGreaterThan(-(width / 2 + BOX.wall + RESET.respawn.offset + RESET.respawn.depth) - EPS);
+      expect(Math.abs(spot.position[0]) + hx).toBeLessThan(ROOM.width / 2);
+      expect(Math.abs(spot.position[2]) + hz).toBeLessThan(ROOM.depth / 2);
+    });
+  });
+
+  it('falls back to the boot patch when the box is wedged in a corner and neither side fits', () => {
+    const inCorner = { position: [ROOM.width / 2 - 0.6, 0, ROOM.depth / 2 - length / 2 - BOX.wall - 0.01], rotation: [0, 0, 0, 1] };
+    expect(respawnSpots(types, inCorner)).toEqual(respawnSpots(types));
   });
 });

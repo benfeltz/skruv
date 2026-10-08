@@ -4,9 +4,14 @@
 // builds the box and main.js spawns the parts at these poses. The packed placements
 // themselves are the pack's (items/johnny `packing.placements`), in the box-local frame:
 // origin on the floor at the box's centre, its length along z, height along y.
+//
+// The box is a part the player can drag (1.7.1), so every pose here hangs off a box pose
+// `{ position, rotation }` of that frame — by default where the room stands it at boot
+// (`boxPlacement()`), or wherever it sits now (`boxPoseOf` its body's pose).
 
-import { multiplyQuaternions, placeLayout } from '../../tools/validate/lib/geometry.js';
-import { BOX, RESET } from '../constants.js';
+import { multiplyQuaternions, placeLayout, rotateVector } from '../../tools/validate/lib/geometry.js';
+import { BOX, RESET, ROOM } from '../constants.js';
+import { rotatedHalfExtents } from './dragMath.js';
 import { MANIFEST, PACKING, PART_TYPES } from './item.js';
 
 /**
@@ -108,28 +113,54 @@ export function boxSlabs(box = PACKED_BOX) {
   ].map(({ size, at: [x, y, z] }) => ({ size, offset: [x, y - centre, z] }));
 }
 
-/** The box base's body pose standing where the room puts the box. */
-export function baseRest(box = PACKED_BOX) {
-  const local = { position: [0, (box.floor + box.inner[1]) / 2, 0], rotation: IDENTITY };
-  const [pose] = placeLayout([local], boxPlacement(box));
-  return { position: pose.position, rotation: pose.rotation };
+// The box base body's centre, in the box-local frame: halfway up the box.
+const BASE_CENTRE = [0, (PACKED_BOX.floor + PACKED_BOX.inner[1]) / 2, 0];
+
+/** The box base's body pose for a box standing at `pose`. */
+export function baseRest(pose = boxPlacement()) {
+  const [rest] = placeLayout([{ position: BASE_CENTRE, rotation: IDENTITY }], pose);
+  return { position: rest.position, rotation: rest.rotation };
 }
 
-/** The lid's pose closed on the walls' top edges, in the room. */
-export function lidRest(box = PACKED_BOX) {
-  const local = { position: [0, box.floor + box.inner[1] + box.lidThickness / 2, 0], rotation: IDENTITY };
-  const [pose] = placeLayout([local], boxPlacement(box));
-  return { position: pose.position, rotation: pose.rotation };
+/** The box pose (its box-local frame) of a box base body at `{ position, rotation }` — `baseRest`'s inverse. */
+export function boxPoseOf({ position, rotation }) {
+  const centre = rotateVector(rotation, BASE_CENTRE);
+  return { position: position.map((v, i) => v - centre[i]), rotation };
+}
+
+/** The lid's pose closed on the walls' top edges of a box at `pose`. */
+export function lidRest(pose = boxPlacement()) {
+  const local = { position: [0, PACKED_BOX.floor + PACKED_BOX.inner[1] + PACKED_BOX.lidThickness / 2, 0], rotation: IDENTITY };
+  const [rest] = placeLayout([local], pose);
+  return { position: rest.position, rotation: rest.rotation };
 }
 
 /**
- * Where recovered parts of `types` are set down, one `{ position, rotation }` each: laid
- * flat as they pack, side by side in a patch beside the box's long side (as long as the
- * box, plus the patch's clearance at each end), every one's
+ * Where recovered parts of `types` are set down beside a box at `pose`, one `{ position,
+ * rotation }` each: laid flat as they pack, side by side in a patch beside the box's long
+ * side (as long as the box, plus the patch's clearance at each end), every one's
  * underside `respawn.height` above the floor so it drops into place. Those that don't fit
- * go in again a layer higher, so no two in one batch ever overlap.
+ * go in again a layer higher, so no two in one batch ever overlap. A box dragged against a
+ * wall gets the patch on its other long side; one wedged in a corner, where neither side
+ * fits inside the room, gets the patch beside where the box stood at boot.
  */
-export function respawnSpots(types, box = PACKED_BOX, respawn = RESET.respawn) {
+export function respawnSpots(types, pose = boxPlacement(), respawn = RESET.respawn) {
+  for (const side of [1, -1]) {
+    const spots = spotsBeside(types, pose, side, respawn);
+    if (spots.every((spot, i) => insideRoom(types[i], spot))) return spots;
+  }
+  return spotsBeside(types, boxPlacement(), 1, respawn);
+}
+
+// A part at `spot` lies wholly inside the room's walls.
+function insideRoom(type, { position: [x, , z], rotation }) {
+  const [hx, , hz] = rotatedHalfExtents(PART_TYPES[type].size.map((d) => d / 2), rotation);
+  return Math.abs(x) + hx < ROOM.width / 2 && Math.abs(z) + hz < ROOM.depth / 2;
+}
+
+// The respawn patch on the box's +x (`side` 1) or −x (−1) long side.
+function spotsBeside(types, pose, side, respawn) {
+  const box = PACKED_BOX;
   const [width, , length] = box.inner;
   const near = width / 2 + box.wall + respawn.offset;
   // Along the box, overhanging each end by the same clearance, so even the lid fits.
@@ -144,19 +175,20 @@ export function respawnSpots(types, box = PACKED_BOX, respawn = RESET.respawn) {
     const lift = respawn.height + layer * respawn.layerHeight;
     centres.forEach(([x, z], k) => {
       const { i, height, rotation } = pending[k];
-      local[i] = { position: [x, lift + height / 2, z], rotation };
+      local[i] = { position: [side * x, lift + height / 2, z], rotation };
     });
     pending = pending.slice(centres.length);
   }
-  return placeLayout(local, boxPlacement(box)).map(({ position, rotation }) => ({ position, rotation }));
+  return placeLayout(local, pose).map(({ position, rotation }) => ({ position, rotation }));
 }
 
 /**
- * Every part in the box as the pack packs it, carried into the room — what main.js spawns:
- * `{ id, type, position, rotation }` per manifest instance, spares included.
+ * Every part in a box at `pose` as the pack packs it, carried into the room — what main.js
+ * spawns and repacks to: `{ id, type, position, rotation }` per manifest instance, spares
+ * included.
  */
-export function createPackedWorldLayout(box = PACKED_BOX) {
+export function createPackedWorldLayout(pose = boxPlacement()) {
   const typeOf = new Map(MANIFEST.map(({ id, type }) => [id, type]));
   const local = PACKING.placements.map(({ id, position, rotation }) => ({ id, type: typeOf.get(id), position, rotation }));
-  return placeLayout(local, boxPlacement(box));
+  return placeLayout(local, pose);
 }
