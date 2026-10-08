@@ -23,7 +23,7 @@ usage. Runs on every PR (`.github/workflows/ci.yml`) and before every deploy.
 Pure, dependency-free, browser-safe TypeScript modules. Each exports the types of the data it
 owns — together, the Flatpack format's TypeScript mirror of the schema. The game imports them (through
 `src/game/item.ts`); the CLI imports them and adds only ajv. Nothing in `lib/` imports from
-`src/`, Three, Rapier, the DOM or Node (pinned by `test/conventions.test.js`).
+`src/`, Three, Rapier, the DOM or Node (pinned by `test/conventions.test.ts`).
 
 | Module | What it holds |
 |--------|---------------|
@@ -59,7 +59,7 @@ is no scripting in format 1.
 
 ## Conformance fixture seeds (R6)
 
-The mutations in `test/validateChecks.test.js` — one per rule, each applied to the shipped
+The mutations in `test/validateChecks.test.ts` — one per rule, each applied to the shipped
 JOHNNY — are the seeds of the conformance fixtures the Godot build must reject for the same
 rule:
 
@@ -83,4 +83,4 @@ rule:
 
 Schema-layer seeds (missing connector id, unknown connector type or fastener kind,
 `format: 2`, a three-component quaternion, a scripted page) are in
-`test/flatpackSchema.test.js`.
+`test/flatpackSchema.test.ts`.

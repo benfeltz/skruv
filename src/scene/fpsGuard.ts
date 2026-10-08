@@ -3,6 +3,9 @@ import { TUNE } from '../constants.js';
 // Frame deltas summed over a sample fall a hair short of whole seconds.
 const EPSILON = 1e-9;
 
+/** The TUNE knobs the guard reads, at use time. */
+export type FpsConfig = Pick<typeof TUNE, 'fpsSampleSeconds' | 'fpsFloor' | 'fpsWindow' | 'fpsRecover' | 'fpsHelpRatio' | 'fpsMaxGap'>;
+
 /** One frame-rate sample: the loop's rate, and whether render skipping is engaged. */
 export interface FpsSample {
   fps: number;
@@ -34,7 +37,7 @@ export interface FrameDecision {
  * (a backgrounded tab) drops the sample in progress. Reads `config` (TUNE by default) at
  * use time, so its knobs tune live. Pure.
  */
-export function createFpsGuard(config = TUNE) {
+export function createFpsGuard(config: FpsConfig = TUNE) {
   let frames = 0;
   let elapsed = 0;
   // While skipping: summed deltas and counts of frames that followed a rendered frame, and

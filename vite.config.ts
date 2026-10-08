@@ -92,6 +92,6 @@ export default defineConfig({
   base: '/',
   plugins: [devStream()],
   test: {
-    include: ['test/**/*.test.js'],
+    include: ['test/**/*.test.ts'],
   },
 });

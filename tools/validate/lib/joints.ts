@@ -28,14 +28,17 @@ export interface Joint {
 }
 
 /** What joints are derived from: part types and the assembled poses (a loaded pack). */
-export type PosedItem = Pick<Pack, 'partTypes' | 'assembled'>;
+export interface PosedItem {
+  partTypes: Readonly<Record<string, Pick<PartType, 'size' | 'connectors'>>>;
+  assembled: Pack['assembled'];
+}
 
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const distance = (a: Vec3, b: Vec3) => Math.hypot(...sub(a, b));
 
 /** True when instances of this part type carry a fastener end (fasteners and tools). */
-export const isHardwareType = (partType: PartType) => partType.connectors.some((c) => isFastenerEnd(c.type));
+export const isHardwareType = (partType: Pick<PartType, 'connectors'>) => partType.connectors.some((c) => isFastenerEnd(c.type));
 
 /** Where a fastener end of `kind` sits once home in `hole` (world `{ position, axis }`). */
 export const seatedPoint = (hole: Frame, kind: FastenerKind): Vec3 => {

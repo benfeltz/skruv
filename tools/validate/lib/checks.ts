@@ -4,7 +4,7 @@
 // `assetExists(path)`, so the same checks run in Node and in the browser.
 //
 // These are 0.0.1's integrity tests, promoted to the contract; the mutated fixtures in
-// test/validateChecks.test.js (one per rule) are the conformance seeds for other engines.
+// test/validateChecks.test.ts (one per rule) are the conformance seeds for other engines.
 
 import { connectorInWorld, rotateVector } from './geometry.js';
 import type { Pose, Size, Vec3 } from './geometry.js';

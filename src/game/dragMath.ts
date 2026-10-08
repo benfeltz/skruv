@@ -61,7 +61,7 @@ export function pullAlong([sx, sy]: number[], [x, y]: number[], [ax, ay]: number
  * away from zero, so ±45° goes to ±90° symmetrically. A falsy step (free rotation)
  * returns the angle unchanged.
  */
-export function quantizeAngle(angle: number, step: number) {
+export function quantizeAngle(angle: number, step: number | null) {
   if (!step) return angle;
   const detents = Math.round(Math.abs(angle) / step);
   return Math.sign(angle) * detents * step || 0;

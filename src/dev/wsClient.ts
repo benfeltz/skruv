@@ -6,7 +6,7 @@ import type { Tunables } from '../game/tunables.js';
 // Dev only: the page's end of the dev stream (the hub is the plugin in vite.config.ts).
 // Every bus event goes out; knob sets, knob listings and screenshots come in. Reached only
 // through main.ts's import.meta.env.DEV-guarded dynamic import, so a build never contains
-// it (pinned by the dist hygiene check in test/conventions.test.js).
+// it (pinned by the dist hygiene check in test/conventions.test.ts).
 
 const { kinds } = DEV_WS;
 
