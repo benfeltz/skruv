@@ -26,6 +26,7 @@ jobs:
       - run: npm ci
       - run: npm ci --prefix tools/validate
       - run: npm run typecheck
+      - run: npm run lint
       - run: npx tsx tools/validate/index.ts items/johnny
       - run: npx vitest run
       - run: npm run build

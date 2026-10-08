@@ -1,4 +1,4 @@
-import { MOUSE, TOUCH, Vector3 } from 'three';
+import { MOUSE, TOUCH } from 'three';
 import type { Camera } from 'three';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';

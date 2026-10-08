@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLoop } from '../src/scene/loop.js';
 
-type Loop = ReturnType<typeof createLoop>;
-
 // Manual rAF: frames only run when the test calls runFrame().
 let pending: Map<number, FrameRequestCallback>;
 let nextId: number;
@@ -51,9 +49,8 @@ describe('createLoop', () => {
   });
 
   it('stops when stop() is called from inside onFrame', () => {
-    let loop: Loop;
     const onFrame = vi.fn(() => loop.stop());
-    loop = createLoop(onFrame);
+    const loop = createLoop(onFrame);
     loop.start();
     runFrame(0);
     runFrame(16);
@@ -62,12 +59,11 @@ describe('createLoop', () => {
   });
 
   it('keeps a single loop when stop() then start() run inside onFrame', () => {
-    let loop: Loop;
     const onFrame = vi.fn(() => {
       loop.stop();
       loop.start();
     });
-    loop = createLoop(onFrame);
+    const loop = createLoop(onFrame);
     loop.start();
     runFrame(0);
     expect(pending.size).toBe(1);
