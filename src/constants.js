@@ -119,6 +119,10 @@ export const CAMERA = {
   far: 100,
   startPosition: [2, 1.8, 2.4],
   startTarget: [0, 0.6, 0],
+  // A phone (coarse pointer) starts this many times further from startTarget along the
+  // same view, so a cold load frames the room without pinching out first. Dialed on
+  // device through ?tune (camera.mobileStartScale) before freezing.
+  mobileStartScale: 1.4,
 };
 
 // Orbit limits (src/scene/cameraLimits.js, applied by src/scene/cameraControls.js). The
@@ -155,6 +159,10 @@ export const BOX = {
   // On the floor in front of the start view, turned so its length runs across it.
   position: [0, 0, 0.6],
   yaw: Math.PI / 2,
+  // The box is a part the player can drag: heavy and grippy, so a panel slid out over a
+  // wall scrapes past it rather than skating it across the floor (kg; Rapier friction).
+  mass: 25,
+  friction: 1,
 };
 
 // The display JOHNNY (src/scene/displayShelf.js): a second, already-built shelf standing
@@ -221,7 +229,7 @@ export const GESTURE = {
   hoverLift: 0.03,
   // Dragged parts stay this far inside the walls.
   wallMargin: 0.05,
-  // Rotate-gizmo detent — the default; the free-rotate toggle turns it off.
+  // Rotate-gizmo detent — behind the snap-rotate toggle; rotation is free by default.
   detentStep: Math.PI / 2,
   // Lift channel (second finger on a phone): metres per CSS px of travel.
   liftRate: 0.004,
@@ -241,6 +249,12 @@ export const GIZMO = {
   tube: 0.025,
   hitTube: 0.12,
   opacity: 0.85,
+  // Direction arrowheads: a pair of cones on each ring, on opposite sides, pointing the way
+  // a counter-clockwise screen sweep turns the part. Fractions of ring radius; the angle
+  // is where the first cone sits around its ring, from the ring's local +X.
+  arrowLength: 0.14,
+  arrowRadius: 0.05,
+  arrowAngle: Math.PI / 4,
 };
 
 // Drop guide (src/scene/dropGuide.js): a line from a dragged part straight down to where it

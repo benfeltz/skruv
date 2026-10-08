@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CAMERA, CAMERA_LIMITS, ROOM } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/item.js';
 import { createPackedWorldLayout } from '../src/game/boxLayout.js';
-import { clampCamera, clampTarget, clampTargetAlongView, panSpeedAt, seatOnFloor } from '../src/scene/cameraLimits.js';
+import { LIVE_KNOBS } from '../src/game/tunables.js';
+import { clampCamera, clampTarget, clampTargetAlongView, panSpeedAt, seatOnFloor, startPosition } from '../src/scene/cameraLimits.js';
 
 const room = { width: 10, depth: 8, height: 3 };
 const limits = { targetMargin: 0.5, targetHeight: [0, 2], wallMargin: 0.4, floorClearance: 0.05 };
@@ -73,6 +75,30 @@ describe('shipped camera limits', () => {
     expect(distance).toBeLessThanOrEqual(CAMERA_LIMITS.maxDistance);
     expect(polar).toBeGreaterThanOrEqual(CAMERA_LIMITS.minPolarAngle);
     expect(polar).toBeLessThanOrEqual(CAMERA_LIMITS.maxPolarAngle);
+  });
+});
+
+describe('startPosition (1.7.1 mobile start zoom)', () => {
+  it('pulls the start back from its target along the same view', () => {
+    expect(startPosition([2, 1, 0], [0, 1, 0], 1.5)).toEqual([3, 1, 0]);
+    expect(startPosition([0, 3, 4], [0, 0, 0], 1)).toEqual([0, 3, 4]);
+  });
+
+  it('frames a phone through startPosition and leaves the desktop start untouched', () => {
+    const scene = readFileSync(new URL('../src/scene/scene.js', import.meta.url), 'utf8');
+    expect(scene).toMatch(/matchMedia\('\(pointer: coarse\)'\)\.matches/);
+    expect(scene).toMatch(/coarse \? startPosition\(CAMERA\.startPosition, CAMERA\.startTarget, CAMERA\.mobileStartScale\) : CAMERA\.startPosition/);
+  });
+
+  it('starts a phone further out, within the camera limits across the whole knob range', () => {
+    expect(CAMERA.mobileStartScale).toBeGreaterThan(1);
+    const { min, max } = LIVE_KNOBS['camera.mobileStartScale'];
+    for (const scale of [min, CAMERA.mobileStartScale, max]) {
+      const eye = startPosition(CAMERA.startPosition, CAMERA.startTarget, scale);
+      const distance = Math.hypot(...eye.map((v, i) => v - CAMERA.startTarget[i]));
+      expect(distance, `scale ${scale}`).toBeLessThanOrEqual(CAMERA_LIMITS.maxDistance);
+      expect(clampCamera(eye, ROOM, CAMERA_LIMITS), `scale ${scale}`).toEqual(eye);
+    }
   });
 });
 

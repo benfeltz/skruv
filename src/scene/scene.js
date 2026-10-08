@@ -1,8 +1,13 @@
 import * as THREE from 'three';
 import { CAMERA, COLORS, LIGHTS, RENDER } from '../constants.js';
+import { startPosition } from './cameraLimits.js';
 import { clampPixelRatio } from './clamp.js';
 
-/** Renderer, camera and lights mounted in `container`; keeps size and DPR in sync. */
+/**
+ * Renderer, camera and lights mounted in `container`; keeps size and DPR in sync.
+ * `startPose()` is where the camera starts on this device — `{ position, target }`, a
+ * phone's pulled back by CAMERA.mobileStartScale — read again when that knob turns.
+ */
 export function createScene(container) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.shadowMap.enabled = true;
@@ -12,8 +17,15 @@ export function createScene(container) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(COLORS.background);
 
+  // A coarse pointer is a phone or tablet: a small screen held close, framed further out.
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  const startPose = () => ({
+    position: coarse ? startPosition(CAMERA.startPosition, CAMERA.startTarget, CAMERA.mobileStartScale) : CAMERA.startPosition,
+    target: CAMERA.startTarget,
+  });
+
   const camera = new THREE.PerspectiveCamera(CAMERA.fov, 1, CAMERA.near, CAMERA.far);
-  camera.position.set(...CAMERA.startPosition);
+  camera.position.set(...startPose().position);
   camera.lookAt(...CAMERA.startTarget);
 
   scene.add(
@@ -55,5 +67,5 @@ export function createScene(container) {
   watchPixelRatio();
   resize();
 
-  return { renderer, scene, camera };
+  return { renderer, scene, camera, startPose };
 }

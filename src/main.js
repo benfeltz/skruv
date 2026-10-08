@@ -7,7 +7,7 @@ import { createTunables, LIVE_KNOBS } from './game/tunables.js';
 import { PART_TYPES } from './game/item.js';
 import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
-import { createPackedWorldLayout, lidRest, respawnSpots } from './game/boxLayout.js';
+import { baseRest, boxPlacement, boxPoseOf, createPackedWorldLayout, lidRest, respawnSpots } from './game/boxLayout.js';
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
@@ -45,7 +45,7 @@ events.emit(sessionEvent('start'));
 // Backgrounded and back: a session that ends hidden is an abandon.
 document.addEventListener('visibilitychange', () => events.emit(sessionEvent(document.visibilityState)));
 
-const { renderer, scene, camera } = createScene(document.getElementById('app'));
+const { renderer, scene, camera, startPose } = createScene(document.getElementById('app'));
 scene.add(createRoom());
 
 const cameraControls = createCameraControls(camera, renderer.domElement);
@@ -59,17 +59,18 @@ tunables.subscribe((key, value) => {
   const { group } = LIVE_KNOBS[key];
   if (group === 'physics' || group === 'joint') physics.retune();
   if (key === 'render.maxPixelRatio') renderer.setPixelRatio(clampPixelRatio(window.devicePixelRatio, RENDER.maxPixelRatio));
+  if (key === 'camera.mobileStartScale') cameraControls.frame(startPose());
 });
 
 // The game opens on the closed flatpack: every part packed flat inside, settling at once
 // and resting until the lid comes off and a hand disturbs it.
 const flatpack = createFlatpack(physics);
-scene.add(flatpack.object, flatpack.lid.mesh);
+scene.add(flatpack.base.mesh, flatpack.lid.mesh);
 
-// One record per physical part — what gestures pick, drag and snap. The lid is one too.
-const parts = [flatpack.lid];
-const packed = createPackedWorldLayout();
-for (const { id, type, position, rotation } of packed) {
+// One record per physical part — what gestures pick, drag and snap. The box and its lid
+// are ones too.
+const parts = [flatpack.base, flatpack.lid];
+for (const { id, type, position, rotation } of createPackedWorldLayout()) {
   const part = PART_TYPES[type];
   const mesh = createPartMesh(part);
   const body = physics.register(mesh, {
@@ -95,15 +96,15 @@ display.fasten(assembly);
 // Manipulation goes through this seam so a fastened compound moves as one.
 const manipulation = createCompoundPhysics(physics, parts, assembly);
 
-// 90° detents are the default; the toggle frees rotation.
-const freeRotate = createToggleButton({ label: 'Free rotate' });
-document.body.append(freeRotate.element);
+// Rotation is free by default; the toggle turns 90° detents on.
+const snapRotate = createToggleButton({ label: 'Snap rotate' });
+document.body.append(snapRotate.element);
 
 const gizmo = createGizmo({
   camera,
   domElement: renderer.domElement,
   physics: manipulation,
-  isFree: () => freeRotate.pressed,
+  isFree: () => !snapRotate.pressed,
 });
 scene.add(gizmo.object);
 
@@ -117,8 +118,8 @@ document.body.append(booklet.scrim, booklet.thumb, booklet.element);
 requestAnimationFrame(() => document.getElementById('pre-splash')?.remove());
 
 // While the booklet is open, the open page's parts glow — the player's own set only, never
-// the display shelf or the box lid.
-const playerParts = parts.filter((part) => !display.parts.includes(part) && part !== flatpack.lid);
+// the display shelf or the box and its lid.
+const playerParts = parts.filter((part) => !display.parts.includes(part) && part !== flatpack.base && part !== flatpack.lid);
 const highlight = createHighlight(playerParts);
 booklet.onChange(({ page, expanded }) => {
   const shown = bookletPages.pages[page];
@@ -136,8 +137,9 @@ scene.add(dropGuide.object);
 const sprue = createSprue();
 scene.add(sprue.object);
 
+// The box drags but never takes the gizmo: tapping it is tapping the room.
 function select(part) {
-  if (!part) {
+  if (!part || part === flatpack.base) {
     gizmo.hide();
     sprue.hide();
     return;
@@ -166,13 +168,24 @@ const router = createGestureRouter({
 // The display shelf's physics joints, made by the same reconcile every tap and turn runs.
 router.sync();
 
+// Where the box sits now, as the level, in-room box frame the layout hangs off.
+function boxPose() {
+  const { x, y, z } = flatpack.base.body.translation();
+  const r = flatpack.base.body.rotation();
+  return boxPoseOf({ position: [x, y, z], rotation: [r.x, r.y, r.z, r.w] });
+}
+
 // Repack: the player's parts come apart by the normal teardown and go back into the box
-// as packed, lid on. The display shelf is never touched.
-const packedPose = new Map([[flatpack.lid.id, lidRest()], ...packed.map((p) => [p.id, p])]);
+// as packed, lid on — wherever the box has been dragged to, stood upright there first if
+// it was left tilted. The display shelf is never touched.
 function repack() {
   events.emit(resetEvent());
   router.unseatAll(playerParts.map((part) => part.id));
   select(null);
+  const box = boxPose();
+  const upright = baseRest(box);
+  physics.place(flatpack.base.body, upright.position, upright.rotation);
+  const packedPose = new Map([[flatpack.lid.id, lidRest(box)], ...createPackedWorldLayout(box).map((p) => [p.id, p])]);
   for (const { id, body } of [...playerParts, flatpack.lid]) {
     const { position, rotation } = packedPose.get(id);
     physics.place(body, position, rotation);
@@ -181,20 +194,30 @@ function repack() {
 document.body.append(createResetButton({ onReset: repack }).element);
 
 // Recovery: a loose player part that has left the room (through a slab, off a wall) is set
-// down again beside the box. Bonded parts go back only with a repack.
+// down again beside the box. Bonded parts go back only with a repack. The box itself goes
+// back to where it last sat in the room — floor it held a moment ago, not the boot spot
+// the player may have built on since.
 let sweepIn = RESET.sweepInterval;
+let lastBox = boxPlacement();
 function sweep(delta) {
   sweepIn -= delta;
   if (sweepIn > 0) return;
   sweepIn = RESET.sweepInterval;
-  const escaped = [...playerParts, flatpack.lid].filter(({ id, body }) => {
+  const escaped = [...playerParts, flatpack.lid, flatpack.base].filter(({ id, body }) => {
     const { x, y, z } = body.translation();
     return hasEscaped([x, y, z], ROOM, RESET.escapeMargin) && assembly.compoundOf(id).size === 1;
   });
+  if (!escaped.includes(flatpack.base)) lastBox = boxPose();
   if (escaped.length === 0) return;
   events.emit(recoveryEvent(escaped.map(({ id }) => id)));
-  const spots = respawnSpots(escaped.map((part) => part.type));
-  escaped.forEach(({ body }, i) => physics.place(body, spots[i].position, spots[i].rotation));
+  // The box goes back first, so the rest are set down beside it there.
+  if (escaped.includes(flatpack.base)) {
+    const back = baseRest(lastBox);
+    physics.place(flatpack.base.body, back.position, back.rotation);
+  }
+  const loose = escaped.filter((part) => part !== flatpack.base);
+  const spots = respawnSpots(loose.map((part) => part.type), boxPose());
+  loose.forEach(({ body }, i) => physics.place(body, spots[i].position, spots[i].rotation));
 }
 
 // Android haptics, off the event stream: a tick on a seat, a double tick on a cam lock.

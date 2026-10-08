@@ -72,7 +72,8 @@ describe('physics boundary', () => {
   const world = read('src/physics/world.js');
 
   it('keeps register/step as they were and adds grab/move/release', () => {
-    expect(world).toMatch(/function register\(mesh, \{ halfExtents, mass, position, rotation \}\)/);
+    // 1.7.1 extends register's options (colliders, friction) without changing a caller.
+    expect(world).toMatch(/function register\(mesh, \{ halfExtents, colliders = \[\{ halfExtents, offset: \[0, 0, 0\] \}\], mass, friction, position, rotation \}\)/);
     expect(world).toMatch(/function step\(delta\)/);
     expect(world).toMatch(/function grab\(body\)/);
     expect(world).toMatch(/function move\(body, position, rotation\)/);
@@ -83,24 +84,32 @@ describe('physics boundary', () => {
     expect(world).toMatch(/function join\(bodyA, bodyB, \{ anchorA, anchorB, rotation \}, mode\)/);
     expect(world).toMatch(/function unjoin\(joint\)/);
     expect(world).toMatch(/function retune\(\)/);
-    expect(world).toMatch(/return \{ register, addStatic, step, grab, move, release, place, join, unjoin, retune \};/);
+    expect(world).toMatch(/return \{ register, step, grab, move, release, place, join, unjoin, retune \};/);
   });
 
-  it('adds static slabs for the flatpack (1.5) and nothing else', () => {
-    expect(world).toMatch(/function addStatic\(\{ halfExtents, position, rotation \}\)/);
-    expect(read('src/scene/flatpack.js')).toMatch(/physics\.addStatic\(/);
+  // 1.7.1: the box is a part — one dynamic multi-collider body — so the 1.5 static slabs went.
+  it('registers the flatpack box as one dynamic body, never static slabs', () => {
+    expect(world).not.toMatch(/addStatic/);
+    expect(read('src/scene/flatpack.js')).toMatch(/physics\.register\(box, \{\n\s+colliders:/);
+  });
+
+  it('lets the box drag but never takes it into the gizmo, the highlight or the repack', () => {
+    const main = read('src/main.js');
+    expect(main).toMatch(/const parts = \[flatpack\.base, flatpack\.lid\];/);
+    expect(main).toMatch(/part !== flatpack\.base && part !== flatpack\.lid\);/);
+    expect(main).toMatch(/if \(!part \|\| part === flatpack\.base\) \{/);
   });
 });
 
 describe('rotation defaults', () => {
-  it('uses 90° detents by default', () => {
+  it('keeps the detent at 90° behind the toggle', () => {
     expect(GESTURE.detentStep).toBeCloseTo(Math.PI / 2);
   });
 
-  it('starts the free-rotate toggle off and feeds it to the gizmo as the only way out of detents', () => {
+  it('starts the snap-rotate toggle off, so rotation is free until it turns detents on', () => {
     const main = read('src/main.js');
-    expect(main).toMatch(/createToggleButton\(\{ label: 'Free rotate' \}\)/);
-    expect(main).toMatch(/isFree: \(\) => freeRotate\.pressed/);
+    expect(main).toMatch(/createToggleButton\(\{ label: 'Snap rotate' \}\)/);
+    expect(main).toMatch(/isFree: \(\) => !snapRotate\.pressed/);
     expect(read('src/scene/gizmo.js')).toMatch(/quantizeAngle\([^)]*isFree\(\) \? 0 : GESTURE\.detentStep\)/);
   });
 });

@@ -44,6 +44,7 @@ describe('LIVE_KNOBS', () => {
       'render.fpsWindow',
       'haptics.seatMs',
       'haptics.lockMs',
+      'camera.mobileStartScale',
     ]);
   });
 });

@@ -136,6 +136,7 @@ describe('no survivors of the retired data modules', () => {
     const constants = await import('../src/constants.js');
     expect(constants).not.toHaveProperty('BRAND');
     expect(constants).not.toHaveProperty('PACK');
-    expect(Object.keys(constants.BOX).sort()).toEqual(['position', 'yaw']);
+    // Where it stands, and (1.7.1) how heavy and grippy the draggable box feels — tunables, not pack data.
+    expect(Object.keys(constants.BOX).sort()).toEqual(['friction', 'mass', 'position', 'yaw']);
   });
 });

@@ -19,9 +19,13 @@ describe('repack reset (decision 9)', () => {
   });
 
   it("puts back only the player's parts and the lid, never the display shelf", () => {
-    expect(main).toMatch(/const playerParts = parts\.filter\(\(part\) => !display\.parts\.includes\(part\) && part !== flatpack\.lid\);/);
+    expect(main).toMatch(/const playerParts = parts\.filter\(\(part\) => !display\.parts\.includes\(part\) && part !== flatpack\.base && part !== flatpack\.lid\);/);
     expect(repack).not.toMatch(/display/);
     expect(repack).toMatch(/physics\.place\(body, position, rotation\)/);
+  });
+
+  it('stands a tilted box upright where it is before repacking into it (1.7.1)', () => {
+    expect(repack).toMatch(/const upright = baseRest\(box\);\n\s+physics\.place\(flatpack\.base\.body, upright\.position, upright\.rotation\);/);
   });
 
   it('asks for a confirming second tap, inside the RESET window', () => {
@@ -40,10 +44,15 @@ describe('recovery sweep (Feedback #9)', () => {
   });
 
   it('respawns only loose player parts, never the display shelf', () => {
-    expect(sweep).toMatch(/\[\.\.\.playerParts, flatpack\.lid\]/);
+    expect(sweep).toMatch(/\[\.\.\.playerParts, flatpack\.lid, flatpack\.base\]/);
     expect(sweep).toMatch(/compoundOf\(id\)\.size === 1/);
     // One batch per sweep, so the parts recovered together are laid out together.
-    expect(sweep).toMatch(/respawnSpots\(escaped\.map\(\(part\) => part\.type\)\)/);
+    expect(sweep).toMatch(/respawnSpots\(loose\.map\(\(part\) => part\.type\), boxPose\(\)\)/);
+  });
+
+  it('sends an escaped box back where it last sat in the room, not into the respawn patch (1.7.1)', () => {
+    expect(sweep).toMatch(/if \(!escaped\.includes\(flatpack\.base\)\) lastBox = boxPose\(\);/);
+    expect(sweep).toMatch(/const back = baseRest\(lastBox\);\n\s+physics\.place\(flatpack\.base\.body, back\.position, back\.rotation\);/);
   });
 });
 

@@ -8,6 +8,7 @@ const AXES = {
   z: { vector: new THREE.Vector3(0, 0, 1), color: COLORS.gizmoZ, turn: [0, 0, 0] },
 };
 const RING_SEGMENTS = [12, 64];
+const ARROW_SEGMENTS = 12;
 
 /**
  * Rotate gizmo: three world-axis rings around the selected part, drawn on top. It renders
@@ -16,16 +17,21 @@ const RING_SEGMENTS = [12, 64];
  * clears the floor and clamping its turned footprint inside the walls (a kinematic body
  * passes through them), and drops it back under physics when the ring is let go.
  *
- * Plugs into src/scene/gestureRouter.js as its `rings` hook. `isFree()` reads the
- * free-rotate toggle; detents (GESTURE.detentStep) are the default.
+ * Each ring carries a pair of arrowheads pointing the way a counter-clockwise screen sweep
+ * turns the part, flipped per frame by which side of the axis the camera is on.
+ *
+ * Plugs into src/scene/gestureRouter.js as its `rings` hook. `isFree()` is true unless the
+ * snap-rotate toggle has turned detents (GESTURE.detentStep) on.
  */
 export function createGizmo({ camera, domElement, physics, isFree }) {
   const object = new THREE.Group();
   object.visible = false;
   const rings = [];
   const hitBands = [];
+  const arrows = [];
+  const arrowGeometry = new THREE.ConeGeometry(GIZMO.arrowRadius, GIZMO.arrowLength, ARROW_SEGMENTS);
 
-  for (const [axis, { color, turn }] of Object.entries(AXES)) {
+  for (const [axis, { vector, color, turn }] of Object.entries(AXES)) {
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(1, GIZMO.tube, ...RING_SEGMENTS),
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity: GIZMO.opacity, depthTest: false }),
@@ -40,6 +46,23 @@ export function createGizmo({ camera, domElement, physics, isFree }) {
     rings.push(ring);
     hitBands.push(band);
     object.add(ring, band);
+
+    // The torus lies in its local XY plane; `turn` may carry local +Z onto −axis, so the
+    // cones' positive sweep about the world axis is `facing` times local counter-clockwise.
+    const euler = new THREE.Euler(...turn);
+    const facing = Math.sign(new THREE.Vector3(0, 0, 1).applyEuler(euler).dot(vector));
+    for (const angle of [GIZMO.arrowAngle, GIZMO.arrowAngle + Math.PI]) {
+      // Holder: on the ring, its +Y along the local counter-clockwise tangent.
+      const holder = new THREE.Object3D();
+      holder.position.set(Math.cos(angle), Math.sin(angle), 0).applyEuler(euler);
+      holder.quaternion.setFromEuler(euler).multiply(new THREE.Quaternion().setFromAxisAngle(AXES.z.vector, angle));
+      // Shares the ring's material, so it dims and brightens with its ring.
+      const cone = new THREE.Mesh(arrowGeometry, ring.material);
+      cone.renderOrder = 1;
+      holder.add(cone);
+      object.add(holder);
+      arrows.push({ cone, vector, facing });
+    }
   }
 
   let part = null;
@@ -64,9 +87,16 @@ export function createGizmo({ camera, domElement, physics, isFree }) {
     object.visible = false;
   }
 
-  /** Follows the selected part; call once per frame. */
+  /** Follows the selected part and turns the arrowheads to face the sweep; call once per frame. */
   function update() {
-    if (part) object.position.copy(part.mesh.position);
+    if (!part) return;
+    object.position.copy(part.mesh.position);
+    toCamera.copy(camera.position).sub(part.mesh.position);
+    for (const { cone, vector, facing } of arrows) {
+      // The same camera-side sign start() turns by: an axis facing away reverses the sweep.
+      const sign = vector.dot(toCamera) >= 0 ? 1 : -1;
+      cone.rotation.x = sign * facing > 0 ? 0 : Math.PI;
+    }
   }
 
   function hitTest(raycaster) {

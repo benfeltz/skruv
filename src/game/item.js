@@ -11,13 +11,15 @@ const pack = loadPack(johnny);
 /** The box's inside and walls, and the lid that closes it, as the pack packs them. */
 export const PACKING = pack.packing;
 
-const { boxInner, wall, lid } = PACKING;
+const { boxInner, wall, floor, lid } = PACKING;
 
 /**
  * Part types by name, engine-shaped (`{ size, partNumber, mass, color, connectors }`,
- * connectors in index order, each keeping its pack `id`) — plus the flatpack's lid: not
- * furniture and never in the manifest, but a part like any other, grabbed, lifted and
- * dropped (src/scene/flatpack.js), sized to close over the box's walls.
+ * connectors in index order, each keeping its pack `id`) — plus the flatpack's lid and
+ * base: not furniture and never in the manifest, but parts like any other, grabbed, lifted
+ * and dropped (src/scene/flatpack.js). The lid is sized to close over the box's walls; the
+ * base is the open box itself, bottom and walls, with no part number of its own and its
+ * mass a tunable (BOX.mass).
  */
 export const PART_TYPES = Object.freeze({
   ...pack.partTypes,
@@ -25,6 +27,11 @@ export const PART_TYPES = Object.freeze({
     size: [boxInner[0] + 2 * wall, lid.thickness, boxInner[2] + 2 * wall],
     partNumber: lid.partNumber,
     mass: lid.mass,
+    color: lid.color,
+    connectors: [],
+  },
+  boxBase: {
+    size: [boxInner[0] + 2 * wall, floor + boxInner[1], boxInner[2] + 2 * wall],
     color: lid.color,
     connectors: [],
   },

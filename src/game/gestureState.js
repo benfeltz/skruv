@@ -17,11 +17,12 @@ const OWNER_FOR_HIT = { part: OWNER.DRAG_PART, ring: OWNER.GIZMO_RING };
 /**
  * What a press lands on, from the nearest gizmo-ring and part raycast hits (each null or
  * `{ distance, ... }`). The rings draw on top but are fat, invisible-banded targets, so a
- * ring only wins when it is nearer than the part, or the part is the selected one the
- * rings belong to — a neighbouring part in front of a band stays draggable.
+ * ring only wins when it is nearer than the part — whichever part that is. A press on the
+ * selected part's own face drags it (stand a panel up, then carry it off); a band in front
+ * of it still turns it.
  */
-export function resolveHit(ringHit, partHit, selectedPart) {
-  if (ringHit && (!partHit || partHit.part === selectedPart || ringHit.distance <= partHit.distance)) {
+export function resolveHit(ringHit, partHit) {
+  if (ringHit && (!partHit || ringHit.distance <= partHit.distance)) {
     return { kind: 'ring', ...ringHit };
   }
   return partHit ? { kind: 'part', ...partHit } : null;

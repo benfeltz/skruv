@@ -194,21 +194,25 @@ describe('resolveHit', () => {
   const ring = { axis: 'x', distance: 2 };
 
   it('gives a press on a neighbouring part in front of a ring band to the part', () => {
-    expect(resolveHit(ring, { part: neighbour, distance: 1.5 }, selected)).toEqual({ kind: 'part', part: neighbour, distance: 1.5 });
+    expect(resolveHit(ring, { part: neighbour, distance: 1.5 })).toEqual({ kind: 'part', part: neighbour, distance: 1.5 });
   });
 
   it('gives the ring a press where it is nearer than the part behind it', () => {
-    expect(resolveHit(ring, { part: neighbour, distance: 3 }, selected)).toEqual({ kind: 'ring', ...ring });
+    expect(resolveHit(ring, { part: neighbour, distance: 3 })).toEqual({ kind: 'ring', ...ring });
   });
 
-  it('gives the ring a press on the selected part itself, whatever the distance', () => {
-    expect(resolveHit(ring, { part: selected, distance: 1 }, selected)).toEqual({ kind: 'ring', ...ring });
+  it('gives a press on the selected part itself to the part when its face is nearer than the band', () => {
+    expect(resolveHit(ring, { part: selected, distance: 1 })).toEqual({ kind: 'part', part: selected, distance: 1 });
+  });
+
+  it('still gives the ring a band in front of the selected part', () => {
+    expect(resolveHit(ring, { part: selected, distance: 2.5 })).toEqual({ kind: 'ring', ...ring });
   });
 
   it('falls back to whichever was hit, or null for empty space', () => {
-    expect(resolveHit(ring, null, selected)).toEqual({ kind: 'ring', ...ring });
-    expect(resolveHit(null, { part: neighbour, distance: 1 }, null)).toMatchObject({ kind: 'part', part: neighbour });
-    expect(resolveHit(null, null, null)).toBeNull();
+    expect(resolveHit(ring, null)).toEqual({ kind: 'ring', ...ring });
+    expect(resolveHit(null, { part: neighbour, distance: 1 })).toMatchObject({ kind: 'part', part: neighbour });
+    expect(resolveHit(null, null)).toBeNull();
   });
 });
 

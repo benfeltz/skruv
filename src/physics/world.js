@@ -37,7 +37,8 @@ function addRoomColliders(world) {
 
 /**
  * The only module that imports Rapier. Resolves once the WASM is initialised, with the
- * static room in place. `register` glues a mesh to a new dynamic cuboid body; `step`
+ * static room in place. `register` glues a mesh to a new dynamic body of one or more
+ * cuboids; `step`
  * advances the simulation by whole fixed steps and copies body poses onto their meshes.
  * `grab`/`move`/`release` hand a registered body between the simulation and direct
  * control (part manipulation). `join`/`unjoin` add and remove the joints fastener state
@@ -54,7 +55,13 @@ export async function createPhysicsWorld() {
   const accumulator = createAccumulator(PHYSICS.timestep, PHYSICS.maxStepsPerFrame);
   const bodies = [];
 
-  function register(mesh, { halfExtents, mass, position, rotation }) {
+  /**
+   * Glues `mesh` to a new dynamic body at `position`/`rotation`. Its shape is one cuboid
+   * (`halfExtents`), or several glued rigid (`colliders: [{ halfExtents, offset }]`, offsets
+   * in the body frame), the mass shared between them by volume. `friction` overrides
+   * PHYSICS.friction for this body, and survives `retune`.
+   */
+  function register(mesh, { halfExtents, colliders = [{ halfExtents, offset: [0, 0, 0] }], mass, friction, position, rotation }) {
     const body = world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(...position)
@@ -64,28 +71,22 @@ export async function createPhysicsWorld() {
         // Hardware is millimetres thin; CCD keeps a fast pin from tunnelling the floor.
         .setCcdEnabled(true),
     );
-    world.createCollider(
-      RAPIER.ColliderDesc.cuboid(...halfExtents)
-        .setMass(Math.max(mass, PHYSICS.minBodyMass))
-        .setFriction(PHYSICS.friction)
-        .setRestitution(PHYSICS.restitution),
-      body,
-    );
+    const volumes = colliders.map(({ halfExtents: [x, y, z] }) => x * y * z);
+    const volume = volumes.reduce((sum, v) => sum + v, 0);
+    colliders.forEach(({ halfExtents: half, offset }, i) => {
+      world.createCollider(
+        RAPIER.ColliderDesc.cuboid(...half)
+          .setTranslation(...offset)
+          .setMass((Math.max(mass, PHYSICS.minBodyMass) * volumes[i]) / volume)
+          .setFriction(friction ?? PHYSICS.friction)
+          .setRestitution(PHYSICS.restitution),
+        body,
+      );
+    });
     mesh.position.set(...position);
     mesh.quaternion.set(...rotation);
-    bodies.push({ body, mesh });
+    bodies.push({ body, mesh, friction });
     return body;
-  }
-
-  /** A fixed slab — the flatpack's cardboard — at `position`/`rotation`. */
-  function addStatic({ halfExtents, position, rotation }) {
-    world.createCollider(
-      RAPIER.ColliderDesc.cuboid(...halfExtents)
-        .setTranslation(...position)
-        .setRotation(toRotation(rotation))
-        .setFriction(PHYSICS.friction)
-        .setRestitution(PHYSICS.restitution),
-    );
   }
 
   function step(delta) {
@@ -182,15 +183,17 @@ export async function createPhysicsWorld() {
 
   /**
    * Re-applies the live-tunable values made into bodies, colliders and joints when they
-   * were created: PHYSICS damping and friction, FASTENER play. Play joints wake, so a
+   * were created: PHYSICS damping and friction (a body's own friction stays), FASTENER play. Play joints wake, so a
    * carcass re-slumps to a changed limit at once. Additive — creation is unchanged.
    */
   function retune() {
-    for (const { body } of bodies) {
+    world.forEachCollider((collider) => collider.setFriction(PHYSICS.friction));
+    for (const { body, friction } of bodies) {
       body.setLinearDamping(PHYSICS.linearDamping);
       body.setAngularDamping(PHYSICS.angularDamping);
+      if (friction === undefined) continue;
+      for (let i = 0; i < body.numColliders(); i++) body.collider(i).setFriction(friction);
     }
-    world.forEachCollider((collider) => collider.setFriction(PHYSICS.friction));
     for (const [joint, { mode }] of joints) {
       if (mode !== 'play') continue;
       setPlay(joint);
@@ -215,5 +218,5 @@ export async function createPhysicsWorld() {
     world.removeImpulseJoint(joint, true);
   }
 
-  return { register, addStatic, step, grab, move, release, place, join, unjoin, retune };
+  return { register, step, grab, move, release, place, join, unjoin, retune };
 }

@@ -11,7 +11,7 @@
 // never a JS object path — and units are the schema's, in the engine's own units; a key
 // once published is renamed only with a profile format bump.
 
-import { FASTENER, GESTURE, HAPTICS, PHYSICS, RENDER, SNAP, TUNE } from '../constants.js';
+import { CAMERA, FASTENER, GESTURE, HAPTICS, PHYSICS, RENDER, SNAP, TUNE } from '../constants.js';
 
 /** Bumped whenever a key is renamed or its unit changes, so old profiles stay readable. */
 export const PROFILE_FORMAT = 1;
@@ -87,6 +87,10 @@ export const LIVE_KNOBS = Object.freeze({
   'haptics.lockMs': {
     object: HAPTICS, prop: 'lockMs', min: 0, max: 80, step: 1, unit: 'ms', group: 'haptics',
     desc: 'Each tick of the double vibration when a cam lock locks (Android; 0: off)',
+  },
+  'camera.mobileStartScale': {
+    object: CAMERA, prop: 'mobileStartScale', min: 1, max: 1.75, step: 0.05, unit: 'x', group: 'camera',
+    desc: 'How much further out a phone starts than the desktop view (re-frames on change)',
   },
 });
 
