@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    // The whole contract: strict checking, Vite-style resolution, no output (Vite builds, tsc only checks).
+    "strict": true,
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    // target matches Vite's build output; lib is esnext because Rapier's and Rolldown's .d.ts name Symbol.dispose.
+    "target": "es2022",
+    "lib": ["esnext", "dom", "dom.iterable"],
+    // Migration only: lets the untouched .js tree resolve while it is renamed in batches; Step 6 removes it.
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": ["src", "test", "tools/validate"]
+}
