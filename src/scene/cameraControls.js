@@ -76,6 +76,12 @@ export function createCameraControls(camera, domElement) {
     get enabled() {
       return controls.enabled;
     },
+    /** Puts the camera at `position` looking at `target` — a re-frame, e.g. a retuned start. */
+    frame({ position, target }) {
+      free.set(...position);
+      controls.target.set(...target);
+      controls.update();
+    },
     dispose() {
       controls.dispose();
     },

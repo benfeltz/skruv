@@ -45,7 +45,7 @@ events.emit(sessionEvent('start'));
 // Backgrounded and back: a session that ends hidden is an abandon.
 document.addEventListener('visibilitychange', () => events.emit(sessionEvent(document.visibilityState)));
 
-const { renderer, scene, camera } = createScene(document.getElementById('app'));
+const { renderer, scene, camera, startPose } = createScene(document.getElementById('app'));
 scene.add(createRoom());
 
 const cameraControls = createCameraControls(camera, renderer.domElement);
@@ -59,6 +59,7 @@ tunables.subscribe((key, value) => {
   const { group } = LIVE_KNOBS[key];
   if (group === 'physics' || group === 'joint') physics.retune();
   if (key === 'render.maxPixelRatio') renderer.setPixelRatio(clampPixelRatio(window.devicePixelRatio, RENDER.maxPixelRatio));
+  if (key === 'camera.mobileStartScale') cameraControls.frame(startPose());
 });
 
 // The game opens on the closed flatpack: every part packed flat inside, settling at once

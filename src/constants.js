@@ -119,6 +119,10 @@ export const CAMERA = {
   far: 100,
   startPosition: [2, 1.8, 2.4],
   startTarget: [0, 0.6, 0],
+  // A phone (coarse pointer) starts this many times further from startTarget along the
+  // same view, so a cold load frames the room without pinching out first. Dialed on
+  // device through ?tune (camera.mobileStartScale) before freezing.
+  mobileStartScale: 1.4,
 };
 
 // Orbit limits (src/scene/cameraLimits.js, applied by src/scene/cameraControls.js). The

@@ -8,6 +8,11 @@
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
+/** `position` pulled back from `target` along the same view, `scale` times as far. */
+export function startPosition(position, target, scale) {
+  return position.map((v, i) => target[i] + (v - target[i]) * scale);
+}
+
 /** The orbit target, held over the floor and inside the walls. */
 export function clampTarget([x, y, z], room, limits) {
   const reachX = room.width / 2 - limits.targetMargin;
