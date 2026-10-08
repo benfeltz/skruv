@@ -117,9 +117,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const picked = preferHit(partHit, proxyHits(), PICK);
     const handle = sprue?.hitTest(raycaster) ?? null;
     if (handle && sprue.selected && [ring, picked].every((hit) => !hit || handle.distance <= hit.distance)) {
-      return resolveHit(null, { part: sprue.selected, ...handle }, rings?.selected);
+      return resolveHit(null, { part: sprue.selected, ...handle });
     }
-    return resolveHit(ring, picked, rings?.selected);
+    return resolveHit(ring, picked);
   }
 
   // The nearest proxy hit per small part, with how far the ray passes from the real part
