@@ -14,7 +14,7 @@ import { ASSEMBLED, MANIFEST, MANUAL, PACKING, PART_TYPES, resolveConnector, SPA
 
 const root = new URL('..', import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
-const cli = fileURLToPath(new URL('tools/validate/index.js', root));
+const cli = fileURLToPath(new URL('tools/validate/index.ts', root));
 const JOHNNY = JSON.parse(read('items/johnny/flatpack.json'));
 
 describe('the validator CLI on broken packs', () => {
@@ -28,7 +28,7 @@ describe('the validator CLI on broken packs', () => {
     writeFileSync(join(folder, 'flatpack.json'), JSON.stringify(pack));
     return folder;
   };
-  const run = (...targets) => spawnSync(process.execPath, [cli, ...targets], { encoding: 'utf8' });
+  const run = (...targets) => spawnSync(process.execPath, ['--import', 'tsx', cli, ...targets], { encoding: 'utf8' });
 
   it('fails a schema-invalid pack on the schema layer, before any geometry', () => {
     const result = run(packAt('format2', (p) => (p.format = 2)));
@@ -65,7 +65,7 @@ describe('CI runs the validator', () => {
 
   it('on every pull request, before the tests and the build', () => {
     expect(ci).toMatch(/on:\s*\n\s*pull_request:/);
-    const [install, validate, tests, build] = order(ci, 'npm ci --prefix tools/validate', 'node tools/validate/index.js items/johnny', 'npx vitest run', 'npm run build');
+    const [install, validate, tests, build] = order(ci, 'npm ci --prefix tools/validate', 'npx tsx tools/validate/index.ts items/johnny', 'npx vitest run', 'npm run build');
     expect(install).toBeGreaterThan(-1);
     expect(install).toBeLessThan(validate);
     expect(validate).toBeLessThan(tests);
@@ -73,7 +73,7 @@ describe('CI runs the validator', () => {
   });
 
   it('before every deploy, ahead of the tests', () => {
-    const [install, validate, tests] = order(deploy, 'npm ci --prefix tools/validate', 'node tools/validate/index.js items/johnny', 'npx vitest run');
+    const [install, validate, tests] = order(deploy, 'npm ci --prefix tools/validate', 'npx tsx tools/validate/index.ts items/johnny', 'npx vitest run');
     expect(install).toBeGreaterThan(-1);
     expect(install).toBeLessThan(validate);
     expect(validate).toBeLessThan(tests);

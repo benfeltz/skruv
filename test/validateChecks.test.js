@@ -68,15 +68,15 @@ describe('checkPack on JOHNNY', () => {
 });
 
 describe('the validator CLI', () => {
-  const cli = fileURLToPath(new URL('../tools/validate/index.js', import.meta.url));
+  const cli = fileURLToPath(new URL('../tools/validate/index.ts', import.meta.url));
   const item = fileURLToPath(new URL('../items/johnny', import.meta.url));
 
   it('passes items/johnny', () => {
-    expect(execFileSync(process.execPath, [cli, item], { encoding: 'utf8' })).toMatch(/^ok /);
+    expect(execFileSync(process.execPath, ['--import', 'tsx', cli, item], { encoding: 'utf8' })).toMatch(/^ok /);
   });
 
   it('reports a path that does not exist and still checks the targets after it', () => {
-    const run = spawnSync(process.execPath, [cli, `${item}-typo`, item], { encoding: 'utf8' });
+    const run = spawnSync(process.execPath, ['--import', 'tsx', cli, `${item}-typo`, item], { encoding: 'utf8' });
     expect(run.status).toBe(1);
     expect(run.stderr).toMatch(/^FAIL .*johnny-typo/m);
     expect(run.stderr).toMatch(/\[json\]/);

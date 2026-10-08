@@ -5,10 +5,10 @@
   "description": "Validates a Flatpack item (format 1): JSON Schema, then the geometry checks the schema cannot express",
   "type": "module",
   "bin": {
-    "skruv-flatpack-validate": "./index.js"
+    "skruv-flatpack-validate": "./index.ts"
   },
   "scripts": {
-    "start": "node index.js"
+    "start": "tsx index.ts"
   },
   "engines": {
     "node": ">=22"

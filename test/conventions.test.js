@@ -272,7 +272,7 @@ describe('agent bridge (1.6)', () => {
 
 describe('Flatpack pack code (1.7)', () => {
   const lib = fileURLToPath(new URL('../tools/validate/lib', import.meta.url));
-  const modules = readdirSync(lib).filter((name) => name.endsWith('.js'));
+  const modules = readdirSync(lib).filter((name) => name.endsWith('.ts'));
 
   it('is loaded by the game in exactly one place, src/game/item.js', () => {
     const sources = readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true }).filter((p) => p.endsWith('.js'));

@@ -23,8 +23,11 @@ export const CONNECTOR = Object.freeze({
   SCREWDRIVER_TIP: 'screwdriverTip',
 });
 
+/** A connector type the format knows (the schema's `connectorType`). */
+export type ConnectorType = (typeof CONNECTOR)[keyof typeof CONNECTOR];
+
 /** Fastener end → the hole it goes in. Matching is symmetric; see `areCompatible`. */
-export const COMPATIBLE = Object.freeze({
+export const COMPATIBLE: Readonly<Partial<Record<ConnectorType, ConnectorType>>> = Object.freeze({
   [CONNECTOR.DOWEL_END]: CONNECTOR.DOWEL_HOLE,
   [CONNECTOR.BOLT_THREAD]: CONNECTOR.CAM_BOLT_HOLE,
   [CONNECTOR.CAM_LOCK_BODY]: CONNECTOR.CAM_LOCK_RECESS,
@@ -34,10 +37,10 @@ export const COMPATIBLE = Object.freeze({
   [CONNECTOR.SCREWDRIVER_TIP]: CONNECTOR.CAM_SLOT,
 });
 
-export const areCompatible = (a, b) => COMPATIBLE[a] === b || COMPATIBLE[b] === a;
+export const areCompatible = (a: ConnectorType, b: ConnectorType) => COMPATIBLE[a] === b || COMPATIBLE[b] === a;
 
 /** True for a fastener-end connector type (the side of a pair that goes into a hole). */
-export const isFastenerEnd = (type) => type in COMPATIBLE;
+export const isFastenerEnd = (type: ConnectorType) => type in COMPATIBLE;
 
 /** The fastener machines — one per seated pair, named by the engine that runs them. */
 export const KIND = Object.freeze({
@@ -50,8 +53,11 @@ export const KIND = Object.freeze({
   TOOL: 'tool',
 });
 
+/** A fastener machine the format knows (the schema's `fastenerKind`). */
+export type FastenerKind = (typeof KIND)[keyof typeof KIND];
+
 // Keyed by the fastener-end side of a pair (COMPATIBLE's keys).
-const KIND_FOR_END = Object.freeze({
+const KIND_FOR_END: Readonly<Partial<Record<ConnectorType, FastenerKind>>> = Object.freeze({
   [CONNECTOR.DOWEL_END]: KIND.DOWEL,
   [CONNECTOR.PIN_TIP]: KIND.PIN,
   [CONNECTOR.BACK_FITTING_TIP]: KIND.FITTING,
@@ -62,7 +68,7 @@ const KIND_FOR_END = Object.freeze({
 });
 
 /** The fastener kind for a pair whose fastener end has connector type `endType`, or null. */
-export const kindOf = (endType) => KIND_FOR_END[endType] ?? null;
+export const kindOf = (endType: ConnectorType) => KIND_FOR_END[endType] ?? null;
 
 /**
  * The geometric contract every engine honours, in metres. A pack's assembled poses are
@@ -74,7 +80,7 @@ export const kindOf = (endType) => KIND_FOR_END[endType] ?? null;
  *   mateTolerance — how exactly a derived pair must then sit (the validator's coincidence rule)
  */
 export const CONTRACT = Object.freeze({
-  sinkDepth: Object.freeze({ dowel: 0.015, pin: 0.008, fitting: 0.012, bolt: 0.011, cam: 0.012 }),
+  sinkDepth: Object.freeze<Partial<Record<FastenerKind, number>>>({ dowel: 0.015, pin: 0.008, fitting: 0.012, bolt: 0.011, cam: 0.012 }),
   captureRadius: 0.015,
   mateReach: 0.005,
   mateTolerance: 1e-6,
