@@ -89,6 +89,32 @@ export function boxPlacement(box = PACKED_BOX) {
   return { position: box.position, rotation: [0, Math.sin(half), 0, Math.cos(half)] };
 }
 
+/**
+ * The box base as one body: its five cardboard slabs (bottom, two sides, two ends) as
+ * `{ size, offset }` in the body's frame, which sits at the middle of the box's height —
+ * the centre the router and the gizmo assume every part turns about.
+ */
+export function boxSlabs(box = PACKED_BOX) {
+  const [width, height, length] = box.inner;
+  const { wall, floor } = box;
+  const outerW = width + 2 * wall;
+  const centre = (floor + height) / 2;
+  return [
+    { size: [outerW, floor, length + 2 * wall], at: [0, floor / 2, 0] },
+    { size: [wall, height, length], at: [-(width + wall) / 2, floor + height / 2, 0] },
+    { size: [wall, height, length], at: [(width + wall) / 2, floor + height / 2, 0] },
+    { size: [outerW, height, wall], at: [0, floor + height / 2, -(length + wall) / 2] },
+    { size: [outerW, height, wall], at: [0, floor + height / 2, (length + wall) / 2] },
+  ].map(({ size, at: [x, y, z] }) => ({ size, offset: [x, y - centre, z] }));
+}
+
+/** The box base's body pose standing where the room puts the box. */
+export function baseRest(box = PACKED_BOX) {
+  const local = { position: [0, (box.floor + box.inner[1]) / 2, 0], rotation: IDENTITY };
+  const [pose] = placeLayout([local], boxPlacement(box));
+  return { position: pose.position, rotation: pose.rotation };
+}
+
 /** The lid's pose closed on the walls' top edges, in the room. */
 export function lidRest(box = PACKED_BOX) {
   const local = { position: [0, box.floor + box.inner[1] + box.lidThickness / 2, 0], rotation: IDENTITY };

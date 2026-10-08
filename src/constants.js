@@ -155,6 +155,10 @@ export const BOX = {
   // On the floor in front of the start view, turned so its length runs across it.
   position: [0, 0, 0.6],
   yaw: Math.PI / 2,
+  // The box is a part the player can drag: heavy and grippy, so a panel slid out over a
+  // wall scrapes past it rather than skating it across the floor (kg; Rapier friction).
+  mass: 25,
+  friction: 1,
 };
 
 // The display JOHNNY (src/scene/displayShelf.js): a second, already-built shelf standing

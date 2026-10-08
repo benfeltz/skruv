@@ -7,7 +7,7 @@ import { createTunables, LIVE_KNOBS } from './game/tunables.js';
 import { PART_TYPES } from './game/item.js';
 import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
-import { createPackedWorldLayout, lidRest, respawnSpots } from './game/boxLayout.js';
+import { baseRest, createPackedWorldLayout, lidRest, respawnSpots } from './game/boxLayout.js';
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
@@ -64,10 +64,11 @@ tunables.subscribe((key, value) => {
 // The game opens on the closed flatpack: every part packed flat inside, settling at once
 // and resting until the lid comes off and a hand disturbs it.
 const flatpack = createFlatpack(physics);
-scene.add(flatpack.object, flatpack.lid.mesh);
+scene.add(flatpack.base.mesh, flatpack.lid.mesh);
 
-// One record per physical part — what gestures pick, drag and snap. The lid is one too.
-const parts = [flatpack.lid];
+// One record per physical part — what gestures pick, drag and snap. The box and its lid
+// are ones too.
+const parts = [flatpack.base, flatpack.lid];
 const packed = createPackedWorldLayout();
 for (const { id, type, position, rotation } of packed) {
   const part = PART_TYPES[type];
@@ -117,8 +118,8 @@ document.body.append(booklet.scrim, booklet.thumb, booklet.element);
 requestAnimationFrame(() => document.getElementById('pre-splash')?.remove());
 
 // While the booklet is open, the open page's parts glow — the player's own set only, never
-// the display shelf or the box lid.
-const playerParts = parts.filter((part) => !display.parts.includes(part) && part !== flatpack.lid);
+// the display shelf or the box and its lid.
+const playerParts = parts.filter((part) => !display.parts.includes(part) && part !== flatpack.base && part !== flatpack.lid);
 const highlight = createHighlight(playerParts);
 booklet.onChange(({ page, expanded }) => {
   const shown = bookletPages.pages[page];
@@ -136,8 +137,9 @@ scene.add(dropGuide.object);
 const sprue = createSprue();
 scene.add(sprue.object);
 
+// The box drags but never takes the gizmo: tapping it is tapping the room.
 function select(part) {
-  if (!part) {
+  if (!part || part === flatpack.base) {
     gizmo.hide();
     sprue.hide();
     return;
@@ -169,6 +171,7 @@ router.sync();
 // Repack: the player's parts come apart by the normal teardown and go back into the box
 // as packed, lid on. The display shelf is never touched.
 const packedPose = new Map([[flatpack.lid.id, lidRest()], ...packed.map((p) => [p.id, p])]);
+const baseHome = baseRest();
 function repack() {
   events.emit(resetEvent());
   router.unseatAll(playerParts.map((part) => part.id));
@@ -181,20 +184,23 @@ function repack() {
 document.body.append(createResetButton({ onReset: repack }).element);
 
 // Recovery: a loose player part that has left the room (through a slab, off a wall) is set
-// down again beside the box. Bonded parts go back only with a repack.
+// down again beside the box. Bonded parts go back only with a repack. The box itself goes
+// back where it stood at boot.
 let sweepIn = RESET.sweepInterval;
 function sweep(delta) {
   sweepIn -= delta;
   if (sweepIn > 0) return;
   sweepIn = RESET.sweepInterval;
-  const escaped = [...playerParts, flatpack.lid].filter(({ id, body }) => {
+  const escaped = [...playerParts, flatpack.lid, flatpack.base].filter(({ id, body }) => {
     const { x, y, z } = body.translation();
     return hasEscaped([x, y, z], ROOM, RESET.escapeMargin) && assembly.compoundOf(id).size === 1;
   });
   if (escaped.length === 0) return;
   events.emit(recoveryEvent(escaped.map(({ id }) => id)));
-  const spots = respawnSpots(escaped.map((part) => part.type));
-  escaped.forEach(({ body }, i) => physics.place(body, spots[i].position, spots[i].rotation));
+  const loose = escaped.filter((part) => part !== flatpack.base);
+  const spots = respawnSpots(loose.map((part) => part.type));
+  loose.forEach(({ body }, i) => physics.place(body, spots[i].position, spots[i].rotation));
+  if (loose.length < escaped.length) physics.place(flatpack.base.body, baseHome.position, baseHome.rotation);
 }
 
 // Android haptics, off the event stream: a tick on a seat, a double tick on a cam lock.

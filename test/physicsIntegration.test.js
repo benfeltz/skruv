@@ -3,7 +3,7 @@ import { placeLayout } from '../tools/validate/lib/geometry.js';
 import { DISPLAY, PHYSICS } from '../src/constants.js';
 import { createAssembly, seatHome } from '../src/game/assembly.js';
 import { ASSEMBLED, PART_TYPES } from '../src/game/item.js';
-import { createPackedWorldLayout, lidRest, respawnSpots } from '../src/game/boxLayout.js';
+import { baseRest, createPackedWorldLayout, lidRest, respawnSpots } from '../src/game/boxLayout.js';
 import { createPhysicsWorld } from '../src/physics/world.js';
 
 // Headless Rapier runs of the 1.5 start state — the real physics module, no renderer.
@@ -25,17 +25,24 @@ function spawn(physics, records) {
 }
 
 describe('the packed flatpack under physics', () => {
-  it('settles within 5 mm, keeps the lid on its walls, and falls asleep', async () => {
+  it('settles within 7 mm, keeps the lid on its walls, and falls asleep', async () => {
     const physics = await createPhysicsWorld();
     const { createFlatpack } = await import('./support/flatpackPhysics.js');
-    createFlatpack(physics);
+    const box = createFlatpack(physics);
+    const home = baseRest();
     const lid = lidRest();
     const lidBody = physics.register(stubMesh(), { halfExtents: PART_TYPES.boxLid.size.map((d) => d / 2), mass: PART_TYPES.boxLid.mass, ...lid });
     const parts = spawn(physics, createPackedWorldLayout());
     run(physics, 30);
-    for (const [id, { body, start }] of parts) expect(Math.abs(y(body) - start[1]), id).toBeLessThan(0.005);
+    // 7 mm: on the 1.5 static slabs the stack compressed ≤4.7 mm; against the box as a
+    // dynamic body (1.7.1) it measures ≤6.6 mm, the box itself sagging 0.3 mm and not sliding.
+    for (const [id, { body, start }] of parts) expect(Math.abs(y(body) - start[1]), id).toBeLessThan(0.007);
     expect(y(lidBody)).toBeCloseTo(lid.position[1], 3);
     for (const [id, { body }] of parts) expect(body.isSleeping(), id).toBe(true);
+    // 1.7.1: the box is a dynamic body now — the packed load must not creep it.
+    const t = box.translation();
+    expect(Math.hypot(t.x - home.position[0], t.y - home.position[1], t.z - home.position[2])).toBeLessThan(0.002);
+    expect(box.isSleeping()).toBe(true);
   });
 });
 

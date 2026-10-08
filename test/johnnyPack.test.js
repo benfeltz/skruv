@@ -83,7 +83,8 @@ describe('part types', () => {
   });
 
   it('gives every part type a stable, unique five-digit part number', () => {
-    const numbers = Object.values(PART_TYPES).map((p) => p.partNumber);
+    // The box base (1.7.1) is the packaging itself: the pack gives it no part number.
+    const numbers = Object.entries(PART_TYPES).filter(([type]) => type !== 'boxBase').map(([, p]) => p.partNumber);
     for (const n of numbers) expect(n).toMatch(/^\d{5}$/);
     expect(new Set(numbers).size).toBe(numbers.length);
     expect(PART_TYPES.dowel.partNumber).toBe('10106');

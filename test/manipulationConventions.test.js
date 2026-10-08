@@ -84,12 +84,20 @@ describe('physics boundary', () => {
     expect(world).toMatch(/function join\(bodyA, bodyB, \{ anchorA, anchorB, rotation \}, mode\)/);
     expect(world).toMatch(/function unjoin\(joint\)/);
     expect(world).toMatch(/function retune\(\)/);
-    expect(world).toMatch(/return \{ register, addStatic, step, grab, move, release, place, join, unjoin, retune \};/);
+    expect(world).toMatch(/return \{ register, step, grab, move, release, place, join, unjoin, retune \};/);
   });
 
-  it('adds static slabs for the flatpack (1.5) and nothing else', () => {
-    expect(world).toMatch(/function addStatic\(\{ halfExtents, position, rotation \}\)/);
-    expect(read('src/scene/flatpack.js')).toMatch(/physics\.addStatic\(/);
+  // 1.7.1: the box is a part — one dynamic multi-collider body — so the 1.5 static slabs went.
+  it('registers the flatpack box as one dynamic body, never static slabs', () => {
+    expect(world).not.toMatch(/addStatic/);
+    expect(read('src/scene/flatpack.js')).toMatch(/physics\.register\(box, \{\n\s+colliders:/);
+  });
+
+  it('lets the box drag but never takes it into the gizmo, the highlight or the repack', () => {
+    const main = read('src/main.js');
+    expect(main).toMatch(/const parts = \[flatpack\.base, flatpack\.lid\];/);
+    expect(main).toMatch(/part !== flatpack\.base && part !== flatpack\.lid\);/);
+    expect(main).toMatch(/if \(!part \|\| part === flatpack\.base\) \{/);
   });
 });
 

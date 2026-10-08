@@ -89,17 +89,6 @@ export async function createPhysicsWorld() {
     return body;
   }
 
-  /** A fixed slab — the flatpack's cardboard — at `position`/`rotation`. */
-  function addStatic({ halfExtents, position, rotation }) {
-    world.createCollider(
-      RAPIER.ColliderDesc.cuboid(...halfExtents)
-        .setTranslation(...position)
-        .setRotation(toRotation(rotation))
-        .setFriction(PHYSICS.friction)
-        .setRestitution(PHYSICS.restitution),
-    );
-  }
-
   function step(delta) {
     const steps = accumulator.consume(delta);
     if (steps === 0) return;
@@ -229,5 +218,5 @@ export async function createPhysicsWorld() {
     world.removeImpulseJoint(joint, true);
   }
 
-  return { register, addStatic, step, grab, move, release, place, join, unjoin, retune };
+  return { register, step, grab, move, release, place, join, unjoin, retune };
 }
