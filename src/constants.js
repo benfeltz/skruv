@@ -241,6 +241,12 @@ export const GIZMO = {
   tube: 0.025,
   hitTube: 0.12,
   opacity: 0.85,
+  // Direction arrowheads: a pair of cones on each ring, on opposite sides, pointing the way
+  // a counter-clockwise screen sweep turns the part. Fractions of ring radius; the angle
+  // is where the first cone sits around its ring, from the ring's local +X.
+  arrowLength: 0.14,
+  arrowRadius: 0.05,
+  arrowAngle: Math.PI / 4,
 };
 
 // Drop guide (src/scene/dropGuide.js): a line from a dragged part straight down to where it
