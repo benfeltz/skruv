@@ -7,6 +7,7 @@ import { createTunables, LIVE_KNOBS } from './game/tunables.js';
 import { PART_TYPES } from './game/item.js';
 import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
+import { fractionOf, heightAt } from './game/liftLine.js';
 import { baseRest, boxPlacement, boxPoseOf, createPackedWorldLayout, lidRest, respawnSpots } from './game/boxLayout.js';
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
@@ -19,6 +20,7 @@ import { createDropGuide } from './scene/dropGuide.js';
 import { createFpsGuard } from './scene/fpsGuard.js';
 import { createFlatpack } from './scene/flatpack.js';
 import { createGestureRouter } from './scene/gestureRouter.js';
+import { createLiftHold, liftRangeOf } from './scene/liftHold.js';
 import { createGizmo } from './scene/gizmo.js';
 import { createHighlight } from './scene/highlight.js';
 import { createLoop } from './scene/loop.js';
@@ -27,6 +29,7 @@ import { createScene } from './scene/scene.js';
 import { createSprue } from './scene/sprue.js';
 import { createBookletPages } from './scene/bookletPages.js';
 import { createBookletSheet } from './ui/booklet.js';
+import { createLiftLine } from './ui/liftLine.js';
 import type { PartId } from './game/assembly.js';
 import type { Part } from './game/partMesh.js';
 import type { Pose, Vec3 } from '../tools/validate/lib/geometry.js';
@@ -99,8 +102,10 @@ const typeById = new Map(parts.map(({ id, type }) => [id, type]));
 const assembly = createAssembly((id) => typeById.get(id)!);
 // The display shelf goes in fastened, through the graph's own events.
 display.fasten(assembly);
-// Manipulation goes through this seam so a fastened compound moves as one.
-const manipulation = createCompoundPhysics(physics, parts, assembly);
+// Manipulation goes through these seams: a fastened compound moves as one, and while a
+// finger is on the elevation line its part is held in mid-air at the line's height.
+const hold = createLiftHold(createCompoundPhysics(physics, parts, assembly));
+const manipulation = hold;
 
 // Rotation is free by default; the toggle turns 90° detents on.
 const snapRotate = createToggleButton({ label: 'Snap rotate' });
@@ -143,8 +148,10 @@ scene.add(dropGuide.object);
 const sprue = createSprue();
 scene.add(sprue.object);
 
-// The box drags but never takes the gizmo: tapping it is tapping the room.
+// The box drags but never takes the gizmo: tapping it is tapping the room. While the line
+// holds a part, taps never change the selection.
 function select(part: Part | null) {
+  if (hold.held) return;
   if (!part || part === flatpack.base) {
     gizmo.hide();
     sprue.hide();
@@ -185,6 +192,7 @@ function boxPose() {
 // as packed, lid on — wherever the box has been dragged to, stood upright there first if
 // it was left tilted. The display shelf is never touched.
 function repack() {
+  hold.end();
   events.emit(resetEvent());
   router.unseatAll(playerParts.map((part) => part.id));
   select(null);
@@ -198,6 +206,57 @@ function repack() {
   }
 }
 document.body.append(createResetButton({ onReset: repack }).element);
+
+// The elevation line's part: the one being moved (never cranked or pulled), else the
+// selected one — never the box, nor a part sitting in a seat.
+function liftablePart() {
+  if (hold.held) return hold.held;
+  const dragging = router.dragging;
+  const part = dragging ? (dragging.mode === 'move' || dragging.mode === 'compound' ? dragging.part : null) : gizmo.selected;
+  if (!part || part === flatpack.base) return null;
+  return dragging || assembly.jointsOf(part.id).length === 0 ? part : null;
+}
+
+const rangeOf = (part: Part) => liftRangeOf(part, part.mesh.quaternion.toArray());
+const heightOf = (part: Part) => (hold.held === part ? hold.height : part.mesh.position.y);
+
+// A finger on the line holds the part: a press on the line eases it toward the finger, one
+// on the knob drags it 1:1 from where it is. Letting go hands it back to gravity.
+let knobOffset: number | null = null;
+function liftTo(fraction: number) {
+  const part = hold.held;
+  if (!part) return;
+  if (knobOffset === null) hold.target(heightAt(fraction, rangeOf(part)));
+  else hold.jump(heightAt(fraction + knobOffset, rangeOf(part)));
+}
+const liftLine = createLiftLine({
+  onPress(fraction, onKnob) {
+    const part = liftablePart();
+    if (!part) return;
+    hold.begin(part);
+    knobOffset = onKnob ? fractionOf(heightOf(part), rangeOf(part)) - fraction : null;
+    liftTo(fraction);
+  },
+  onMove: liftTo,
+  onRelease: () => hold.end(),
+});
+document.body.append(liftLine.element);
+
+function showLiftLine() {
+  const part = liftablePart();
+  if (part) liftLine.show(fractionOf(heightOf(part), rangeOf(part)));
+  else liftLine.hide();
+}
+
+// The hold ends with the finger, and also when its part seats, on a repack, and whenever
+// the app is backgrounded or loses focus.
+events.on(EVENT.SEAT, ({ hardware, host }) => {
+  if (hold.held && (hardware === hold.held.id || host === hold.held.id)) hold.end();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') hold.end();
+});
+window.addEventListener('blur', () => hold.end());
 
 // Recovery: a loose player part that has left the room (through a slab, off a wall) is set
 // down again beside the box. Bonded parts go back only with a repack. The box itself goes
@@ -241,6 +300,8 @@ const fps = createFpsGuard();
 
 createLoop((delta, rawDelta) => {
   cameraControls.update(delta);
+  hold.update(delta);
+  showLiftLine();
   physics.step(delta);
   sweep(delta);
   router.update(delta);

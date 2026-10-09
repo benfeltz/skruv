@@ -97,6 +97,7 @@ interface Rings {
 
 /** What `createGestureRouter` returns — see there. */
 export interface GestureRouter {
+  readonly dragging: { part: Part; mode: Drag['mode'] } | null;
   update(delta?: number): void;
   sync(): void;
   unseatAll(ids: PartId[]): void;
@@ -880,6 +881,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   window.addEventListener('keyup', onKey);
 
   return {
+    // The drag in progress, read-only: which part, and how it is being moved.
+    get dragging() {
+      return drag && { part: drag.part, mode: drag.mode };
+    },
     update,
     // Brings the physics joints in line with the graph after a change made outside a
     // gesture — the display shelf seated pre-fastened — through the same reconcile a tap
