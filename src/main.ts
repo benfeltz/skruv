@@ -254,7 +254,18 @@ events.on(EVENT.FASTEN, ({ kind }) => {
 // Under sustained load the room renders every other frame; everything else runs every frame.
 const fps = createFpsGuard();
 
+// Engine spike 1.2: the metrics overlay over the assembled set — loaded only in spike mode.
+const metrics = spike
+  ? await import('./spike/metricsOverlay.js').then(({ createMetricsOverlay }) => {
+      const assembledIds = new Set(spike.assembled.map(({ id }) => id));
+      const overlay = createMetricsOverlay({ bodies: playerParts.filter(({ id }) => assembledIds.has(id)).map(({ body }) => body) });
+      document.body.append(overlay.element);
+      return overlay;
+    })
+  : null;
+
 createLoop((delta, rawDelta) => {
+  metrics?.frame(rawDelta);
   cameraControls.update(delta);
   physics.step(delta);
   sweep(delta);

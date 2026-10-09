@@ -437,4 +437,17 @@ export const SPIKE = {
   // behind the box, facing the start view.
   assembledPosition: [0, 0, -1.2] satisfies Vec3,
   assembledYaw: 0,
+  // The metrics overlay (src/spike/metricsOverlay.ts). Frame deltas land in fixed bins of
+  // this width (ms), up to this ceiling (a longer one counts in the last bin); a frame
+  // longer than `slowFrameMs` counts as a dropped-frame stall, as the shared schema asks.
+  histogramBinMs: 0.25,
+  histogramMaxMs: 1000,
+  slowFrameMs: 33,
+  // Drift and sleep are read off the bodies this often (s) — not every frame, since a
+  // Rapier pose read allocates — and the readout redrawn this often.
+  stabilitySampleSeconds: 0.1,
+  readoutSeconds: 0.5,
+  // metrics.json's identity fields and the memory tool (JS can't read memory in WKWebView).
+  name: 'capacitor',
+  memoryHow: 'Xcode memory gauge (Debug navigator), app run from Xcode on the device',
 };
