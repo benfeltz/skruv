@@ -37,7 +37,6 @@
     "perceptibleLag": null
   },
   "agentLoop": {
-    "metaTestRounds": null,
-    "stalls": null
+    "ports": []
   }
 }

@@ -116,7 +116,8 @@ export function createMetricsOverlay({ bodies }: { bodies: Body[] }) {
       appSize: { installedMb: null, webExportMb: null },
       editToPhone: { seconds: null, how: null },
       haptics: { grabToTickMs: round2(median(haptics)), perceptibleLag: null },
-      agentLoop: { metaTestRounds: null, stalls: null },
+      // One entry per port of a main change, recorded by the port's worker — never by the page.
+      agentLoop: { ports: [] },
     };
   }
 
