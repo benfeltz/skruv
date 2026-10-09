@@ -31,6 +31,12 @@ describe('seam order', () => {
   });
 });
 
+describe('which part the line shows for (review round 1)', () => {
+  it('takes a dragged part only in a plain move, never a compound, crank or pull', () => {
+    expect(body(main, 'liftablePart')).toMatch(/dragging \? \(dragging\.mode === 'move' \? dragging\.part : null\) : gizmo\.selected/);
+  });
+});
+
 describe('taps never change the selection while the line holds', () => {
   it('returns from select() first thing while holding', () => {
     expect(body(main, 'select')).toMatch(/^function select\(part: Part \| null\) \{\n\s*if \(hold\.held\) return;/);

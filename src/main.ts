@@ -208,12 +208,13 @@ function repack() {
 }
 document.body.append(createResetButton({ onReset: repack }).element);
 
-// The elevation line's part: the one being moved (never cranked or pulled), else the
-// selected one — never the box, nor a part sitting in a seat.
+// The elevation line's part: the one being moved (never cranked or pulled, nor a compound,
+// whose range is not one part's), else the selected one — never the box, nor a part
+// sitting in a seat.
 function liftablePart() {
   if (hold.held) return hold.held;
   const dragging = router.dragging;
-  const part = dragging ? (dragging.mode === 'move' || dragging.mode === 'compound' ? dragging.part : null) : gizmo.selected;
+  const part = dragging ? (dragging.mode === 'move' ? dragging.part : null) : gizmo.selected;
   if (!part || part === flatpack.base) return null;
   return dragging || assembly.jointsOf(part.id).length === 0 ? part : null;
 }
