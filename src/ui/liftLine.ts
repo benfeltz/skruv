@@ -84,11 +84,12 @@ export function createLiftLine({ onPress, onMove, onRelease }: LiftLineHandlers)
   let shown = 0;
   let pointerId: number | null = null;
 
-  // The line's place on screen, inside the safe area.
+  // The line's place on screen, its whole touch band inside the safe area at either edge.
   function place() {
     const { x, top, bottom, knobRadius, lineWidth, hitWidth } = LIFT_LINE;
     const style = element.style;
-    style.left = `max(${x * 100}vw, calc(env(safe-area-inset-left) + ${hitWidth / 2}px))`;
+    const half = hitWidth / 2;
+    style.left = `clamp(calc(env(safe-area-inset-left) + ${half}px), ${x * 100}vw, calc(100vw - env(safe-area-inset-right) - ${half}px))`;
     style.top = `max(${top * 100}vh, calc(env(safe-area-inset-top) + ${knobRadius}px))`;
     style.height = `${(bottom - top) * 100}vh`;
     style.width = `${hitWidth}px`;

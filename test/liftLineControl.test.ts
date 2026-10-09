@@ -127,6 +127,17 @@ describe('the elevation line control (1.8.1 Step 4)', () => {
     expect(element.hidden).toBe(true);
   });
 
+  // Review round 7: gesture.liftLineX runs 0 to 1, so both edges hold the whole touch band
+  // inside the safe area — the notch may be on either side in landscape.
+  it('keeps the line inside the safe area at both edges', () => {
+    const { line, element } = mount();
+    line.show(0);
+    const half = LIFT_LINE.hitWidth / 2;
+    expect(element.style.left).toBe(
+      `clamp(calc(env(safe-area-inset-left) + ${half}px), ${LIFT_LINE.x * 100}vw, calc(100vw - env(safe-area-inset-right) - ${half}px))`,
+    );
+  });
+
   it('turns off browser touch handling on the line', () => {
     mount();
     expect(head.children[0].textContent).toMatch(/\.lift-line \{[^}]*touch-action: none/);
