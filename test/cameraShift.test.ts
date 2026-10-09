@@ -38,13 +38,13 @@ class FakeCanvas extends FakeTarget {
   releasePointerCapture() {}
 }
 
-function dragOnEmptySpace(button: number, shiftKey: boolean) {
+function dragOnEmptySpace(button: number, shiftKey: boolean, other: 'ctrlKey' | 'metaKey' | null = null) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   const canvas = new FakeCanvas();
   const controls = createCameraControls(camera, canvas as unknown as HTMLElement); // a fake: listeners, style, rect
   const before = camera.getWorldDirection(new THREE.Vector3());
   const from = camera.position.clone();
-  const pointer = { pointerId: 1, pointerType: 'mouse', button, shiftKey, ctrlKey: false, metaKey: false, preventDefault() {} };
+  const pointer = { pointerId: 1, pointerType: 'mouse', button, shiftKey, ctrlKey: other === 'ctrlKey', metaKey: other === 'metaKey', preventDefault() {} };
   canvas.dispatch('pointerdown', { ...pointer, clientX: 400, clientY: 400 });
   for (let x = 410; x <= 500; x += 10) canvas.ownerDocument.dispatch('pointermove', { ...pointer, clientX: x, clientY: 400 });
   canvas.ownerDocument.dispatch('pointerup', { ...pointer, clientX: 500, clientY: 400 });
@@ -62,5 +62,14 @@ describe('Shift never changes what a mouse drag on empty space does to the camer
     const { turned, moved } = dragOnEmptySpace(2, shift);
     expect(turned).toBeLessThan(1e-6);
     expect(moved).toBeGreaterThan(0.01);
+  });
+
+  // Review round 6: Ctrl/Cmd swap orbit and pan, and Shift on top changes nothing.
+  it.each(['ctrlKey', 'metaKey'] as const)('a left drag with %s pans, with Shift or not', (other) => {
+    for (const shift of [false, true]) {
+      const { turned, moved } = dragOnEmptySpace(0, shift, other);
+      expect(turned).toBeLessThan(1e-6);
+      expect(moved).toBeGreaterThan(0.01);
+    }
   });
 });
