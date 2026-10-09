@@ -460,18 +460,23 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   // Straight up: the finger's ray meets the raised plane nearer the camera, so the grab
-  // offset is re-anchored there and the part keeps its x, z; the next finger move carries
-  // on from where the part is.
+  // offset is re-anchored there and the finger's x, z for the part stay put; the next
+  // finger move carries on from there. Re-anchored on where the finger puts the part, not
+  // where it is held — a seat assist's pull or a wall's clamp never sticks to the grab.
   function raiseDrag(height: number) {
-    drag!.planeY += height - drag!.height;
+    const planeY = drag!.planeY + height - drag!.height;
+    if (drag!.pointer) {
+      aim(drag!.pointer);
+      const origin = raycaster.ray.origin.toArray();
+      const direction = raycaster.ray.direction.toArray();
+      const before = intersectDragPlane(origin, direction, drag!.planeY);
+      const after = intersectDragPlane(origin, direction, planeY);
+      // Aimed above the horizon: keep the old offset; updateDrag holds the last pose.
+      if (before && after) drag!.offset = rebaseDragOffset([before[0] + drag!.offset[0], before[2] + drag!.offset[1]], after);
+    }
+    drag!.planeY = planeY;
     drag!.height = height;
-    if (!drag!.pointer) return;
-    aim(drag!.pointer);
-    const { origin, direction } = raycaster.ray;
-    const point = intersectDragPlane(origin.toArray(), direction.toArray(), drag!.planeY);
-    // Aimed above the horizon: keep the old offset; updateDrag holds the last pose.
-    if (point && drag!.held) drag!.offset = rebaseDragOffset([drag!.held.position[0], drag!.held.position[2]], point);
-    updateDrag(drag!.pointer);
+    if (drag!.pointer) updateDrag(drag!.pointer);
   }
 
   // A drag of the part the elevation line holds rides at the line's height.

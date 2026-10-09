@@ -132,8 +132,12 @@ describe('a drag of the held part rides at the line height (review round 1)', ()
   });
 
   it('rides at the line height and keeps it, straight up, after the line lets go', () => {
-    const { router, canvas, hold, dowel, moves, dragDowel } = harness();
-    const at = dragDowel();
+    const { router, canvas, hold, dowel, moves, dragDowel, offered } = harness();
+    const start = dragDowel();
+    // Off the seat first, so the part is exactly where the finger puts it.
+    const at = { clientX: start.clientX + 200, clientY: start.clientY };
+    canvas.fire('pointermove', at);
+    expect(offered()).toBeNull();
     const [x, , z] = moves.at(-1)!;
     hold.held = dowel;
     hold.height = 0.6;
@@ -167,6 +171,26 @@ describe('a drag of the held part rides at the line height (review round 1)', ()
     dragDowel();
     expect(offered()).toBe('panel');
     expect(targets).toEqual([]);
+  });
+
+  // Review round 3: the grab is re-anchored on where the finger puts the part, so seat
+  // assist's pull is never baked into it.
+  it('keeps the grab where the finger had it after assist and a hold change, once the finger moves off', () => {
+    const run = (assistFor: number) => {
+      const { router, canvas, hold, dowel, moves, dragDowel } = harness();
+      const at = dragDowel();
+      for (let i = 0; i < 10; i++) router.update(assistFor);
+      hold.held = dowel;
+      hold.height = 0.3;
+      router.update(assistFor);
+      canvas.fire('pointermove', { clientX: at.clientX + 200, clientY: at.clientY + 100 });
+      return moves.at(-1)!;
+    };
+    const unassisted = run(0);
+    const assisted = run(0.05);
+    expect(assisted[0]).toBeCloseTo(unassisted[0], 9);
+    expect(assisted[2]).toBeCloseTo(unassisted[2], 9);
+    expect(assisted[1]).toBeCloseTo(0.3, 9);
   });
 
   it('leaves a drag of any other part alone', () => {
