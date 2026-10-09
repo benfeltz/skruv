@@ -1,0 +1,158 @@
+import * as THREE from 'three';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createAssembly } from '../src/game/assembly.js';
+import { PART_TYPES } from '../src/game/item.js';
+import { createBus, EVENT } from '../src/game/events.js';
+import { createGestureRouter } from '../src/scene/gestureRouter.js';
+import type { StampedEvent } from '../src/game/events.js';
+import type { Part } from '../src/game/partMesh.js';
+import type { Body, PhysicsJoint } from '../src/physics/world.js';
+import type { GestureRouterOptions } from '../src/scene/gestureRouter.js';
+import type { Quat, Vec3 } from '../tools/validate/lib/geometry.js';
+
+// The real gesture router dragging the part the elevation line holds (1.8.1 review round 1):
+// the drag rides at the line's height, so a seat is offered only where the part really is,
+// and letting go of the line mid-drag leaves the part where the line had it. The router
+// reads the hold only through its `{ held, height }` view; this stands one in.
+
+const SIZE = 1000;
+type FakeListener = (event: object) => void;
+
+class FakeCanvas {
+  listeners = new Map<string, FakeListener>();
+  addEventListener(type: string, fn: FakeListener) {
+    this.listeners.set(type, fn);
+  }
+  removeEventListener(type: string) {
+    this.listeners.delete(type);
+  }
+  getBoundingClientRect() {
+    return { left: 0, top: 0, width: SIZE, height: SIZE };
+  }
+  setPointerCapture() {}
+  fire(type: string, init: object) {
+    this.listeners.get(type)?.({ type, pointerId: 1, button: 0, timeStamp: 0, ...init });
+  }
+}
+
+const quiet = { addEventListener() {}, removeEventListener() {} };
+beforeEach(() => {
+  vi.stubGlobal('window', quiet);
+  vi.stubGlobal('document', { ...quiet, visibilityState: 'visible' });
+});
+afterEach(() => vi.unstubAllGlobals());
+
+// A part whose body reports its mesh's pose; moves land on the mesh, as a step would.
+function makePart(id: string, type: string, position: Vec3, rotation: Quat = [0, 0, 0, 1]): Part {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...PART_TYPES[type].size));
+  mesh.position.set(...position);
+  mesh.quaternion.set(...rotation);
+  mesh.updateMatrixWorld(true);
+  const body = {
+    id,
+    translation: () => ({ x: mesh.position.x, y: mesh.position.y, z: mesh.position.z }),
+    rotation: () => ({ x: mesh.quaternion.x, y: mesh.quaternion.y, z: mesh.quaternion.z, w: mesh.quaternion.w }),
+  };
+  // A fake: a plain-material mesh and a body that only reports its pose.
+  return { id, type, mesh, body } as unknown as Part;
+}
+
+function harness() {
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
+  camera.position.set(0, 1.2, 0.8);
+  camera.lookAt(0, 0, 0);
+  camera.updateMatrixWorld(true);
+
+  // A side panel lying flat, its holes facing up; a loose dowel standing beside hole 3.
+  const panel = makePart('panel', 'sidePanel', [0, 0.008, 0], [0, 0, Math.SQRT1_2, Math.SQRT1_2]);
+  const dowel = makePart('dowel', 'dowel', [0.05, 0.031, -0.11]);
+  const parts = [panel, dowel];
+  const typeById = new Map(parts.map(({ id, type }) => [id, type]));
+  const assembly = createAssembly((id) => typeById.get(id)!);
+
+  const moves: Vec3[] = [];
+  const physics: GestureRouterOptions['physics'] = {
+    grab: () => {},
+    move: (body: Body, position: Vec3) => {
+      moves.push(position);
+      const { mesh } = parts.find((part) => part.body === body)!;
+      mesh.position.set(...position);
+      mesh.updateMatrixWorld(true);
+    },
+    release: () => {},
+    join: () => ({}) as PhysicsJoint, // a fake joint: the router only hands it back to unjoin
+    unjoin: () => {},
+  };
+  const offers: StampedEvent[] = [];
+  const events = createBus();
+  events.on(EVENT.SNAP_CANDIDATE, (event) => offers.push(event));
+
+  const hold: { held: Part | null; height: number } = { held: null, height: 0 };
+  const canvas = new FakeCanvas();
+  const router = createGestureRouter({
+    domElement: canvas as unknown as HTMLElement, // a fake: listeners and a bounding rect only
+    camera,
+    cameraControls: { enable() {}, disable() {} },
+    physics,
+    parts,
+    assembly,
+    events,
+    hold,
+  });
+  const screen = (point: Vec3) => {
+    const v = new THREE.Vector3(...point).project(camera);
+    return { clientX: ((v.x + 1) / 2) * SIZE, clientY: ((1 - v.y) / 2) * SIZE };
+  };
+  // Pressed on the dowel and dragged toward the hole, still held.
+  function dragDowel() {
+    const at = screen([0.05, 0.031, -0.11]);
+    canvas.fire('pointerdown', at);
+    for (let i = 1; i <= 4; i++) canvas.fire('pointermove', { clientX: at.clientX - i * 8, clientY: at.clientY });
+    return { clientX: at.clientX - 32, clientY: at.clientY };
+  }
+  const offered = () => offers.at(-1)?.target ?? null;
+  return { router, canvas, hold, dowel, moves, dragDowel, offered };
+}
+
+describe('a drag of the held part rides at the line height (review round 1)', () => {
+  it('offers the hole at the drag height without a hold — the fixture works', () => {
+    const { dragDowel, offered } = harness();
+    dragDowel();
+    expect(offered()).toBe('panel');
+  });
+
+  it('withdraws the offer once the line lifts the part well clear of the hole', () => {
+    const { router, hold, dowel, dragDowel, offered } = harness();
+    dragDowel();
+    hold.held = dowel;
+    hold.height = 0.6;
+    router.update(0);
+    expect(offered()).toBeNull();
+  });
+
+  it('rides at the line height and keeps it, straight up, after the line lets go', () => {
+    const { router, canvas, hold, dowel, moves, dragDowel } = harness();
+    const at = dragDowel();
+    const [x, , z] = moves.at(-1)!;
+    hold.held = dowel;
+    hold.height = 0.6;
+    router.update(0);
+    expect(moves.at(-1)![1]).toBeCloseTo(0.6, 9);
+    expect(moves.at(-1)![0]).toBeCloseTo(x, 9);
+    expect(moves.at(-1)![2]).toBeCloseTo(z, 9);
+    // The line finger lifts; the drag finger moves on.
+    hold.held = null;
+    canvas.fire('pointermove', { clientX: at.clientX + 10, clientY: at.clientY });
+    router.update(0);
+    expect(moves.at(-1)![1]).toBeCloseTo(0.6, 9);
+  });
+
+  it('leaves a drag of any other part alone', () => {
+    const { router, hold, moves, dragDowel } = harness();
+    dragDowel();
+    hold.held = makePart('other', 'dowel', [1, 0.015, 1]);
+    hold.height = 0.6;
+    router.update(0);
+    expect(moves.every(([, y]) => y < 0.1)).toBe(true);
+  });
+});

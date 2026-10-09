@@ -177,6 +177,7 @@ const router = createGestureRouter({
   sprue,
   dropGuide,
   events,
+  hold,
 });
 // The display shelf's physics joints, made by the same reconcile every tap and turn runs.
 router.sync();

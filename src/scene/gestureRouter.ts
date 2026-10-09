@@ -118,6 +118,7 @@ export interface GestureRouterOptions {
   sprue?: { selected: Part | null; hitTest(raycaster: THREE.Raycaster): HandleHit | null };
   dropGuide?: { show(from: Vec3, to: Vec3): void; hide(): void };
   events?: Pick<Bus, 'emit'>;
+  hold?: { readonly held: Part | null; readonly height: number };
 }
 
 // A hole marking on a part's mesh (src/game/partMesh.ts).
@@ -166,10 +167,14 @@ const PULL_AXIS_PROBE = 0.05;
  *   events — `{ emit(event) }` bus (src/game/events.ts): grabs, releases, seat offers,
  *            seats and fastenings are reported as they happen. Reporting only — nothing
  *            here reads it back.
+ *   hold   — `{ held, height }`, read-only (src/scene/liftHold.ts): while the elevation
+ *            line holds the part being dragged, the drag rides at the line's height, so
+ *            seats are offered where the part really is and letting go of the line leaves
+ *            the drag there.
  * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
  * eases a dragged part toward the seat on offer (seat assist) and fades the seat flash.
  */
-export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, events }: GestureRouterOptions) {
+export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, events, hold }: GestureRouterOptions) {
   const state = createGestureState<Press>();
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -447,12 +452,16 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     updateDrag(event);
   }
 
-  // The lift raises the part and its drag plane together. Straight up: the finger's ray
-  // meets the raised plane nearer the camera, so the grab offset is re-anchored there and
-  // the part keeps its x, z; the next finger move carries on from where the part is.
+  // The lift raises the part and its drag plane together.
   function liftDrag(dy: number, rate: number) {
     const cy = drag!.centre[1];
-    const height = clampLift(drag!.height + dy * rate + cy, drag!.halfHeight, ROOM, GESTURE.ceilingMargin) - cy;
+    raiseDrag(clampLift(drag!.height + dy * rate + cy, drag!.halfHeight, ROOM, GESTURE.ceilingMargin) - cy);
+  }
+
+  // Straight up: the finger's ray meets the raised plane nearer the camera, so the grab
+  // offset is re-anchored there and the part keeps its x, z; the next finger move carries
+  // on from where the part is.
+  function raiseDrag(height: number) {
     drag!.planeY += height - drag!.height;
     drag!.height = height;
     if (!drag!.pointer) return;
@@ -462,6 +471,12 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     // Aimed above the horizon: keep the old offset; updateDrag holds the last pose.
     if (point && drag!.held) drag!.offset = rebaseDragOffset([drag!.held.position[0], drag!.held.position[2]], point);
     updateDrag(drag!.pointer);
+  }
+
+  // A drag of the part the elevation line holds rides at the line's height.
+  function followHold() {
+    if (drag?.mode !== 'move' || !hold || hold.held !== drag.part || hold.height === drag.height) return;
+    raiseDrag(hold.height);
   }
 
   function updateDrag(event: ClientPoint) {
@@ -731,6 +746,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // --- per frame: fastener progress drawn on top of the simulated poses ---
 
   function update(delta = 0) {
+    followHold();
     assist(delta);
     fadeFlashes(delta);
     guideDrop();
