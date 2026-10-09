@@ -96,8 +96,9 @@ function harness() {
   const hold = {
     held: null as Part | null,
     height: 0,
-    target: (height: number) => targets.push(height),
-    jump: (height: number) => jumps.push((hold.height = height)),
+    goal: 0,
+    target: (height: number) => targets.push((hold.goal = height)),
+    jump: (height: number) => jumps.push((hold.goal = hold.height = height)),
   };
   const canvas = new FakeCanvas();
   const router = createGestureRouter({
@@ -243,5 +244,34 @@ describe('a drag of the held part rides at the line height (review round 1)', ()
     expect(jumps.length).toBeGreaterThan(0);
     expect(hold.height).toBeGreaterThan(0.35);
     expect(moves.at(-1)![1]).toBeCloseTo(hold.height, 9);
+  });
+
+  // Review round 6: under a Shift hold there is no line finger to win the height back.
+  it('puts the line back where it was once the seat is no longer on offer', () => {
+    const { canvas, hold, dowel, targets, dragDowel, offered } = harness();
+    hold.held = dowel;
+    hold.height = 0.061;
+    hold.goal = 0.5;
+    const at = dragDowel();
+    expect(offered()).toBe('panel');
+    expect(hold.goal).not.toBe(0.5);
+    canvas.fire('pointermove', { clientX: at.clientX + 200, clientY: at.clientY });
+    expect(offered()).toBeNull();
+    expect(targets).toHaveLength(2);
+    expect(hold.goal).toBe(0.5);
+  });
+
+  it('leaves the line where the finger moved it during the offer', () => {
+    const { canvas, hold, dowel, targets, dragDowel, offered } = harness();
+    hold.held = dowel;
+    hold.height = 0.061;
+    hold.goal = 0.5;
+    const at = dragDowel();
+    expect(offered()).toBe('panel');
+    hold.goal = 0.9; // the line finger moved
+    canvas.fire('pointermove', { clientX: at.clientX + 200, clientY: at.clientY });
+    expect(offered()).toBeNull();
+    expect(targets).toHaveLength(1);
+    expect(hold.goal).toBe(0.9);
   });
 });

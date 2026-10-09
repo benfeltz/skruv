@@ -16,6 +16,7 @@ export interface LiftHold {
   update(delta: number): void;
   readonly held: Part | null;
   readonly height: number;
+  readonly goal: number;
 }
 
 /** What keeps a held part up: a finger on the line, or Shift held down (the desktop's hold). */
@@ -148,6 +149,10 @@ export function createLiftHold(physics: PhysicsWorld): PhysicsWorld & LiftHold {
     },
     get height() {
       return hold?.height ?? 0;
+    },
+    // The height the hold is easing toward.
+    get goal() {
+      return hold?.goal ?? 0;
     },
   };
 }

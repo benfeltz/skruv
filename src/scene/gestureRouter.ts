@@ -78,6 +78,7 @@ interface Drag {
   held: Pose | null;
   snapped: (Pose & { snap: RouterSnap }) | null;
   offer: string | null;
+  retarget: { from: number; to: number } | null;
   pointer: ClientPoint | null;
   start: ScreenPoint;
   joints: { id: number; axis: ScreenPoint }[];
@@ -118,7 +119,7 @@ export interface GestureRouterOptions {
   sprue?: { selected: Part | null; hitTest(raycaster: THREE.Raycaster): HandleHit | null };
   dropGuide?: { show(from: Vec3, to: Vec3): void; hide(): void };
   events?: Pick<Bus, 'emit'>;
-  hold?: { readonly held: Part | null; readonly height: number; target(height: number): void; jump(height: number): void };
+  hold?: { readonly held: Part | null; readonly height: number; readonly goal: number; target(height: number): void; jump(height: number): void };
 }
 
 // A hole marking on a part's mesh (src/game/partMesh.ts).
@@ -167,13 +168,13 @@ const PULL_AXIS_PROBE = 0.05;
  *   events — `{ emit(event) }` bus (src/game/events.ts): grabs, releases, seat offers,
  *            seats and fastenings are reported as they happen. Reporting only — nothing
  *            here reads it back.
- *   hold   — `{ held, height, target(height), jump(height) }` (src/scene/liftHold.ts):
+ *   hold   — `{ held, height, goal, target(height), jump(height) }` (src/scene/liftHold.ts):
  *            while the elevation line holds the part being dragged, the drag rides at the
  *            line's height, so seats are offered where the part really is and letting go
  *            of the line leaves the drag there; a seat newly on offer eases the line to its
- *            height, as seat assist eases everything else, and a lift (second finger,
- *            Shift, wheel) moves the line with it. A part the line holds is never a seat
- *            for another: it drops when the line lets go.
+ *            height, as seat assist eases everything else, and back once the offer is
+ *            gone; a lift (second finger, Shift, wheel) moves the line with it. A part the
+ *            line holds is never a seat for another: it drops when the line lets go.
  * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
  * eases a dragged part toward the seat on offer (seat assist) and fades the seat flash.
  */
@@ -450,6 +451,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       snapped: null,
       // The seat last reported on offer (telemetry), so only a change is reported.
       offer: null,
+      // The line's goal before a seat offer moved it (from), and where the offer put it (to).
+      retarget: null,
       pointer: null,
     } as Drag;
     physics.grab(body);
@@ -528,9 +531,20 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (offer === drag!.offer) return;
     drag!.offer = offer;
     events?.emit(snapCandidateEvent(drag!.part.id, snap));
+    if (hold?.held !== drag!.part) return;
     // The line sets the held part's height, so seat assist reaches the seat's through it —
-    // once per offer, so moving the line finger afterwards still wins.
-    if (drag!.snapped && hold?.held === drag!.part) hold.target(drag!.snapped.position[1]);
+    // once per offer, so moving the line finger afterwards still wins. When the offer goes,
+    // so does its pull: the goal goes back, unless the line has moved it since.
+    const back = drag!.retarget;
+    const moved = !back || hold.goal !== back.to;
+    if (drag!.snapped) {
+      const from = moved ? hold.goal : back.from;
+      hold.target(drag!.snapped.position[1]);
+      drag!.retarget = { from, to: hold.goal };
+    } else if (back) {
+      drag!.retarget = null;
+      if (!moved) hold.target(back.from);
+    }
   }
 
   // Seat assist: only while a seat is on offer, the held part glides toward it.
