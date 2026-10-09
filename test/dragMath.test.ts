@@ -10,6 +10,7 @@ import {
   intersectDragPlane,
   pullAlong,
   quantizeAngle,
+  rebaseDragOffset,
   rotatedHalfExtents,
 } from '../src/game/dragMath.js';
 import type { Pose, Quat, Vec3 } from '../tools/validate/lib/geometry.js';
@@ -164,6 +165,16 @@ describe('clampLift', () => {
   });
 });
 
+describe('rebaseDragOffset', () => {
+  it('maps the new intersection back onto the part', () => {
+    expect(rebaseDragOffset([1.25, -0.5], [1, 0.4, -0.25])).toEqual([0.25, -0.25]);
+  });
+
+  it('is zero when the finger is over the part', () => {
+    expect(rebaseDragOffset([0.3, 0.7], [0.3, 1, 0.7])).toEqual([0, 0]);
+  });
+});
+
 describe('pullAlong', () => {
   it('measures travel along the on-screen axis, whatever its length', () => {
     expect(pullAlong([10, 10], [40, 50], [3, 4])).toBeCloseTo(50);
@@ -242,5 +253,46 @@ describe('hasEscaped (1.5 recovery sweep)', () => {
     expect(hasEscaped([5.06, 1, 0], room, margin)).toBe(true);
     expect(hasEscaped([0, 1, -5.06], room, margin)).toBe(true);
     expect(hasEscaped([0, -0.04, 5.04], room, margin)).toBe(false);
+  });
+});
+
+// The router's lift, headless: the finger's ray through one fixed screen point, a drag
+// plane raised by the lift, and the part placed where the ray meets the plane plus the
+// grab offset — liftDrag then updateDrag (src/scene/gestureRouter.ts).
+describe('lifting goes straight up (1.8.1 Step 1)', () => {
+  // An elevated camera looking down at the floor at an angle, and the finger's ray
+  // through one screen point.
+  const camera: Vec3 = [0, 1.6, 2.4];
+  const ray: Vec3 = [0.1, -0.55, -0.83];
+  const grabY = 0.05;
+  const grab = intersectDragPlane(camera, ray, grabY)!;
+  // Grabbed 3 cm off the part's centre.
+  const part: Vec3 = [grab[0] + 0.03, grabY, grab[2] - 0.02];
+  const grabOffset: [number, number] = [part[0] - grab[0], part[2] - grab[2]];
+  const placed = (point: Vec3, [dx, dz]: [number, number]) => [point[0] + dx, point[2] + dz];
+
+  // Today's liftDrag: the plane rises, the offset stays.
+  function liftUnfixed(planeY: number) {
+    return placed(intersectDragPlane(camera, ray, planeY)!, grabOffset);
+  }
+
+  function lift(planeY: number) {
+    const point = intersectDragPlane(camera, ray, planeY)!;
+    return placed(point, rebaseDragOffset([part[0], part[2]], point));
+  }
+
+  it('keeps the part over the same spot on the floor as it rises', () => {
+    for (const dy of [0.05, 0.3, 0.8]) {
+      const [x, z] = lift(grabY + dy);
+      expect(x).toBeCloseTo(part[0], 9);
+      expect(z).toBeCloseTo(part[2], 9);
+    }
+  });
+
+  it('is the fix: carrying the old offset to the raised plane slides the part toward the camera', () => {
+    const [x, z] = liftUnfixed(grabY + 0.3);
+    const before = Math.hypot(part[0] - camera[0], part[2] - camera[2]);
+    const after = Math.hypot(x - camera[0], z - camera[2]);
+    expect(after).toBeLessThan(before - 0.1);
   });
 });

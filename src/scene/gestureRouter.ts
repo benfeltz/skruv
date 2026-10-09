@@ -6,7 +6,7 @@ import { capture } from '../game/assembly.js';
 import { PART_TYPES } from '../game/item.js';
 import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
-import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rotatedHalfExtents } from '../game/dragMath.js';
+import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rebaseDragOffset, rotatedHalfExtents } from '../game/dragMath.js';
 import { isFastened } from '../game/fasteners.js';
 import {
   fastenEvent,
@@ -446,13 +446,21 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     updateDrag(event);
   }
 
-  // The lift raises the part and its drag plane together, so it stays under the finger.
+  // The lift raises the part and its drag plane together. Straight up: the finger's ray
+  // meets the raised plane nearer the camera, so the grab offset is re-anchored there and
+  // the part keeps its x, z; the next finger move carries on from where the part is.
   function liftDrag(dy: number, rate: number) {
     const cy = drag!.centre[1];
     const height = clampLift(drag!.height + dy * rate + cy, drag!.halfHeight, ROOM, GESTURE.ceilingMargin) - cy;
     drag!.planeY += height - drag!.height;
     drag!.height = height;
-    if (drag!.pointer) updateDrag(drag!.pointer);
+    if (!drag!.pointer) return;
+    aim(drag!.pointer);
+    const { origin, direction } = raycaster.ray;
+    const point = intersectDragPlane(origin.toArray(), direction.toArray(), drag!.planeY);
+    // Aimed above the horizon: keep the old offset; updateDrag holds the last pose.
+    if (point && drag!.held) drag!.offset = rebaseDragOffset([drag!.held.position[0], drag!.held.position[2]], point);
+    updateDrag(drag!.pointer);
   }
 
   function updateDrag(event: ClientPoint) {
