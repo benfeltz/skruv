@@ -263,6 +263,8 @@ const metrics = spike
       return overlay;
     })
   : null;
+// …and the haptic tick on grab, in the native shell only.
+if (metrics) import('./spike/haptics.js').then(({ connectSpikeHaptics }) => connectSpikeHaptics({ events, onRoundTrip: metrics.haptic }));
 
 createLoop((delta, rawDelta) => {
   metrics?.frame(rawDelta);
