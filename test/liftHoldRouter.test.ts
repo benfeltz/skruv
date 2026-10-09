@@ -274,4 +274,29 @@ describe('a drag of the held part rides at the line height (review round 1)', ()
     expect(targets).toHaveLength(1);
     expect(hold.goal).toBe(0.9);
   });
+
+  // Review round 8: a hold that starts with a seat already on offer pulls the line there
+  // too, or the part hovers short of the seat and jumps in on release.
+  it('pulls the line to the seat when the hold starts with one already on offer — each time', () => {
+    const { router, hold, dowel, targets, dragDowel, offered } = harness();
+    dragDowel();
+    expect(offered()).toBe('panel');
+    for (let i = 0; i < 5; i++) router.update(0.05); // assist pulls it partway
+    const seatY = 0.016 + PART_TYPES.dowel.size[1] / 2;
+    hold.held = dowel;
+    hold.goal = hold.height = dowel.mesh.position.y;
+    router.update(0);
+    expect(targets).toHaveLength(1);
+    expect(targets[0]).toBeCloseTo(seatY, 3);
+    router.update(0);
+    expect(targets).toHaveLength(1);
+    // The hold ends and starts again over the same offer.
+    hold.held = null;
+    router.update(0);
+    hold.held = dowel;
+    hold.goal = hold.height = dowel.mesh.position.y;
+    router.update(0);
+    expect(targets).toHaveLength(2);
+    expect(targets[1]).toBeCloseTo(seatY, 3);
+  });
 });

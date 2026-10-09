@@ -492,10 +492,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // Whether the drag in progress is of the part the elevation line holds.
   const holdsDrag = () => drag?.mode === 'move' && !!hold && hold.held === drag.part;
 
-  // A drag of the part the elevation line holds rides at the line's height.
+  // A drag of the part the elevation line holds rides at the line's height. A hold that
+  // starts with a seat already on offer pulls the line there, as a new offer would.
   function followHold() {
-    if (!holdsDrag() || hold!.height === drag!.height) return;
-    raiseDrag(hold!.height);
+    if (!holdsDrag()) {
+      if (drag) drag.retarget = null;
+      return;
+    }
+    if (drag!.snapped && !drag!.retarget) pullLineToSeat();
+    if (hold!.height !== drag!.height) raiseDrag(hold!.height);
   }
 
   function updateDrag(event: ClientPoint) {
@@ -532,19 +537,22 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     drag!.offer = offer;
     events?.emit(snapCandidateEvent(drag!.part.id, snap));
     if (hold?.held !== drag!.part) return;
-    // The line sets the held part's height, so seat assist reaches the seat's through it —
-    // once per offer, so moving the line finger afterwards still wins. When the offer goes,
-    // so does its pull: the goal goes back, unless the line has moved it since.
+    if (drag!.snapped) return pullLineToSeat();
+    // When the offer goes, so does its pull: the goal goes back, unless the line has moved
+    // it since.
     const back = drag!.retarget;
-    const moved = !back || hold.goal !== back.to;
-    if (drag!.snapped) {
-      const from = moved ? hold.goal : back.from;
-      hold.target(drag!.snapped.position[1]);
-      drag!.retarget = { from, to: hold.goal };
-    } else if (back) {
-      drag!.retarget = null;
-      if (!moved) hold.target(back.from);
-    }
+    drag!.retarget = null;
+    if (back && hold.goal === back.to) hold.target(back.from);
+  }
+
+  // The line sets the held part's height, so seat assist reaches the seat's through it —
+  // once per offer, so moving the line finger afterwards still wins. The goal it had before
+  // the first offer is kept, to go back to.
+  function pullLineToSeat() {
+    const back = drag!.retarget;
+    const from = back && hold!.goal === back.to ? back.from : hold!.goal;
+    hold!.target(drag!.snapped!.position[1]);
+    drag!.retarget = { from, to: hold!.goal };
   }
 
   // Seat assist: only while a seat is on offer, the held part glides toward it.
