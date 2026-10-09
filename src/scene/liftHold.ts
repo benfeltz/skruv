@@ -29,7 +29,7 @@ const clampTo = (y: number, [min, max]: LiftRange) => Math.min(max, Math.max(min
 /**
  * Physics seam for the elevation line (src/ui/liftLine.ts): while a finger is on the line,
  * the held part stays in mid-air at the line's height. `begin(part)` takes the part's body
- * over (unless a drag or turn already has it), `target(height)` eases it there in
+ * over (unless it is already under direct control), `target(height)` eases it there in
  * `update(delta)`, `jump(height)` puts it there at once, and `end()` hands it back to the
  * simulation at rest — so it drops, as releasing a lift always has.
  *
@@ -40,12 +40,14 @@ const clampTo = (y: number, [min, max]: LiftRange) => Math.min(max, Math.max(min
  *   grab(B)    a drag or turn is another holder.
  *   release(B) from that holder is swallowed: the line still holds the part. `end()` lets
  *              go only when no other holder remains; one still dragging releases it itself.
+ * Holding is per body, not counted: the router re-grabs a seated part it already holds
+ * when a drag pulls it free, and pairs that with one release.
  * With nothing held, and for every other body and call, it is a pure passthrough to
  * `physics` — the same shape as src/scene/compoundPhysics.ts, which it wraps.
  */
 export function createLiftHold(physics: PhysicsWorld): PhysicsWorld & LiftHold {
-  // Grabs through this seam not yet released, per body: the drags' and turns' holds.
-  const holders = new Map<Body, number>();
+  // Bodies grabbed through this seam and not yet released: the drags', turns' and seats' holds.
+  const holders = new Set<Body>();
   let hold: { part: Part; x: number; z: number; rotation: Quat; height: number; goal: number } | null = null;
 
   const holding = (body: Body) => hold?.part.body === body;
@@ -60,7 +62,7 @@ export function createLiftHold(physics: PhysicsWorld): PhysicsWorld & LiftHold {
   }
 
   function grab(body: Body) {
-    holders.set(body, (holders.get(body) ?? 0) + 1);
+    holders.add(body);
     physics.grab(body);
   }
 
@@ -72,15 +74,17 @@ export function createLiftHold(physics: PhysicsWorld): PhysicsWorld & LiftHold {
   }
 
   function release(body: Body) {
-    const count = holders.get(body) ?? 0;
-    if (count > 1) holders.set(body, count - 1);
-    else holders.delete(body);
+    holders.delete(body);
     if (!holding(body)) physics.release(body);
   }
 
   function begin(part: Part) {
     const { body } = part;
-    if (!holders.has(body)) physics.grab(body);
+    // A body the simulation has is nobody's, whatever was left behind (a repack's place).
+    if (!body.isKinematic()) {
+      holders.delete(body);
+      physics.grab(body);
+    }
     const { x, y, z } = body.translation();
     const r = body.rotation();
     hold = { part, x, z, rotation: [r.x, r.y, r.z, r.w], height: y, goal: y };

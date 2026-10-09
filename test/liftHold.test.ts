@@ -6,7 +6,7 @@ import type { Part } from '../src/game/partMesh.js';
 import type { Body, PhysicsWorld } from '../src/physics/world.js';
 import type { Quat, Vec3 } from '../tools/validate/lib/geometry.js';
 
-type FakeBody = Body & { id: string };
+type FakeBody = Body & { id: string; kinematic: boolean };
 
 // A stood-up quarter turn about x: the shelf's 0.28 m depth becomes its height.
 const UPENDED: Quat = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
@@ -15,16 +15,24 @@ const shelfHalf = PART_TYPES.fixedShelf.size[1] / 2;
 function rig() {
   const calls: (string | number[] | undefined)[][] = [];
   // A stand-in rigid body: the seam reads its pose, the fake physics its id.
-  const body = (id: string, [x, y, z]: Vec3) =>
-    ({ id, translation: () => ({ x, y, z }), rotation: () => ({ x: 0, y: 0, z: 0, w: 1 }) }) as unknown as FakeBody;
+  function body(id: string, [x, y, z]: Vec3) {
+    const fake = {
+      id,
+      kinematic: false,
+      isKinematic: () => fake.kinematic,
+      translation: () => ({ x, y, z }),
+      rotation: () => ({ x: 0, y: 0, z: 0, w: 1 }),
+    };
+    return fake as unknown as FakeBody;
+  }
   const shelf = { id: 'fixedShelf-1', type: 'fixedShelf', body: body('shelf', [0.5, shelfHalf, -0.25]) } as unknown as Part;
   const other = { id: 'dowel-1', type: 'dowel', body: body('dowel', [2, 0.004, 0]) } as unknown as Part;
   const round = (v: number[]) => v.map((n) => +n.toFixed(6));
   // Only the calls the seam makes, recorded with the pose a move asked for.
   const physics = {
-    grab: (b: FakeBody) => calls.push(['grab', b.id]),
+    grab: (b: FakeBody) => calls.push(['grab', b.id]) && (b.kinematic = true),
     move: (b: FakeBody, position: Vec3, rotation?: Quat) => calls.push(['move', b.id, round(position), rotation && round(rotation)]),
-    release: (b: FakeBody) => calls.push(['release', b.id]),
+    release: (b: FakeBody) => calls.push(['release', b.id]) && (b.kinematic = false),
     step: () => 'stepped',
   } as unknown as PhysicsWorld;
   const hold = createLiftHold(physics);
@@ -142,6 +150,29 @@ describe('lift hold seam — holding', () => {
     hold.end();
     expect(ops('release')).toEqual([]);
     hold.release(shelf.body);
+    expect(ops('release')).toEqual([['release', 'shelf']]);
+  });
+
+  // The router re-grabs a seated part it already holds when a drag pulls it free, and
+  // pairs that with one release (review round 2).
+  it('grabs a body handed back to the simulation, however often it was grabbed before', () => {
+    const { ops, shelf, hold } = rig();
+    hold.grab(shelf.body); // held at its seat
+    hold.grab(shelf.body); // dragged off it
+    hold.release(shelf.body); // dropped
+    hold.begin(shelf);
+    expect(ops('grab')).toHaveLength(3);
+    hold.end();
+    expect(ops('release')).toHaveLength(2);
+  });
+
+  it('grabs a body put back by a repack while still listed as held', () => {
+    const { ops, shelf, hold } = rig();
+    hold.grab(shelf.body);
+    (shelf.body as FakeBody).kinematic = false; // physics.place, outside the seam
+    hold.begin(shelf);
+    expect(ops('grab')).toHaveLength(2);
+    hold.end();
     expect(ops('release')).toEqual([['release', 'shelf']]);
   });
 
