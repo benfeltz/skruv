@@ -1,0 +1,43 @@
+{
+  "_note": "NOT device data. Desktop verification of the overlay: headless Chrome 'new' (ANGLE Metal, Apple M5 Pro) on the production build at ?spike=assembled, 2026-10-08, untouched 300 s (no drag window; drift/sleep from boot). Not comparable with phone metrics.json.",
+  "spike": "capacitor",
+  "device": null,
+  "date": "2026-10-08",
+  "framePacing": {
+    "p50ms": 16.63,
+    "p95ms": 16.63,
+    "p99ms": 16.88,
+    "framesOver33ms": 0,
+    "sessionSeconds": 300
+  },
+  "stability": {
+    "maxDriftMm": 200.22,
+    "visibleJitter": null,
+    "allAsleepSeconds": null
+  },
+  "memory": {
+    "steadyMb": null,
+    "peakMb": null,
+    "warningsOrKills": null,
+    "how": "Xcode memory gauge (Debug navigator), app run from Xcode on the device"
+  },
+  "coldStart": {
+    "median3Seconds": null
+  },
+  "appSize": {
+    "installedMb": null,
+    "webExportMb": null
+  },
+  "editToPhone": {
+    "seconds": null,
+    "how": null
+  },
+  "haptics": {
+    "grabToTickMs": null,
+    "perceptibleLag": null
+  },
+  "agentLoop": {
+    "metaTestRounds": null,
+    "stalls": null
+  }
+}
