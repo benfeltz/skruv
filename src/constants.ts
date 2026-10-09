@@ -425,3 +425,16 @@ export const DEV_WS = {
   // A dropped socket (the dev server restarted) is retried this often, in ms.
   retryMs: 2000,
 };
+
+// Engine spike 1.2 (branch-local, never merges): `?spike=assembled` boots the player's own
+// set standing assembled under live physics — every derived joint at once — with the
+// spares and tools loose beside the box to drag, the metrics overlay up and no booklet
+// mounted. The plain URL is untouched.
+export const SPIKE = {
+  queryParam: 'spike',
+  assembledMode: 'assembled',
+  // Where the assembled layout's frame (floor under the carcass centre, front +z) stands:
+  // behind the box, facing the start view.
+  assembledPosition: [0, 0, -1.2] satisfies Vec3,
+  assembledYaw: 0,
+};

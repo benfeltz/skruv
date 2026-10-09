@@ -8,6 +8,8 @@ import { PART_TYPES } from './game/item.js';
 import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
 import { baseRest, boxPlacement, boxPoseOf, createPackedWorldLayout, lidRest, respawnSpots } from './game/boxLayout.js';
+import { isSpikeAssembled, spikeAssembledPlan } from './game/spikeAssembled.js';
+import { seatHome } from './game/assembly.js';
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
@@ -71,10 +73,19 @@ tunables.subscribe((key, value) => {
 const flatpack = createFlatpack(physics);
 scene.add(flatpack.base.mesh, flatpack.lid.mesh);
 
+// Engine spike 1.2 (branch-local): ?spike=assembled boots the player's set standing
+// assembled, spares and tools loose beside the box. Null on every other URL.
+const spike = isSpikeAssembled(location.search) ? spikeAssembledPlan() : null;
+function spawnLayout() {
+  if (!spike) return createPackedWorldLayout();
+  const spots = respawnSpots(spike.loose.map(({ type }) => type));
+  return [...spike.assembled, ...spike.loose.map(({ id, type }, i) => ({ id, type, ...spots[i] }))];
+}
+
 // One record per physical part — what gestures pick, drag and snap. The box and its lid
 // are ones too.
 const parts = [flatpack.base, flatpack.lid];
-for (const { id, type, position, rotation } of createPackedWorldLayout()) {
+for (const { id, type, position, rotation } of spawnLayout()) {
   const part = PART_TYPES[type];
   const mesh = createPartMesh(part);
   const body = physics.register(mesh, {
@@ -99,6 +110,8 @@ const typeById = new Map(parts.map(({ id, type }) => [id, type]));
 const assembly = createAssembly((id) => typeById.get(id)!);
 // The display shelf goes in fastened, through the graph's own events.
 display.fasten(assembly);
+// The spike's assembled set goes in the same way: seated and driven home, joints by sync.
+if (spike) seatHome(assembly, spike.pairs);
 // Manipulation goes through this seam so a fastened compound moves as one.
 const manipulation = createCompoundPhysics(physics, parts, assembly);
 
@@ -119,7 +132,8 @@ scene.add(gizmo.object);
 // puts it down and does nothing else.
 const bookletPages = createBookletPages(renderer);
 const booklet = createBookletSheet({ pages: bookletPages });
-document.body.append(booklet.scrim, booklet.thumb, booklet.element);
+// The engine spike measures the room untouched: no booklet over it.
+if (!spike) document.body.append(booklet.scrim, booklet.thumb, booklet.element);
 // The real sheet now covers index.html's stand-in; it goes in the frame that first paints it.
 requestAnimationFrame(() => document.getElementById('pre-splash')?.remove());
 
@@ -171,7 +185,8 @@ const router = createGestureRouter({
   dropGuide,
   events,
 });
-// The display shelf's physics joints, made by the same reconcile every tap and turn runs.
+// The display shelf's (and the spike set's) physics joints, made by the same reconcile
+// every tap and turn runs.
 router.sync();
 
 // Where the box sits now, as the level, in-room box frame the layout hangs off.
