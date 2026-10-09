@@ -27,6 +27,15 @@ export function intersectDragPlane([ox, oy, oz]: number[], [dx, dy, dz]: number[
 }
 
 /**
+ * The grab offset [dx, dz] that keeps a part at `partXZ` once its drag plane has moved and
+ * the finger's ray now meets it at `pointOnPlane` — so a lift raises the part straight up
+ * instead of sliding it along the ray toward the camera.
+ */
+export function rebaseDragOffset([px, pz]: number[], [x, , z]: number[]): [number, number] {
+  return [px - x, pz - z];
+}
+
+/**
  * Clamps a part's centre so its [halfX, halfZ] footprint stays `margin` inside the walls
  * of a room centred on the origin. A part wider than the room is held at the centre line.
  */

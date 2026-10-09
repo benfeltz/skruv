@@ -11,7 +11,7 @@
 // never a JS object path — and units are the schema's, in the engine's own units; a key
 // once published is renamed only with a profile format bump.
 
-import { CAMERA, FASTENER, GESTURE, HAPTICS, PHYSICS, RENDER, SNAP, TUNE } from '../constants.js';
+import { CAMERA, FASTENER, GESTURE, HAPTICS, LIFT_LINE, PHYSICS, RENDER, SNAP, TUNE } from '../constants.js';
 
 /** Bumped whenever a key is renamed or its unit changes, so old profiles stay readable. */
 export const PROFILE_FORMAT = 1;
@@ -68,6 +68,14 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
   'gesture.detentStep': {
     object: GESTURE, prop: 'detentStep', min: 15 * DEGREE, max: 90 * DEGREE, step: 15 * DEGREE, unit: 'rad', group: 'gesture',
     desc: 'Rotate-gizmo detent',
+  },
+  'gesture.liftLineX': {
+    object: LIFT_LINE, prop: 'x', min: 0, max: 1, step: 0.01, unit: '', group: 'gesture',
+    desc: 'Where the elevation line sits across the screen (0: left edge, 1: right)',
+  },
+  'gesture.liftLineEase': {
+    object: LIFT_LINE, prop: 'easeRate', min: 1, max: 30, step: 0.5, unit: '1/s', group: 'gesture',
+    desc: 'How fast a touch on the elevation line eases the part to that height',
   },
   'joint.angularPlay': {
     object: FASTENER, prop: 'angularPlayDegrees', min: 0, max: 15, step: 0.5, unit: 'deg', group: 'joint',

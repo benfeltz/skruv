@@ -2,6 +2,7 @@
 // regression risks, checked against the real catalog and the packed flatpack headlessly. Touch
 // feel itself (phone pickability, sprue, assist, zoom-out) is manual — see Test Plan.md.
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CONNECTOR } from '../tools/validate/lib/vocabulary.js';
 import type { ConnectorType } from '../tools/validate/lib/vocabulary.js';
@@ -285,6 +286,15 @@ describe('Shift-drag lift (AC5)', () => {
     expect(GESTURE.liftRate).toBe(0.004);
     expect(GESTURE.desktopLiftRate).toBeGreaterThan(0);
     expect(GESTURE.desktopLiftRate).toBeLessThan(GESTURE.liftRate);
+  });
+});
+
+describe('lifting goes straight up (1.8.1 Step 1)', () => {
+  const router = readFileSync(new URL('../src/scene/gestureRouter.ts', import.meta.url), 'utf8');
+
+  it('re-anchors the grab offset on the raised plane in liftDrag', () => {
+    const liftDrag = router.slice(router.indexOf('function liftDrag('), router.indexOf('function updateDrag('));
+    expect(liftDrag).toMatch(/drag!\.offset = rebaseDragOffset\(/);
   });
 });
 
