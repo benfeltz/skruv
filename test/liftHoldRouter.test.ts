@@ -36,8 +36,12 @@ class FakeCanvas {
 }
 
 const quiet = { addEventListener() {}, removeEventListener() {} };
+// The window's key listeners, so a spec can hold Shift down.
+const keys = new Map<string, FakeListener>();
+const shift = (down: boolean) => keys.get(down ? 'keydown' : 'keyup')?.({ type: down ? 'keydown' : 'keyup', key: 'Shift' });
 beforeEach(() => {
-  vi.stubGlobal('window', quiet);
+  keys.clear();
+  vi.stubGlobal('window', { addEventListener: (type: string, fn: FakeListener) => keys.set(type, fn), removeEventListener() {} });
   vi.stubGlobal('document', { ...quiet, visibilityState: 'visible' });
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -88,7 +92,13 @@ function harness() {
   events.on(EVENT.SNAP_CANDIDATE, (event) => offers.push(event));
 
   const targets: number[] = [];
-  const hold = { held: null as Part | null, height: 0, target: (height: number) => targets.push(height) };
+  const jumps: number[] = [];
+  const hold = {
+    held: null as Part | null,
+    height: 0,
+    target: (height: number) => targets.push(height),
+    jump: (height: number) => jumps.push((hold.height = height)),
+  };
   const canvas = new FakeCanvas();
   const router = createGestureRouter({
     domElement: canvas as unknown as HTMLElement, // a fake: listeners and a bounding rect only
@@ -112,7 +122,7 @@ function harness() {
     return { clientX: at.clientX - 32, clientY: at.clientY };
   }
   const offered = () => offers.at(-1)?.target ?? null;
-  return { router, canvas, hold, panel, dowel, moves, targets, dragDowel, offered };
+  return { router, canvas, hold, panel, dowel, moves, targets, jumps, dragDowel, offered };
 }
 
 describe('a drag of the held part rides at the line height (review round 1)', () => {
@@ -209,5 +219,29 @@ describe('a drag of the held part rides at the line height (review round 1)', ()
     hold.height = 0.6;
     router.update(0);
     expect(moves.every(([, y]) => y < 0.1)).toBe(true);
+  });
+
+  // Ben's manual pass (2026-10-09): Shift-drag (and a second finger) lifting the held part
+  // moves the line with it — else the line's height pulls it straight back down.
+  it.each([
+    ['Shift-drag', 'shift'],
+    ['a second finger', 'finger'],
+  ])('a lift of the held part by %s carries the line up with it', (_, by) => {
+    const { router, canvas, hold, dowel, moves, jumps, dragDowel } = harness();
+    const at = dragDowel();
+    hold.held = dowel;
+    hold.height = 0.3;
+    router.update(0);
+    if (by === 'shift') {
+      shift(true);
+      canvas.fire('pointermove', { clientX: at.clientX, clientY: at.clientY - 120 });
+    } else {
+      canvas.fire('pointerdown', { pointerId: 2, clientX: 900, clientY: 800 });
+      canvas.fire('pointermove', { pointerId: 2, clientX: 900, clientY: 680 });
+    }
+    router.update(0);
+    expect(jumps.length).toBeGreaterThan(0);
+    expect(hold.height).toBeGreaterThan(0.35);
+    expect(moves.at(-1)![1]).toBeCloseTo(hold.height, 9);
   });
 });

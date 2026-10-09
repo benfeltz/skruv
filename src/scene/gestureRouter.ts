@@ -118,7 +118,7 @@ export interface GestureRouterOptions {
   sprue?: { selected: Part | null; hitTest(raycaster: THREE.Raycaster): HandleHit | null };
   dropGuide?: { show(from: Vec3, to: Vec3): void; hide(): void };
   events?: Pick<Bus, 'emit'>;
-  hold?: { readonly held: Part | null; readonly height: number; target(height: number): void };
+  hold?: { readonly held: Part | null; readonly height: number; target(height: number): void; jump(height: number): void };
 }
 
 // A hole marking on a part's mesh (src/game/partMesh.ts).
@@ -167,12 +167,13 @@ const PULL_AXIS_PROBE = 0.05;
  *   events — `{ emit(event) }` bus (src/game/events.ts): grabs, releases, seat offers,
  *            seats and fastenings are reported as they happen. Reporting only — nothing
  *            here reads it back.
- *   hold   — `{ held, height, target(height) }` (src/scene/liftHold.ts): while the
- *            elevation line holds the part being dragged, the drag rides at the line's
- *            height, so seats are offered where the part really is and letting go of the
- *            line leaves the drag there; a seat newly on offer eases the line to its
- *            height, as seat assist eases everything else. A part the line holds is never
- *            a seat for another: it drops when the line lets go.
+ *   hold   — `{ held, height, target(height), jump(height) }` (src/scene/liftHold.ts):
+ *            while the elevation line holds the part being dragged, the drag rides at the
+ *            line's height, so seats are offered where the part really is and letting go
+ *            of the line leaves the drag there; a seat newly on offer eases the line to its
+ *            height, as seat assist eases everything else, and a lift (second finger,
+ *            Shift, wheel) moves the line with it. A part the line holds is never a seat
+ *            for another: it drops when the line lets go.
  * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
  * eases a dragged part toward the seat on offer (seat assist) and fades the seat flash.
  */
@@ -455,10 +456,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     updateDrag(event);
   }
 
-  // The lift raises the part and its drag plane together.
+  // The lift raises the part and its drag plane together — and the line, for the part it
+  // holds, so the line's height never pulls it back.
   function liftDrag(dy: number, rate: number) {
     const cy = drag!.centre[1];
-    raiseDrag(clampLift(drag!.height + dy * rate + cy, drag!.halfHeight, ROOM, GESTURE.ceilingMargin) - cy);
+    const height = clampLift(drag!.height + dy * rate + cy, drag!.halfHeight, ROOM, GESTURE.ceilingMargin) - cy;
+    if (!holdsDrag()) return raiseDrag(height);
+    hold!.jump(height);
+    raiseDrag(hold!.height);
   }
 
   // Straight up: the finger's ray meets the raised plane nearer the camera, so the grab
@@ -481,10 +486,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (drag!.pointer) updateDrag(drag!.pointer);
   }
 
+  // Whether the drag in progress is of the part the elevation line holds.
+  const holdsDrag = () => drag?.mode === 'move' && !!hold && hold.held === drag.part;
+
   // A drag of the part the elevation line holds rides at the line's height.
   function followHold() {
-    if (drag?.mode !== 'move' || !hold || hold.held !== drag.part || hold.height === drag.height) return;
-    raiseDrag(hold.height);
+    if (!holdsDrag() || hold!.height === drag!.height) return;
+    raiseDrag(hold!.height);
   }
 
   function updateDrag(event: ClientPoint) {
