@@ -149,10 +149,10 @@ const sprue = createSprue();
 scene.add(sprue.object);
 
 // The box drags but never takes the gizmo: tapping it is tapping the room. While the line
-// holds a part, a tap on empty space puts its rings away (a drag then moves it) and one on
-// the part brings them back (to turn it); no other part is picked.
+// holds a part, a tap on the room puts its rings away (a drag then moves it) and one on the
+// part brings them back (to turn it); no other part is picked.
 function select(part: Part | null) {
-  if (!selectsDuringHold(part, hold.held)) return;
+  if (!selectsDuringHold(part === flatpack.base ? null : part, hold.held)) return;
   if (!part || part === flatpack.base) {
     gizmo.hide();
     sprue.hide();

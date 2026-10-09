@@ -41,8 +41,11 @@ describe('which part the line shows for (review round 1)', () => {
 
 // Ben's manual pass (2026-10-09): taps switch the held part between turning and moving.
 describe('taps never pick another part while the line holds', () => {
-  it('asks selectsDuringHold first thing in select()', () => {
-    expect(body(main, 'select')).toMatch(/^function select\(part: Part \| null\) \{\n\s*if \(!selectsDuringHold\(part, hold\.held\)\) return;/);
+  // Review round 6: a tap on the box is a tap on the room, so it puts the rings away too.
+  it('asks selectsDuringHold first thing in select(), with the box as the room', () => {
+    expect(body(main, 'select')).toMatch(
+      /^function select\(part: Part \| null\) \{\n\s*if \(!selectsDuringHold\(part === flatpack\.base \? null : part, hold\.held\)\) return;/,
+    );
   });
 });
 
