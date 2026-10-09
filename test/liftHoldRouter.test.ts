@@ -112,7 +112,7 @@ function harness() {
     return { clientX: at.clientX - 32, clientY: at.clientY };
   }
   const offered = () => offers.at(-1)?.target ?? null;
-  return { router, canvas, hold, dowel, moves, targets, dragDowel, offered };
+  return { router, canvas, hold, panel, dowel, moves, targets, dragDowel, offered };
 }
 
 describe('a drag of the held part rides at the line height (review round 1)', () => {
@@ -191,6 +191,15 @@ describe('a drag of the held part rides at the line height (review round 1)', ()
     expect(assisted[0]).toBeCloseTo(unassisted[0], 9);
     expect(assisted[2]).toBeCloseTo(unassisted[2], 9);
     expect(assisted[1]).toBeCloseTo(0.3, 9);
+  });
+
+  // Review round 4: a seat on a part the line holds would be left floating when it drops.
+  it('offers no seat on a part the line holds up', () => {
+    const { hold, panel, dragDowel, offered } = harness();
+    hold.held = panel;
+    hold.height = 0.008;
+    dragDowel();
+    expect(offered()).toBeNull();
   });
 
   it('leaves a drag of any other part alone', () => {

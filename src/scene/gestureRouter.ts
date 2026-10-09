@@ -171,7 +171,8 @@ const PULL_AXIS_PROBE = 0.05;
  *            elevation line holds the part being dragged, the drag rides at the line's
  *            height, so seats are offered where the part really is and letting go of the
  *            line leaves the drag there; a seat newly on offer eases the line to its
- *            height, as seat assist eases everything else.
+ *            height, as seat assist eases everything else. A part the line holds is never
+ *            a seat for another: it drops when the line lets go.
  * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
  * eases a dragged part toward the seat on offer (seat assist) and fades the seat flash.
  */
@@ -309,8 +310,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const free = (connectors: WorldConnector[]) => connectors.filter((c) => !isTaken(c));
     const dragged = free(worldConnectors(part, scratch.clone().fromArray(target), rotation));
     if (dragged.length === 0) return null;
+    // A part the elevation line holds up is no seat: it drops when the line lets go.
     const others = parts.flatMap((other) =>
-      other === part ? [] : free(worldConnectors(other, other.mesh.position, other.mesh.quaternion)),
+      other === part || other === hold?.held ? [] : free(worldConnectors(other, other.mesh.position, other.mesh.quaternion)),
     );
     const snap = findSnap(dragged, others, SNAP);
     if (!snap) return null;
@@ -609,7 +611,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       const { from: a, to: b } = drag.snapped.snap;
       return glow(decalOf(a) ?? decalOf(b));
     }
-    const host = hit && drag.mode === 'move' ? partByMesh.get(hit.object) : null;
+    const under = hit && drag.mode === 'move' ? partByMesh.get(hit.object)! : null;
+    const host = under === hold?.held ? null : under;
     glow(host ? decalOf(socketUnder(to, freeSocketsFor(part, host), DROP.holeReach)) : null);
   }
 
