@@ -3,7 +3,7 @@ import { EVENT } from '../game/events.js';
 import type { Bus } from '../game/events.js';
 
 // Engine spike 1.2 (branch-local): a native haptic tick on every grab, through the
-// Capacitor bridge. Loaded only under ?spike=assembled.
+// Capacitor bridge. Loaded only in a spike boot.
 
 /**
  * In the native shell, ticks `@capacitor/haptics` on each grab and reports the grab →

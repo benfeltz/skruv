@@ -1,6 +1,7 @@
-// Engine spike 1.2 (branch-local): the `?spike=assembled` boot plan. Pure — the item's
-// assembled layout and derived joints, placed in the room, as main.ts spawns and seats
-// them; and the rest of the box (spares, tools) to lie loose. No Three, Rapier or DOM.
+// Engine spike 1.2 (branch-local): which spike boot the page asks for, and the
+// `?spike=assembled` boot plan. Pure — the item's assembled layout and derived joints,
+// placed in the room, as main.ts spawns and seats them; and the rest of the box (spares,
+// tools) to lie loose. No Three, Rapier or DOM.
 
 import { SPIKE } from '../constants.js';
 import { ASSEMBLED, MANIFEST } from './item.js';
@@ -9,12 +10,18 @@ import type { ApplyContext, SeatPair } from './assembly.js';
 import type { PackedPart } from './boxLayout.js';
 
 /**
- * True when the page asks for the assembled spike: its query string (`location.search`)
- * says so, or it is served from the Capacitor shell's own scheme (`location.protocol`) —
- * which a browser never is, so the plain URL is untouched.
+ * The spike boot the page asks for, from its query string (`location.search`) and scheme
+ * (`location.protocol`):
+ *   'assembled' — `?spike=assembled`: the stress test, the player's set standing built
+ *   'standard'  — any other `?spike`, or the Capacitor shell's own scheme (which a browser
+ *                 never is): the ordinary game scene, with the overlay and haptic tick
+ *   null        — the plain URL, untouched
  */
-export function isSpikeAssembled(search: string, protocol: string) {
-  return protocol === SPIKE.shellProtocol || new URLSearchParams(search).get(SPIKE.queryParam) === SPIKE.assembledMode;
+export function spikeMode(search: string, protocol: string): 'assembled' | 'standard' | null {
+  const params = new URLSearchParams(search);
+  if (params.get(SPIKE.queryParam) === SPIKE.assembledMode) return 'assembled';
+  if (protocol === SPIKE.shellProtocol || params.has(SPIKE.queryParam)) return 'standard';
+  return null;
 }
 
 /**

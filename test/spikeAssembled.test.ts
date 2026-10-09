@@ -4,7 +4,7 @@ import { deriveJoints } from '../tools/validate/lib/joints.js';
 import { loadPack } from '../tools/validate/lib/pack.js';
 import type { FlatpackFile } from '../tools/validate/lib/pack.js';
 import { MANIFEST } from '../src/game/item.js';
-import { isSpikeAssembled, spikeAssembledPlan } from '../src/game/spikeAssembled.js';
+import { spikeAssembledPlan, spikeMode } from '../src/game/spikeAssembled.js';
 
 // The pack read fresh from disk, as the validator CLI reads it — not through the game's door.
 const pack = loadPack(JSON.parse(readFileSync(new URL('../items/johnny/flatpack.json', import.meta.url), 'utf8')) as FlatpackFile);
@@ -30,12 +30,20 @@ describe('?spike=assembled boot plan (engine spike 1.2)', () => {
     }
   });
 
-  it('turns on only for ?spike=assembled, or inside the Capacitor shell', () => {
-    expect(isSpikeAssembled('?spike=assembled', 'https:')).toBe(true);
-    expect(isSpikeAssembled('?tune&spike=assembled', 'http:')).toBe(true);
-    expect(isSpikeAssembled('', 'capacitor:')).toBe(true);
-    expect(isSpikeAssembled('', 'https:')).toBe(false);
-    expect(isSpikeAssembled('?tune', 'https:')).toBe(false);
-    expect(isSpikeAssembled('?spike=other', 'http:')).toBe(false);
+  it('boots assembled only for ?spike=assembled — even inside the shell', () => {
+    expect(spikeMode('?spike=assembled', 'https:')).toBe('assembled');
+    expect(spikeMode('?tune&spike=assembled', 'http:')).toBe('assembled');
+    expect(spikeMode('?spike=assembled', 'capacitor:')).toBe('assembled');
+  });
+
+  it('boots the standard scene with the spike instruments in the shell, or for any other ?spike', () => {
+    expect(spikeMode('', 'capacitor:')).toBe('standard');
+    expect(spikeMode('?spike', 'http:')).toBe('standard');
+    expect(spikeMode('?spike=other', 'http:')).toBe('standard');
+  });
+
+  it('leaves the plain URL alone', () => {
+    expect(spikeMode('', 'https:')).toBeNull();
+    expect(spikeMode('?tune', 'https:')).toBeNull();
   });
 });

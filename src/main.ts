@@ -8,7 +8,7 @@ import { PART_TYPES } from './game/item.js';
 import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
 import { baseRest, boxPlacement, boxPoseOf, createPackedWorldLayout, lidRest, respawnSpots } from './game/boxLayout.js';
-import { isSpikeAssembled, spikeAssembledPlan } from './game/spikeAssembled.js';
+import { spikeAssembledPlan, spikeMode } from './game/spikeAssembled.js';
 import { seatHome } from './game/assembly.js';
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
@@ -73,9 +73,11 @@ tunables.subscribe((key, value) => {
 const flatpack = createFlatpack(physics);
 scene.add(flatpack.base.mesh, flatpack.lid.mesh);
 
-// Engine spike 1.2 (branch-local): ?spike=assembled boots the player's set standing
+// Engine spike 1.2 (branch-local): the shell (or ?spike) boots this same game with the
+// metrics overlay and haptic tick; ?spike=assembled instead boots the player's set standing
 // assembled, spares and tools loose beside the box. Null on every other URL.
-const spike = isSpikeAssembled(location.search, location.protocol) ? spikeAssembledPlan() : null;
+const mode = spikeMode(location.search, location.protocol);
+const spike = mode === 'assembled' ? spikeAssembledPlan() : null;
 function spawnLayout() {
   if (!spike) return createPackedWorldLayout();
   const spots = respawnSpots(spike.loose.map(({ type }) => type));
@@ -132,7 +134,7 @@ scene.add(gizmo.object);
 // puts it down and does nothing else.
 const bookletPages = createBookletPages(renderer);
 const booklet = createBookletSheet({ pages: bookletPages });
-// The engine spike measures the room untouched: no booklet over it.
+// The assembled stress test measures the room untouched: no booklet over it.
 if (!spike) document.body.append(booklet.scrim, booklet.thumb, booklet.element);
 // The real sheet now covers index.html's stand-in; it goes in the frame that first paints it.
 requestAnimationFrame(() => document.getElementById('pre-splash')?.remove());
@@ -254,11 +256,13 @@ events.on(EVENT.FASTEN, ({ kind }) => {
 // Under sustained load the room renders every other frame; everything else runs every frame.
 const fps = createFpsGuard();
 
-// Engine spike 1.2: the metrics overlay over the assembled set — loaded only in spike mode.
-const metrics = spike
+// Engine spike 1.2: the metrics overlay — loaded only in a spike boot. Drift and sleep are
+// watched on whichever JOHNNY stands built: the spike's assembled set, else the display shelf.
+const metrics = mode
   ? await import('./spike/metricsOverlay.js').then(({ createMetricsOverlay }) => {
-      const assembledIds = new Set(spike.assembled.map(({ id }) => id));
-      const overlay = createMetricsOverlay({ bodies: playerParts.filter(({ id }) => assembledIds.has(id)).map(({ body }) => body) });
+      const assembledIds = new Set(spike?.assembled.map(({ id }) => id));
+      const watched = spike ? playerParts.filter(({ id }) => assembledIds.has(id)) : display.parts;
+      const overlay = createMetricsOverlay({ bodies: watched.map(({ body }) => body) });
       document.body.append(overlay.element);
       return overlay;
     })

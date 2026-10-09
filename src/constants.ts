@@ -426,15 +426,17 @@ export const DEV_WS = {
   retryMs: 2000,
 };
 
-// Engine spike 1.2 (branch-local, never merges): `?spike=assembled` boots the player's own
-// set standing assembled under live physics — every derived joint at once — with the
-// spares and tools loose beside the box to drag, the metrics overlay up and no booklet
-// mounted. The plain URL is untouched.
+// Engine spike 1.2 (branch-local, never merges): the Capacitor shell (or `?spike` in a
+// browser) boots the ordinary game with the metrics overlay and a native haptic tick.
+// `?spike=assembled` is the stress test instead: the player's own set standing assembled
+// under live physics — every derived joint at once — spares and tools loose beside the
+// box, no booklet mounted. The plain URL is untouched.
 export const SPIKE = {
   queryParam: 'spike',
   assembledMode: 'assembled',
   // The iOS shell serves the bundled build from capacitor://localhost/ and can't append a
-  // query to a bundled file (appStartPath is a path there), so its scheme turns the mode on.
+  // query to a bundled file (appStartPath is a path there), so its scheme turns the
+  // standard spike boot on.
   shellProtocol: 'capacitor:',
   // Where the assembled layout's frame (floor under the carcass centre, front +z) stands:
   // behind the box, facing the start view.

@@ -3,7 +3,7 @@ import { createDriftTracker, createFrameHistogram, createSleepTimer } from './me
 import type { Body } from '../physics/world.js';
 
 // Engine spike 1.2 (branch-local): the shared measurement protocol's in-page half, up only
-// under ?spike=assembled and loaded only then. Observation only — it reads frame times and
+// in a spike boot (the shell, or ?spike) and loaded only then. Observation only — it reads frame times and
 // body poses, never writes game state.
 //
 //   frames ↺     restarts the frame-time window (action script step 3: the drag minute)
@@ -38,7 +38,7 @@ function button(label: string, onClick: () => void) {
 }
 
 /**
- * The overlay over `bodies` (the assembled set's, whose drift and sleep it watches).
+ * The overlay over `bodies` (a built JOHNNY's, whose drift and sleep it watches).
  * Mount `element`; call `frame(rawDeltaSeconds)` once per rAF tick with the loop's true
  * delta. `haptic(ms)` records one grab→haptic-bridge round trip (src/spike/haptics.ts).
  */
