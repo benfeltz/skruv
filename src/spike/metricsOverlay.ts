@@ -20,7 +20,7 @@ const localDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).pa
 const round2 = (value: number | null) => (value === null ? null : Math.round(value * 100) / 100);
 
 const CSS = `
-  .spike-metrics { position: fixed; top: 8px; left: 8px; z-index: 20; max-width: calc(100vw - 16px);
+  .spike-metrics { position: fixed; top: calc(env(safe-area-inset-top) + 8px); left: calc(env(safe-area-inset-left) + 8px); z-index: 20; max-width: calc(100vw - 16px);
     font: 11px/1.35 ui-monospace, Menlo, monospace; color: #e8e8e8; background: rgba(20, 22, 26, 0.78);
     border-radius: 8px; padding: 6px 8px; pointer-events: none; }
   .spike-metrics pre { margin: 0; white-space: pre; }

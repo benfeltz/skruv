@@ -75,7 +75,7 @@ scene.add(flatpack.base.mesh, flatpack.lid.mesh);
 
 // Engine spike 1.2 (branch-local): ?spike=assembled boots the player's set standing
 // assembled, spares and tools loose beside the box. Null on every other URL.
-const spike = isSpikeAssembled(location.search) ? spikeAssembledPlan() : null;
+const spike = isSpikeAssembled(location.search, location.protocol) ? spikeAssembledPlan() : null;
 function spawnLayout() {
   if (!spike) return createPackedWorldLayout();
   const spots = respawnSpots(spike.loose.map(({ type }) => type));

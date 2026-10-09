@@ -30,11 +30,12 @@ describe('?spike=assembled boot plan (engine spike 1.2)', () => {
     }
   });
 
-  it('turns on only for ?spike=assembled', () => {
-    expect(isSpikeAssembled('?spike=assembled')).toBe(true);
-    expect(isSpikeAssembled('?tune&spike=assembled')).toBe(true);
-    expect(isSpikeAssembled('')).toBe(false);
-    expect(isSpikeAssembled('?tune')).toBe(false);
-    expect(isSpikeAssembled('?spike=other')).toBe(false);
+  it('turns on only for ?spike=assembled, or inside the Capacitor shell', () => {
+    expect(isSpikeAssembled('?spike=assembled', 'https:')).toBe(true);
+    expect(isSpikeAssembled('?tune&spike=assembled', 'http:')).toBe(true);
+    expect(isSpikeAssembled('', 'capacitor:')).toBe(true);
+    expect(isSpikeAssembled('', 'https:')).toBe(false);
+    expect(isSpikeAssembled('?tune', 'https:')).toBe(false);
+    expect(isSpikeAssembled('?spike=other', 'http:')).toBe(false);
   });
 });

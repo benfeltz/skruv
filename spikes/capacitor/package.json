@@ -6,7 +6,12 @@
   "description": "Engine spike 1.2 (branch-local, never merges): the root Vite build in a Capacitor iOS shell.",
   "scripts": {
     "web": "npm --prefix ../.. run build",
-    "sync": "npm run web && cap sync ios"
+    "sync": "npm run web && cap sync ios",
+    "ios:build": "scripts/ios.sh build",
+    "ios:install": "scripts/ios.sh install",
+    "ios:launch": "scripts/ios.sh launch",
+    "ios:all": "scripts/ios.sh all",
+    "ios:sim": "scripts/ios.sh sim"
   },
   "dependencies": {
     "@capacitor/core": "8.5.2",

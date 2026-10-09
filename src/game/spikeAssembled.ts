@@ -8,9 +8,13 @@ import { placeLayout } from '../../tools/validate/lib/geometry.js';
 import type { ApplyContext, SeatPair } from './assembly.js';
 import type { PackedPart } from './boxLayout.js';
 
-/** True when the page's query string (`location.search`) asks for the assembled spike. */
-export function isSpikeAssembled(search: string) {
-  return new URLSearchParams(search).get(SPIKE.queryParam) === SPIKE.assembledMode;
+/**
+ * True when the page asks for the assembled spike: its query string (`location.search`)
+ * says so, or it is served from the Capacitor shell's own scheme (`location.protocol`) —
+ * which a browser never is, so the plain URL is untouched.
+ */
+export function isSpikeAssembled(search: string, protocol: string) {
+  return protocol === SPIKE.shellProtocol || new URLSearchParams(search).get(SPIKE.queryParam) === SPIKE.assembledMode;
 }
 
 /**

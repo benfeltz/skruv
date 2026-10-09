@@ -433,6 +433,9 @@ export const DEV_WS = {
 export const SPIKE = {
   queryParam: 'spike',
   assembledMode: 'assembled',
+  // The iOS shell serves the bundled build from capacitor://localhost/ and can't append a
+  // query to a bundled file (appStartPath is a path there), so its scheme turns the mode on.
+  shellProtocol: 'capacitor:',
   // Where the assembled layout's frame (floor under the carcass centre, front +z) stands:
   // behind the box, facing the start view.
   assembledPosition: [0, 0, -1.2] satisfies Vec3,
