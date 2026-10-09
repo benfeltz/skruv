@@ -7,7 +7,7 @@ import { createTunables, LIVE_KNOBS } from './game/tunables.js';
 import { PART_TYPES } from './game/item.js';
 import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
-import { fractionOf, heightAt } from './game/liftLine.js';
+import { fractionOf, heightAt, selectsDuringHold } from './game/liftLine.js';
 import { baseRest, boxPlacement, boxPoseOf, createPackedWorldLayout, lidRest, respawnSpots } from './game/boxLayout.js';
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
@@ -149,9 +149,10 @@ const sprue = createSprue();
 scene.add(sprue.object);
 
 // The box drags but never takes the gizmo: tapping it is tapping the room. While the line
-// holds a part, taps never change the selection.
+// holds a part, a tap on empty space puts its rings away (a drag then moves it) and one on
+// the part brings them back (to turn it); no other part is picked.
 function select(part: Part | null) {
-  if (hold.held) return;
+  if (!selectsDuringHold(part, hold.held)) return;
   if (!part || part === flatpack.base) {
     gizmo.hide();
     sprue.hide();

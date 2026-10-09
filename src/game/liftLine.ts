@@ -37,3 +37,13 @@ export function easeHeight(current: number, target: number, rate: number, delta:
 export function pressOnKnob(pointerY: number, knobY: number, radius: number) {
   return Math.abs(pointerY - knobY) <= radius;
 }
+
+/**
+ * Whether a tap on `tapped` (null: empty space) may change the selection while the line
+ * holds `held`. Taps switch what the free hand does to the held part — empty space puts its
+ * rings away so a drag moves it, the part itself brings them back to turn it — but never
+ * pick another part.
+ */
+export function selectsDuringHold<T>(tapped: T | null, held: T | null) {
+  return held === null || tapped === null || tapped === held;
+}

@@ -39,9 +39,10 @@ describe('which part the line shows for (review round 1)', () => {
   });
 });
 
-describe('taps never change the selection while the line holds', () => {
-  it('returns from select() first thing while holding', () => {
-    expect(body(main, 'select')).toMatch(/^function select\(part: Part \| null\) \{\n\s*if \(hold\.held\) return;/);
+// Ben's manual pass (2026-10-09): taps switch the held part between turning and moving.
+describe('taps never pick another part while the line holds', () => {
+  it('asks selectsDuringHold first thing in select()', () => {
+    expect(body(main, 'select')).toMatch(/^function select\(part: Part \| null\) \{\n\s*if \(!selectsDuringHold\(part, hold\.held\)\) return;/);
   });
 });
 

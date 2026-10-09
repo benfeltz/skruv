@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GESTURE, LIFT_LINE, ROOM } from '../src/constants.js';
 import { clampLift } from '../src/game/dragMath.js';
-import { easeHeight, fractionOf, heightAt, liftRange, pressOnKnob } from '../src/game/liftLine.js';
+import { easeHeight, fractionOf, heightAt, liftRange, pressOnKnob, selectsDuringHold } from '../src/game/liftLine.js';
 
 describe('liftRange', () => {
   it.each([
@@ -70,5 +70,26 @@ describe('pressOnKnob', () => {
     expect(pressOnKnob(300 - r, 300, r)).toBe(true);
     expect(pressOnKnob(300 + r + 1, 300, r)).toBe(false);
     expect(pressOnKnob(300 - r - 1, 300, r)).toBe(false);
+  });
+});
+
+// Ben's manual pass (2026-10-09): one hold lifts, turns AND moves — taps switch the free
+// hand between turning (rings up) and moving (rings away), and never pick another part.
+describe('selectsDuringHold', () => {
+  const held = { id: 'held' };
+  const other = { id: 'other' };
+
+  it('lets any tap select while nothing is held', () => {
+    expect(selectsDuringHold(other, null)).toBe(true);
+    expect(selectsDuringHold(null, null)).toBe(true);
+  });
+
+  it('lets a tap on empty space put the rings away, and one on the held part bring them back', () => {
+    expect(selectsDuringHold(null, held)).toBe(true);
+    expect(selectsDuringHold(held, held)).toBe(true);
+  });
+
+  it('never selects another part while one is held', () => {
+    expect(selectsDuringHold(other, held)).toBe(false);
   });
 });
