@@ -118,7 +118,7 @@ export interface GestureRouterOptions {
   sprue?: { selected: Part | null; hitTest(raycaster: THREE.Raycaster): HandleHit | null };
   dropGuide?: { show(from: Vec3, to: Vec3): void; hide(): void };
   events?: Pick<Bus, 'emit'>;
-  hold?: { readonly held: Part | null; readonly height: number };
+  hold?: { readonly held: Part | null; readonly height: number; target(height: number): void };
 }
 
 // A hole marking on a part's mesh (src/game/partMesh.ts).
@@ -167,10 +167,11 @@ const PULL_AXIS_PROBE = 0.05;
  *   events — `{ emit(event) }` bus (src/game/events.ts): grabs, releases, seat offers,
  *            seats and fastenings are reported as they happen. Reporting only — nothing
  *            here reads it back.
- *   hold   — `{ held, height }`, read-only (src/scene/liftHold.ts): while the elevation
- *            line holds the part being dragged, the drag rides at the line's height, so
- *            seats are offered where the part really is and letting go of the line leaves
- *            the drag there.
+ *   hold   — `{ held, height, target(height) }` (src/scene/liftHold.ts): while the
+ *            elevation line holds the part being dragged, the drag rides at the line's
+ *            height, so seats are offered where the part really is and letting go of the
+ *            line leaves the drag there; a seat newly on offer eases the line to its
+ *            height, as seat assist eases everything else.
  * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
  * eases a dragged part toward the seat on offer (seat assist) and fades the seat flash.
  */
@@ -512,6 +513,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (offer === drag!.offer) return;
     drag!.offer = offer;
     events?.emit(snapCandidateEvent(drag!.part.id, snap));
+    // The line sets the held part's height, so seat assist reaches the seat's through it —
+    // once per offer, so moving the line finger afterwards still wins.
+    if (drag!.snapped && hold?.held === drag!.part) hold.target(drag!.snapped.position[1]);
   }
 
   // Seat assist: only while a seat is on offer, the held part glides toward it.

@@ -87,7 +87,8 @@ function harness() {
   const events = createBus();
   events.on(EVENT.SNAP_CANDIDATE, (event) => offers.push(event));
 
-  const hold: { held: Part | null; height: number } = { held: null, height: 0 };
+  const targets: number[] = [];
+  const hold = { held: null as Part | null, height: 0, target: (height: number) => targets.push(height) };
   const canvas = new FakeCanvas();
   const router = createGestureRouter({
     domElement: canvas as unknown as HTMLElement, // a fake: listeners and a bounding rect only
@@ -111,7 +112,7 @@ function harness() {
     return { clientX: at.clientX - 32, clientY: at.clientY };
   }
   const offered = () => offers.at(-1)?.target ?? null;
-  return { router, canvas, hold, dowel, moves, dragDowel, offered };
+  return { router, canvas, hold, dowel, moves, targets, dragDowel, offered };
 }
 
 describe('a drag of the held part rides at the line height (review round 1)', () => {
@@ -145,6 +146,27 @@ describe('a drag of the held part rides at the line height (review round 1)', ()
     canvas.fire('pointermove', { clientX: at.clientX + 10, clientY: at.clientY });
     router.update(0);
     expect(moves.at(-1)![1]).toBeCloseTo(0.6, 9);
+  });
+
+  // Review round 2: seat assist moves y through the line, once per offer.
+  it('eases the line to the seat height when a seat comes on offer for the held part', () => {
+    const { router, hold, dowel, targets, dragDowel, offered } = harness();
+    hold.held = dowel;
+    hold.height = 0.061;
+    dragDowel();
+    expect(offered()).toBe('panel');
+    // The dowel's end in the hole: its centre stands half its length above the hole.
+    expect(targets).toHaveLength(1);
+    expect(targets[0]).toBeCloseTo(0.016 + PART_TYPES.dowel.size[1] / 2, 3);
+    router.update(0);
+    expect(targets).toHaveLength(1);
+  });
+
+  it('never retargets the line for a part it does not hold', () => {
+    const { targets, dragDowel, offered } = harness();
+    dragDowel();
+    expect(offered()).toBe('panel');
+    expect(targets).toEqual([]);
   });
 
   it('leaves a drag of any other part alone', () => {
