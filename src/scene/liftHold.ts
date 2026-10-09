@@ -9,14 +9,17 @@ import type { Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
 
 /** What `createLiftHold` adds to the physics it wraps — see there. */
 export interface LiftHold {
-  begin(part: Part): void;
+  begin(part: Part, by: Keeper): void;
   target(height: number): void;
   jump(height: number): void;
-  end(): void;
+  end(by?: Keeper): void;
   update(delta: number): void;
   readonly held: Part | null;
   readonly height: number;
 }
+
+/** What keeps a held part up: a finger on the line, or Shift held down (the desktop's hold). */
+export type Keeper = 'line' | 'key';
 
 /** A part's lift range turned by `rotation`: a part stood on end needs more floor clearance. */
 export function liftRangeOf(part: Part, rotation: Quat): LiftRange {
@@ -28,10 +31,12 @@ const clampTo = (y: number, [min, max]: LiftRange) => Math.min(max, Math.max(min
 
 /**
  * Physics seam for the elevation line (src/ui/liftLine.ts): while a finger is on the line,
- * the held part stays in mid-air at the line's height. `begin(part)` takes the part's body
- * over (unless it is already under direct control), `target(height)` eases it there in
- * `update(delta)`, `jump(height)` puts it there at once, and `end()` hands it back to the
- * simulation at rest — so it drops, as releasing a lift always has.
+ * or Shift is held, the held part stays in mid-air at the line's height. `begin(part, by)`
+ * takes the part's body over (unless it is already under direct control) and counts `by`
+ * as keeping it up, `target(height)` eases it there in `update(delta)`, `jump(height)` puts
+ * it there at once, and `end(by)` lets `by` go: once no keeper is left, the body goes back
+ * to the simulation at rest — so it drops, as releasing a lift always has. `end()` drops it
+ * whoever keeps it (a seat, a repack, the app put away).
  *
  * While holding body B:
  *   move(B)    only y is replaced by the hold's height — x, z and rotation pass through, so
@@ -48,7 +53,10 @@ const clampTo = (y: number, [min, max]: LiftRange) => Math.min(max, Math.max(min
 export function createLiftHold(physics: PhysicsWorld): PhysicsWorld & LiftHold {
   // Bodies grabbed through this seam and not yet released: the drags', turns' and seats' holds.
   const holders = new Set<Body>();
+  // Where each of them was last moved to: ahead of the simulation until the next step.
+  const moved = new Map<Body, Vec3>();
   let hold: { part: Part; x: number; z: number; rotation: Quat; height: number; goal: number } | null = null;
+  const keepers = new Set<Keeper>();
 
   const holding = (body: Body) => hold?.part.body === body;
   const rangeNow = () => liftRangeOf(hold!.part, hold!.rotation);
@@ -67,6 +75,7 @@ export function createLiftHold(physics: PhysicsWorld): PhysicsWorld & LiftHold {
   }
 
   function move(body: Body, position: Vec3, rotation?: Quat) {
+    if (holders.has(body)) moved.set(body, position);
     if (!holding(body)) return physics.move(body, position, rotation);
     if (rotation) hold!.rotation = rotation;
     [hold!.x, , hold!.z] = position;
@@ -75,17 +84,27 @@ export function createLiftHold(physics: PhysicsWorld): PhysicsWorld & LiftHold {
 
   function release(body: Body) {
     holders.delete(body);
+    moved.delete(body);
     if (!holding(body)) physics.release(body);
   }
 
-  function begin(part: Part) {
+  function begin(part: Part, by: Keeper) {
+    // A second keeper joins the hold as it is, mid-ease and all.
+    if (hold) {
+      if (hold.part === part) keepers.add(by);
+      return;
+    }
+    keepers.add(by);
     const { body } = part;
     // A body the simulation has is nobody's, whatever was left behind (a repack's place).
     if (!body.isKinematic()) {
       holders.delete(body);
+      moved.delete(body);
       physics.grab(body);
     }
-    const { x, y, z } = body.translation();
+    // Under a drag, where it was last put; else where the simulation has it.
+    const t = body.translation();
+    const [x, y, z] = moved.get(body) ?? [t.x, t.y, t.z];
     const r = body.rotation();
     hold = { part, x, z, rotation: [r.x, r.y, r.z, r.w], height: y, goal: y };
   }
@@ -98,8 +117,11 @@ export function createLiftHold(physics: PhysicsWorld): PhysicsWorld & LiftHold {
     if (hold) hold.goal = hold.height = clampTo(height, rangeNow());
   }
 
-  function end() {
+  function end(by?: Keeper) {
     if (!hold) return;
+    if (by) keepers.delete(by);
+    else keepers.clear();
+    if (keepers.size > 0) return;
     const { body } = hold.part;
     hold = null;
     if (!holders.has(body)) physics.release(body);

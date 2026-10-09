@@ -28,6 +28,8 @@ describe('seam order', () => {
     expect(at('hold.update(delta)')).toBeGreaterThan(-1);
     expect(at('hold.update(delta)')).toBeLessThan(at('physics.step(delta)'));
     expect(at('showLiftLine()')).toBeLessThan(at('physics.step(delta)'));
+    expect(at('keepShiftHold()')).toBeGreaterThan(-1);
+    expect(at('keepShiftHold()')).toBeLessThan(at('hold.update(delta)'));
   });
 });
 
@@ -45,7 +47,13 @@ describe('taps never change the selection while the line holds', () => {
 
 describe('every path ends the hold (regression risk: a hold that never ends)', () => {
   it('the finger leaving the line', () => {
-    expect(main).toMatch(/onRelease: \(\) => hold\.end\(\)/);
+    expect(main).toMatch(/onRelease: \(\) => hold\.end\('line'\)/);
+  });
+
+  // Ben's manual pass (2026-10-09): Shift is the desktop's hold.
+  it('Shift let go', () => {
+    expect(body(main, 'onShift')).toMatch(/shiftDown = event\.type === 'keydown';\n\s*if \(!shiftDown\) hold\.end\('key'\);/);
+    expect(main).toMatch(/window\.addEventListener\('keyup', onShift\);/);
   });
 
   it('a seat naming the held part', () => {
@@ -56,9 +64,10 @@ describe('every path ends the hold (regression risk: a hold that never ends)', (
     expect(body(main, 'repack')).toMatch(/^function repack\(\) \{\n\s*hold\.end\(\);/);
   });
 
-  it('the app hidden or blurred', () => {
-    expect(main).toMatch(/document\.addEventListener\('visibilitychange', \(\) => \{\n\s*if \(document\.visibilityState === 'hidden'\) hold\.end\(\);/);
-    expect(main).toMatch(/window\.addEventListener\('blur', \(\) => hold\.end\(\)\);/);
+  it('the app hidden or blurred — whoever keeps it, and Shift is forgotten too', () => {
+    expect(main).toMatch(/document\.addEventListener\('visibilitychange', \(\) => \{\n\s*if \(document\.visibilityState === 'hidden'\) dropHold\(\);/);
+    expect(main).toMatch(/window\.addEventListener\('blur', dropHold\);/);
+    expect(body(main, 'dropHold')).toMatch(/shiftDown = false;\n\s*hold\.end\(\);/);
   });
 
   it('the control reports a release on up, cancel and lost capture', () => {

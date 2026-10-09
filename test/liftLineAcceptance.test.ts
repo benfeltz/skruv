@@ -142,7 +142,7 @@ describe('AC: lifting only lifts — the line never moves a part toward the came
     fire('pointerdown', at);
     fire('pointermove', { clientX: at.clientX + 30, clientY: at.clientY });
     const [, , [x, , z]] = w.calls.filter(([op]) => op === 'move').at(-1)! as [string, string, number[]];
-    hold.begin(panel);
+    hold.begin(panel, 'line');
     hold.target(1.2);
     w.calls.length = 0;
     for (let frame = 0; frame < 120; frame++) {
@@ -165,7 +165,7 @@ describe('AC: a panel stood up in mid-air drops upright when the line lets go', 
     const w = world();
     const panel = w.add('panel', 'fixedShelf', [0, 0.008, 0]);
     const hold = createLiftHold(w.physics);
-    hold.begin(panel);
+    hold.begin(panel, 'line');
     hold.jump(0.5);
     // A gizmo turn stands it on end (a quarter turn about x), then lets go.
     const upended: Quat = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
@@ -228,9 +228,9 @@ describe('AC: the finger leaving the line always ends the hold', () => {
     const panel = w.add('panel', 'fixedShelf', [0, 0.008, 0]);
     const hold = createLiftHold(w.physics);
     const line = createLiftLine({
-      onPress: () => hold.begin(panel),
+      onPress: () => hold.begin(panel, 'line'),
       onMove: () => {},
-      onRelease: () => hold.end(),
+      onRelease: () => hold.end('line'),
     });
     const element = line.element as unknown as FakeElement;
     line.show(0);
@@ -255,7 +255,7 @@ describe('AC: gesture.liftLineX and gesture.liftLineEase are live', () => {
     const w = world();
     const panel = w.add('panel', 'fixedShelf', [0, 0.008, 0]);
     const hold = createLiftHold(w.physics);
-    hold.begin(panel);
+    hold.begin(panel, 'line');
     hold.target(1);
     hold.update(0.05);
     const share = 1 - Math.exp(-20 * 0.05);

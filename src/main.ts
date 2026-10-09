@@ -223,7 +223,8 @@ const rangeOf = (part: Part) => liftRangeOf(part, part.mesh.quaternion.toArray()
 const heightOf = (part: Part) => (hold.held === part ? hold.height : part.mesh.position.y);
 
 // A finger on the line holds the part: a press on the line eases it toward the finger, one
-// on the knob drags it 1:1 from where it is. Letting go hands it back to gravity.
+// on the knob drags it 1:1 from where it is. Letting go hands it back to gravity — unless
+// Shift still keeps it up.
 let knobOffset: number | null = null;
 function liftTo(fraction: number) {
   const part = hold.held;
@@ -235,14 +236,32 @@ const liftLine = createLiftLine({
   onPress(fraction, onKnob) {
     const part = liftablePart();
     if (!part) return;
-    hold.begin(part);
+    hold.begin(part, 'line');
     knobOffset = onKnob ? fractionOf(heightOf(part), rangeOf(part)) - fraction : null;
     liftTo(fraction);
   },
   onMove: liftTo,
-  onRelease: () => hold.end(),
+  onRelease: () => hold.end('line'),
 });
 document.body.append(liftLine.element);
+
+// Shift is the desktop's finger on the line: while it is down, the part the line would lift
+// stays where it is — the pointer free to turn it, drag it (a Shift-drag still lifts) or
+// orbit — and letting go drops it. Window-level, so it counts wherever focus sits.
+let shiftDown = false;
+function onShift(event: KeyboardEvent) {
+  if (event.key !== 'Shift') return;
+  shiftDown = event.type === 'keydown';
+  if (!shiftDown) hold.end('key');
+}
+window.addEventListener('keydown', onShift);
+window.addEventListener('keyup', onShift);
+
+// Per frame, so a part picked up or selected with Shift already down is held from then on.
+function keepShiftHold() {
+  const part = shiftDown && liftablePart();
+  if (part) hold.begin(part, 'key');
+}
 
 function showLiftLine() {
   const part = liftablePart();
@@ -250,15 +269,19 @@ function showLiftLine() {
   else liftLine.hide();
 }
 
-// The hold ends with the finger, and also when its part seats, on a repack, and whenever
-// the app is backgrounded or loses focus.
+// The hold ends with the finger and Shift, and also when its part seats, on a repack, and
+// whenever the app is backgrounded or loses focus — a Shift let go meanwhile never arrives.
+function dropHold() {
+  shiftDown = false;
+  hold.end();
+}
 events.on(EVENT.SEAT, ({ hardware, host }) => {
   if (hold.held && (hardware === hold.held.id || host === hold.held.id)) hold.end();
 });
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') hold.end();
+  if (document.visibilityState === 'hidden') dropHold();
 });
-window.addEventListener('blur', () => hold.end());
+window.addEventListener('blur', dropHold);
 
 // Recovery: a loose player part that has left the room (through a slab, off a wall) is set
 // down again beside the box. Bonded parts go back only with a repack. The box itself goes
@@ -302,6 +325,7 @@ const fps = createFpsGuard();
 
 createLoop((delta, rawDelta) => {
   cameraControls.update(delta);
+  keepShiftHold();
   hold.update(delta);
   showLiftLine();
   physics.step(delta);
