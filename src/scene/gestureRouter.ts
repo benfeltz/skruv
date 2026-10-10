@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { AIM, COLORS, DROP, FASTENER, GESTURE, PICK, RING, ROOM, SNAP } from '../constants.js';
 import { areCompatible, COMPATIBLE, CONNECTOR, KIND } from '../../tools/validate/lib/vocabulary.js';
-import { connectorInWorld } from '../../tools/validate/lib/geometry.js';
+import { connectorInWorld, rotateVector } from '../../tools/validate/lib/geometry.js';
 import { capture } from '../game/assembly.js';
 import { PART_TYPES } from '../game/item.js';
 import { socketUnder } from '../game/decals.js';
@@ -23,7 +23,7 @@ import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
 import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
 import type { Snap } from '../game/snapMath.js';
-import type { Assembly, AssemblyJoint, PartId } from '../game/assembly.js';
+import type { Assembly, AssemblyJoint, Head, PartId } from '../game/assembly.js';
 import type { Bus } from '../game/events.js';
 import type { ApplyContext } from '../game/assembly.js';
 import type { GestureEffect } from '../game/gestureState.js';
@@ -58,6 +58,13 @@ interface WorldConnector {
 }
 
 type RouterSnap = Snap<WorldConnector, WorldConnector>;
+
+/** A tool being carried: its tip connector, the tip's catalog index, and the seats it could take. */
+interface CarriedTool {
+  tip: (typeof PART_TYPES)[string]['connectors'][number];
+  index: number;
+  seats: WorldConnector[];
+}
 
 /** Where a pointer is, in client coordinates. */
 interface ClientPoint {
@@ -223,6 +230,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // The hole marking lit under the drop line (or at the seat on offer), if any.
   let glowing: Decal | null = null;
   const down = new THREE.Vector3(0, -1, 0);
+  // A carried tool's tip in the world, rewritten every frame (tipAt).
+  const tipPoint: Vec3 = [0, 0, 0];
 
   function aim({ clientX, clientY }: ClientPoint) {
     const rect = domElement.getBoundingClientRect();
@@ -298,9 +307,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const connectorWorld = (id: PartId, index: number) => connectorInWorld(PART_TYPES[partById.get(id)!.type].connectors[index], poseOf(id));
 
   // A world point in client (CSS px) coordinates.
-  function screenPoint(position: Vec3): ScreenPoint {
+  // `rect` is the canvas's, read once by a caller projecting many points.
+  function screenPoint(position: Vec3, rect = domElement.getBoundingClientRect()): ScreenPoint {
     scratch.fromArray(position).project(camera);
-    const rect = domElement.getBoundingClientRect();
     return [rect.left + ((scratch.x + 1) / 2) * rect.width, rect.top + ((1 - scratch.y) / 2) * rect.height];
   }
 
@@ -580,24 +589,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     drag!.retarget = { from, to: hold!.goal };
   }
 
-  // Self-aim: a carried tool whose tip nears a seat target turns its tip into it, harder the
-  // nearer, so the snap's angle window comes to the tool. Every frame — a still finger sends
-  // no events, so the offer the aim brings is looked for here too. Tools only; outside
-  // AIM.zone nothing changes, and once a seat is on offer seat assist takes over.
-  function aimTool(delta: number) {
-    if (drag?.mode !== 'move' || drag.snapped || !drag.held) return;
+  // The carried tool: its tip connector and the seats it could take, swept once per frame
+  // for both the aim and the rings — or null when no tool is being carried.
+  function carriedTool() {
+    if (drag?.mode !== 'move' || !drag.held || !drag.pointer) return null;
     const index = tipIndex(drag.part.type);
-    if (index < 0) return;
+    if (index < 0) return null;
     const tip = PART_TYPES[drag.part.type].connectors[index];
-    // No seat on offer: the part is held exactly where the finger puts it.
-    const { position } = drag.held;
-    const near = nearestTarget(connectorInWorld(tip, { position, rotation: drag.rotation }).position, seatsFor(drag.part, tip.type), AIM.zone);
-    if (!near) return;
-    const aimed = aimedRotation(drag.rotation, tip.axis, near.target.axis);
-    drag.rotation = aimStep(drag.rotation, aimed, aimWeight(near.distance, AIM.zone), AIM.rate, delta);
-    drag.held = { position, rotation: drag.rotation };
-    physics.move(drag.part.body, position, drag.rotation);
-    refreshOffer(position);
+    return { tip, index, seats: seatsFor(drag.part, tip.type) };
   }
 
   // Where a carried tool's tip of `type` could seat: free targets that take it, on seated
@@ -614,49 +613,73 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     );
   }
 
-  // --- target rings: the fasteners a carried tool can work right now ---
-
-  // The carried tool's tip connector, or null when no tool is being carried.
-  function carriedTip() {
-    if (drag?.mode !== 'move' || !drag.held || !drag.pointer) return null;
-    const index = tipIndex(drag.part.type);
-    return index < 0 ? null : PART_TYPES[drag.part.type].connectors[index];
+  // The carried tool's tip in the world with the tool at `pose`, into one reused record.
+  function tipAt({ tip }: CarriedTool, { position, rotation }: Pose): Vec3 {
+    return scratch.fromArray(tip.position).applyQuaternion(twist.fromArray(rotation)).add(offset.fromArray(position)).toArray(tipPoint);
   }
+
+  // Self-aim: a carried tool whose tip nears a seat target turns its tip into it, harder the
+  // nearer, so the snap's angle window comes to the tool. Every frame — a still finger sends
+  // no events, so the offer the aim brings is looked for here too. Tools only; outside
+  // AIM.zone nothing changes, and once a seat is on offer seat assist takes over.
+  function aimTool(tool: CarriedTool | null, delta: number) {
+    if (!tool || drag!.snapped) return;
+    // No seat on offer: the part is held exactly where the finger puts it.
+    const { position } = drag!.held!;
+    const near = nearestTarget(tipAt(tool, drag!.held!), tool.seats, AIM.zone);
+    if (!near) return;
+    const aimed = aimedRotation(drag!.rotation, tool.tip.axis, near.target.axis);
+    drag!.rotation = aimStep(drag!.rotation, aimed, aimWeight(near.distance, AIM.zone), AIM.rate, delta);
+    drag!.held = { position, rotation: drag!.rotation };
+    physics.move(drag!.part.body, position, drag!.rotation);
+    // A tool's one connector is its tip and these are its seats: the full offer check runs
+    // only once the aim has brought one within the snap window.
+    const from = { type: tool.tip.type, position: tipAt(tool, drag!.held), axis: rotateVector(drag!.rotation, tool.tip.axis) };
+    if (findSnap([from], tool.seats, SNAP)) refreshOffer(position);
+  }
+
+  // --- target rings: the fasteners a carried tool can work right now ---
 
   // Workable targets for the carried tool, nearest the finger first, with how brightly each
   // lights — dark ones included.
-  function ringsFor(tip: NonNullable<ReturnType<typeof carriedTip>>) {
-    const { held, pointer, part } = drag!;
+  function ringsFor(tool: CarriedTool) {
+    const { held, pointer } = drag!;
     const joints = assembly.all();
-    const workable = seatsFor(part, tip.type).filter((c) => isWorkable(c, joints, catches));
-    const at = connectorInWorld(tip, held!).position;
-    return ringStrengths(workable, [pointer!.clientX, pointer!.clientY], screenPoint, at, RING);
+    const catches = catcher(joints);
+    const workable = tool.seats.filter((c) => isWorkable(c, joints, catches));
+    const rect = domElement.getBoundingClientRect();
+    return ringStrengths(workable, [pointer!.clientX, pointer!.clientY], (position) => screenPoint(position, rect), tipAt(tool, held!), RING);
   }
 
-  // The bolt a seated cam lock's recess would catch, as a turn of it would.
-  function catches(cam: PartId) {
-    const joint = assembly.all().find((j) => j.hardware === cam && j.kind === KIND.CAM);
-    return joint ? (crankContext(joint).captured ?? null) : null;
+  // The bolt a seated cam lock's recess would catch, as a turn of it would. The screwed
+  // heads are found once per sweep, and only if a cam lock asks.
+  function catcher(joints: AssemblyJoint[]) {
+    let heads: Head[] | null = null;
+    return (cam: PartId) => {
+      const joint = joints.find((j) => j.hardware === cam && j.kind === KIND.CAM);
+      if (!joint) return null;
+      heads ??= screwedHeads();
+      return capture(connectorWorld(joint.host, joint.hostConnector), heads)?.id ?? null;
+    };
   }
 
   // A tool let go with the finger on a lit ring seats there whatever its angle or distance:
   // the seat snapCandidate would offer, taken with no reach or angle limit.
   function ringDrop() {
-    const tip = carriedTip();
-    if (!tip) return null;
-    const hit = ringsFor(tip).find(({ strength, offset }) => strength > 0 && offset <= RING.hitRadius);
+    const tool = carriedTool();
+    if (!tool) return null;
+    const hit = ringsFor(tool).find(({ strength, offset }) => strength > 0 && offset <= RING.hitRadius);
     if (!hit) return null;
     const { part, held } = drag!;
-    const from: WorldConnector = { ...connectorInWorld(tip, held!), type: tip.type, part, index: tipIndex(part.type) };
+    const from: WorldConnector = { ...connectorInWorld(tool.tip, held!), type: tool.tip.type, part, index: tool.index };
     const snap = findSnap([from], [hit.target], { maxDistance: Infinity, maxAngle: Math.PI });
     return snap && seatPose(snap, held!);
   }
 
-  function showRings() {
-    const tip = targetRings && carriedTip();
-    if (!tip) return;
-    const lit = ringsFor(tip).filter(({ strength }) => strength > 0);
-    targetRings!.show(lit.map(({ target, strength }) => ({ position: target.position, axis: target.axis, strength })));
+  function showRings(tool: CarriedTool | null) {
+    if (!targetRings || !tool) return;
+    const lit = ringsFor(tool).filter(({ strength }) => strength > 0);
+    targetRings.show(lit.map(({ target, strength }) => ({ position: target.position, axis: target.axis, strength })));
   }
 
   // Seat assist: only while a seat is on offer, the held part glides toward it.
@@ -847,12 +870,12 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function crankContext(joint: AssemblyJoint): ApplyContext {
     if (joint.kind !== KIND.CAM) return {};
     const recess = connectorWorld(joint.host, joint.hostConnector);
-    const heads = assembly.screwedBolts().map(({ hardware }) => ({
-      id: hardware,
-      position: connectorWorld(hardware, headIndex(hardware)).position,
-    }));
-    return { captured: capture(recess, heads)?.id ?? null };
+    return { captured: capture(recess, screwedHeads())?.id ?? null };
   }
+
+  // Screwed bolts' heads where they are: the only ones a cam can catch.
+  const screwedHeads = (): Head[] =>
+    assembly.screwedBolts().map(({ hardware }) => ({ id: hardware, position: connectorWorld(hardware, headIndex(hardware)).position }));
 
   const headIndex = (id: PartId) => PART_TYPES[partById.get(id)!.type].connectors.findIndex((c) => c.type === CONNECTOR.BOLT_HEAD);
 
@@ -903,11 +926,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   function update(delta = 0) {
     followHold();
-    aimTool(delta);
+    // Swept once, for the aim and the rings.
+    const tool = carriedTool();
+    aimTool(tool, delta);
     assist(delta);
     fadeFlashes(delta);
     guideDrop();
-    showRings();
+    showRings(tool);
     for (const joint of assembly.all()) {
       if (joint.kind !== KIND.BOLT && joint.kind !== KIND.CAM) continue;
       const { mesh, body } = partById.get(joint.hardware)!;

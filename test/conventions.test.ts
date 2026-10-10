@@ -184,6 +184,16 @@ describe('target rings (1.8.2.1)', () => {
     const stop = router.slice(router.indexOf('function stopDrag()'), router.indexOf('}', router.indexOf('function stopDrag()')));
     expect(stop).toMatch(/targetRings\?\.hide\(\)/);
   });
+
+  // Review round 1: one connector sweep per frame on the phone path, shared by aim and rings.
+  it('share one sweep of the carried tool\'s seats per frame with the aim', () => {
+    const update = router.slice(router.indexOf('function update('), router.indexOf('// --- effects from the state machine'));
+    expect(update.match(/carriedTool\(\)/g)).toHaveLength(1);
+    expect(update).toMatch(/aimTool\(tool, delta\)/);
+    expect(update).toMatch(/showRings\(tool\)/);
+    const perFrame = router.slice(router.indexOf('function aimTool('), router.indexOf('// The bolt a seated cam lock'));
+    expect(perFrame).not.toMatch(/seatsFor\(|carriedTool\(/);
+  });
 });
 
 describe('seat flash hands back to the drop glow (1.4.1 review)', () => {
