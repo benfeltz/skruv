@@ -330,6 +330,17 @@ export const SNAP = {
   flashMs: 450,
 };
 
+// Tool self-aim (src/game/toolAim.ts, driven by src/scene/gestureRouter.ts): a dragged tool
+// whose tip comes within `zone` of a seat target turns its tip to point into it, harder the
+// nearer it is — so SNAP's 40° window is reached without the gizmo. Outside the zone the
+// tool keeps whatever orientation it has.
+export const AIM = {
+  // Metres from the tool's tip at which aiming starts (strength 0 there, 1 at the target).
+  zone: 0.3,
+  // Turn rate at full strength (1/s), the seat assist's exponential law.
+  rate: 8,
+};
+
 // Hole markings (src/game/decals.ts, drawn by src/game/partMesh.ts). Radii are keyed by
 // the catalog's socket connector type and sized a touch wider than what fills them, so a
 // seated fastener still shows a rim.

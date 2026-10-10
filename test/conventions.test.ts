@@ -45,6 +45,7 @@ describe('pure-logic modules', () => {
     'src/game/sessionBuffer.ts',
     'src/game/tunables.ts',
     'src/game/toolTargets.ts',
+    'src/game/toolAim.ts',
     'src/scene/fpsGuard.ts',
   ];
 
@@ -72,6 +73,7 @@ describe('pure-logic modules', () => {
     'src/game/sessionBuffer.ts',
     'src/game/tunables.ts',
     'src/game/toolTargets.ts',
+    'src/game/toolAim.ts',
     'src/scene/fpsGuard.ts',
   ])(
     '%s touches no DOM globals',
