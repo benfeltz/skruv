@@ -641,7 +641,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // 10 cm from its middle). The drag carries on from the new pose: its footprint is the
   // turned one, kept inside the room, and the finger's grab and height are rebased so the
   // next move doesn't put it back. The elevation line holding the drag goes with it, as a
-  // lift takes it, so it never pulls the tool back down.
+  // lift takes it, so it never pulls the tool back down — and whatever height the line is
+  // easing toward moves by as much, so a press on its track still gets there.
   function turnAboutTip(tool: CarriedTool, rotation: Quat): Vec3 {
     const { held, centre } = drag!;
     const [tx, ty, tz] = tipAt(tool, held!);
@@ -653,8 +654,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const [bx, , bz] = clampToRoom([tx - lx + cx, 0, tz - lz + cz], drag!.half, ROOM, GESTURE.wallMargin);
     let y = clampLift(ty - ly + cy, hy, ROOM, GESTURE.ceilingMargin) - cy;
     if (holdsDrag()) {
+      const goal = hold!.goal + y - hold!.height;
       hold!.jump(y);
       y = hold!.height;
+      hold!.target(goal);
     }
     const position: Vec3 = [bx - cx, y, bz - cz];
     const [px, , pz] = held!.position;
