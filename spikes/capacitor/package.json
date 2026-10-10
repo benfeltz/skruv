@@ -11,7 +11,8 @@
     "ios:install": "scripts/ios.sh install",
     "ios:launch": "scripts/ios.sh launch",
     "ios:all": "scripts/ios.sh all",
-    "ios:sim": "scripts/ios.sh sim"
+    "ios:sim": "scripts/ios.sh sim",
+    "ios:testflight": "scripts/ios.sh testflight"
   },
   "dependencies": {
     "@capacitor/core": "8.5.2",

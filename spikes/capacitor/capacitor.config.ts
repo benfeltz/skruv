@@ -11,8 +11,8 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const live = process.env.CAP_LIVE_URL;
 
 const config: CapacitorConfig = {
-  appId: 'site.skruv.spike',
-  appName: 'Skruv Spike',
+  appId: 'site.skruv.capacitor',
+  appName: 'Skruv Capacitor',
   webDir: '../../dist',
   server: live ? { url: live, cleartext: true } : {},
   ios: {

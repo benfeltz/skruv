@@ -241,6 +241,24 @@ export const GESTURE = {
   ceilingMargin: 0.1,
 };
 
+// Elevation line (src/ui/liftLine.ts, src/game/liftLine.ts, src/scene/liftHold.ts): a
+// vertical line with a knob for the held part's height, floor at the bottom to the lift
+// ceiling at the top. A finger on it holds the part in mid-air; touching the line eases the
+// part there, the knob drags it 1:1. Read at use time, so the ?tune knobs act live.
+export const LIFT_LINE = {
+  // Across the screen as a fraction of its width, 0 = left edge.
+  x: 0.08,
+  // Top and bottom of the line as fractions of the screen's height, top down.
+  top: 0.22,
+  bottom: 0.78,
+  // Knob radius, the drawn line's width and the line's touch band, CSS px — a fingertip.
+  knobRadius: 22,
+  lineWidth: 4,
+  hitWidth: 48,
+  // How fast the part eases toward a touched height, 1/s (exponential, like seat assist).
+  easeRate: 8,
+};
+
 // Rotate gizmo (src/scene/gizmo.ts): rings sized from the selected part's bounding sphere.
 export const GIZMO = {
   radiusPadding: 1.15,
