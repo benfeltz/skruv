@@ -6,7 +6,7 @@ import { capture } from '../game/assembly.js';
 import { PART_TYPES } from '../game/item.js';
 import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
-import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rotatedHalfExtents } from '../game/dragMath.js';
+import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rebaseDragOffset, rotatedHalfExtents } from '../game/dragMath.js';
 import { isFastened } from '../game/fasteners.js';
 import {
   fastenEvent,
@@ -78,6 +78,7 @@ interface Drag {
   held: Pose | null;
   snapped: (Pose & { snap: RouterSnap }) | null;
   offer: string | null;
+  retarget: { from: number; to: number } | null;
   pointer: ClientPoint | null;
   start: ScreenPoint;
   joints: { id: number; axis: ScreenPoint }[];
@@ -97,6 +98,7 @@ interface Rings {
 
 /** What `createGestureRouter` returns — see there. */
 export interface GestureRouter {
+  readonly dragging: { part: Part; mode: Drag['mode'] } | null;
   update(delta?: number): void;
   sync(): void;
   unseatAll(ids: PartId[]): void;
@@ -117,6 +119,7 @@ export interface GestureRouterOptions {
   sprue?: { selected: Part | null; hitTest(raycaster: THREE.Raycaster): HandleHit | null };
   dropGuide?: { show(from: Vec3, to: Vec3): void; hide(): void };
   events?: Pick<Bus, 'emit'>;
+  hold?: { readonly held: Part | null; readonly height: number; readonly goal: number; target(height: number): void; jump(height: number): void };
 }
 
 // A hole marking on a part's mesh (src/game/partMesh.ts).
@@ -165,10 +168,17 @@ const PULL_AXIS_PROBE = 0.05;
  *   events — `{ emit(event) }` bus (src/game/events.ts): grabs, releases, seat offers,
  *            seats and fastenings are reported as they happen. Reporting only — nothing
  *            here reads it back.
+ *   hold   — `{ held, height, goal, target(height), jump(height) }` (src/scene/liftHold.ts):
+ *            while the elevation line holds the part being dragged, the drag rides at the
+ *            line's height, so seats are offered where the part really is and letting go
+ *            of the line leaves the drag there; a seat newly on offer eases the line to its
+ *            height, as seat assist eases everything else, and back once the offer is
+ *            gone; a lift (second finger, Shift, wheel) moves the line with it. A part the
+ *            line holds is never a seat for another: it drops when the line lets go.
  * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
  * eases a dragged part toward the seat on offer (seat assist) and fades the seat flash.
  */
-export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, events }: GestureRouterOptions) {
+export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, events, hold }: GestureRouterOptions) {
   const state = createGestureState<Press>();
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -302,8 +312,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const free = (connectors: WorldConnector[]) => connectors.filter((c) => !isTaken(c));
     const dragged = free(worldConnectors(part, scratch.clone().fromArray(target), rotation));
     if (dragged.length === 0) return null;
+    // A part the elevation line holds up is no seat: it drops when the line lets go.
     const others = parts.flatMap((other) =>
-      other === part ? [] : free(worldConnectors(other, other.mesh.position, other.mesh.quaternion)),
+      other === part || other === hold?.held ? [] : free(worldConnectors(other, other.mesh.position, other.mesh.quaternion)),
     );
     const snap = findSnap(dragged, others, SNAP);
     if (!snap) return null;
@@ -440,19 +451,56 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       snapped: null,
       // The seat last reported on offer (telemetry), so only a change is reported.
       offer: null,
+      // The line's goal before a seat offer moved it (from), and where the offer put it (to).
+      retarget: null,
       pointer: null,
     } as Drag;
     physics.grab(body);
     updateDrag(event);
   }
 
-  // The lift raises the part and its drag plane together, so it stays under the finger.
+  // The lift raises the part and its drag plane together — and the line, for the part it
+  // holds, so the line's height never pulls it back.
   function liftDrag(dy: number, rate: number) {
     const cy = drag!.centre[1];
     const height = clampLift(drag!.height + dy * rate + cy, drag!.halfHeight, ROOM, GESTURE.ceilingMargin) - cy;
-    drag!.planeY += height - drag!.height;
+    if (!holdsDrag()) return raiseDrag(height);
+    hold!.jump(height);
+    raiseDrag(hold!.height);
+  }
+
+  // Straight up: the finger's ray meets the raised plane nearer the camera, so the grab
+  // offset is re-anchored there and the finger's x, z for the part stay put; the next
+  // finger move carries on from there. Re-anchored on where the finger puts the part, not
+  // where it is held — a seat assist's pull or a wall's clamp never sticks to the grab.
+  function raiseDrag(height: number) {
+    const planeY = drag!.planeY + height - drag!.height;
+    if (drag!.pointer) {
+      aim(drag!.pointer);
+      const origin = raycaster.ray.origin.toArray();
+      const direction = raycaster.ray.direction.toArray();
+      const before = intersectDragPlane(origin, direction, drag!.planeY);
+      const after = intersectDragPlane(origin, direction, planeY);
+      // Aimed above the horizon: keep the old offset; updateDrag holds the last pose.
+      if (before && after) drag!.offset = rebaseDragOffset([before[0] + drag!.offset[0], before[2] + drag!.offset[1]], after);
+    }
+    drag!.planeY = planeY;
     drag!.height = height;
     if (drag!.pointer) updateDrag(drag!.pointer);
+  }
+
+  // Whether the drag in progress is of the part the elevation line holds.
+  const holdsDrag = () => drag?.mode === 'move' && !!hold && hold.held === drag.part;
+
+  // A drag of the part the elevation line holds rides at the line's height. A hold that
+  // starts with a seat already on offer pulls the line there, as a new offer would.
+  function followHold() {
+    if (!holdsDrag()) {
+      if (drag) drag.retarget = null;
+      return;
+    }
+    if (drag!.snapped && !drag!.retarget) pullLineToSeat();
+    if (hold!.height !== drag!.height) raiseDrag(hold!.height);
   }
 
   function updateDrag(event: ClientPoint) {
@@ -488,6 +536,23 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (offer === drag!.offer) return;
     drag!.offer = offer;
     events?.emit(snapCandidateEvent(drag!.part.id, snap));
+    if (hold?.held !== drag!.part) return;
+    if (drag!.snapped) return pullLineToSeat();
+    // When the offer goes, so does its pull: the goal goes back, unless the line has moved
+    // it since.
+    const back = drag!.retarget;
+    drag!.retarget = null;
+    if (back && hold.goal === back.to) hold.target(back.from);
+  }
+
+  // The line sets the held part's height, so seat assist reaches the seat's through it —
+  // once per offer, so moving the line finger afterwards still wins. The goal it had before
+  // the first offer is kept, to go back to.
+  function pullLineToSeat() {
+    const back = drag!.retarget;
+    const from = back && hold!.goal === back.to ? back.from : hold!.goal;
+    hold!.target(drag!.snapped!.position[1]);
+    drag!.retarget = { from, to: hold!.goal };
   }
 
   // Seat assist: only while a seat is on offer, the held part glides toward it.
@@ -576,7 +641,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       const { from: a, to: b } = drag.snapped.snap;
       return glow(decalOf(a) ?? decalOf(b));
     }
-    const host = hit && drag.mode === 'move' ? partByMesh.get(hit.object) : null;
+    const under = hit && drag.mode === 'move' ? partByMesh.get(hit.object)! : null;
+    const host = under === hold?.held ? null : under;
     glow(host ? decalOf(socketUnder(to, freeSocketsFor(part, host), DROP.holeReach)) : null);
   }
 
@@ -722,6 +788,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // --- per frame: fastener progress drawn on top of the simulated poses ---
 
   function update(delta = 0) {
+    followHold();
     assist(delta);
     fadeFlashes(delta);
     guideDrop();
@@ -872,6 +939,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   window.addEventListener('keyup', onKey);
 
   return {
+    // The drag in progress, read-only: which part, and how it is being moved.
+    get dragging() {
+      return drag && { part: drag.part, mode: drag.mode };
+    },
     update,
     // Brings the physics joints in line with the graph after a change made outside a
     // gesture — the display shelf seated pre-fastened — through the same reconcile a tap

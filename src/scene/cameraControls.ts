@@ -20,6 +20,18 @@ export function createCameraControls(camera: Camera, domElement: HTMLElement) {
   controls.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN };
   controls.mouseButtons = { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN };
 
+  // Shift is the desktop's part hold (src/main.ts), never a camera mode: a left drag orbits
+  // and a right drag pans with it down or not. OrbitControls swaps the two once under any
+  // of Ctrl, Cmd and Shift, so a press with Shift as the only one gets them pre-swapped —
+  // in the capture phase, before OrbitControls' own pointerdown on the same element reads
+  // them. Ctrl/Cmd keep their swap, Shift or no Shift.
+  function unswapShift(event: PointerEvent) {
+    const swap = event.shiftKey && !event.ctrlKey && !event.metaKey;
+    controls.mouseButtons.LEFT = swap ? MOUSE.PAN : MOUSE.ROTATE;
+    controls.mouseButtons.RIGHT = swap ? MOUSE.ROTATE : MOUSE.PAN;
+  }
+  domElement.addEventListener('pointerdown', unswapShift, { capture: true });
+
   controls.enableDamping = true;
   controls.dampingFactor = CAMERA_LIMITS.dampingFactor;
 
@@ -85,6 +97,7 @@ export function createCameraControls(camera: Camera, domElement: HTMLElement) {
       controls.update();
     },
     dispose() {
+      domElement.removeEventListener('pointerdown', unswapShift, { capture: true });
       controls.dispose();
     },
   };

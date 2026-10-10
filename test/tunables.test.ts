@@ -34,6 +34,8 @@ describe('LIVE_KNOBS', () => {
       'gesture.hoverLift',
       'gesture.liftRate',
       'gesture.detentStep',
+      'gesture.liftLineX',
+      'gesture.liftLineEase',
       'joint.angularPlay',
       'joint.playDamping',
       'physics.linearDamping',
