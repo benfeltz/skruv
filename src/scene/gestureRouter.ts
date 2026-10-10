@@ -332,11 +332,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
         : free(worldConnectors(other, other.mesh.position, other.mesh.quaternion)).filter((c) => isSeatTarget(c, seated)),
     );
     const snap = findSnap(dragged, others, SNAP);
-    if (!snap) return null;
-    // The alignment can swing a long part's far end by up to SNAP.maxAngle; refuse a seat
-    // that would hold it through the floor or a wall.
-    const pose = applyTransform(snap.transform, { position: target, rotation: drag!.rotation });
-    const half = rotatedHalfExtents(PART_TYPES[part.type].size.map((d) => d / 2), pose.rotation);
+    return snap && seatPose(snap, { position: target, rotation: drag!.rotation });
+  }
+
+  // Where `snap` seats the dragged part from `pose`. The alignment can swing a long part's
+  // far end by up to SNAP.maxAngle (a ring drop's by more); refuse a seat that would hold it
+  // through the floor or a wall.
+  function seatPose(snap: RouterSnap, from: Pose) {
+    const pose = applyTransform(snap.transform, from);
+    const half = rotatedHalfExtents(PART_TYPES[drag!.part.type].size.map((d) => d / 2), pose.rotation);
     return fitsInRoom(pose.position, half, ROOM, SNAP.roomTolerance) ? { ...pose, snap } : null;
   }
 
@@ -634,6 +638,19 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return joint ? (crankContext(joint).captured ?? null) : null;
   }
 
+  // A tool let go with the finger on a lit ring seats there whatever its angle or distance:
+  // the seat snapCandidate would offer, taken with no reach or angle limit.
+  function ringDrop() {
+    const tip = carriedTip();
+    if (!tip) return null;
+    const hit = ringsFor(tip).find(({ strength, offset }) => strength > 0 && offset <= RING.hitRadius);
+    if (!hit) return null;
+    const { part, held } = drag!;
+    const from: WorldConnector = { ...connectorInWorld(tip, held!), type: tip.type, part, index: tipIndex(part.type) };
+    const snap = findSnap([from], [hit.target], { maxDistance: Infinity, maxAngle: Math.PI });
+    return snap && seatPose(snap, held!);
+  }
+
   function showRings() {
     const tip = targetRings && carriedTip();
     if (!tip) return;
@@ -648,9 +665,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     physics.move(drag.part.body, drag.held.position, drag.held.rotation);
   }
 
+  // Lets go of the drag; true if the part seated.
   function endDrag() {
-    const { mode, part, snapped } = drag!;
-    if (mode === 'crank' || mode === 'pull') return stopDrag();
+    const { mode, part } = drag!;
+    if (mode === 'crank' || mode === 'pull') {
+      stopDrag();
+      return false;
+    }
+    // The seat on offer — or, for a tool let go over a lit ring, that ring's.
+    const snapped = drag!.snapped ?? ringDrop();
     if (snapped) {
       const { from, to } = snapped.snap;
       const joint = assembly.seat({ partA: part.id, connectorA: from.index, partB: to.part.id, connectorB: to.index, mover: part.id });
@@ -667,6 +690,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     stopDrag();
     // Whatever was seated on a part that just moved away drops.
     pruneStale();
+    return !!snapped;
   }
 
   function cancelDrag() {
@@ -938,9 +962,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       }
       else if (!drag) return;
       else if (effect.type === 'dragEnd') {
-        const { part, mode, snapped } = drag;
-        endDrag();
-        events?.emit(releaseEvent(part.id, mode, { seated: !!snapped }));
+        const { part, mode } = drag;
+        const seated = endDrag();
+        events?.emit(releaseEvent(part.id, mode, { seated }));
       }
       else if (effect.type === 'dragCancel') {
         const { part, mode } = drag;

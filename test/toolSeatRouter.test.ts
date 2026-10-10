@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, rotateVector } from '../tools/validate/lib/geometry.js';
-import { SNAP } from '../src/constants.js';
+import { RING, SNAP } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
 import { PART_TYPES } from '../src/game/item.js';
 import { createBus, EVENT } from '../src/game/events.js';
@@ -124,9 +124,11 @@ function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra, screwed 
   };
   const offers: StampedEvent[] = [];
   const seats: StampedEvent[] = [];
+  const releases: StampedEvent[] = [];
   const events = createBus();
   events.on(EVENT.SNAP_CANDIDATE, (event) => offers.push(event));
   events.on(EVENT.SEAT, (event) => seats.push(event));
+  events.on(EVENT.RELEASE, (event) => releases.push(event));
 
   // Every show the rings get, and how many hides.
   const shown: TargetRing[][] = [];
@@ -162,7 +164,7 @@ function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra, screwed 
   const hold = (frames: number) => {
     for (let i = 0; i < frames; i++) router.update(FRAME);
   };
-  return { router, canvas, assembly, parts, panel, bolt, key, camera, drag, hold, screen, offered, seats, toolJoints, shown, ringCalls };
+  return { router, canvas, assembly, parts, panel, bolt, key, camera, drag, hold, screen, offered, seats, toolJoints, shown, ringCalls, releases };
 }
 
 describe('a tool never seats on loose hardware (1.8.2.1 step 2)', () => {
@@ -262,5 +264,59 @@ describe('rings light the fasteners a carried tool can work (1.8.2.1 step 6)', (
     drag(parts.at(-1)!);
     router.update(0);
     expect(shown).toEqual([]);
+  });
+});
+
+describe('letting a tool go over a lit ring seats it (1.8.2.1 step 7)', () => {
+  // Pressed on `part`, carried until the finger is `miss` px right of the bolt head on
+  // screen, then let go — with no frame in between, so nothing aims.
+  function dropOverHead(h: ReturnType<typeof harness>, part: Part, miss = 0) {
+    const from = h.screen(part.mesh.position.toArray());
+    const head = h.screen(HEAD);
+    h.canvas.fire('pointerdown', from);
+    const steps = 6;
+    for (let i = 1; i <= steps; i++) {
+      h.canvas.fire('pointermove', {
+        clientX: from.clientX + ((head.clientX + miss - from.clientX) * i) / steps,
+        clientY: from.clientY + ((head.clientY - from.clientY) * i) / steps,
+      });
+    }
+    expect(h.router.dragging?.part).toBe(part);
+    expect(h.offered()).toBeNull();
+    h.canvas.fire('pointerup', { clientX: head.clientX + miss, clientY: head.clientY });
+  }
+  // Off-axis and off to the side: no snap would ever be offered from here.
+  const OFF_AXIS = { keyAt: [HEAD[0] + 0.15, HEAD[1], HEAD[2] + 0.1] as Vec3, keyRotation: IDENTITY };
+
+  it('seats a far, off-axis Allen key on the ring under the finger, with the SEAT event', () => {
+    const h = harness(OFF_AXIS);
+    dropOverHead(h, h.key);
+    expect(h.toolJoints()).toHaveLength(1);
+    expect(h.toolJoints()[0]).toMatchObject({ hardware: 'allenWrench-1', host: 'camLockBolt-1' });
+    expect(h.seats.at(-1)).toMatchObject({ hardware: 'allenWrench-1', host: 'camLockBolt-1' });
+    expect(h.releases.at(-1)).toMatchObject({ part: 'allenWrench-1', seated: true });
+    // Seated as a snap seats it: tip straight down into the head.
+    expect(tipMisalignment(h.key)).toBeCloseTo(0, 6);
+  });
+
+  it('does not seat it let go outside the hit radius', () => {
+    const h = harness(OFF_AXIS);
+    dropOverHead(h, h.key, RING.hitRadius + 20);
+    expect(h.toolJoints()).toEqual([]);
+    expect(h.releases.at(-1)).toMatchObject({ part: 'allenWrench-1', seated: false });
+  });
+
+  it('never seats it over a loose bolt: no ring lights there', () => {
+    const h = harness({ ...OFF_AXIS, seated: false });
+    dropOverHead(h, h.key);
+    expect(h.toolJoints()).toEqual([]);
+  });
+
+  it('leaves anything but a tool unaffected over a ring point', () => {
+    const h = harness({ extra: { type: 'dowel', at: [HEAD[0] + 0.15, HEAD[1], HEAD[2] + 0.1], rotation: [0, 0, Math.SQRT1_2, Math.SQRT1_2] } });
+    const before = h.assembly.all().length;
+    dropOverHead(h, h.parts.at(-1)!);
+    expect(h.assembly.all()).toHaveLength(before);
+    expect(h.seats).toEqual([]);
   });
 });
