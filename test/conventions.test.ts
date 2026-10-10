@@ -163,6 +163,29 @@ describe('drop guide (1.4.1, Ben)', () => {
   });
 });
 
+describe('target rings (1.8.2.1)', () => {
+  const router = read('src/scene/gestureRouter.ts');
+  const rings = read('src/scene/targetRings.ts');
+
+  it('render only — which targets light, and how brightly, is toolTargets.js', () => {
+    const imports = rings.match(/^import .*$/gm)!.join('\n');
+    expect(imports).not.toMatch(/physics|\/game\//);
+    expect(rings).not.toMatch(/\.intersectObjects?\(|physics\./);
+    expect(router).toMatch(/ringStrengths\(workable, /);
+    expect(router).toMatch(/isWorkable\(c, joints, catches\)/);
+  });
+
+  it('build their pool once; show and hide only update it', () => {
+    const perFrame = rings.slice(rings.indexOf('return {'));
+    expect(perFrame).not.toMatch(/new THREE\./);
+  });
+
+  it('go away when the drag ends, however it ends', () => {
+    const stop = router.slice(router.indexOf('function stopDrag()'), router.indexOf('}', router.indexOf('function stopDrag()')));
+    expect(stop).toMatch(/targetRings\?\.hide\(\)/);
+  });
+});
+
 describe('seat flash hands back to the drop glow (1.4.1 review)', () => {
   const router = read('src/scene/gestureRouter.ts');
   const fade = router.slice(router.indexOf('function fadeFlashes('), router.indexOf('// --- pull'));

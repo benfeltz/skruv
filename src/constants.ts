@@ -358,6 +358,8 @@ export const RING = {
   radius: 0.012,
   width: 0.004,
   opacity: 0.9,
+  // Rings drawn at once, nearest first: JOHNNY has 8 cam bolts, the most one tool can work.
+  pool: 8,
 };
 
 // Hole markings (src/game/decals.ts, drawn by src/game/partMesh.ts). Radii are keyed by

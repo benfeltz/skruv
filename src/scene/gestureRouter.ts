@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AIM, COLORS, DROP, FASTENER, GESTURE, PICK, ROOM, SNAP } from '../constants.js';
+import { AIM, COLORS, DROP, FASTENER, GESTURE, PICK, RING, ROOM, SNAP } from '../constants.js';
 import { areCompatible, COMPATIBLE, CONNECTOR, KIND } from '../../tools/validate/lib/vocabulary.js';
 import { connectorInWorld } from '../../tools/validate/lib/geometry.js';
 import { capture } from '../game/assembly.js';
@@ -21,7 +21,7 @@ import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
-import { isSeatTarget, isToolTip, seatedHardware } from '../game/toolTargets.js';
+import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
 import type { Snap } from '../game/snapMath.js';
 import type { Assembly, AssemblyJoint, PartId } from '../game/assembly.js';
 import type { Bus } from '../game/events.js';
@@ -32,6 +32,7 @@ import type { Part } from '../game/partMesh.js';
 import type { PhysicsJoint, PhysicsWorld } from '../physics/world.js';
 import type { RingHit } from './gizmo.js';
 import type { HandleHit } from './sprue.js';
+import type { TargetRing } from './targetRings.js';
 import type { Pose, Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
 import type { ConnectorType } from '../../tools/validate/lib/vocabulary.js';
 
@@ -120,6 +121,7 @@ export interface GestureRouterOptions {
   ghost?: { show(mesh: THREE.Mesh, pose: Pose): void; hide(): void };
   sprue?: { selected: Part | null; hitTest(raycaster: THREE.Raycaster): HandleHit | null };
   dropGuide?: { show(from: Vec3, to: Vec3): void; hide(): void };
+  targetRings?: { show(rings: readonly TargetRing[]): void; hide(): void };
   events?: Pick<Bus, 'emit'>;
   hold?: { readonly held: Part | null; readonly height: number; readonly goal: number; target(height: number): void; jump(height: number): void };
 }
@@ -167,6 +169,9 @@ const PULL_AXIS_PROBE = 0.05;
  *   dropGuide — `{ show(from, to), hide() }` line from a dragged part down to where it
  *            would land (src/scene/dropGuide.ts); a free hole there that takes the part
  *            glows, as does the seat the ghost shows.
+ *   targetRings — `{ show(rings), hide() }` rings on the fasteners a carried tool can work
+ *            right now, lit as the finger nears them (src/scene/targetRings.ts); letting go
+ *            over a lit one seats the tool there.
  *   sprue  — `{ selected, hitTest(raycaster) }` handle on a selected small part
  *            (src/scene/sprue.ts); a press on it nearer than anything else is a press on
  *            its part, so dragging it is the part's own drag.
@@ -184,7 +189,7 @@ const PULL_AXIS_PROBE = 0.05;
  * turns a carried tool's tip toward a seat target near it (self-aim), eases a dragged part
  * toward the seat on offer (seat assist) and fades the seat flash.
  */
-export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, events, hold }: GestureRouterOptions) {
+export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, targetRings, events, hold }: GestureRouterOptions) {
   const state = createGestureState<Press>();
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -604,6 +609,38 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     );
   }
 
+  // --- target rings: the fasteners a carried tool can work right now ---
+
+  // The carried tool's tip connector, or null when no tool is being carried.
+  function carriedTip() {
+    if (drag?.mode !== 'move' || !drag.held || !drag.pointer) return null;
+    const index = tipIndex(drag.part.type);
+    return index < 0 ? null : PART_TYPES[drag.part.type].connectors[index];
+  }
+
+  // Workable targets for the carried tool, nearest the finger first, with how brightly each
+  // lights — dark ones included.
+  function ringsFor(tip: NonNullable<ReturnType<typeof carriedTip>>) {
+    const { held, pointer, part } = drag!;
+    const joints = assembly.all();
+    const workable = seatsFor(part, tip.type).filter((c) => isWorkable(c, joints, catches));
+    const at = connectorInWorld(tip, held!).position;
+    return ringStrengths(workable, [pointer!.clientX, pointer!.clientY], screenPoint, at, RING);
+  }
+
+  // The bolt a seated cam lock's recess would catch, as a turn of it would.
+  function catches(cam: PartId) {
+    const joint = assembly.all().find((j) => j.hardware === cam && j.kind === KIND.CAM);
+    return joint ? (crankContext(joint).captured ?? null) : null;
+  }
+
+  function showRings() {
+    const tip = targetRings && carriedTip();
+    if (!tip) return;
+    const lit = ringsFor(tip).filter(({ strength }) => strength > 0);
+    targetRings!.show(lit.map(({ target, strength }) => ({ position: target.position, axis: target.axis, strength })));
+  }
+
   // Seat assist: only while a seat is on offer, the held part glides toward it.
   function assist(delta: number) {
     if (!drag?.snapped || !drag.held) return;
@@ -640,6 +677,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function stopDrag() {
     ghost?.hide();
     dropGuide?.hide();
+    targetRings?.hide();
     drag = null;
   }
 
@@ -842,6 +880,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     assist(delta);
     fadeFlashes(delta);
     guideDrop();
+    showRings();
     for (const joint of assembly.all()) {
       if (joint.kind !== KIND.BOLT && joint.kind !== KIND.CAM) continue;
       const { mesh, body } = partById.get(joint.hardware)!;

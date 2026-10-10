@@ -11,6 +11,7 @@ import type { StampedEvent } from '../src/game/events.js';
 import type { Part } from '../src/game/partMesh.js';
 import type { Body, PhysicsJoint } from '../src/physics/world.js';
 import type { GestureRouterOptions } from '../src/scene/gestureRouter.js';
+import type { TargetRing } from '../src/scene/targetRings.js';
 import type { Quat, Vec3 } from '../tools/validate/lib/geometry.js';
 
 // The real gesture router carrying a tool to a fastener (1.8.2.1), with the real catalog: a
@@ -86,9 +87,10 @@ interface Options {
   keyAt?: Vec3;
   keyRotation?: Quat;
   extra?: { type: string; at: Vec3; rotation?: Quat };
+  screwed?: boolean;
 }
 
-function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra }: Options = {}) {
+function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra, screwed = false }: Options = {}) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   camera.position.set(0, 1.2, 0.8);
   camera.lookAt(0, 0, 0);
@@ -103,7 +105,10 @@ function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra }: Option
   if (extra) parts.push(makePart(`${extra.type}-9`, extra.type, extra.at, extra.rotation));
   const typeById = new Map(parts.map(({ id, type }) => [id, type]));
   const assembly = createAssembly((id) => typeById.get(id)!);
-  if (seated) assembly.seat({ partA: bolt.id, connectorA: 0, partB: panel.id, connectorB: CAM_BOLT_HOLE, mover: bolt.id });
+  if (seated) {
+    const joint = assembly.seat({ partA: bolt.id, connectorA: 0, partB: panel.id, connectorB: CAM_BOLT_HOLE, mover: bolt.id });
+    if (screwed) assembly.drive(joint.id);
+  }
 
   const physics: GestureRouterOptions['physics'] = {
     grab: () => {},
@@ -123,6 +128,11 @@ function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra }: Option
   events.on(EVENT.SNAP_CANDIDATE, (event) => offers.push(event));
   events.on(EVENT.SEAT, (event) => seats.push(event));
 
+  // Every show the rings get, and how many hides.
+  const shown: TargetRing[][] = [];
+  const ringCalls = { hides: 0 };
+  const targetRings = { show: (rings: readonly TargetRing[]) => shown.push([...rings]), hide: () => ringCalls.hides++ };
+
   const canvas = new FakeCanvas();
   const router = createGestureRouter({
     domElement: canvas as unknown as HTMLElement, // a fake: listeners and a bounding rect only
@@ -132,6 +142,7 @@ function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra }: Option
     parts,
     assembly,
     events,
+    targetRings,
   });
   const screen = (point: Vec3) => {
     const v = new THREE.Vector3(...point).project(camera);
@@ -151,7 +162,7 @@ function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra }: Option
   const hold = (frames: number) => {
     for (let i = 0; i < frames; i++) router.update(FRAME);
   };
-  return { router, canvas, assembly, parts, panel, bolt, key, camera, drag, hold, screen, offered, seats, toolJoints };
+  return { router, canvas, assembly, parts, panel, bolt, key, camera, drag, hold, screen, offered, seats, toolJoints, shown, ringCalls };
 }
 
 describe('a tool never seats on loose hardware (1.8.2.1 step 2)', () => {
@@ -219,5 +230,37 @@ describe('a carried tool aims itself (1.8.2.1 step 4)', () => {
     const before = part.mesh.quaternion.toArray();
     hold(60);
     expect(part.mesh.quaternion.toArray()).toEqual(before);
+  });
+});
+
+describe('rings light the fasteners a carried tool can work (1.8.2.1 step 6)', () => {
+  const headRing = (shown: TargetRing[][]) => shown.at(-1)?.find(({ position }) => position.every((v, i) => Math.abs(v - HEAD[i]) < 1e-6));
+
+  it('lights a seated, unscrewed bolt near the finger and puts the rings away on release', () => {
+    const { router, canvas, key, drag, shown, ringCalls } = harness({ keyAt: FLAT_BESIDE, keyRotation: IDENTITY });
+    const at = drag(key);
+    router.update(0);
+    expect(headRing(shown)?.strength).toBeGreaterThan(0);
+    const hides = ringCalls.hides;
+    canvas.fire('pointerup', at);
+    expect(ringCalls.hides).toBeGreaterThan(hides);
+  });
+
+  it.each([
+    ['a loose bolt', { seated: false }],
+    ['a bolt already screwed home', { screwed: true }],
+  ])('never lights %s', (_, options) => {
+    const { router, key, drag, shown } = harness({ keyAt: FLAT_BESIDE, keyRotation: IDENTITY, ...options });
+    drag(key);
+    router.update(0);
+    expect(shown.length).toBeGreaterThan(0);
+    expect(headRing(shown)).toBeUndefined();
+  });
+
+  it('draws no rings while anything but a tool is dragged', () => {
+    const { router, parts, drag, shown } = harness({ extra: { type: 'dowel', at: [HEAD[0] - 0.03, HEAD[1], HEAD[2]], rotation: [0, 0, Math.SQRT1_2, Math.SQRT1_2] } });
+    drag(parts.at(-1)!);
+    router.update(0);
+    expect(shown).toEqual([]);
   });
 });
