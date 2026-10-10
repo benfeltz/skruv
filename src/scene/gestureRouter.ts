@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COLORS, DROP, FASTENER, GESTURE, PICK, ROOM, SNAP } from '../constants.js';
+import { AIM, COLORS, DROP, FASTENER, GESTURE, PICK, ROOM, SNAP } from '../constants.js';
 import { areCompatible, COMPATIBLE, CONNECTOR, KIND } from '../../tools/validate/lib/vocabulary.js';
 import { connectorInWorld } from '../../tools/validate/lib/geometry.js';
 import { capture } from '../game/assembly.js';
@@ -20,7 +20,8 @@ import {
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
-import { isSeatTarget, seatedHardware } from '../game/toolTargets.js';
+import { aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
+import { isSeatTarget, isToolTip, seatedHardware } from '../game/toolTargets.js';
 import type { Snap } from '../game/snapMath.js';
 import type { Assembly, AssemblyJoint, PartId } from '../game/assembly.js';
 import type { Bus } from '../game/events.js';
@@ -132,6 +133,9 @@ const isHardware = (type: string) => PART_TYPES[type].connectors.some((c) => c.t
 // Fasteners and tools, never panels — the parts that get a fat hit proxy.
 const isSmall = (type: string) => isSmallPart(PART_TYPES[type].size, PICK);
 
+// A tool's working end: the catalog connector index of its tip, or -1 for any other part.
+const tipIndex = (type: string) => PART_TYPES[type].connectors.findIndex((c) => isToolTip(c.type));
+
 // A pull is judged along a short stretch of the joint's axis projected to the screen.
 const PULL_AXIS_PROBE = 0.05;
 
@@ -177,7 +181,8 @@ const PULL_AXIS_PROBE = 0.05;
  *            gone; a lift (second finger, Shift, wheel) moves the line with it. A part the
  *            line holds is never a seat for another: it drops when the line lets go.
  * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
- * eases a dragged part toward the seat on offer (seat assist) and fades the seat flash.
+ * turns a carried tool's tip toward a seat target near it (self-aim), eases a dragged part
+ * toward the seat on offer (seat assist) and fades the seat flash.
  */
 export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, events, hold }: GestureRouterOptions) {
   const state = createGestureState<Press>();
@@ -523,16 +528,21 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       GESTURE.wallMargin,
     );
     const target: Vec3 = [bx - cx, drag!.height, bz - cz];
-    // A compound carries its joints along; only a free part looks for a seat.
-    drag!.snapped = drag!.mode === 'move' ? snapCandidate(target) : null;
-    reportOffer();
-    if (drag!.snapped) ghost?.show(drag!.part.mesh, drag!.snapped);
-    else ghost?.hide();
+    refreshOffer(target);
     // No seat on offer: the part is exactly where the finger puts it, no pull at all. With
     // one, update() eases it in from wherever it is held.
     if (drag!.snapped && drag!.held) return;
     drag!.held = { position: target, rotation: drag!.rotation };
     physics.move(drag!.part.body, target, drag!.mode === 'move' ? drag!.rotation : undefined);
+  }
+
+  // The seat on offer with the part at `target` — reported, and shown as the ghost.
+  function refreshOffer(target: Vec3) {
+    // A compound carries its joints along; only a free part looks for a seat.
+    drag!.snapped = drag!.mode === 'move' ? snapCandidate(target) : null;
+    reportOffer();
+    if (drag!.snapped) ghost?.show(drag!.part.mesh, drag!.snapped);
+    else ghost?.hide();
   }
 
   function reportOffer() {
@@ -558,6 +568,40 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const from = back && hold!.goal === back.to ? back.from : hold!.goal;
     hold!.target(drag!.snapped!.position[1]);
     drag!.retarget = { from, to: hold!.goal };
+  }
+
+  // Self-aim: a carried tool whose tip nears a seat target turns its tip into it, harder the
+  // nearer, so the snap's angle window comes to the tool. Every frame — a still finger sends
+  // no events, so the offer the aim brings is looked for here too. Tools only; outside
+  // AIM.zone nothing changes, and once a seat is on offer seat assist takes over.
+  function aimTool(delta: number) {
+    if (drag?.mode !== 'move' || drag.snapped || !drag.held) return;
+    const index = tipIndex(drag.part.type);
+    if (index < 0) return;
+    const tip = PART_TYPES[drag.part.type].connectors[index];
+    // No seat on offer: the part is held exactly where the finger puts it.
+    const { position } = drag.held;
+    const near = nearestTarget(connectorInWorld(tip, { position, rotation: drag.rotation }).position, seatsFor(drag.part, tip.type), AIM.zone);
+    if (!near) return;
+    const aimed = aimedRotation(drag.rotation, tip.axis, near.target.axis);
+    drag.rotation = aimStep(drag.rotation, aimed, aimWeight(near.distance, AIM.zone), AIM.rate, delta);
+    drag.held = { position, rotation: drag.rotation };
+    physics.move(drag.part.body, position, drag.rotation);
+    refreshOffer(position);
+  }
+
+  // Where a carried tool's tip of `type` could seat: free targets that take it, on seated
+  // hardware, never on the part the elevation line holds — as snapCandidate offers them.
+  function seatsFor(tool: Part, type: ConnectorType) {
+    const isTaken = occupied();
+    const seated = seatedHardware(assembly.all());
+    return parts.flatMap((other) =>
+      other === tool || other === hold?.held
+        ? []
+        : worldConnectors(other, other.mesh.position, other.mesh.quaternion).filter(
+            (c) => areCompatible(type, c.type) && !isTaken(c) && isSeatTarget(c, seated),
+          ),
+    );
   }
 
   // Seat assist: only while a seat is on offer, the held part glides toward it.
@@ -794,6 +838,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   function update(delta = 0) {
     followHold();
+    aimTool(delta);
     assist(delta);
     fadeFlashes(delta);
     guideDrop();

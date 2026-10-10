@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
-import { connectorInWorld } from '../tools/validate/lib/geometry.js';
+import { connectorInWorld, rotateVector } from '../tools/validate/lib/geometry.js';
+import { SNAP } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
 import { PART_TYPES } from '../src/game/item.js';
 import { createBus, EVENT } from '../src/game/events.js';
@@ -69,13 +70,25 @@ const HEAD: Vec3 = [HOLE[0], HOLE[1] + 2 * BOLT_HALF, HOLE[2]];
 const TIP_DOWN: Quat = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
 const TIP = PART_TYPES.allenWrench.connectors[0].position;
 
+const IDENTITY: Quat = [0, 0, 0, 1];
+// Lying flat on its side: tip axis horizontal, 90° off a head that points up.
+const FLAT_BESIDE: Vec3 = [HEAD[0] - TIP[0], HEAD[1] + 0.01, HEAD[2]];
+const FRAME = 1 / 60;
+
+// How far the key's tip is from pointing straight down into an upward head.
+const tipMisalignment = (part: Part) => {
+  const { x, y, z, w } = part.mesh.quaternion;
+  return Math.acos(Math.min(1, Math.max(-1, -rotateVector([x, y, z, w], PART_TYPES.allenWrench.connectors[0].axis)[1])));
+};
+
 interface Options {
   seated?: boolean;
   keyAt?: Vec3;
   keyRotation?: Quat;
+  extra?: { type: string; at: Vec3; rotation?: Quat };
 }
 
-function harness({ seated = true, keyAt, keyRotation = TIP_DOWN }: Options = {}) {
+function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra }: Options = {}) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   camera.position.set(0, 1.2, 0.8);
   camera.lookAt(0, 0, 0);
@@ -87,6 +100,7 @@ function harness({ seated = true, keyAt, keyRotation = TIP_DOWN }: Options = {})
   const tipOffset = new THREE.Vector3(...TIP).applyQuaternion(new THREE.Quaternion(...keyRotation));
   const key = makePart('allenWrench-1', 'allenWrench', keyAt ?? [HEAD[0] - tipOffset.x, HEAD[1] - tipOffset.y + 0.02, HEAD[2] - tipOffset.z], keyRotation);
   const parts = [panel, bolt, key];
+  if (extra) parts.push(makePart(`${extra.type}-9`, extra.type, extra.at, extra.rotation));
   const typeById = new Map(parts.map(({ id, type }) => [id, type]));
   const assembly = createAssembly((id) => typeById.get(id)!);
   if (seated) assembly.seat({ partA: bolt.id, connectorA: 0, partB: panel.id, connectorB: CAM_BOLT_HOLE, mover: bolt.id });
@@ -134,7 +148,10 @@ function harness({ seated = true, keyAt, keyRotation = TIP_DOWN }: Options = {})
   }
   const offered = () => offers.at(-1)?.target ?? null;
   const toolJoints = () => assembly.all().filter((j) => j.kind === KIND.TOOL);
-  return { router, canvas, assembly, panel, bolt, key, camera, drag, screen, offered, seats, toolJoints };
+  const hold = (frames: number) => {
+    for (let i = 0; i < frames; i++) router.update(FRAME);
+  };
+  return { router, canvas, assembly, parts, panel, bolt, key, camera, drag, hold, screen, offered, seats, toolJoints };
 }
 
 describe('a tool never seats on loose hardware (1.8.2.1 step 2)', () => {
@@ -155,5 +172,52 @@ describe('a tool never seats on loose hardware (1.8.2.1 step 2)', () => {
     expect(offered()).toBeNull();
     canvas.fire('pointerup', at);
     expect(toolJoints()).toEqual([]);
+  });
+});
+
+describe('a carried tool aims itself (1.8.2.1 step 4)', () => {
+  it('turns a flat Allen key near a seated bolt to point into it while the finger holds still, and offers the seat', () => {
+    const { canvas, key, drag, hold, offered, toolJoints } = harness({ keyAt: FLAT_BESIDE, keyRotation: IDENTITY });
+    const at = drag(key);
+    // Picked up flat it is 90° off: no seat on offer yet.
+    expect(tipMisalignment(key)).toBeCloseTo(Math.PI / 2, 6);
+    expect(offered()).toBeNull();
+    // No pointer events from here on: the aim runs from update() alone.
+    hold(60);
+    expect(tipMisalignment(key)).toBeLessThan(SNAP.maxAngle);
+    expect(offered()).toBe('camLockBolt-1');
+    canvas.fire('pointerup', at);
+    expect(toolJoints()).toHaveLength(1);
+  });
+
+  it('leaves a key outside the aim zone exactly as it was picked up', () => {
+    const { key, drag, hold, offered } = harness({ keyAt: [HEAD[0] + 0.45, HEAD[1], HEAD[2]], keyRotation: IDENTITY });
+    drag(key);
+    const before = key.mesh.quaternion.toArray();
+    hold(60);
+    expect(key.mesh.quaternion.toArray()).toEqual(before);
+    expect(offered()).toBeNull();
+  });
+
+  it('never aims at a loose bolt', () => {
+    const { key, drag, hold } = harness({ seated: false, keyAt: FLAT_BESIDE, keyRotation: IDENTITY });
+    drag(key);
+    const before = key.mesh.quaternion.toArray();
+    hold(60);
+    expect(key.mesh.quaternion.toArray()).toEqual(before);
+  });
+
+  it.each([
+    ['a dowel lying beside the bolt', { type: 'dowel', at: [HEAD[0] - 0.03, HEAD[1], HEAD[2]] as Vec3, rotation: [0, 0, Math.SQRT1_2, Math.SQRT1_2] as Quat }],
+    ['a panel carried over it', { type: 'topBottomPanel', at: [HEAD[0], HEAD[1] + 0.1, HEAD[2] + 0.1] as Vec3 }],
+  ])('never turns %s', (_, extra) => {
+    const { parts, drag, hold, router, offered } = harness({ extra });
+    const part = parts.at(-1)!;
+    drag(part);
+    expect(router.dragging?.part).toBe(part);
+    expect(offered()).toBeNull();
+    const before = part.mesh.quaternion.toArray();
+    hold(60);
+    expect(part.mesh.quaternion.toArray()).toEqual(before);
   });
 });
