@@ -88,16 +88,18 @@ interface Options {
   keyRotation?: Quat;
   extra?: { type: string; at: Vec3; rotation?: Quat };
   screwed?: boolean;
+  // A bolt lying loose somewhere else, instead of standing in the hole.
+  boltAt?: { at: Vec3; rotation: Quat };
 }
 
-function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra, screwed = false }: Options = {}) {
+function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra, screwed = false, boltAt }: Options = {}) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   camera.position.set(0, 1.2, 0.8);
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld(true);
 
   const panel = makePart('sidePanel-1', 'sidePanel', PANEL_POSE.position, PANEL_POSE.rotation);
-  const bolt = makePart('camLockBolt-1', 'camLockBolt', [HOLE[0], HOLE[1] + BOLT_HALF, HOLE[2]]);
+  const bolt = boltAt ? makePart('camLockBolt-1', 'camLockBolt', boltAt.at, boltAt.rotation) : makePart('camLockBolt-1', 'camLockBolt', [HOLE[0], HOLE[1] + BOLT_HALF, HOLE[2]]);
   // Tip-down, its tip a little above the head, beside it.
   const tipOffset = new THREE.Vector3(...TIP).applyQuaternion(new THREE.Quaternion(...keyRotation));
   const key = makePart('allenWrench-1', 'allenWrench', keyAt ?? [HEAD[0] - tipOffset.x, HEAD[1] - tipOffset.y + 0.02, HEAD[2] - tipOffset.z], keyRotation);
@@ -182,6 +184,30 @@ describe('a tool never seats on loose hardware (1.8.2.1 step 2)', () => {
     const { router, canvas, key, drag, offered, toolJoints } = harness({ seated: false });
     const at = drag(key);
     expect(router.dragging?.part).toBe(key);
+    expect(offered()).toBeNull();
+    canvas.fire('pointerup', at);
+    expect(toolJoints()).toEqual([]);
+  });
+});
+
+// Review round 1: a snap pairs connectors either way round, so a loose bolt carried to a
+// resting key would seat the key on it just the same.
+describe('a loose bolt carried to a tool never seats it either (review round 1)', () => {
+  // The Allen key lying flat on the floor, clear of the panel; a loose bolt beside it, its
+  // head facing the key's tip 2 cm away and pointing straight back at it.
+  const KEY_AT: Vec3 = [0.3, 0.004, 0.3];
+  const KEY_TIP: Vec3 = [KEY_AT[0] + TIP[0], KEY_AT[1] + TIP[1], KEY_AT[2] + TIP[2]];
+  const HEAD_BACK: Quat = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2]; // the bolt's +y (head) onto -z
+  const boltAt = { at: [KEY_TIP[0], KEY_TIP[1], KEY_TIP[2] + 0.02 + BOLT_HALF] as Vec3, rotation: HEAD_BACK };
+
+  it.each([
+    [0, 15],
+    [15, 0],
+    [0, -15],
+  ])('offers the resting key no seat on the dragged bolt (nudged %i, %i px)', (dx, dy) => {
+    const { canvas, bolt, drag, router, offered, toolJoints } = harness({ seated: false, keyAt: KEY_AT, keyRotation: IDENTITY, boltAt });
+    const at = drag(bolt, dx, dy);
+    expect(router.dragging?.part).toBe(bolt);
     expect(offered()).toBeNull();
     canvas.fire('pointerup', at);
     expect(toolJoints()).toEqual([]);

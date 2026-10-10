@@ -321,10 +321,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const rotation = twist.fromArray(drag!.rotation);
     const isTaken = occupied();
     const free = (connectors: WorldConnector[]) => connectors.filter((c) => !isTaken(c));
-    const dragged = free(worldConnectors(part, scratch.clone().fromArray(target), rotation));
-    if (dragged.length === 0) return null;
-    // A tool on a loose bolt or cam lock is a dead end: nothing turns until it is seated.
+    // A tool on a loose bolt or cam lock is a dead end: nothing turns until it is seated —
+    // whichever side is carried to the other.
     const seated = seatedHardware(assembly.all());
+    const dragged = free(worldConnectors(part, scratch.clone().fromArray(target), rotation)).filter((c) => isSeatTarget(c, seated));
+    if (dragged.length === 0) return null;
     // A part the elevation line holds up is no seat: it drops when the line lets go.
     const others = parts.flatMap((other) =>
       other === part || other === hold?.held
