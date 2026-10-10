@@ -7,9 +7,10 @@ import { createAssembly } from '../src/game/assembly.js';
 import { PART_TYPES } from '../src/game/item.js';
 import { createBus, EVENT } from '../src/game/events.js';
 import { createGestureRouter } from '../src/scene/gestureRouter.js';
+import { createLiftHold } from '../src/scene/liftHold.js';
 import type { StampedEvent } from '../src/game/events.js';
 import type { Part } from '../src/game/partMesh.js';
-import type { Body, PhysicsJoint } from '../src/physics/world.js';
+import type { Body, PhysicsJoint, PhysicsWorld } from '../src/physics/world.js';
 import type { GestureRouterOptions } from '../src/scene/gestureRouter.js';
 import type { TargetRing } from '../src/scene/targetRings.js';
 import type { Quat, Vec3 } from '../tools/validate/lib/geometry.js';
@@ -57,6 +58,8 @@ function makePart(id: string, type: string, position: Vec3, rotation: Quat = [0,
   const at = stepped ? committed : mesh;
   const body = {
     id,
+    // Picked-up parts are the router's kinematic ones, as the lift hold asks.
+    isKinematic: () => true,
     translation: () => ({ x: at.position.x, y: at.position.y, z: at.position.z }),
     rotation: () => ({ x: at.quaternion.x, y: at.quaternion.y, z: at.quaternion.z, w: at.quaternion.w }),
     step: () => {
@@ -383,7 +386,8 @@ describe('a carried screwdriver aims about its tip (review round 2)', () => {
   const DRIVER = PART_TYPES.screwdriver.connectors[0];
   const DRIVER_HALF = PART_TYPES.screwdriver.size[0] / 2;
 
-  function camHarness() {
+  // `held`: the desktop's Shift hold keeps the screwdriver up through the lift hold seam.
+  function camHarness({ held = false } = {}) {
     const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
     camera.position.set(0, 1.2, 0.8);
     camera.lookAt(0, 0, 0);
@@ -399,42 +403,56 @@ describe('a carried screwdriver aims about its tip (review round 2)', () => {
     const events = createBus();
     events.on(EVENT.SNAP_CANDIDATE, (event) => offers.push(event));
     const canvas = new FakeCanvas();
+    const physics = {
+      grab: () => {},
+      move: (body: Body, position: Vec3, rotation?: Quat) => {
+        const { mesh } = parts.find((part) => part.body === body)!;
+        mesh.position.set(...position);
+        if (rotation) mesh.quaternion.set(...rotation);
+        mesh.updateMatrixWorld(true);
+      },
+      release: () => {},
+      join: () => ({}) as PhysicsJoint, // a fake joint: the router only hands it back to unjoin
+      unjoin: () => {},
+    };
+    // A fake world: the lift hold only grabs, moves and releases through it.
+    const hold = createLiftHold(physics as unknown as PhysicsWorld);
     const router = createGestureRouter({
       domElement: canvas as unknown as HTMLElement, // a fake: listeners and a bounding rect only
       camera,
       cameraControls: { enable() {}, disable() {} },
-      physics: {
-        grab: () => {},
-        move: (body: Body, position: Vec3, rotation?: Quat) => {
-          const { mesh } = parts.find((part) => part.body === body)!;
-          mesh.position.set(...position);
-          if (rotation) mesh.quaternion.set(...rotation);
-          mesh.updateMatrixWorld(true);
-        },
-        release: () => {},
-        join: () => ({}) as PhysicsJoint, // a fake joint: the router only hands it back to unjoin
-        unjoin: () => {},
-      },
+      physics: hold,
       parts,
       assembly,
       events,
+      hold,
     });
     const v = driver.mesh.position.clone().project(camera);
     const at = { clientX: ((v.x + 1) / 2) * SIZE, clientY: ((1 - v.y) / 2) * SIZE };
     canvas.fire('pointerdown', at);
     canvas.fire('pointermove', { clientX: at.clientX, clientY: at.clientY + 8 });
     canvas.fire('pointermove', { clientX: at.clientX, clientY: at.clientY + 16 });
+    if (held) hold.begin(driver, 'key');
+    const frame = () => {
+      router.update(FRAME);
+      hold.update(FRAME);
+    };
     const tip = () => new THREE.Vector3(...DRIVER.position).applyQuaternion(driver.mesh.quaternion).add(driver.mesh.position);
-    return { router, canvas, driver, tip, finger: { clientX: at.clientX, clientY: at.clientY + 16 }, offered: () => offers.at(-1)?.target ?? null };
+    return { router, canvas, driver, tip, frame, finger: { clientX: at.clientX, clientY: at.clientY + 16 }, offered: () => offers.at(-1)?.target ?? null };
   }
 
-  it('turns it upright over the slot, held still, keeping its tip clear of the shelf, and offers the slot', () => {
-    const { router, driver, tip, offered } = camHarness();
+  // Review round 3: under the elevation line (or Shift) the line sets the height, so the line
+  // goes up with the tip-preserving pose rather than holding the middle where it was.
+  it.each([
+    ['carried by the finger alone', false],
+    ['held up by Shift', true],
+  ])('turns it upright over the slot, %s and still, keeping its tip clear of the shelf, and offers the slot', (_, held) => {
+    const { router, driver, tip, frame, offered } = camHarness({ held });
     expect(router.dragging?.part).toBe(driver);
     expect(offered()).toBeNull();
     const before = tip().distanceTo(new THREE.Vector3(...SLOT));
     for (let i = 0; i < 180; i++) {
-      router.update(FRAME);
+      frame();
       expect(tip().y).toBeGreaterThan(SHELF_TOP);
     }
     expect(offered()).toBe('camLock-1');

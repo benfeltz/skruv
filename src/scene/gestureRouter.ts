@@ -306,8 +306,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   const connectorWorld = (id: PartId, index: number) => connectorInWorld(PART_TYPES[partById.get(id)!.type].connectors[index], poseOf(id));
 
-  // A world point in client (CSS px) coordinates.
-  // `rect` is the canvas's, read once by a caller projecting many points.
+  // A world point in client (CSS px) coordinates; a caller projecting many points reads the
+  // canvas `rect` once and passes it.
   function screenPoint(position: Vec3, rect = domElement.getBoundingClientRect()): ScreenPoint {
     scratch.fromArray(position).project(camera);
     return [rect.left + ((scratch.x + 1) / 2) * rect.width, rect.top + ((1 - scratch.y) / 2) * rect.height];
@@ -640,7 +640,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // its target or the tool's far end through what lies under it (the screwdriver's tip is
   // 10 cm from its middle). The drag carries on from the new pose: its footprint is the
   // turned one, kept inside the room, and the finger's grab and height are rebased so the
-  // next move doesn't put it back. A drag the elevation line holds keeps the line's height.
+  // next move doesn't put it back. The elevation line holding the drag goes with it, as a
+  // lift takes it, so it never pulls the tool back down.
   function turnAboutTip(tool: CarriedTool, rotation: Quat): Vec3 {
     const { held, centre } = drag!;
     const [tx, ty, tz] = tipAt(tool, held!);
@@ -650,7 +651,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     drag!.halfHeight = hy;
     const [cx, cy, cz] = centre;
     const [bx, , bz] = clampToRoom([tx - lx + cx, 0, tz - lz + cz], drag!.half, ROOM, GESTURE.wallMargin);
-    const y = holdsDrag() ? drag!.height : clampLift(ty - ly + cy, hy, ROOM, GESTURE.ceilingMargin) - cy;
+    let y = clampLift(ty - ly + cy, hy, ROOM, GESTURE.ceilingMargin) - cy;
+    if (holdsDrag()) {
+      hold!.jump(y);
+      y = hold!.height;
+    }
     const position: Vec3 = [bx - cx, y, bz - cz];
     const [px, , pz] = held!.position;
     drag!.offset = [drag!.offset[0] + position[0] - px, drag!.offset[1] + position[2] - pz];
