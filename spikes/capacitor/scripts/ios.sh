@@ -79,12 +79,12 @@ testflight() {
   # Every upload needs a build number above the last one: minutes since 2026-01-01 (UTC).
   build_number=$(( ($(date -u +%s) - 1767225600) / 60 ))
   step "web build + cap sync" npm run sync
-  # shellcheck disable=SC2086 # $auth is a flag list
+  # Archive unsigned; the export signs with the cloud-managed distribution certificate through
+  # the API key — so a fresh CI runner needs no .p12 or profile, and local runs take the same path.
   step "xcodebuild archive" xcodebuild -quiet \
     -project ios/App/App.xcodeproj -scheme App -configuration "$CONFIG" \
     -destination 'generic/platform=iOS' -archivePath "$archive" \
-    -allowProvisioningUpdates $auth \
-    DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+    DEVELOPMENT_TEAM="$TEAM" CODE_SIGNING_ALLOWED=NO PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
     CURRENT_PROJECT_VERSION="$build_number" \
     archive
   cat > build/ExportOptions.plist <<PLIST
@@ -100,7 +100,7 @@ testflight() {
 </plist>
 PLIST
   rm -rf "$export_dir"
-  # shellcheck disable=SC2086
+  # shellcheck disable=SC2086 # $auth is a flag list
   step "xcodebuild export" xcodebuild -quiet -exportArchive \
     -archivePath "$archive" -exportPath "$export_dir" -exportOptionsPlist build/ExportOptions.plist \
     -allowProvisioningUpdates $auth
