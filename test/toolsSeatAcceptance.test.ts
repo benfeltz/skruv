@@ -1,9 +1,10 @@
 // Automated half of 1.8.2.1's acceptance (tools seat): JOHNNY's two tool steps done start
 // to finish by touch, in build order, through the real router over a recording physics
-// stub. A cam bolt stands seated in a side panel's hole; a shelf lies recess-up with a cam
-// lock seated in it, its recess within capture reach of that bolt's head (capture is
-// instance-agnostic and purely geometric). The Allen key and the screwdriver lie flat,
-// well off to the side. No gizmo is used. How it feels on a phone is Test Plan.md.
+// stub. A cam bolt lies loose on its side beside a side panel's cam-bolt hole; a shelf lies
+// recess-up with a cam lock seated in it, its recess within capture reach of where that
+// bolt's head will stand (capture is instance-agnostic and purely geometric). The Allen key
+// and the screwdriver lie flat, well off to the side. No gizmo is used. How it feels on a
+// phone is Test Plan.md.
 
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -72,14 +73,21 @@ const KEY_AT: Vec3 = [HEAD[0] - 0.05, 0.002, HEAD[2] + 0.25];
 const DRIVER_AT: Vec3 = [HEAD[0] + 0.1, 0.011, HEAD[2] + 0.3];
 const DRIVER_FLAT: Quat = [0, 0, Math.SQRT1_2, Math.SQRT1_2];
 
-function bench() {
+// The cam bolt lying on its side on the floor, clear of both panels, its thread toward the
+// hole 20 cm away.
+const BOLT_FLAT = { at: [HOLE[0], 0.004, HOLE[2] - 0.2] as Vec3, rotation: [-Math.SQRT1_2, 0, 0, Math.SQRT1_2] as Quat };
+
+// `boltSeated`: the cam bolt starts standing seated in its hole instead of lying loose.
+function bench({ boltSeated = false } = {}) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   camera.position.set(0, 1.2, 0.8);
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld(true);
 
   const side = makePart('sidePanel-1', 'sidePanel', SIDE_POSE.position, SIDE_POSE.rotation);
-  const bolt = makePart('camLockBolt-1', 'camLockBolt', [HOLE[0], HOLE[1] + BOLT_HALF, HOLE[2]]);
+  const bolt = boltSeated
+    ? makePart('camLockBolt-1', 'camLockBolt', [HOLE[0], HOLE[1] + BOLT_HALF, HOLE[2]])
+    : makePart('camLockBolt-1', 'camLockBolt', BOLT_FLAT.at, BOLT_FLAT.rotation);
   const shelf = makePart('topBottomPanel-1', 'topBottomPanel', SHELF_POSE.position, SHELF_POSE.rotation);
   const cam = makePart('camLock-1', 'camLock', [RECESS_AT[0], RECESS_AT[1] + CAM_HALF, RECESS_AT[2]]);
   const key = makePart('allenWrench-1', 'allenWrench', KEY_AT);
@@ -87,7 +95,8 @@ function bench() {
   const parts = [side, bolt, shelf, cam, key, driver];
   const typeById = new Map(parts.map(({ id, type }) => [id, type]));
   const assembly = createAssembly((id) => typeById.get(id)!);
-  const boltSeat = assembly.seat({ partA: bolt.id, connectorA: 0, partB: side.id, connectorB: BOLT_HOLE, mover: bolt.id });
+  if (boltSeated) assembly.seat({ partA: bolt.id, connectorA: 0, partB: side.id, connectorB: BOLT_HOLE, mover: bolt.id });
+  const boltSeat = () => assembly.all().find((j) => j.kind === KIND.BOLT && j.hardware === bolt.id) ?? null;
   const camSeat = assembly.seat({ partA: cam.id, connectorA: 0, partB: shelf.id, connectorB: RECESS, mover: cam.id });
 
   const events = createBus();
@@ -177,8 +186,22 @@ function bench() {
 }
 
 describe('JOHNNY\'s tool steps by touch, in build order (1.8.2.1 acceptance)', () => {
-  it('Allen key onto the cam bolt and home, then the screwdriver onto the cam lock and locked — no gizmo', () => {
+  it('a loose cam bolt into its hole, the Allen key onto it and home, then the screwdriver onto the cam lock and locked — no gizmo', () => {
     const b = bench();
+
+    // Nothing for the Allen key to work while the bolt lies loose.
+    const none = b.carry(b.on(b.key), b.bolt.mesh.position.toArray(), true);
+    expect(none.lit).toEqual([]);
+    expect(b.toolOn(b.key)).toBeNull();
+
+    // The bolt, lying on its side, carried to its hole and let go on the lit ring: it seats
+    // standing in the hole (plan amendment: fasteners aim and drop like tools).
+    const boltDrop = b.carry(b.on(b.bolt), HOLE);
+    expect(boltDrop.carried?.part).toBe(b.bolt);
+    expect(boltDrop.lit.some((ring) => b.near(ring, HOLE) && ring.strength > 0)).toBe(true);
+    expect(b.boltSeat()).toMatchObject({ host: 'sidePanel-1', hostConnector: BOLT_HOLE });
+    const head = new THREE.Vector3(...PART_TYPES.camLockBolt.connectors[1].position).applyQuaternion(b.bolt.mesh.quaternion).add(b.bolt.mesh.position);
+    expect(head.distanceTo(new THREE.Vector3(...HEAD))).toBeLessThan(1e-6);
 
     // The cam lock can't be worked before its bolt is home: no ring lights on its slot.
     const early = b.carry(b.on(b.driver), SLOT, true);
@@ -196,8 +219,7 @@ describe('JOHNNY\'s tool steps by touch, in build order (1.8.2.1 acceptance)', (
     // Circling the seated key screws the bolt home, as cranking always has.
     const keyEnd: Vec3 = [-0.025, 0, 0];
     expect(b.crank(b.on(b.key, keyEnd), HEAD, Math.ceil(FASTENER.screwRadians / (2 * Math.PI)) + 1)).toBe('crank');
-    console.log("DBG", JSON.stringify(b.assembly.get(b.boltSeat.id)!.fastener), JSON.stringify(b.toolOn(b.key)));
-    expect(b.assembly.get(b.boltSeat.id)!.fastener.state).toBe(STATE.SCREWED);
+    expect(b.boltSeat()!.fastener.state).toBe(STATE.SCREWED);
     expect(b.log.some((e) => e.type === EVENT.FASTEN && e.hardware === 'camLockBolt-1')).toBe(true);
 
     // A tap takes the key off; the screwed bolt no longer lights for it.
@@ -215,8 +237,8 @@ describe('JOHNNY\'s tool steps by touch, in build order (1.8.2.1 acceptance)', (
   });
 
   it('never lights the screwed bolt for the Allen key once it is home', () => {
-    const b = bench();
-    b.assembly.drive(b.boltSeat.id);
+    const b = bench({ boltSeated: true });
+    b.assembly.drive(b.boltSeat()!.id);
     const drop = b.carry(b.on(b.key), HEAD);
     expect(drop.lit.some((ring) => b.near(ring, HEAD))).toBe(false);
   });
