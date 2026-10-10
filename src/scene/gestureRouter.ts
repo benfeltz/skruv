@@ -20,6 +20,7 @@ import {
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
+import { isSeatTarget, seatedHardware } from '../game/toolTargets.js';
 import type { Snap } from '../game/snapMath.js';
 import type { Assembly, AssemblyJoint, PartId } from '../game/assembly.js';
 import type { Bus } from '../game/events.js';
@@ -312,9 +313,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const free = (connectors: WorldConnector[]) => connectors.filter((c) => !isTaken(c));
     const dragged = free(worldConnectors(part, scratch.clone().fromArray(target), rotation));
     if (dragged.length === 0) return null;
+    // A tool on a loose bolt or cam lock is a dead end: nothing turns until it is seated.
+    const seated = seatedHardware(assembly.all());
     // A part the elevation line holds up is no seat: it drops when the line lets go.
     const others = parts.flatMap((other) =>
-      other === part || other === hold?.held ? [] : free(worldConnectors(other, other.mesh.position, other.mesh.quaternion)),
+      other === part || other === hold?.held
+        ? []
+        : free(worldConnectors(other, other.mesh.position, other.mesh.quaternion)).filter((c) => isSeatTarget(c, seated)),
     );
     const snap = findSnap(dragged, others, SNAP);
     if (!snap) return null;
