@@ -14,8 +14,8 @@ export interface TargetRing {
 }
 
 /**
- * Target rings: while a tool is carried, a ring round each fastener it can work right now,
- * brighter the nearer the finger. It renders only; which targets light, and how brightly,
+ * Target rings: while hardware is carried, a ring round each place it can go right now — a
+ * free hole for a fastener, a fastener a tool can turn — brighter the nearer the finger. It renders only; which targets light, and how brightly,
  * is src/game/toolTargets.ts's call, driven from src/scene/gestureRouter.ts.
  */
 export function createTargetRings() {

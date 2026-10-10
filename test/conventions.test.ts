@@ -186,13 +186,13 @@ describe('target rings (1.8.2.1)', () => {
   });
 
   // Review round 1: one connector sweep per frame on the phone path, shared by aim and rings.
-  it('share one sweep of the carried tool\'s seats per frame with the aim', () => {
+  it('share one sweep of the carried part\'s seats per frame with the aim', () => {
     const update = router.slice(router.indexOf('function update('), router.indexOf('// --- effects from the state machine'));
-    expect(update.match(/carriedTool\(\)/g)).toHaveLength(1);
-    expect(update).toMatch(/aimTool\(tool, delta\)/);
-    expect(update).toMatch(/showRings\(tool\)/);
-    const perFrame = router.slice(router.indexOf('function aimTool('), router.indexOf('// The bolt a seated cam lock'));
-    expect(perFrame).not.toMatch(/seatsFor\(|carriedTool\(/);
+    expect(update.match(/carriedEnds\(\)/g)).toHaveLength(1);
+    expect(update).toMatch(/aimHardware\(ends, delta\)/);
+    expect(update).toMatch(/showRings\(ends\)/);
+    const perFrame = router.slice(router.indexOf('function aimHardware('), router.indexOf('// The bolt a seated cam lock'));
+    expect(perFrame).not.toMatch(/seatsFor\(|carriedEnds\(/);
   });
 });
 

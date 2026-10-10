@@ -82,9 +82,11 @@ describe('workable targets', () => {
     expect(isWorkable(slot('camLock-1'), loose.all(), catching(loose, NEAR))).toBe(false);
   });
 
-  it('only bolt heads and cam slots are ever workable', () => {
+  // Plan amendment (Ben, 2026-10-10): fasteners light holes too, with no extra rule.
+  it('lights any hole a fastener is carried to — a free compatible hole is workable', () => {
     const { assembly } = build();
-    expect(isWorkable({ type: CONNECTOR.CAM_BOLT_HOLE, part: { id: 'sidePanel-1' } }, assembly.all(), catching(assembly, NEAR))).toBe(false);
+    expect(isWorkable({ type: CONNECTOR.CAM_BOLT_HOLE, part: { id: 'sidePanel-1' } }, assembly.all(), catching(assembly, NEAR))).toBe(true);
+    expect(isWorkable({ type: CONNECTOR.DOWEL_HOLE, part: { id: 'sidePanel-1' } }, assembly.all(), catching(assembly, NEAR))).toBe(true);
   });
 });
 
@@ -93,7 +95,7 @@ describe('ring strengths', () => {
   const project = ([x, , z]: Vec3): ScreenPoint => [x * 1000, z * 1000];
   const FINGER: ScreenPoint = [0, 0];
   const TIP: Vec3 = [0, 0.05, 0];
-  const strengths = (targets: { position: Vec3 }[]) => ringStrengths(targets, FINGER, project, TIP, RING);
+  const strengths = (targets: { position: Vec3 }[]) => ringStrengths(targets, FINGER, project, [TIP], RING);
 
   it('lights a target under the finger and near the tip at full strength', () => {
     const under = { position: [0, 0, 0] as Vec3 };
@@ -126,5 +128,16 @@ describe('ring strengths', () => {
     const [first, second] = strengths([lit, outOfReach]);
     expect(first).toMatchObject({ target: outOfReach, strength: 0 });
     expect(second).toMatchObject({ target: lit, strength: 1 });
+  });
+});
+
+describe('ring strengths from a part with two ends', () => {
+  it('caps by whichever end is nearer — a dowel reaching a hole with its far end still lights it', () => {
+    const project = ([x, , z]: Vec3): ScreenPoint => [x * 1000, z * 1000];
+    const hole = { position: [0, 0, 0] as Vec3 };
+    const nearEnd: Vec3 = [0, RING.maxDistance - 0.01, 0];
+    const farEnd: Vec3 = [0, RING.maxDistance + 0.2, 0];
+    expect(ringStrengths([hole], [0, 0], project, [farEnd], RING)[0].strength).toBe(0);
+    expect(ringStrengths([hole], [0, 0], project, [farEnd, nearEnd], RING)[0].strength).toBe(1);
   });
 });

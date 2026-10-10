@@ -59,19 +59,19 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
   },
   'aim.zone': {
     object: AIM, prop: 'zone', min: 0.05, max: 0.6, step: 0.01, unit: 'm', group: 'aim',
-    desc: "How near a carried tool's tip must come to a fastener before it turns to point at it",
+    desc: "How near a carried part's end (a tool's tip, a dowel's end) must come to a seat before it turns to point in",
   },
   'aim.rate': {
     object: AIM, prop: 'rate', min: 0, max: 30, step: 0.5, unit: '1/s', group: 'aim',
-    desc: 'How fast a carried tool turns toward a fastener at full strength (0: no aim)',
+    desc: 'How fast a carried part turns toward a seat at full strength (0: no aim)',
   },
   'rings.screenRadius': {
     object: RING, prop: 'screenRadius', min: 30, max: 300, step: 5, unit: 'px', group: 'rings',
-    desc: 'How near the finger, on screen, a workable fastener starts to light',
+    desc: 'How near the finger, on screen, a place the carried part can go starts to light',
   },
   'rings.hitRadius': {
     object: RING, prop: 'hitRadius', min: 10, max: 100, step: 2, unit: 'px', group: 'rings',
-    desc: 'How near a lit ring the finger must let go of a tool to seat it there',
+    desc: 'How near a lit ring the finger must let go of a carried part to seat it there',
   },
   'gesture.hoverLift': {
     object: GESTURE, prop: 'hoverLift', min: 0, max: 0.15, step: 0.005, unit: 'm', group: 'gesture',

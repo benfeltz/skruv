@@ -261,11 +261,9 @@ describe('a carried tool aims itself (1.8.2.1 step 4)', () => {
     expect(key.mesh.quaternion.toArray()).toEqual(before);
   });
 
-  it.each([
-    ['a dowel lying beside the bolt', { type: 'dowel', at: [HEAD[0] - 0.03, HEAD[1], HEAD[2]] as Vec3, rotation: [0, 0, Math.SQRT1_2, Math.SQRT1_2] as Quat }],
-    ['a panel carried over it', { type: 'topBottomPanel', at: [HEAD[0], HEAD[1] + 0.1, HEAD[2] + 0.1] as Vec3 }],
-  ])('never turns %s', (_, extra) => {
-    const { parts, drag, hold, router, offered } = harness({ extra });
+  // Plan amendment (Ben, 2026-10-10): every fastener aims too; panels and the box never do.
+  it('never turns a panel carried over it', () => {
+    const { parts, drag, hold, router, offered } = harness({ extra: { type: 'topBottomPanel', at: [HEAD[0], HEAD[1] + 0.1, HEAD[2] + 0.1] } });
     const part = parts.at(-1)!;
     drag(part);
     expect(router.dragging?.part).toBe(part);
@@ -300,8 +298,8 @@ describe('rings light the fasteners a carried tool can work (1.8.2.1 step 6)', (
     expect(headRing(shown)).toBeUndefined();
   });
 
-  it('draws no rings while anything but a tool is dragged', () => {
-    const { router, parts, drag, shown } = harness({ extra: { type: 'dowel', at: [HEAD[0] - 0.03, HEAD[1], HEAD[2]], rotation: [0, 0, Math.SQRT1_2, Math.SQRT1_2] } });
+  it('draws no rings while a panel is dragged', () => {
+    const { router, parts, drag, shown } = harness({ extra: { type: 'topBottomPanel', at: [HEAD[0], HEAD[1] + 0.1, HEAD[2] + 0.1] } });
     drag(parts.at(-1)!);
     router.update(0);
     expect(shown).toEqual([]);
@@ -362,8 +360,11 @@ describe('letting a tool go over a lit ring seats it (1.8.2.1 step 7)', () => {
     expect(h.toolJoints()).toEqual([]);
   });
 
-  it('leaves anything but a tool unaffected over a ring point', () => {
-    const h = harness({ extra: { type: 'dowel', at: [HEAD[0] + 0.15, HEAD[1], HEAD[2] + 0.1], rotation: [0, 0, Math.SQRT1_2, Math.SQRT1_2] } });
+  it.each([
+    ['a dowel, which no bolt head takes', { type: 'dowel', at: [HEAD[0] + 0.15, HEAD[1], HEAD[2] + 0.1] as Vec3, rotation: [0, 0, Math.SQRT1_2, Math.SQRT1_2] as Quat }],
+    ['a panel', { type: 'topBottomPanel', at: [HEAD[0] + 0.15, HEAD[1] + 0.1, HEAD[2] + 0.3] as Vec3 }],
+  ])('seats nothing let go over the bolt head: %s', (_, extra) => {
+    const h = harness({ extra });
     const before = h.assembly.all().length;
     dropOverHead(h, h.parts.at(-1)!);
     expect(h.assembly.all()).toHaveLength(before);
@@ -387,18 +388,18 @@ const DRIVER_HALF = PART_TYPES.screwdriver.size[0] / 2;
 
 // `held`: the desktop's Shift hold keeps the screwdriver up through the lift hold seam.
 // `short`: how far the tip lies short of the slot (m).
-function camHarness({ held = false, short = 0.035 } = {}) {
+function camHarness({ held = false, short = 0.035, camAt }: { held?: boolean; short?: number; camAt?: { at: Vec3; rotation: Quat } } = {}) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   camera.position.set(0, 1.2, 0.8);
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld(true);
   const shelf = makePart('topBottomPanel-1', 'topBottomPanel', SHELF_POSE.position, SHELF_POSE.rotation);
-  const cam = makePart('camLock-1', 'camLock', [recess[0], recess[1] + CAM_HALF, recess[2]]);
+  const cam = camAt ? makePart('camLock-1', 'camLock', camAt.at, camAt.rotation) : makePart('camLock-1', 'camLock', [recess[0], recess[1] + CAM_HALF, recess[2]]);
   const driver = makePart('screwdriver-1', 'screwdriver', [SLOT[0] - short + DRIVER.position[1], SHELF_TOP + DRIVER_HALF, SLOT[2]], DRIVER_FLAT);
   const parts = [shelf, cam, driver];
   const typeById = new Map(parts.map(({ id, type }) => [id, type]));
   const assembly = createAssembly((id) => typeById.get(id)!);
-  assembly.seat({ partA: cam.id, connectorA: 0, partB: shelf.id, connectorB: RECESS, mover: cam.id });
+  if (!camAt) assembly.seat({ partA: cam.id, connectorA: 0, partB: shelf.id, connectorB: RECESS, mover: cam.id });
   const offers: StampedEvent[] = [];
   const events = createBus();
   events.on(EVENT.SNAP_CANDIDATE, (event) => offers.push(event));
@@ -438,7 +439,11 @@ function camHarness({ held = false, short = 0.035 } = {}) {
     hold.update(FRAME);
   };
   const tip = () => new THREE.Vector3(...DRIVER.position).applyQuaternion(driver.mesh.quaternion).add(driver.mesh.position);
-  return { router, canvas, driver, hold, tip, frame, finger: { clientX: at.clientX, clientY: at.clientY + 16 }, offered: () => offers.at(-1)?.target ?? null };
+  const screen = (point: Vec3) => {
+    const p = new THREE.Vector3(...point).project(camera);
+    return { clientX: ((p.x + 1) / 2) * SIZE, clientY: ((1 - p.y) / 2) * SIZE };
+  };
+  return { router, canvas, assembly, cam, driver, hold, tip, frame, screen, finger: { clientX: at.clientX, clientY: at.clientY + 16 }, offered: () => offers.at(-1)?.target ?? null };
 }
 
 describe('a carried screwdriver aims about its tip (review round 2)', () => {
@@ -490,5 +495,63 @@ describe('a line easing up while the tool aims still gets there (review round 4)
     expect(hold.goal).toBeGreaterThanOrEqual(start + 0.3);
     expect(hold.height).toBeCloseTo(hold.goal, 3);
     expect(tip().y).toBeGreaterThan(start + 0.25);
+  });
+});
+
+// Plan amendment (Ben, 2026-10-10): on the phone no fastener could be seated in a hole either
+// — a dowel or bolt lying on the floor points sideways, every hole in a flat panel points
+// up. Self-aim, rings and ring drops widen from tools to every piece of hardware.
+describe('fasteners aim, light and drop into holes like tools (plan amendment)', () => {
+  const FLAT: Quat = [0, 0, Math.SQRT1_2, Math.SQRT1_2]; // a dowel's or bolt's axis (local y) lying along x
+  const DOWEL_HOLE = connectorInWorld(PART_TYPES.sidePanel.connectors[0], PANEL_POSE).position;
+  const FAR_KEY: Vec3 = [HEAD[0] - 0.4, 0.004, HEAD[2] + 0.4];
+  const KINDS = (h: ReturnType<typeof harness>) => h.assembly.all().map((j) => j.kind);
+
+  it('turns a dowel lying flat by a free hole into it, held still, and seats it with no gizmo', () => {
+    const half = PART_TYPES.dowel.size[1] / 2;
+    const h = harness({ seated: false, keyAt: FAR_KEY, extra: { type: 'dowel', at: [DOWEL_HOLE[0] - half - 0.03, DOWEL_HOLE[1] + 0.005, DOWEL_HOLE[2]], rotation: FLAT } });
+    const dowel = h.parts.at(-1)!;
+    const at = h.drag(dowel, 0, 12);
+    expect(h.router.dragging?.part).toBe(dowel);
+    expect(h.offered()).toBeNull();
+    h.hold(120);
+    expect(h.offered()).toBe('sidePanel-1');
+    h.canvas.fire('pointerup', at);
+    expect(KINDS(h)).toContain(KIND.DOWEL);
+  });
+
+  it('turns a cam bolt lying flat by its free hole into it, held still, and seats it', () => {
+    const h = harness({ seated: false, keyAt: FAR_KEY, boltAt: { at: [HOLE[0] - BOLT_HALF - 0.03, HOLE[1] + 0.005, HOLE[2]], rotation: FLAT } });
+    const at = h.drag(h.bolt, 0, 12);
+    expect(h.router.dragging?.part).toBe(h.bolt);
+    expect(h.offered()).toBeNull();
+    h.hold(120);
+    expect(h.offered()).toBe('sidePanel-1');
+    h.canvas.fire('pointerup', at);
+    expect(h.assembly.all()).toEqual([expect.objectContaining({ kind: KIND.BOLT, hardware: 'camLockBolt-1', host: 'sidePanel-1' })]);
+  });
+
+  it('lights the free hole a carried dowel takes, and never a filled one', () => {
+    const half = PART_TYPES.dowel.size[1] / 2;
+    const h = harness({ seated: true, keyAt: FAR_KEY, extra: { type: 'dowel', at: [DOWEL_HOLE[0] - half - 0.03, DOWEL_HOLE[1] + 0.005, DOWEL_HOLE[2]], rotation: FLAT } });
+    h.drag(h.parts.at(-1)!, 0, 12);
+    h.router.update(0);
+    const lit = h.shown.at(-1)!;
+    expect(lit.some(({ position }) => position.every((v, i) => Math.abs(v - DOWEL_HOLE[i]) < 1e-6))).toBe(true);
+    // The cam-bolt hole is filled by the seated bolt, and takes no dowel anyway.
+    expect(lit.some(({ position }) => position.every((v, i) => Math.abs(v - HOLE[i]) < 1e-6))).toBe(false);
+  });
+
+  it('seats a cam lock let go over its lit recess, whatever its angle', () => {
+    const c = camHarness({ short: 0.6, camAt: { at: [SLOT[0] + 0.12, SHELF_TOP + 0.008, SLOT[2] + 0.1], rotation: FLAT } });
+    c.canvas.fire('pointerup', c.finger); // let the screwdriver go, far off
+    const from = c.screen(c.cam.mesh.position.toArray());
+    const to = c.screen(connectorInWorld(PART_TYPES.topBottomPanel.connectors[RECESS], SHELF_POSE).position);
+    c.canvas.fire('pointerdown', from);
+    for (let i = 1; i <= 6; i++) c.canvas.fire('pointermove', { clientX: from.clientX + ((to.clientX - from.clientX) * i) / 6, clientY: from.clientY + ((to.clientY - from.clientY) * i) / 6 });
+    expect(c.router.dragging?.part).toBe(c.cam);
+    expect(c.offered()).toBeNull();
+    c.canvas.fire('pointerup', to);
+    expect(c.assembly.all()).toEqual([expect.objectContaining({ kind: KIND.CAM, hardware: 'camLock-1', host: 'topBottomPanel-1' })]);
   });
 });

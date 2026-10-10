@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { AIM, COLORS, DROP, FASTENER, GESTURE, PICK, RING, ROOM, SNAP } from '../constants.js';
-import { areCompatible, COMPATIBLE, CONNECTOR, KIND } from '../../tools/validate/lib/vocabulary.js';
+import { areCompatible, COMPATIBLE, CONNECTOR, isFastenerEnd, KIND } from '../../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, rotateVector } from '../../tools/validate/lib/geometry.js';
 import { capture } from '../game/assembly.js';
 import { PART_TYPES } from '../game/item.js';
@@ -20,8 +20,8 @@ import {
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
-import { aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
-import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
+import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
+import { isSeatTarget, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
 import type { Snap } from '../game/snapMath.js';
 import type { Assembly, AssemblyJoint, Head, PartId } from '../game/assembly.js';
 import type { Bus } from '../game/events.js';
@@ -59,9 +59,9 @@ interface WorldConnector {
 
 type RouterSnap = Snap<WorldConnector, WorldConnector>;
 
-/** A tool being carried: its tip connector, the tip's catalog index, and the seats it could take. */
-interface CarriedTool {
-  tip: (typeof PART_TYPES)[string]['connectors'][number];
+/** One fastener end of a carried part — a tool's tip, a dowel's either end — and the seats that take it. */
+interface CarriedEnd {
+  connector: (typeof PART_TYPES)[string]['connectors'][number];
   index: number;
   seats: WorldConnector[];
 }
@@ -142,8 +142,9 @@ const isHardware = (type: string) => PART_TYPES[type].connectors.some((c) => c.t
 // Fasteners and tools, never panels — the parts that get a fat hit proxy.
 const isSmall = (type: string) => isSmallPart(PART_TYPES[type].size, PICK);
 
-// A tool's working end: the catalog connector index of its tip, or -1 for any other part.
-const tipIndex = (type: string) => PART_TYPES[type].connectors.findIndex((c) => isToolTip(c.type));
+// A part's fastener ends — what it seats by: a tool's tip, a dowel's two ends, a bolt's
+// thread. Catalog connector indices; none for a panel or the box.
+const endsOf = (type: string) => PART_TYPES[type].connectors.flatMap((c, index) => (isFastenerEnd(c.type) ? [index] : []));
 
 // A pull is judged along a short stretch of the joint's axis projected to the screen.
 const PULL_AXIS_PROBE = 0.05;
@@ -176,9 +177,10 @@ const PULL_AXIS_PROBE = 0.05;
  *   dropGuide — `{ show(from, to), hide() }` line from a dragged part down to where it
  *            would land (src/scene/dropGuide.ts); a free hole there that takes the part
  *            glows, as does the seat the ghost shows.
- *   targetRings — `{ show(rings), hide() }` rings on the fasteners a carried tool can work
- *            right now, lit as the finger nears them (src/scene/targetRings.ts); letting go
- *            over a lit one seats the tool there.
+ *   targetRings — `{ show(rings), hide() }` rings on where carried hardware can go right
+ *            now — the free holes a fastener takes, the fasteners a tool can turn — lit as
+ *            the finger nears them (src/scene/targetRings.ts); letting go over a lit one
+ *            seats the part there.
  *   sprue  — `{ selected, hitTest(raycaster) }` handle on a selected small part
  *            (src/scene/sprue.ts); a press on it nearer than anything else is a press on
  *            its part, so dragging it is the part's own drag.
@@ -193,7 +195,7 @@ const PULL_AXIS_PROBE = 0.05;
  *            gone; a lift (second finger, Shift, wheel) moves the line with it. A part the
  *            line holds is never a seat for another: it drops when the line lets go.
  * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
- * turns a carried tool's tip toward a seat target near it (self-aim), eases a dragged part
+ * turns carried hardware's end toward a seat near it (self-aim), eases a dragged part
  * toward the seat on offer (seat assist) and fades the seat flash.
  */
 export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, targetRings, events, hold }: GestureRouterOptions) {
@@ -230,8 +232,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // The hole marking lit under the drop line (or at the seat on offer), if any.
   let glowing: Decal | null = null;
   const down = new THREE.Vector3(0, -1, 0);
-  // A carried tool's tip in the world, rewritten every frame (tipAt).
-  const tipPoint: Vec3 = [0, 0, 0];
+  // A carried part's end in the world, rewritten every frame (endAt).
+  const endPoint: Vec3 = [0, 0, 0];
 
   function aim({ clientX, clientY }: ClientPoint) {
     const rect = domElement.getBoundingClientRect();
@@ -589,64 +591,81 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     drag!.retarget = { from, to: hold!.goal };
   }
 
-  // The carried tool: its tip connector and the seats it could take, swept once per frame
-  // for both the aim and the rings — or null when no tool is being carried.
-  function carriedTool() {
+  // The carried hardware's fastener ends, each with the seats that take it — swept once per
+  // frame for both the aim and the rings — or null when no hardware is being carried (a
+  // panel, the box, a compound, a pull or a crank).
+  function carriedEnds(): CarriedEnd[] | null {
     if (drag?.mode !== 'move' || !drag.held || !drag.pointer) return null;
-    const index = tipIndex(drag.part.type);
-    if (index < 0) return null;
-    const tip = PART_TYPES[drag.part.type].connectors[index];
-    return { tip, index, seats: seatsFor(drag.part, tip.type) };
+    const ends = endsOf(drag.part.type);
+    if (ends.length === 0) return null;
+    const seats = seatsFor(drag.part);
+    const { connectors } = PART_TYPES[drag.part.type];
+    return ends.map((index) => ({ connector: connectors[index], index, seats: seats.filter((c) => areCompatible(connectors[index].type, c.type)) }));
   }
 
-  // Where a carried tool's tip of `type` could seat: free targets that take it, on seated
-  // hardware, never on the part the elevation line holds — as snapCandidate offers them.
-  function seatsFor(tool: Part, type: ConnectorType) {
+  // Where carried hardware could seat: free connectors on seated hardware or any hole, never
+  // on the part the elevation line holds — as snapCandidate offers them.
+  function seatsFor(carried: Part) {
     const isTaken = occupied();
     const seated = seatedHardware(assembly.all());
     return parts.flatMap((other) =>
-      other === tool || other === hold?.held
+      other === carried || other === hold?.held
         ? []
-        : worldConnectors(other, other.mesh.position, other.mesh.quaternion).filter(
-            (c) => areCompatible(type, c.type) && !isTaken(c) && isSeatTarget(c, seated),
-          ),
+        : worldConnectors(other, other.mesh.position, other.mesh.quaternion).filter((c) => !isTaken(c) && isSeatTarget(c, seated)),
     );
   }
 
-  // The carried tool's tip in the world with the tool at `pose`, into one reused record.
-  function tipAt({ tip }: CarriedTool, { position, rotation }: Pose): Vec3 {
-    return scratch.fromArray(tip.position).applyQuaternion(twist.fromArray(rotation)).add(offset.fromArray(position)).toArray(tipPoint);
+  // A carried part's end in the world with the part at `pose`, into one reused record.
+  function endAt({ connector }: CarriedEnd, { position, rotation }: Pose): Vec3 {
+    return scratch.fromArray(connector.position).applyQuaternion(twist.fromArray(rotation)).add(offset.fromArray(position)).toArray(endPoint);
   }
 
-  // Self-aim: a carried tool whose tip nears a seat target turns its tip into it, harder the
-  // nearer, so the snap's angle window comes to the tool. Every frame — a still finger sends
-  // no events, so the offer the aim brings is looked for here too. Tools only; outside
-  // AIM.zone nothing changes, and once a seat is on offer seat assist takes over.
-  function aimTool(tool: CarriedTool | null, delta: number) {
-    if (!tool || drag!.snapped) return;
+  // Of a carried part's ends, the one whose seat nearest it (inside `zone`) needs the least
+  // turn — a dowel aims whichever end is the shorter turn to its hole — or null.
+  function aimEnd(ends: CarriedEnd[], pose: Pose, zone: number) {
+    let best: { end: CarriedEnd; target: WorldConnector; distance: number; turn: number } | null = null;
+    for (const end of ends) {
+      const near = nearestTarget(endAt(end, pose), end.seats, zone);
+      if (!near) continue;
+      const turn = aimAngle(pose.rotation, end.connector.axis, near.target.axis);
+      if (!best || turn < best.turn) best = { end, ...near, turn };
+    }
+    return best;
+  }
+
+  // Self-aim: carried hardware whose end nears a seat turns that end into it, harder the
+  // nearer, so the snap's angle window comes to the part — a tool's tip to a bolt head, a
+  // dowel's end to its hole. Every frame — a still finger sends no events, so the offer the
+  // aim brings is looked for here too. Panels never aim; outside AIM.zone, or already
+  // pointing in, nothing changes; once a seat is on offer seat assist takes over.
+  function aimHardware(ends: CarriedEnd[] | null, delta: number) {
+    if (!ends || drag!.snapped) return;
     // No seat on offer: the part is held exactly where the finger puts it.
-    const near = nearestTarget(tipAt(tool, drag!.held!), tool.seats, AIM.zone);
-    if (!near) return;
-    const aimed = aimedRotation(drag!.rotation, tool.tip.axis, near.target.axis);
-    const position = turnAboutTip(tool, aimStep(drag!.rotation, aimed, aimWeight(near.distance, AIM.zone), AIM.rate, delta));
+    const near = aimEnd(ends, drag!.held!, AIM.zone);
+    if (!near || near.turn < AIM.settled) return;
+    const aimed = aimedRotation(drag!.rotation, near.end.connector.axis, near.target.axis);
+    const position = turnAbout(near.end, aimStep(drag!.rotation, aimed, aimWeight(near.distance, AIM.zone), AIM.rate, delta));
     physics.move(drag!.part.body, position, drag!.rotation);
-    // A tool's one connector is its tip and these are its seats: the full offer check runs
+    // The part seats by these ends and these are their seats: the full offer check runs
     // only once the aim has brought one within the snap window.
-    const from = { type: tool.tip.type, position: tipAt(tool, drag!.held!), axis: rotateVector(drag!.rotation, tool.tip.axis) };
-    if (findSnap([from], tool.seats, SNAP)) refreshOffer(position);
+    const within = ends.some((end) => {
+      const from = { type: end.connector.type, position: endAt(end, drag!.held!), axis: rotateVector(drag!.rotation, end.connector.axis) };
+      return findSnap([from], end.seats, SNAP) !== null;
+    });
+    if (within) refreshOffer(position);
   }
 
-  // Turns the carried tool to `rotation` about its tip, so aiming never swings the tip off
-  // its target or the tool's far end through what lies under it (the screwdriver's tip is
-  // 10 cm from its middle). The drag carries on from the new pose: its footprint is the
-  // turned one, kept inside the room, and the finger's grab and height are rebased so the
-  // next move doesn't put it back. The elevation line holding the drag goes with it, as a
-  // lift takes it, so it never pulls the tool back down — and whatever height the line is
-  // easing toward moves by as much, so a press on its track still gets there.
-  function turnAboutTip(tool: CarriedTool, rotation: Quat): Vec3 {
+  // Turns the carried part to `rotation` about `end`, so aiming never swings the end off its
+  // seat or the part's far side through what lies under it (the screwdriver's tip is 10 cm
+  // from its middle). The drag carries on from the new pose: its footprint is the turned
+  // one, kept inside the room, and the finger's grab and height are rebased so the next move
+  // doesn't put it back. The elevation line holding the drag goes with it, as a lift takes
+  // it, so it never pulls the part back down — and whatever height the line is easing
+  // toward moves by as much, so a press on its track still gets there.
+  function turnAbout(end: CarriedEnd, rotation: Quat): Vec3 {
     const { held, centre } = drag!;
-    const [tx, ty, tz] = tipAt(tool, held!);
-    const [lx, ly, lz] = rotateVector(rotation, tool.tip.position);
+    const [tx, ty, tz] = endAt(end, held!);
+    const [lx, ly, lz] = rotateVector(rotation, end.connector.position);
     const [hx, hy, hz] = rotatedHalfExtents(PART_TYPES[drag!.part.type].size.map((d) => d / 2), rotation);
     drag!.half = [hx, hz];
     drag!.halfHeight = hy;
@@ -668,17 +687,18 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return position;
   }
 
-  // --- target rings: the fasteners a carried tool can work right now ---
+  // --- target rings: where carried hardware can go right now ---
 
-  // Workable targets for the carried tool, nearest the finger first, with how brightly each
+  // Workable seats for the carried part, nearest the finger first, with how brightly each
   // lights — dark ones included.
-  function ringsFor(tool: CarriedTool) {
+  function ringsFor(ends: CarriedEnd[]) {
     const { held, pointer } = drag!;
     const joints = assembly.all();
     const catches = catcher(joints);
-    const workable = tool.seats.filter((c) => isWorkable(c, joints, catches));
+    const workable = ends.flatMap((end) => end.seats.filter((c) => isWorkable(c, joints, catches)));
     const rect = domElement.getBoundingClientRect();
-    return ringStrengths(workable, [pointer!.clientX, pointer!.clientY], (position) => screenPoint(position, rect), tipAt(tool, held!), RING);
+    const reach = ends.map((end) => connectorInWorld(end.connector, held!).position);
+    return ringStrengths(workable, [pointer!.clientX, pointer!.clientY], (position) => screenPoint(position, rect), reach, RING);
   }
 
   // The bolt a seated cam lock's recess would catch, as a turn of it would. The screwed
@@ -693,22 +713,25 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     };
   }
 
-  // A tool let go with the finger on a lit ring seats there whatever its angle or distance:
-  // the seat snapCandidate would offer, taken with no reach or angle limit.
+  // Hardware let go with the finger on a lit ring seats there whatever its angle or
+  // distance, by the end that takes it with the least turn: the seat snapCandidate would
+  // offer, taken with no reach or angle limit.
   function ringDrop() {
-    const tool = carriedTool();
-    if (!tool) return null;
-    const hit = ringsFor(tool).find(({ strength, offset }) => strength > 0 && offset <= RING.hitRadius);
+    const ends = carriedEnds();
+    if (!ends) return null;
+    const hit = ringsFor(ends).find(({ strength, offset }) => strength > 0 && offset <= RING.hitRadius);
     if (!hit) return null;
     const { part, held } = drag!;
-    const from: WorldConnector = { ...connectorInWorld(tool.tip, held!), type: tool.tip.type, part, index: tool.index };
-    const snap = findSnap([from], [hit.target], { maxDistance: Infinity, maxAngle: Math.PI });
+    const from = ends
+      .filter((end) => end.seats.includes(hit.target))
+      .map((end): WorldConnector => ({ ...connectorInWorld(end.connector, held!), type: end.connector.type, part, index: end.index }));
+    const snap = findSnap(from, [hit.target], { maxDistance: Infinity, maxAngle: Math.PI });
     return snap && seatPose(snap, held!);
   }
 
-  function showRings(tool: CarriedTool | null) {
-    if (!targetRings || !tool) return;
-    const lit = ringsFor(tool).filter(({ strength }) => strength > 0);
+  function showRings(ends: CarriedEnd[] | null) {
+    if (!targetRings || !ends) return;
+    const lit = ringsFor(ends).filter(({ strength }) => strength > 0);
     targetRings.show(lit.map(({ target, strength }) => ({ position: target.position, axis: target.axis, strength })));
   }
 
@@ -726,7 +749,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       stopDrag();
       return false;
     }
-    // The seat on offer — or, for a tool let go over a lit ring, that ring's.
+    // The seat on offer — or, for hardware let go over a lit ring, that ring's.
     const snapped = drag!.snapped ?? ringDrop();
     // Whatever was seated on a part that just moved away drops — judged before the new seat
     // is made: a kinematic move lands on the next physics step, so until then the part reads
@@ -957,12 +980,12 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function update(delta = 0) {
     followHold();
     // Swept once, for the aim and the rings.
-    const tool = carriedTool();
-    aimTool(tool, delta);
+    const ends = carriedEnds();
+    aimHardware(ends, delta);
     assist(delta);
     fadeFlashes(delta);
     guideDrop();
-    showRings(tool);
+    showRings(ends);
     for (const joint of assembly.all()) {
       if (joint.kind !== KIND.BOLT && joint.kind !== KIND.CAM) continue;
       const { mesh, body } = partById.get(joint.hardware)!;

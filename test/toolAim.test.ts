@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeQuaternion, rotateVector } from '../tools/validate/lib/geometry.js';
 import { AIM } from '../src/constants.js';
-import { aimedRotation, aimStep, aimWeight, nearestTarget } from '../src/game/toolAim.js';
+import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../src/game/toolAim.js';
 import type { Quat, Vec3 } from '../tools/validate/lib/geometry.js';
 
 const UP: Vec3 = [0, 1, 0];
@@ -72,5 +72,13 @@ describe('aimStep', () => {
     const aimed = aimedRotation(IDENTITY, TIP, UP);
     expect(aimStep(IDENTITY, aimed, 0, AIM.rate, 1 / 60)).toEqual(IDENTITY);
     expect(aimStep(IDENTITY, aimed, 1, AIM.rate, 0)).toEqual(IDENTITY);
+  });
+});
+
+describe('aimAngle', () => {
+  it('is 0 pointing straight in, 90° lying flat, and 180° pointing away', () => {
+    expect(aimAngle(aimedRotation(IDENTITY, TIP, UP), TIP, UP)).toBeCloseTo(0, 6);
+    expect(aimAngle(IDENTITY, TIP, UP)).toBeCloseTo(Math.PI / 2, 9);
+    expect(aimAngle(aboutX(-Math.PI / 2), TIP, UP)).toBeCloseTo(Math.PI, 6);
   });
 });

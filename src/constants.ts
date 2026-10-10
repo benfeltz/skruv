@@ -332,34 +332,38 @@ export const SNAP = {
   flashMs: 450,
 };
 
-// Tool self-aim (src/game/toolAim.ts, driven by src/scene/gestureRouter.ts): a dragged tool
-// whose tip comes within `zone` of a seat target turns its tip to point into it, harder the
-// nearer it is — so SNAP's 40° window is reached without the gizmo. Outside the zone the
-// tool keeps whatever orientation it has.
+// Self-aim (src/game/toolAim.ts, driven by src/scene/gestureRouter.ts): dragged hardware —
+// a tool, a dowel, a bolt, a cam lock, a pin, a fitting — whose fastener end comes within
+// `zone` of a seat that takes it turns that end to point in, harder the nearer it is, so
+// SNAP's 40° window is reached without the gizmo. Outside the zone the part keeps whatever
+// orientation it has; panels never aim.
 export const AIM = {
-  // Metres from the tool's tip at which aiming starts (strength 0 there, 1 at the target).
+  // Metres from the end at which aiming starts (strength 0 there, 1 at the seat).
   zone: 0.3,
   // Turn rate at full strength (1/s), the seat assist's exponential law.
   rate: 8,
+  // An end this close (radians) to pointing straight in is left as it is.
+  settled: 0.001,
 };
 
 // Target rings (src/game/toolTargets.ts picks them, src/scene/targetRings.ts draws them):
-// while a tool is carried, each fastener it can work right now lights a ring as the finger
-// nears it on screen — never one across the room from the tool — the nearest brightest.
-// Letting go over a lit ring seats the tool there.
+// while hardware is carried, each place it can go right now — a free hole that takes a
+// fastener, a fastener a tool can turn — lights a ring as the finger nears it on screen,
+// never one across the room from the part, the nearest brightest. Letting go over a lit
+// ring seats the part there.
 export const RING = {
   // CSS px from the finger at which a ring starts to fade in.
   screenRadius: 120,
-  // CSS px from a lit ring within which letting go seats the tool: a fingertip.
+  // CSS px from a lit ring within which letting go seats the part: a fingertip.
   hitRadius: 36,
-  // Metres from the tool's tip beyond which nothing lights, however close it looks.
+  // Metres from the carried part's ends beyond which nothing lights, however close it looks.
   maxDistance: 0.5,
   // The ring lying round a head or slot (m), and its look at full strength.
   radius: 0.012,
   width: 0.004,
   opacity: 0.9,
-  // Rings drawn at once, nearest first: JOHNNY has 8 cam bolts, the most one tool can work.
-  pool: 8,
+  // Rings drawn at once, nearest first: plenty for the holes around one finger.
+  pool: 12,
 };
 
 // Hole markings (src/game/decals.ts, drawn by src/game/partMesh.ts). Radii are keyed by

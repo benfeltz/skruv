@@ -1,6 +1,7 @@
-// Tool self-aim: the arithmetic that turns a carried tool's tip toward the nearest seat
-// target. Pure — positions [x, y, z], quaternions [x, y, z, w]; the router feeds it the
-// drag's pick-up rotation every frame and AIM's zone and rate.
+// Self-aim: the arithmetic that turns a carried part's fastener end — a tool's tip, a
+// dowel's or bolt's end — toward the nearest seat that takes it. Pure — positions
+// [x, y, z], quaternions [x, y, z, w]; the router feeds it the drag's pick-up rotation
+// every frame and AIM's zone and rate.
 
 import { multiplyQuaternions, normalizeQuaternion, rotateVector, rotationBetween } from '../../tools/validate/lib/geometry.js';
 import { easeToward } from './dragMath.js';
@@ -22,6 +23,12 @@ export function nearestTarget<T extends { position: Vec3 }>(tip: Vec3, targets: 
     if (distance < zone && (!best || distance < best.distance)) best = { target, distance };
   }
   return best;
+}
+
+/** How far (radians) an end — `axis`, local — at `rotation` is from pointing straight into a target facing `targetAxis`. */
+export function aimAngle(rotation: Quat, axis: Vec3, targetAxis: Vec3) {
+  const [x, y, z] = rotateVector(rotation, axis);
+  return Math.acos(Math.min(1, Math.max(-1, -(x * targetAxis[0] + y * targetAxis[1] + z * targetAxis[2]))));
 }
 
 /**

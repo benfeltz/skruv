@@ -1,16 +1,18 @@
-// Which tool connectors a fastener offers. Pure — joints and connector records in, sets and
-// booleans out; geometry the graph doesn't hold (which bolt head a cam would catch) is
-// injected by the caller.
+// Where carried hardware can go: which connectors are seats, and which light up. Pure —
+// joints and connector records in, sets and booleans out; geometry the graph doesn't hold
+// (which bolt head a cam would catch) is injected by the caller. The caller has already
+// kept to free connectors that take the carried part's ends.
 //
-//   seat target  a connector a tool may seat on at all: a bolt head or cam slot only once
-//                its bolt or cam lock is seated in its hole — a tool on loose hardware is a
-//                dead end (nothing turns)
-//   workable     a seat target the tool can turn right now: an unscrewed seated bolt for
-//                the Allen key; an unlocked seated cam lock with a screwed bolt in reach for
-//                the screwdriver. Only these light up, which also teaches the build order.
+//   seat target  a connector anything may seat on at all: any hole, but a bolt head or cam
+//                slot only once its bolt or cam lock is seated in its hole — a tool on
+//                loose hardware is a dead end (nothing turns)
+//   workable     a seat target worth lighting: any free hole for a fastener; for a tool,
+//                only what it can turn right now — an unscrewed seated bolt for the Allen
+//                key, an unlocked seated cam lock with a screwed bolt in reach for the
+//                screwdriver, which also teaches the build order
 //   ring         how brightly a workable target lights for the finger: by on-screen
 //                distance (what looks close is close, on a phone), capped by a 3D distance
-//                from the tool's tip so nothing across the room lights.
+//                from the carried part's ends so nothing across the room lights.
 
 import { CONNECTOR, KIND } from '../../tools/validate/lib/vocabulary.js';
 import { isCrankKind, isFastened, STATE } from './fasteners.js';
@@ -49,8 +51,9 @@ export function seatedHardware(joints: Iterable<AssemblyJoint>) {
 export const isSeatTarget = (connector: TargetConnector, seated: ReadonlySet<PartId>) =>
   !isToolTarget(connector.type) || seated.has(connector.part.id);
 
-/** A seat target the matching tool can turn right now — see the header. */
+/** A seat target worth lighting — any hole; a bolt head or cam slot only when its tool can turn it now (see the header). */
 export function isWorkable(connector: TargetConnector, joints: Iterable<AssemblyJoint>, captured: Captured) {
+  if (!isToolTarget(connector.type)) return true;
   const seat = seatOf(connector, joints);
   if (!seat) return false;
   if (connector.type === CONNECTOR.BOLT_HEAD) return !isFastened(seat.fastener);
@@ -75,20 +78,22 @@ export interface RingStrength<T> {
 /**
  * Ring strengths for `targets` (workable ones — the caller filters), nearest the finger
  * first. `project` maps a world point to client px. A target lights within `screenRadius`
- * px of `finger`, fading linearly out to it, and only within `maxDistance` metres of the
- * tool's `tip`; the nearest lit one is at full strength.
+ * px of `finger`, fading linearly out to it, and only within `maxDistance` metres of one of
+ * the carried part's `ends` (a tool's tip, a dowel's either end); the nearest lit one is at
+ * full strength.
  */
 export function ringStrengths<T extends { position: Vec3 }>(
   targets: Iterable<T>,
   finger: ScreenPoint,
   project: (position: Vec3) => ScreenPoint,
-  tip: Vec3,
+  ends: readonly Vec3[],
   { screenRadius, maxDistance }: { screenRadius: number; maxDistance: number },
 ): RingStrength<T>[] {
   const rings = [...targets].map((target) => {
     const [x, y] = project(target.position);
     const offset = Math.hypot(x - finger[0], y - finger[1]);
-    const reach = Math.hypot(target.position[0] - tip[0], target.position[1] - tip[1], target.position[2] - tip[2]);
+    const [tx, ty, tz] = target.position;
+    const reach = Math.min(...ends.map(([ex, ey, ez]) => Math.hypot(tx - ex, ty - ey, tz - ez)));
     const strength = reach > maxDistance ? 0 : Math.max(0, 1 - offset / screenRadius);
     return { target, strength, offset };
   });
