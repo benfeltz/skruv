@@ -9,6 +9,8 @@ import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
 import { fractionOf, heightAt, selectsDuringHold } from './game/liftLine.js';
 import { baseRest, boxPlacement, boxPoseOf, createPackedWorldLayout, lidRest, respawnSpots } from './game/boxLayout.js';
+import { spikeAssembledPlan, spikeMode } from './game/spikeAssembled.js';
+import { seatHome } from './game/assembly.js';
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
@@ -74,10 +76,21 @@ tunables.subscribe((key, value) => {
 const flatpack = createFlatpack(physics);
 scene.add(flatpack.base.mesh, flatpack.lid.mesh);
 
+// Engine spike 1.2 (branch-local): the shell (or ?spike) boots this same game with the
+// metrics overlay and haptic tick; ?spike=assembled instead boots the player's set standing
+// assembled, spares and tools loose beside the box. Null on every other URL.
+const mode = spikeMode(location.search, location.protocol);
+const spike = mode === 'assembled' ? spikeAssembledPlan() : null;
+function spawnLayout() {
+  if (!spike) return createPackedWorldLayout();
+  const spots = respawnSpots(spike.loose.map(({ type }) => type));
+  return [...spike.assembled, ...spike.loose.map(({ id, type }, i) => ({ id, type, ...spots[i] }))];
+}
+
 // One record per physical part — what gestures pick, drag and snap. The box and its lid
 // are ones too.
 const parts = [flatpack.base, flatpack.lid];
-for (const { id, type, position, rotation } of createPackedWorldLayout()) {
+for (const { id, type, position, rotation } of spawnLayout()) {
   const part = PART_TYPES[type];
   const mesh = createPartMesh(part);
   const body = physics.register(mesh, {
@@ -102,6 +115,8 @@ const typeById = new Map(parts.map(({ id, type }) => [id, type]));
 const assembly = createAssembly((id) => typeById.get(id)!);
 // The display shelf goes in fastened, through the graph's own events.
 display.fasten(assembly);
+// The spike's assembled set goes in the same way: seated and driven home, joints by sync.
+if (spike) seatHome(assembly, spike.pairs);
 // Manipulation goes through these seams: a fastened compound moves as one, and while a
 // finger is on the elevation line its part is held in mid-air at the line's height.
 const hold = createLiftHold(createCompoundPhysics(physics, parts, assembly));
@@ -124,7 +139,8 @@ scene.add(gizmo.object);
 // puts it down and does nothing else.
 const bookletPages = createBookletPages(renderer);
 const booklet = createBookletSheet({ pages: bookletPages });
-document.body.append(booklet.scrim, booklet.thumb, booklet.element);
+// The assembled stress test measures the room untouched: no booklet over it.
+if (!spike) document.body.append(booklet.scrim, booklet.thumb, booklet.element);
 // The real sheet now covers index.html's stand-in; it goes in the frame that first paints it.
 requestAnimationFrame(() => document.getElementById('pre-splash')?.remove());
 
@@ -180,7 +196,8 @@ const router = createGestureRouter({
   events,
   hold,
 });
-// The display shelf's physics joints, made by the same reconcile every tap and turn runs.
+// The display shelf's (and the spike set's) physics joints, made by the same reconcile
+// every tap and turn runs.
 router.sync();
 
 // Where the box sits now, as the level, in-room box frame the layout hangs off.
@@ -324,7 +341,22 @@ events.on(EVENT.FASTEN, ({ kind }) => {
 // Under sustained load the room renders every other frame; everything else runs every frame.
 const fps = createFpsGuard();
 
+// Engine spike 1.2: the metrics overlay — loaded only in a spike boot. Drift and sleep are
+// watched on whichever JOHNNY stands built: the spike's assembled set, else the display shelf.
+const metrics = mode
+  ? await import('./spike/metricsOverlay.js').then(({ createMetricsOverlay }) => {
+      const assembledIds = new Set(spike?.assembled.map(({ id }) => id));
+      const watched = spike ? playerParts.filter(({ id }) => assembledIds.has(id)) : display.parts;
+      const overlay = createMetricsOverlay({ bodies: watched.map(({ body }) => body) });
+      document.body.append(overlay.element);
+      return overlay;
+    })
+  : null;
+// …and the haptic tick on grab, in the native shell only.
+if (metrics) import('./spike/haptics.js').then(({ connectSpikeHaptics }) => connectSpikeHaptics({ events, onRoundTrip: metrics.haptic }));
+
 createLoop((delta, rawDelta) => {
+  metrics?.frame(rawDelta);
   cameraControls.update(delta);
   keepShiftHold();
   hold.update(delta);

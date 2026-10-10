@@ -1,0 +1,41 @@
+{
+  "spike": "capacitor",
+  "device": null,
+  "date": "2026-10-08",
+  "framePacing": {
+    "p50ms": null,
+    "p95ms": null,
+    "p99ms": null,
+    "framesOver33ms": null,
+    "sessionSeconds": null
+  },
+  "stability": {
+    "maxDriftMm": null,
+    "visibleJitter": null,
+    "allAsleepSeconds": null
+  },
+  "memory": {
+    "steadyMb": null,
+    "peakMb": null,
+    "warningsOrKills": null,
+    "how": "Xcode memory gauge (Debug navigator), app run from Xcode on the device"
+  },
+  "coldStart": {
+    "median3Seconds": null
+  },
+  "appSize": {
+    "installedMb": null,
+    "webExportMb": 5.06
+  },
+  "editToPhone": {
+    "seconds": null,
+    "how": "live reload: Vite dev server on the LAN, shell server.url via CAP_LIVE_URL (simulator 1.56 s median edit→reloaded page; phone pending) · full rebuild: scripts/ios.sh all = web build → cap sync → xcodebuild → devicectl install+launch (edit→signed .app 3.29 s median warm; install+launch pending)"
+  },
+  "haptics": {
+    "grabToTickMs": null,
+    "perceptibleLag": null
+  },
+  "agentLoop": {
+    "ports": []
+  }
+}
