@@ -675,6 +675,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     }
     // The seat on offer — or, for a tool let go over a lit ring, that ring's.
     const snapped = drag!.snapped ?? ringDrop();
+    // Whatever was seated on a part that just moved away drops — judged before the new seat
+    // is made: a kinematic move lands on the next physics step, so until then the part reads
+    // where it was, and a seat from a far ring drop would look stale.
+    pruneStale();
     if (snapped) {
       const { from, to } = snapped.snap;
       const joint = assembly.seat({ partA: part.id, connectorA: from.index, partB: to.part.id, connectorB: to.index, mover: part.id });
@@ -689,8 +693,6 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       physics.release(part.body);
     }
     stopDrag();
-    // Whatever was seated on a part that just moved away drops.
-    pruneStale();
     return !!snapped;
   }
 

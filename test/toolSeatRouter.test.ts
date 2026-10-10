@@ -45,16 +45,24 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-// A part whose body reports its mesh's pose; moves land on the mesh, as a step would.
-function makePart(id: string, type: string, position: Vec3, rotation: Quat = [0, 0, 0, 1]): Part {
+// A part whose body reports its mesh's pose; moves land on the mesh, as a step would. A
+// `stepped` body reports instead the pose committed at the last `step()` — as Rapier's
+// kinematic bodies do, a move landing only on the next physics step.
+function makePart(id: string, type: string, position: Vec3, rotation: Quat = [0, 0, 0, 1], stepped = false): Part {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(...PART_TYPES[type].size));
   mesh.position.set(...position);
   mesh.quaternion.set(...rotation);
   mesh.updateMatrixWorld(true);
+  const committed = { position: mesh.position.clone(), quaternion: mesh.quaternion.clone() };
+  const at = stepped ? committed : mesh;
   const body = {
     id,
-    translation: () => ({ x: mesh.position.x, y: mesh.position.y, z: mesh.position.z }),
-    rotation: () => ({ x: mesh.quaternion.x, y: mesh.quaternion.y, z: mesh.quaternion.z, w: mesh.quaternion.w }),
+    translation: () => ({ x: at.position.x, y: at.position.y, z: at.position.z }),
+    rotation: () => ({ x: at.quaternion.x, y: at.quaternion.y, z: at.quaternion.z, w: at.quaternion.w }),
+    step: () => {
+      committed.position.copy(mesh.position);
+      committed.quaternion.copy(mesh.quaternion);
+    },
   };
   // A fake: a plain-material mesh and a body that only reports its pose.
   return { id, type, mesh, body } as unknown as Part;
@@ -90,9 +98,11 @@ interface Options {
   screwed?: boolean;
   // A bolt lying loose somewhere else, instead of standing in the hole.
   boltAt?: { at: Vec3; rotation: Quat };
+  // Bodies report their pose as of the last physics step, not the last move.
+  stepped?: boolean;
 }
 
-function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra, screwed = false, boltAt }: Options = {}) {
+function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra, screwed = false, boltAt, stepped = false }: Options = {}) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   camera.position.set(0, 1.2, 0.8);
   camera.lookAt(0, 0, 0);
@@ -102,7 +112,7 @@ function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra, screwed 
   const bolt = boltAt ? makePart('camLockBolt-1', 'camLockBolt', boltAt.at, boltAt.rotation) : makePart('camLockBolt-1', 'camLockBolt', [HOLE[0], HOLE[1] + BOLT_HALF, HOLE[2]]);
   // Tip-down, its tip a little above the head, beside it.
   const tipOffset = new THREE.Vector3(...TIP).applyQuaternion(new THREE.Quaternion(...keyRotation));
-  const key = makePart('allenWrench-1', 'allenWrench', keyAt ?? [HEAD[0] - tipOffset.x, HEAD[1] - tipOffset.y + 0.02, HEAD[2] - tipOffset.z], keyRotation);
+  const key = makePart('allenWrench-1', 'allenWrench', keyAt ?? [HEAD[0] - tipOffset.x, HEAD[1] - tipOffset.y + 0.02, HEAD[2] - tipOffset.z], keyRotation, stepped);
   const parts = [panel, bolt, key];
   if (extra) parts.push(makePart(`${extra.type}-9`, extra.type, extra.at, extra.rotation));
   const typeById = new Map(parts.map(({ id, type }) => [id, type]));
@@ -127,10 +137,12 @@ function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra, screwed 
   const offers: StampedEvent[] = [];
   const seats: StampedEvent[] = [];
   const releases: StampedEvent[] = [];
+  const unseats: StampedEvent[] = [];
   const events = createBus();
   events.on(EVENT.SNAP_CANDIDATE, (event) => offers.push(event));
   events.on(EVENT.SEAT, (event) => seats.push(event));
   events.on(EVENT.RELEASE, (event) => releases.push(event));
+  events.on(EVENT.UNSEAT, (event) => unseats.push(event));
 
   // Every show the rings get, and how many hides.
   const shown: TargetRing[][] = [];
@@ -166,7 +178,7 @@ function harness({ seated = true, keyAt, keyRotation = TIP_DOWN, extra, screwed 
   const hold = (frames: number) => {
     for (let i = 0; i < frames; i++) router.update(FRAME);
   };
-  return { router, canvas, assembly, parts, panel, bolt, key, camera, drag, hold, screen, offered, seats, toolJoints, shown, ringCalls, releases };
+  return { router, canvas, assembly, parts, panel, bolt, key, camera, drag, hold, screen, offered, seats, toolJoints, shown, ringCalls, releases, unseats };
 }
 
 describe('a tool never seats on loose hardware (1.8.2.1 step 2)', () => {
@@ -323,6 +335,15 @@ describe('letting a tool go over a lit ring seats it (1.8.2.1 step 7)', () => {
     expect(h.releases.at(-1)).toMatchObject({ part: 'allenWrench-1', seated: true });
     // Seated as a snap seats it: tip straight down into the head.
     expect(tipMisalignment(h.key)).toBeCloseTo(0, 6);
+  });
+
+  // Review round 1: under Rapier a kinematic move lands on the next step, so the seat just
+  // made must not be judged on the tool's pre-drop pose — a far drop would unseat at once.
+  it('keeps a far drop seated while the physics step has yet to carry the tool there', () => {
+    const h = harness({ ...OFF_AXIS, keyAt: [HEAD[0] + 0.15, HEAD[1] + 0.08, HEAD[2] + 0.1], stepped: true });
+    dropOverHead(h, h.key);
+    expect(h.toolJoints()).toHaveLength(1);
+    expect(h.unseats).toEqual([]);
   });
 
   it('does not seat it let go outside the hit radius', () => {
