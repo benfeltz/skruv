@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { CONNECTOR } from '../tools/validate/lib/vocabulary.js';
+import { RING } from '../src/constants.js';
 import { capture, createAssembly } from '../src/game/assembly.js';
-import { isSeatTarget, isWorkable, seatedHardware } from '../src/game/toolTargets.js';
+import { isSeatTarget, isWorkable, ringStrengths, seatedHardware } from '../src/game/toolTargets.js';
+import type { ScreenPoint } from '../src/game/dragMath.js';
 import type { Vec3 } from '../tools/validate/lib/geometry.js';
 import type { Captured, TargetConnector } from '../src/game/toolTargets.js';
 
@@ -83,5 +85,46 @@ describe('workable targets', () => {
   it('only bolt heads and cam slots are ever workable', () => {
     const { assembly } = build();
     expect(isWorkable({ type: CONNECTOR.CAM_BOLT_HOLE, part: { id: 'sidePanel-1' } }, assembly.all(), catching(assembly, NEAR))).toBe(false);
+  });
+});
+
+describe('ring strengths', () => {
+  // A flat screen: 1 m across x/z is 1000 px, y ignored — so 3D and on-screen distance part ways.
+  const project = ([x, , z]: Vec3): ScreenPoint => [x * 1000, z * 1000];
+  const FINGER: ScreenPoint = [0, 0];
+  const TIP: Vec3 = [0, 0.05, 0];
+  const strengths = (targets: { position: Vec3 }[]) => ringStrengths(targets, FINGER, project, TIP, RING);
+
+  it('lights a target under the finger and near the tip at full strength', () => {
+    const under = { position: [0, 0, 0] as Vec3 };
+    expect(strengths([under])).toEqual([{ target: under, strength: 1, offset: 0 }]);
+  });
+
+  it('leaves a target beyond the screen radius dark', () => {
+    const away = { position: [(RING.screenRadius + 1) / 1000, 0, 0] as Vec3 };
+    expect(strengths([away])[0].strength).toBe(0);
+  });
+
+  it('leaves a target that only looks close dark — across the room from the tool', () => {
+    const behind = { position: [0, RING.maxDistance + 0.2, 0] as Vec3 };
+    expect(strengths([behind])[0].strength).toBe(0);
+  });
+
+  it('ranks the nearest first at full strength, and fades the others with screen distance', () => {
+    const far = { position: [0.09, 0, 0] as Vec3 };
+    const near = { position: [0.03, 0, 0] as Vec3 };
+    const [first, second] = strengths([far, near]);
+    expect(first.target).toBe(near);
+    expect(first.strength).toBe(1);
+    expect(second.target).toBe(far);
+    expect(second.strength).toBeCloseTo(1 - 90 / RING.screenRadius, 9);
+  });
+
+  it('gives the nearest lit target full strength even when a nearer one is out of reach', () => {
+    const outOfReach = { position: [0.01, RING.maxDistance + 0.2, 0] as Vec3 };
+    const lit = { position: [0.06, 0, 0] as Vec3 };
+    const [first, second] = strengths([lit, outOfReach]);
+    expect(first).toMatchObject({ target: outOfReach, strength: 0 });
+    expect(second).toMatchObject({ target: lit, strength: 1 });
   });
 });

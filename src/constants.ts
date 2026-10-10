@@ -55,6 +55,8 @@ export const COLORS = {
   bookletFaint: 0xbdbdbd,
   // Per-page highlight (src/scene/highlight.ts): the warm accent, glowing softly.
   highlight: 0xe0a64a,
+  // Target rings on the fasteners a carried tool can work (src/scene/targetRings.ts).
+  targetRing: 0xe0a64a,
 };
 
 // Per-page highlight (src/scene/highlight.ts): the parts the open booklet page is about
@@ -339,6 +341,23 @@ export const AIM = {
   zone: 0.3,
   // Turn rate at full strength (1/s), the seat assist's exponential law.
   rate: 8,
+};
+
+// Target rings (src/game/toolTargets.ts picks them, src/scene/targetRings.ts draws them):
+// while a tool is carried, each fastener it can work right now lights a ring as the finger
+// nears it on screen — never one across the room from the tool — the nearest brightest.
+// Letting go over a lit ring seats the tool there.
+export const RING = {
+  // CSS px from the finger at which a ring starts to fade in.
+  screenRadius: 120,
+  // CSS px from a lit ring within which letting go seats the tool: a fingertip.
+  hitRadius: 36,
+  // Metres from the tool's tip beyond which nothing lights, however close it looks.
+  maxDistance: 0.5,
+  // The ring lying round a head or slot (m), and its look at full strength.
+  radius: 0.012,
+  width: 0.004,
+  opacity: 0.9,
 };
 
 // Hole markings (src/game/decals.ts, drawn by src/game/partMesh.ts). Radii are keyed by
