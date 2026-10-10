@@ -542,6 +542,17 @@ describe('fasteners aim, light and drop into holes like tools (plan amendment)',
     expect(lit.some(({ position }) => position.every((v, i) => Math.abs(v - HOLE[i]) < 1e-6))).toBe(false);
   });
 
+  // Review round 6: both of a dowel's ends take the same holes; each lights once.
+  it('lights each hole once for a dowel, though both its ends take it', () => {
+    const half = PART_TYPES.dowel.size[1] / 2;
+    const h = harness({ seated: false, keyAt: FAR_KEY, extra: { type: 'dowel', at: [DOWEL_HOLE[0] - half - 0.03, DOWEL_HOLE[1] + 0.005, DOWEL_HOLE[2]], rotation: FLAT } });
+    h.drag(h.parts.at(-1)!, 0, 12);
+    h.router.update(0);
+    const lit = h.shown.at(-1)!;
+    expect(lit.length).toBeGreaterThan(1);
+    expect(new Set(lit.map(({ position }) => position.join())).size).toBe(lit.length);
+  });
+
   it('seats a cam lock let go over its lit recess, whatever its angle', () => {
     const c = camHarness({ short: 0.6, camAt: { at: [SLOT[0] + 0.12, SHELF_TOP + 0.008, SLOT[2] + 0.1], rotation: FLAT } });
     c.canvas.fire('pointerup', c.finger); // let the screwdriver go, far off
