@@ -367,3 +367,90 @@ describe('letting a tool go over a lit ring seats it (1.8.2.1 step 7)', () => {
     expect(h.seats).toEqual([]);
   });
 });
+
+// Review round 2: the screwdriver's tip is 10 cm from its middle, so an aim that turned it
+// about its middle swung the tip away from the slot and through the panel under it. A shelf
+// lies recess-up with a cam lock seated in it; the screwdriver lies flat on the shelf, its
+// tip 3.5 cm short of the cam lock's slot.
+describe('a carried screwdriver aims about its tip (review round 2)', () => {
+  const SHELF_POSE = { position: [0, 0.008, 0] as Vec3, rotation: [1, 0, 0, 0] as Quat };
+  const RECESS = 2;
+  const SHELF_TOP = 0.016;
+  const recess = connectorInWorld(PART_TYPES.topBottomPanel.connectors[RECESS], SHELF_POSE).position;
+  const CAM_HALF = PART_TYPES.camLock.size[1] / 2;
+  const SLOT: Vec3 = [recess[0], recess[1] + 2 * CAM_HALF, recess[2]];
+  const DRIVER_FLAT: Quat = [0, 0, Math.SQRT1_2, Math.SQRT1_2]; // its tip (local -y) onto +x
+  const DRIVER = PART_TYPES.screwdriver.connectors[0];
+  const DRIVER_HALF = PART_TYPES.screwdriver.size[0] / 2;
+
+  function camHarness() {
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
+    camera.position.set(0, 1.2, 0.8);
+    camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld(true);
+    const shelf = makePart('topBottomPanel-1', 'topBottomPanel', SHELF_POSE.position, SHELF_POSE.rotation);
+    const cam = makePart('camLock-1', 'camLock', [recess[0], recess[1] + CAM_HALF, recess[2]]);
+    const driver = makePart('screwdriver-1', 'screwdriver', [SLOT[0] - 0.035 + DRIVER.position[1], SHELF_TOP + DRIVER_HALF, SLOT[2]], DRIVER_FLAT);
+    const parts = [shelf, cam, driver];
+    const typeById = new Map(parts.map(({ id, type }) => [id, type]));
+    const assembly = createAssembly((id) => typeById.get(id)!);
+    assembly.seat({ partA: cam.id, connectorA: 0, partB: shelf.id, connectorB: RECESS, mover: cam.id });
+    const offers: StampedEvent[] = [];
+    const events = createBus();
+    events.on(EVENT.SNAP_CANDIDATE, (event) => offers.push(event));
+    const canvas = new FakeCanvas();
+    const router = createGestureRouter({
+      domElement: canvas as unknown as HTMLElement, // a fake: listeners and a bounding rect only
+      camera,
+      cameraControls: { enable() {}, disable() {} },
+      physics: {
+        grab: () => {},
+        move: (body: Body, position: Vec3, rotation?: Quat) => {
+          const { mesh } = parts.find((part) => part.body === body)!;
+          mesh.position.set(...position);
+          if (rotation) mesh.quaternion.set(...rotation);
+          mesh.updateMatrixWorld(true);
+        },
+        release: () => {},
+        join: () => ({}) as PhysicsJoint, // a fake joint: the router only hands it back to unjoin
+        unjoin: () => {},
+      },
+      parts,
+      assembly,
+      events,
+    });
+    const v = driver.mesh.position.clone().project(camera);
+    const at = { clientX: ((v.x + 1) / 2) * SIZE, clientY: ((1 - v.y) / 2) * SIZE };
+    canvas.fire('pointerdown', at);
+    canvas.fire('pointermove', { clientX: at.clientX, clientY: at.clientY + 8 });
+    canvas.fire('pointermove', { clientX: at.clientX, clientY: at.clientY + 16 });
+    const tip = () => new THREE.Vector3(...DRIVER.position).applyQuaternion(driver.mesh.quaternion).add(driver.mesh.position);
+    return { router, canvas, driver, tip, finger: { clientX: at.clientX, clientY: at.clientY + 16 }, offered: () => offers.at(-1)?.target ?? null };
+  }
+
+  it('turns it upright over the slot, held still, keeping its tip clear of the shelf, and offers the slot', () => {
+    const { router, driver, tip, offered } = camHarness();
+    expect(router.dragging?.part).toBe(driver);
+    expect(offered()).toBeNull();
+    const before = tip().distanceTo(new THREE.Vector3(...SLOT));
+    for (let i = 0; i < 180; i++) {
+      router.update(FRAME);
+      expect(tip().y).toBeGreaterThan(SHELF_TOP);
+    }
+    expect(offered()).toBe('camLock-1');
+    expect(tip().distanceTo(new THREE.Vector3(...SLOT))).toBeLessThan(before);
+  });
+});
+
+describe('a turned tool carries on from where the aim left it (review round 2)', () => {
+  it('stays put when the finger next moves a pixel, rather than jumping back to the old grab', () => {
+    const h = harness({ keyAt: FLAT_BESIDE, keyRotation: IDENTITY });
+    const at = h.drag(h.key);
+    // Turned partway, still short of an offer.
+    h.hold(3);
+    expect(h.offered()).toBeNull();
+    const before = h.key.mesh.position.clone();
+    h.canvas.fire('pointermove', { clientX: at.clientX + 1, clientY: at.clientY });
+    expect(h.key.mesh.position.distanceTo(before)).toBeLessThan(0.003);
+  });
+});

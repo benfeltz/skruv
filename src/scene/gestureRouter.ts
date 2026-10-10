@@ -625,17 +625,39 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function aimTool(tool: CarriedTool | null, delta: number) {
     if (!tool || drag!.snapped) return;
     // No seat on offer: the part is held exactly where the finger puts it.
-    const { position } = drag!.held!;
     const near = nearestTarget(tipAt(tool, drag!.held!), tool.seats, AIM.zone);
     if (!near) return;
     const aimed = aimedRotation(drag!.rotation, tool.tip.axis, near.target.axis);
-    drag!.rotation = aimStep(drag!.rotation, aimed, aimWeight(near.distance, AIM.zone), AIM.rate, delta);
-    drag!.held = { position, rotation: drag!.rotation };
+    const position = turnAboutTip(tool, aimStep(drag!.rotation, aimed, aimWeight(near.distance, AIM.zone), AIM.rate, delta));
     physics.move(drag!.part.body, position, drag!.rotation);
     // A tool's one connector is its tip and these are its seats: the full offer check runs
     // only once the aim has brought one within the snap window.
-    const from = { type: tool.tip.type, position: tipAt(tool, drag!.held), axis: rotateVector(drag!.rotation, tool.tip.axis) };
+    const from = { type: tool.tip.type, position: tipAt(tool, drag!.held!), axis: rotateVector(drag!.rotation, tool.tip.axis) };
     if (findSnap([from], tool.seats, SNAP)) refreshOffer(position);
+  }
+
+  // Turns the carried tool to `rotation` about its tip, so aiming never swings the tip off
+  // its target or the tool's far end through what lies under it (the screwdriver's tip is
+  // 10 cm from its middle). The drag carries on from the new pose: its footprint is the
+  // turned one, kept inside the room, and the finger's grab and height are rebased so the
+  // next move doesn't put it back. A drag the elevation line holds keeps the line's height.
+  function turnAboutTip(tool: CarriedTool, rotation: Quat): Vec3 {
+    const { held, centre } = drag!;
+    const [tx, ty, tz] = tipAt(tool, held!);
+    const [lx, ly, lz] = rotateVector(rotation, tool.tip.position);
+    const [hx, hy, hz] = rotatedHalfExtents(PART_TYPES[drag!.part.type].size.map((d) => d / 2), rotation);
+    drag!.half = [hx, hz];
+    drag!.halfHeight = hy;
+    const [cx, cy, cz] = centre;
+    const [bx, , bz] = clampToRoom([tx - lx + cx, 0, tz - lz + cz], drag!.half, ROOM, GESTURE.wallMargin);
+    const y = holdsDrag() ? drag!.height : clampLift(ty - ly + cy, hy, ROOM, GESTURE.ceilingMargin) - cy;
+    const position: Vec3 = [bx - cx, y, bz - cz];
+    const [px, , pz] = held!.position;
+    drag!.offset = [drag!.offset[0] + position[0] - px, drag!.offset[1] + position[2] - pz];
+    drag!.height = y;
+    drag!.rotation = rotation;
+    drag!.held = { position, rotation };
+    return position;
   }
 
   // --- target rings: the fasteners a carried tool can work right now ---
