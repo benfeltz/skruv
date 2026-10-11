@@ -21,7 +21,7 @@ import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
-import { isSeatTarget, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
+import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
 import type { Snap } from '../game/snapMath.js';
 import type { Assembly, AssemblyJoint, Head, PartId } from '../game/assembly.js';
 import type { Bus } from '../game/events.js';
@@ -636,15 +636,18 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // Self-aim: carried hardware whose end nears a seat turns that end into it, harder the
   // nearer, so the snap's angle window comes to the part — a tool's tip to a bolt head, a
   // dowel's end to its hole. Every frame — a still finger sends no events, so the offer the
-  // aim brings is looked for here too. Panels never aim; outside AIM.zone, or already
+  // aim brings is looked for here too. Fasteners and tools are tuned apart (AIM.zone/rate,
+  // AIM.toolZone/toolRate). Panels never aim; outside the zone, or already
   // pointing in, nothing changes; once a seat is on offer seat assist takes over.
   function aimHardware(ends: CarriedEnd[] | null, delta: number) {
     if (!ends || drag!.snapped) return;
     // No seat on offer: the part is held exactly where the finger puts it.
-    const near = aimEnd(ends, drag!.held!, AIM.zone);
+    const tool = ends.some((end) => isToolTip(end.connector.type));
+    const zone = tool ? AIM.toolZone : AIM.zone;
+    const near = aimEnd(ends, drag!.held!, zone);
     if (!near || near.turn < AIM.settled) return;
     const aimed = aimedRotation(drag!.rotation, near.end.connector.axis, near.target.axis);
-    const position = turnAbout(near.end, aimStep(drag!.rotation, aimed, aimWeight(near.distance, AIM.zone), AIM.rate, delta));
+    const position = turnAbout(near.end, aimStep(drag!.rotation, aimed, aimWeight(near.distance, zone), tool ? AIM.toolRate : AIM.rate, delta));
     physics.move(drag!.part.body, position, drag!.rotation);
     // The part seats by these ends and these are their seats: the full offer check runs
     // only once the aim has brought one within the snap window.

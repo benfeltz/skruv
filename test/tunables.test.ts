@@ -33,6 +33,8 @@ describe('LIVE_KNOBS', () => {
       'snap.assistStrength',
       'aim.zone',
       'aim.rate',
+      'aim.toolZone',
+      'aim.toolRate',
       'rings.screenRadius',
       'rings.hitRadius',
       'gesture.hoverLift',

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, rotateVector } from '../tools/validate/lib/geometry.js';
-import { RING, SNAP } from '../src/constants.js';
+import { AIM, RING, SNAP } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
 import { PART_TYPES } from '../src/game/item.js';
 import { createBus, EVENT } from '../src/game/events.js';
@@ -564,5 +564,36 @@ describe('fasteners aim, light and drop into holes like tools (plan amendment)',
     expect(c.offered()).toBeNull();
     c.canvas.fire('pointerup', to);
     expect(c.assembly.all()).toEqual([expect.objectContaining({ kind: KIND.CAM, hardware: 'camLock-1', host: 'topBottomPanel-1' })]);
+  });
+});
+
+// Ben (2026-10-10): fastener and tool magnetism get their own knobs.
+describe('fasteners and tools aim on their own knobs', () => {
+  const FLAT: Quat = [0, 0, Math.SQRT1_2, Math.SQRT1_2];
+  const DOWEL_HOLE = connectorInWorld(PART_TYPES.sidePanel.connectors[0], PANEL_POSE).position;
+  const half = PART_TYPES.dowel.size[1] / 2;
+  const DOWEL_BY_HOLE = { type: 'dowel', at: [DOWEL_HOLE[0] - half - 0.03, DOWEL_HOLE[1] + 0.005, DOWEL_HOLE[2]] as Vec3, rotation: FLAT };
+  const saved = { ...AIM };
+  afterEach(() => Object.assign(AIM, saved));
+
+  // Whether `part`, picked up and held still for a second, turned at all.
+  const turns = (h: ReturnType<typeof harness>, part: Part) => {
+    h.drag(part, 0, 12);
+    const before = part.mesh.quaternion.clone();
+    h.hold(60);
+    return part.mesh.quaternion.angleTo(before) > 1e-6;
+  };
+
+  it.each([
+    ['aim.rate stopped', { rate: 0 }, false, true],
+    ['aim.zone shrunk', { zone: 0.001 }, false, true],
+    ['aim.toolRate stopped', { toolRate: 0 }, true, false],
+    ['aim.toolZone shrunk', { toolZone: 0.001 }, true, false],
+  ])('with %s, only that kind of part stops turning', (_, knobs, dowelTurns, keyTurns) => {
+    Object.assign(AIM, knobs);
+    const withDowel = harness({ seated: false, keyAt: [HEAD[0] - 0.4, 0.004, HEAD[2] + 0.4], extra: DOWEL_BY_HOLE });
+    expect(turns(withDowel, withDowel.parts.at(-1)!)).toBe(dowelTurns);
+    const withKey = harness({ keyAt: FLAT_BESIDE, keyRotation: IDENTITY });
+    expect(turns(withKey, withKey.key)).toBe(keyTurns);
   });
 });

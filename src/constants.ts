@@ -338,10 +338,14 @@ export const SNAP = {
 // SNAP's 40° window is reached without the gizmo. Outside the zone the part keeps whatever
 // orientation it has; panels never aim.
 export const AIM = {
-  // Metres from the end at which aiming starts (strength 0 there, 1 at the seat).
+  // Fasteners — a dowel, bolt, cam lock, pin or fitting into its hole: metres from the end
+  // at which aiming starts (strength 0 there, 1 at the seat), and the turn rate at full
+  // strength (1/s, the seat assist's exponential law).
   zone: 0.3,
-  // Turn rate at full strength (1/s), the seat assist's exponential law.
   rate: 8,
+  // Tools — a tip onto a bolt head or cam slot — the same, tuned apart.
+  toolZone: 0.3,
+  toolRate: 8,
   // An end this close (radians) to pointing straight in is left as it is.
   settled: 0.001,
 };

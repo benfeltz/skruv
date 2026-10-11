@@ -59,11 +59,19 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
   },
   'aim.zone': {
     object: AIM, prop: 'zone', min: 0.05, max: 0.6, step: 0.01, unit: 'm', group: 'aim',
-    desc: "How near a carried part's end (a tool's tip, a dowel's end) must come to a seat before it turns to point in",
+    desc: "How near a carried fastener's end (a dowel's, a bolt's) must come to a hole before it turns to point in",
   },
   'aim.rate': {
     object: AIM, prop: 'rate', min: 0, max: 30, step: 0.5, unit: '1/s', group: 'aim',
-    desc: 'How fast a carried part turns toward a seat at full strength (0: no aim)',
+    desc: 'How fast a carried fastener turns toward a hole at full strength (0: no aim)',
+  },
+  'aim.toolZone': {
+    object: AIM, prop: 'toolZone', min: 0.05, max: 0.6, step: 0.01, unit: 'm', group: 'aim',
+    desc: "How near a carried tool's tip must come to a bolt head or cam slot before it turns to point in",
+  },
+  'aim.toolRate': {
+    object: AIM, prop: 'toolRate', min: 0, max: 30, step: 0.5, unit: '1/s', group: 'aim',
+    desc: 'How fast a carried tool turns toward a bolt head or cam slot at full strength (0: no aim)',
   },
   'rings.screenRadius': {
     object: RING, prop: 'screenRadius', min: 30, max: 300, step: 5, unit: 'px', group: 'rings',
