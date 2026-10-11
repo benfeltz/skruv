@@ -337,18 +337,21 @@ const standing = (index: number, by: number): Vec3 => holeAt(index).position.map
 
 // A side panel lying flat; a dowel pushed home in its hole 3 and the bottom panel pushed home
 // on it, standing up (one assembly); a dowel seated only in its hole 4. `extra` parts lie aside.
-function assemblyHarness(extra: Part[] = []) {
+// `joined: false`: the side panel alone with the dowel seated in it — a single panel carrying its dowel.
+function assemblyHarness(extra: Part[] = [], { joined = true } = {}) {
   const dowelHalf = PART_TYPES.dowel.size[1] / 2;
   const side = makePart('sidePanel-1', 'sidePanel', FLAT_SIDE.position, FLAT_SIDE.rotation);
   const joiner = makePart('dowel-1', 'dowel', standing(3, dowelHalf));
   const hole3 = rotateVector(DOWN, PART_TYPES.topBottomPanel.connectors[3].position);
   const bottom = makePart('topBottomPanel-1', 'topBottomPanel', standing(3, 2 * dowelHalf).map((v, i) => v - hole3[i]) as Vec3, DOWN);
   const loose = makePart('dowel-2', 'dowel', standing(4, dowelHalf));
-  const parts = [side, joiner, bottom, loose, ...extra];
+  const parts = [side, ...(joined ? [joiner, bottom] : []), loose, ...extra];
   const typeById = new Map(parts.map(({ id, type }) => [id, type]));
   const assembly = createAssembly((id) => typeById.get(id)!);
-  assembly.drive(assembly.seat({ partA: joiner.id, connectorA: 0, partB: side.id, connectorB: 3, mover: joiner.id }).id);
-  assembly.drive(assembly.seat({ partA: bottom.id, connectorA: 3, partB: joiner.id, connectorB: 1, mover: bottom.id }).id);
+  if (joined) {
+    assembly.drive(assembly.seat({ partA: joiner.id, connectorA: 0, partB: side.id, connectorB: 3, mover: joiner.id }).id);
+    assembly.drive(assembly.seat({ partA: bottom.id, connectorA: 3, partB: joiner.id, connectorB: 1, mover: bottom.id }).id);
+  }
   assembly.seat({ partA: loose.id, connectorA: 0, partB: side.id, connectorB: 4, mover: loose.id });
 
   // Bodies under direct control: grabbed, not since released.
@@ -388,7 +391,7 @@ function assemblyHarness(extra: Part[] = []) {
     }
   };
   const held = (part: Part) => kinematic.has(part.body);
-  return { router, line, assembly, side, joiner, bottom, loose, frames, held, members: [joiner, bottom, loose] };
+  return { router, line, assembly, side, joiner, bottom, loose, frames, held, members: joined ? [joiner, bottom, loose] : [loose] };
 }
 
 describe('the line for a selected assembly (1.8.3.4 Step 4)', () => {
@@ -474,5 +477,20 @@ describe('the line for a selected assembly (1.8.3.4 Step 4)', () => {
     h.side.mesh.position.y -= 0.2;
     h.router.update(FRAME);
     expect(h.loose.mesh.position.y - h.side.mesh.position.y).toBeCloseTo(gap, 9);
+  });
+});
+
+// Test plan (1.8.3.4): the same gap closed for a single panel holding a dowel.
+describe('the line for a selected panel holding its dowel (1.8.3.4 test plan)', () => {
+  it('carries it, and raises the dowel with it', () => {
+    const h = assemblyHarness([], { joined: false });
+    expect(h.router.carries(h.side)).toBe(true);
+    const before = [h.side, h.loose].map((part) => part.mesh.position.y);
+    h.line.begin(h.side, 'line');
+    h.line.target(h.side.mesh.position.y + 0.3);
+    h.frames(240);
+    const rise = h.side.mesh.position.y - before[0];
+    expect(rise).toBeGreaterThan(0.25);
+    expect(h.loose.mesh.position.y - before[1]).toBeCloseTo(rise, 6);
   });
 });
