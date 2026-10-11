@@ -71,14 +71,20 @@ const KEY_AT: Vec3 = [HEAD[0] - 0.05, 0.002, HEAD[2] + 0.25];
 const DRIVER_AT: Vec3 = [HEAD[0] + 0.1, 0.011, HEAD[2] + 0.3];
 const DRIVER_FLAT: Quat = [0, 0, Math.SQRT1_2, Math.SQRT1_2];
 
-function bench() {
+// The cam bolt lying on its side on the floor, 20 cm from its hole (1.8.2.1's layout).
+const BOLT_FLAT = { at: [HOLE[0], 0.004, HOLE[2] - 0.2] as Vec3, rotation: [-Math.SQRT1_2, 0, 0, Math.SQRT1_2] as Quat };
+
+// `boltSeated`: the cam bolt starts standing seated in its hole (the default), else loose.
+function bench({ boltSeated = true } = {}) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   camera.position.set(0, 1.2, 0.8);
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld(true);
 
   const side = makePart('sidePanel-1', 'sidePanel', SIDE_POSE.position, SIDE_POSE.rotation);
-  const bolt = makePart('camLockBolt-1', 'camLockBolt', [HOLE[0], HOLE[1] + BOLT_HALF, HOLE[2]]);
+  const bolt = boltSeated
+    ? makePart('camLockBolt-1', 'camLockBolt', [HOLE[0], HOLE[1] + BOLT_HALF, HOLE[2]])
+    : makePart('camLockBolt-1', 'camLockBolt', BOLT_FLAT.at, BOLT_FLAT.rotation);
   const shelf = makePart('topBottomPanel-1', 'topBottomPanel', SHELF_POSE.position, SHELF_POSE.rotation);
   const cam = makePart('camLock-1', 'camLock', [RECESS_AT[0], RECESS_AT[1] + CAM_HALF, RECESS_AT[2]]);
   const key = makePart('allenWrench-1', 'allenWrench', KEY_AT);
@@ -86,7 +92,7 @@ function bench() {
   const parts = [side, bolt, shelf, cam, key, driver];
   const typeById = new Map(parts.map(({ id, type }) => [id, type]));
   const assembly = createAssembly((id) => typeById.get(id)!);
-  const boltSeat = assembly.seat({ partA: bolt.id, connectorA: 0, partB: side.id, connectorB: BOLT_HOLE, mover: bolt.id });
+  const boltSeat = boltSeated ? assembly.seat({ partA: bolt.id, connectorA: 0, partB: side.id, connectorB: BOLT_HOLE, mover: bolt.id }) : null;
   const camSeat = assembly.seat({ partA: cam.id, connectorA: 0, partB: shelf.id, connectorB: RECESS, mover: cam.id });
 
   // The haptics as src/main.ts wires them, into a buzzer that records its cues.
@@ -161,7 +167,7 @@ function bench() {
   };
   const toolOn = (tool: Part) => assembly.all().find((j) => j.kind === KIND.TOOL && j.hardware === tool.id) ?? null;
   const shownNow = () => dials.at(-1) ?? null;
-  return { assembly, key, driver, bolt, cam, boltSeat, camSeat, cues, dials, fire, screen, on, frames, carry, tap, toolOn, shownNow };
+  return { router, assembly, key, driver, bolt, cam, boltSeat, camSeat, cues, dials, fire, screen, on, frames, carry, tap, toolOn, shownNow };
 }
 
 // Consecutive ticks read as one run: how many frames ticked is the ratchet's business.
@@ -185,7 +191,7 @@ describe("JOHNNY's tool steps by ring and hold (1.8.2.2 acceptance)", () => {
     const press = b.on(b.key, keyEnd);
     b.fire('pointerdown', press);
     b.frames(TAP_FRAMES + DRIVE_FRAMES);
-    expect(b.assembly.get(b.boltSeat.id)!.fastener).toMatchObject({ state: STATE.SCREWED, progress: 1 });
+    expect(b.assembly.get(b.boltSeat!.id)!.fastener).toMatchObject({ state: STATE.SCREWED, progress: 1 });
     b.fire('pointerup', press);
     expect(b.toolOn(b.key)).not.toBeNull();
 
@@ -236,7 +242,7 @@ describe("a neighbouring tool's ring never takes a press on a seated tool (revie
   function bothSeated() {
     const b = bench();
     b.carry(b.on(b.key), HEAD);
-    b.assembly.drive(b.boltSeat.id);
+    b.assembly.drive(b.boltSeat!.id);
     b.frames(FLASH_FRAMES);
     b.carry(b.on(b.driver), SLOT);
     expect(b.toolOn(b.key)).not.toBeNull();
@@ -263,5 +269,90 @@ describe("a neighbouring tool's ring never takes a press on a seated tool (revie
     b.fire('pointerup', b.press);
     expect(b.assembly.get(b.camSeat.id)!.fastener).toMatchObject({ state: STATE.SEATED, progress: 0 });
     expect(b.toolOn(b.key)).not.toBeNull();
+  });
+});
+
+// Test plan (1.8.2.2): the regression risks and ACs pinned end to end, beside the flow above.
+describe('the ring and the hold leave the rest of the gesture alone (1.8.2.2 test plan)', () => {
+  // The Allen key let go onto the seated bolt's head; its dial live.
+  function keyOn() {
+    const b = bench();
+    b.carry(b.on(b.key), HEAD);
+    const [dial] = b.shownNow()!;
+    return { ...b, dial };
+  }
+
+  // Pressed on the key's end, then swept clockwise (the dial's tighten way) `degrees` round
+  // the head, `radius` px out, a frame per 10°, and let go.
+  function circleAt(b: ReturnType<typeof keyOn>, radius: number, degrees: number) {
+    const sense = b.dial.clockwise ? 1 : -1;
+    const at = (deg: number) => {
+      const a = (sense * deg * Math.PI) / 180;
+      return { clientX: b.dial.centre[0] + radius * Math.cos(a), clientY: b.dial.centre[1] + radius * Math.sin(a) };
+    };
+    b.fire('pointerdown', b.on(b.key, [-0.025, 0, 0]));
+    b.fire('pointermove', at(0));
+    for (let deg = 10; deg <= degrees; deg += 10) {
+      b.fire('pointermove', at(deg));
+      b.frames(1);
+    }
+    b.fire('pointerup', at(degrees));
+  }
+
+  it.each([
+    ['inside the ring', FASTENER.crankDeadzone + 10],
+    ['well outside it', TURN_RING.radius + TURN_RING.band + 80],
+  ])('still cranks from circling %s', (_where, radius) => {
+    const b = keyOn();
+    circleAt(b, radius, 180);
+    const progress = b.assembly.get(b.boltSeat!.id)!.fastener.progress;
+    expect(progress).toBeGreaterThan(0.2);
+    expect(progress).toBeLessThan(0.3);
+  });
+
+  it('stops driving when the press is cancelled, and the key stays on', () => {
+    const b = keyOn();
+    const press = b.on(b.key, [-0.025, 0, 0]);
+    b.fire('pointerdown', press);
+    b.frames(TAP_FRAMES + 20);
+    const driven = b.assembly.get(b.boltSeat!.id)!.fastener.progress;
+    expect(driven).toBeGreaterThan(0);
+    b.fire('pointercancel', press);
+    b.frames(DRIVE_FRAMES);
+    expect(b.assembly.get(b.boltSeat!.id)!.fastener.progress).toBe(driven);
+    expect(b.toolOn(b.key)).not.toBeNull();
+  });
+
+  it('drives home in driveSeconds at 30 fps as at 60', () => {
+    const b = keyOn();
+    b.fire('pointerdown', b.on(b.key, [-0.025, 0, 0]));
+    const slow = 1 / 30;
+    let seconds = 0;
+    while (b.assembly.get(b.boltSeat!.id)!.fastener.progress < 1 && seconds < 10) {
+      b.router.update(slow);
+      seconds += slow;
+    }
+    expect(seconds).toBeGreaterThan(FASTENER.driveSeconds + GESTURE.tapMaxMs / 1000 - 2 * slow);
+    expect(seconds).toBeLessThan(FASTENER.driveSeconds + GESTURE.tapMaxMs / 1000 + 2 * slow);
+  });
+
+  it('turns nothing from a hold on a key whose bolt is home, and the release leaves it on', () => {
+    const b = keyOn();
+    b.assembly.drive(b.boltSeat!.id);
+    const before = b.cues.length;
+    const press = b.on(b.key, [-0.025, 0, 0]);
+    b.fire('pointerdown', press);
+    b.frames(TAP_FRAMES + DRIVE_FRAMES);
+    b.fire('pointerup', press);
+    expect(b.toolOn(b.key)).not.toBeNull();
+    expect(b.cues.slice(before)).toEqual([]);
+  });
+
+  it('buzzes a plain seat as seat, not engage', () => {
+    const b = bench({ boltSeated: false });
+    // The loose cam bolt carried from the floor into its hole by touch.
+    b.carry(b.on(b.bolt), HOLE);
+    expect(b.assembly.all().some((j) => j.hardware === b.bolt.id && j.kind === KIND.BOLT)).toBe(true);
+    expect(b.cues).toEqual([CUE.SEAT]);
   });
 });
