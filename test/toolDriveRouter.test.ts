@@ -47,16 +47,20 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-// A part whose body reports its mesh's pose; moves land on the mesh, as a step would.
+// A part whose body keeps its own pose, as the simulation's does: a move lands on both body
+// and mesh, as a step would, while the fastener progress the router draws (a bolt sinking
+// and turning) lands on the mesh alone.
 function makePart(id: string, type: string, position: Vec3, rotation: Quat = [0, 0, 0, 1]): Part {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(...PART_TYPES[type].size));
-  mesh.position.set(...position);
-  mesh.quaternion.set(...rotation);
+  const pose = { position: new THREE.Vector3(...position), quaternion: new THREE.Quaternion(...rotation) };
+  mesh.position.copy(pose.position);
+  mesh.quaternion.copy(pose.quaternion);
   mesh.updateMatrixWorld(true);
   const body = {
     id,
-    translation: () => ({ x: mesh.position.x, y: mesh.position.y, z: mesh.position.z }),
-    rotation: () => ({ x: mesh.quaternion.x, y: mesh.quaternion.y, z: mesh.quaternion.z, w: mesh.quaternion.w }),
+    pose,
+    translation: () => ({ x: pose.position.x, y: pose.position.y, z: pose.position.z }),
+    rotation: () => ({ x: pose.quaternion.x, y: pose.quaternion.y, z: pose.quaternion.z, w: pose.quaternion.w }),
   };
   // A fake: a plain-material mesh and a body that only reports its pose.
   return { id, type, mesh, body } as unknown as Part;
@@ -84,8 +88,11 @@ function mount(parts: Part[]) {
     grab: () => {},
     move: (body: Body, position: Vec3, rotation?: Quat) => {
       const { mesh } = parts.find((part) => part.body === body)!;
-      mesh.position.set(...position);
-      if (rotation) mesh.quaternion.set(...rotation);
+      const { pose } = body as unknown as { pose: { position: THREE.Vector3; quaternion: THREE.Quaternion } }; // makePart's fake body
+      pose.position.set(...position);
+      if (rotation) pose.quaternion.set(...rotation);
+      mesh.position.copy(pose.position);
+      mesh.quaternion.copy(pose.quaternion);
       mesh.updateMatrixWorld(true);
     },
     release: () => {},
@@ -99,6 +106,7 @@ function mount(parts: Part[]) {
   const dials: (Dial[] | null)[] = [];
   const turnRing = { show: (shown: readonly Dial[]) => dials.push([...shown]), hide: () => dials.push(null) };
   const taps: (Part | null)[] = [];
+  const ratchet: number[] = [];
 
   const canvas = new FakeCanvas();
   const router = createGestureRouter({
@@ -111,6 +119,7 @@ function mount(parts: Part[]) {
     events,
     turnRing,
     onTap: (part) => taps.push(part),
+    onRatchet: (count) => ratchet.push(count),
   });
   const screen = (point: Vec3 | THREE.Vector3) => {
     const v = (Array.isArray(point) ? new THREE.Vector3(...point) : point.clone()).project(camera);
@@ -124,7 +133,24 @@ function mount(parts: Part[]) {
     canvas.fire('pointerup', at);
   };
   const fastens = () => log.filter((e) => e.type === EVENT.FASTEN);
-  return { router, canvas, assembly, log, dials, taps, screen, hold, tap, fastens };
+  const clicks = () => ratchet.reduce((sum, n) => sum + n, 0);
+  // Pressed at `from`, then swept `degrees` round `centre` on screen (clockwise positive),
+  // `radius` px out, a frame per 10°, and let go.
+  function circle(from: { clientX: number; clientY: number }, centre: Vec3, degrees: number, start = 0, radius = TURN_RING.radius) {
+    const c = screen(centre);
+    const at = (deg: number) => {
+      const a = start + (deg * Math.PI) / 180;
+      return { clientX: c.clientX + radius * Math.cos(a), clientY: c.clientY + radius * Math.sin(a) };
+    };
+    canvas.fire('pointerdown', from);
+    canvas.fire('pointermove', at(0));
+    for (let d = 10; d <= Math.abs(degrees); d += 10) {
+      canvas.fire('pointermove', at(Math.sign(degrees) * d));
+      router.update(FRAME);
+    }
+    canvas.fire('pointerup', at(degrees));
+  }
+  return { router, canvas, assembly, log, dials, taps, ratchet, screen, hold, tap, fastens, clicks, circle };
 }
 
 // `engaged`: the key is let go onto the seated bolt's head before the test starts.
@@ -219,10 +245,12 @@ describe('the turn ring takes presses (1.8.2.2 step 5)', () => {
     expect(ring.sweep(ring.ringAt(start), start, 180)).toBe('crank');
     const viaKey = harness();
     expect(viaKey.sweep(viaKey.screen(viaKey.key.mesh.position), start, 180)).toBe('crank');
-    // Half a turn of the bolt's two: a quarter of the way home either way. (The press that
-    // starts on the ring spends its first few degrees getting past the tap distance.)
-    expect(ring.progress()).toBeGreaterThan(0);
-    expect(ring.progress()).toBeCloseTo(viaKey.progress(), 1);
+    // Each turns the bolt by exactly the sweep its crank saw, over the bolt's two turns: from
+    // the key, all 180°; from the ring, whose press is already on the circle, 170° — its
+    // first 10° step is what takes it past the tap distance.
+    const span = (FASTENER.screwRadians * 180) / Math.PI;
+    expect(viaKey.progress()).toBeCloseTo(180 / span, 9);
+    expect(ring.progress()).toBeCloseTo(170 / span, 9);
   });
 
   it('takes a press anywhere on the band, never inside it', () => {
@@ -266,6 +294,7 @@ describe('the turn ring takes presses (1.8.2.2 step 5)', () => {
 
 // A shelf lying recess-up with a cam lock seated in its recess and the screwdriver standing
 // on its slot — no screwed bolt anywhere, so the cam can turn but never lock.
+const SLOT: Vec3 = [0, 0.028, 0];
 function camBench() {
   const shelf = makePart('topBottomPanel-1', 'topBottomPanel', [0.35, 0.008, 0], [1, 0, 0, 0]);
   const cam = makePart('camLock-1', 'camLock', [0, 0.022, 0]);
@@ -350,5 +379,71 @@ describe('a still hold drives the fastener home (1.8.2.2 step 6)', () => {
     }
     expect(h.router.dragging?.mode).toBe('crank');
     expect(h.progress()).toBeLessThan(driven);
+  });
+});
+
+describe('the ratchet ticks every eighth of a turn (1.8.2.2 step 7)', () => {
+  it("clicks 16 times over a bolt's two turns, held", () => {
+    const h = harness();
+    const at = h.screen(h.key.mesh.position);
+    h.canvas.fire('pointerdown', at);
+    h.hold(TAP_FRAMES + DRIVE_FRAMES);
+    h.canvas.fire('pointerup', at);
+    expect(h.progress()).toBe(1);
+    expect(h.clicks()).toBe(16);
+  });
+
+  it("clicks 16 times over a bolt's two turns, cranked", () => {
+    const h = harness();
+    h.circle(h.ringAt(h.awayFromKey()), HEAD, 3 * 360, h.awayFromKey());
+    expect(h.progress()).toBe(1);
+    expect(h.clicks()).toBe(16);
+  });
+
+  it("clicks twice over a cam's quarter turn, held or cranked", () => {
+    const held = camBench();
+    const at = held.screen(held.driver.mesh.position);
+    held.canvas.fire('pointerdown', at);
+    held.hold(TAP_FRAMES + DRIVE_FRAMES);
+    held.canvas.fire('pointerup', at);
+    expect(held.clicks()).toBe(2);
+
+    const cranked = camBench();
+    cranked.circle(cranked.screen(cranked.driver.mesh.position), SLOT, 180);
+    expect(cranked.assembly.get(cranked.camSeat.id)!.fastener.progress).toBe(1);
+    expect(cranked.clicks()).toBe(2);
+  });
+
+  it('clicks loosening too, once per eighth crossed', () => {
+    const h = harness();
+    h.assembly.apply(h.boltSeat.id, { type: 'crank', radians: FASTENER.screwRadians / 2 });
+    const before = h.progress() * FASTENER.screwRadians;
+    h.circle(h.ringAt(h.awayFromKey()), HEAD, -120, h.awayFromKey());
+    const after = h.progress() * FASTENER.screwRadians;
+    expect(after).toBeLessThan(before);
+    expect(h.clicks()).toBeGreaterThan(0);
+    expect(h.clicks()).toBe(Math.floor(before / FASTENER.ratchetRadians) - Math.floor(after / FASTENER.ratchetRadians));
+  });
+
+  it('never clicks for a drag that turns nothing', () => {
+    const h = harness();
+    const bearing = h.awayFromKey();
+    // Straight out along one bearing from the head: no sweep, no turn.
+    h.canvas.fire('pointerdown', h.ringAt(bearing));
+    for (let r = TURN_RING.radius + 5; r <= TURN_RING.radius + 60; r += 5) {
+      h.canvas.fire('pointermove', h.ringAt(bearing, r));
+      h.hold(1);
+    }
+    expect(h.router.dragging?.mode).toBe('crank');
+    h.canvas.fire('pointerup', h.ringAt(bearing, TURN_RING.radius + 60));
+    expect(h.progress()).toBeCloseTo(0, 9);
+    expect(h.ratchet).toEqual([]);
+  });
+
+  it('puts nothing on the bus for a click', () => {
+    const h = harness();
+    h.circle(h.ringAt(h.awayFromKey()), HEAD, 90, h.awayFromKey());
+    expect(h.clicks()).toBeGreaterThan(0);
+    expect(h.log.map((e) => e.type)).toEqual([EVENT.GRAB]);
   });
 });
