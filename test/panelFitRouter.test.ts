@@ -1,0 +1,279 @@
+import * as THREE from 'three';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { KIND } from '../tools/validate/lib/vocabulary.js';
+import { connectorInWorld, multiplyQuaternions, rotateVector } from '../tools/validate/lib/geometry.js';
+import { GESTURE } from '../src/constants.js';
+import { createAssembly } from '../src/game/assembly.js';
+import { isFastened } from '../src/game/fasteners.js';
+import { ASSEMBLED, PART_TYPES } from '../src/game/item.js';
+import { preferredRelatives } from '../src/game/panelFit.js';
+import { createBus, EVENT } from '../src/game/events.js';
+import { createGestureRouter } from '../src/scene/gestureRouter.js';
+import type { StampedEvent } from '../src/game/events.js';
+import type { Part } from '../src/game/partMesh.js';
+import type { Body, PhysicsJoint } from '../src/physics/world.js';
+import type { GestureRouterOptions } from '../src/scene/gestureRouter.js';
+import type { TargetRing } from '../src/scene/targetRings.js';
+import type { Pose, Quat, Vec3 } from '../tools/validate/lib/geometry.js';
+
+// The real gesture router carrying a panel onto its dowels (1.8.3.1), with the real catalog:
+// a side panel lying flat, holes up, two dowels standing in its bottom dowel holes, and the
+// bottom panel carried onto them, holes down.
+
+const SIZE = 1000;
+const DEG = Math.PI / 180;
+const FRAME = 1 / 60;
+type FakeListener = (event: object) => void;
+
+class FakeCanvas {
+  listeners = new Map<string, FakeListener>();
+  addEventListener(type: string, fn: FakeListener) {
+    this.listeners.set(type, fn);
+  }
+  removeEventListener(type: string) {
+    this.listeners.delete(type);
+  }
+  getBoundingClientRect() {
+    return { left: 0, top: 0, width: SIZE, height: SIZE };
+  }
+  setPointerCapture() {}
+  fire(type: string, init: object) {
+    this.listeners.get(type)?.({ type, pointerId: 1, button: 0, timeStamp: 0, ...init });
+  }
+}
+
+const quiet = { addEventListener() {}, removeEventListener() {} };
+beforeEach(() => {
+  vi.stubGlobal('window', quiet);
+  vi.stubGlobal('document', { ...quiet, visibilityState: 'visible' });
+});
+afterEach(() => vi.unstubAllGlobals());
+
+// A part whose body reports its mesh's pose; moves land on the mesh, as a step would.
+function makePart(id: string, type: string, { position, rotation }: Pose): Part {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...PART_TYPES[type].size));
+  mesh.position.set(...position);
+  mesh.quaternion.set(...rotation);
+  mesh.updateMatrixWorld(true);
+  const body = {
+    id,
+    isKinematic: () => true,
+    translation: () => ({ x: mesh.position.x, y: mesh.position.y, z: mesh.position.z }),
+    rotation: () => ({ x: mesh.quaternion.x, y: mesh.quaternion.y, z: mesh.quaternion.z, w: mesh.quaternion.w }),
+  };
+  // A fake: a plain-material mesh and a body that only reports its pose.
+  return { id, type, mesh, body } as unknown as Part;
+}
+
+const IDENTITY: Quat = [0, 0, 0, 1];
+const HALF_TURN_Z: Quat = [0, 0, Math.SQRT1_2, Math.SQRT1_2]; // the side panel's hole faces up
+const SIDE: Pose = { position: [0, 0.008, 0], rotation: HALF_TURN_Z };
+const DOWEL_HALF = PART_TYPES.dowel.size[1] / 2;
+// The bottom panel standing on its edge, its right-hand holes (3 and 4) facing down.
+const HOLES_DOWN: Quat = [0, 0, -Math.SQRT1_2, Math.SQRT1_2];
+const sideHole = (index: number) => connectorInWorld(PART_TYPES.sidePanel.connectors[index], SIDE);
+// A dowel standing in side-panel hole `index`, seated at its mouth; and its free top end.
+const dowelIn = (index: number): Pose => ({ position: sideHole(index).position.map((v, i) => v + (i === 1 ? DOWEL_HALF : 0)) as Vec3, rotation: IDENTITY });
+const topOf = (index: number) => sideHole(index).position.map((v, i) => v + (i === 1 ? 2 * DOWEL_HALF : 0)) as Vec3;
+// The bottom panel seated on both dowels: its hole 3 on the first, hole 4 on the second.
+const SEAT: Pose = (() => {
+  const offset = rotateVector(HOLES_DOWN, PART_TYPES.topBottomPanel.connectors[3].position);
+  return { position: topOf(0).map((v, i) => v - offset[i]) as Vec3, rotation: HOLES_DOWN };
+})();
+
+/** `pose` turned `angle` about the vertical through `centre`, then moved by `shift`. */
+function skewed(pose: Pose, angle: number, centre: Vec3, shift: Vec3 = [0, 0, 0]): Pose {
+  const turn: Quat = [0, Math.sin(angle / 2), 0, Math.cos(angle / 2)];
+  const arm = rotateVector(turn, pose.position.map((v, i) => v - centre[i]) as Vec3);
+  return { position: arm.map((v, i) => v + centre[i] + shift[i]) as Vec3, rotation: multiplyQuaternions(turn, pose.rotation) };
+}
+
+// Picked up, a part rides GESTURE.hoverLift higher: start it that much lower.
+const lowered = ({ position, rotation }: Pose): Pose => ({ position: [position[0], position[1] - GESTURE.hoverLift, position[2]], rotation });
+
+const angleBetween = (a: Quat, b: Quat) => 2 * Math.acos(Math.min(1, Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3])));
+const gap = (a: Vec3, b: Vec3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+const poseOf = (part: Part): Pose => ({ position: part.mesh.position.toArray(), rotation: part.mesh.quaternion.toArray() });
+
+interface Options {
+  // Where the bottom panel starts (before pick-up); omitted, there is none.
+  panelAt?: Pose;
+  // Side-panel holes with a dowel standing in them.
+  dowels?: number[];
+  extra?: { id: string; type: string; pose: Pose }[];
+}
+
+function harness({ panelAt, dowels = [0, 1], extra = [] }: Options = {}) {
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
+  camera.position.set(0.9, 1.3, 1.1);
+  camera.lookAt(0.9, 0.2, 0);
+  camera.updateMatrixWorld(true);
+
+  const side = makePart('sidePanel-1', 'sidePanel', SIDE);
+  const dowelParts = dowels.map((index, n) => makePart(`dowel-${n + 1}`, 'dowel', dowelIn(index)));
+  const panel = panelAt ? makePart('topBottomPanel-1', 'topBottomPanel', panelAt) : null;
+  const parts = [side, ...dowelParts, ...(panel ? [panel] : []), ...extra.map(({ id, type, pose }) => makePart(id, type, pose))];
+  const typeById = new Map(parts.map(({ id, type }) => [id, type]));
+  const assembly = createAssembly((id) => typeById.get(id)!);
+  dowels.forEach((index, n) => assembly.seat({ partA: `dowel-${n + 1}`, connectorA: 0, partB: side.id, connectorB: index, mover: `dowel-${n + 1}` }));
+
+  const physics: GestureRouterOptions['physics'] = {
+    grab: () => {},
+    move: (body: Body, position: Vec3, rotation?: Quat) => {
+      const { mesh } = parts.find((part) => part.body === body)!;
+      mesh.position.set(...position);
+      if (rotation) mesh.quaternion.set(...rotation);
+      mesh.updateMatrixWorld(true);
+    },
+    release: () => {},
+    join: () => ({}) as PhysicsJoint, // a fake joint: the router only hands it back to unjoin
+    unjoin: () => {},
+  };
+  const offers: StampedEvent[] = [];
+  const seats: StampedEvent[] = [];
+  const events = createBus();
+  events.on(EVENT.SNAP_CANDIDATE, (event) => offers.push(event));
+  events.on(EVENT.SEAT, (event) => seats.push(event));
+  const shown: TargetRing[][] = [];
+  const targetRings = { show: (rings: readonly TargetRing[]) => shown.push([...rings]), hide: () => shown.push([]) };
+  const ghosts: Pose[] = [];
+  const ghost = { show: (_mesh: THREE.Mesh, pose: Pose) => ghosts.push({ position: [...pose.position], rotation: [...pose.rotation] }), hide() {} };
+
+  const canvas = new FakeCanvas();
+  const router = createGestureRouter({
+    domElement: canvas as unknown as HTMLElement, // a fake: listeners and a bounding rect only
+    camera,
+    cameraControls: { enable() {}, disable() {} },
+    physics,
+    parts,
+    assembly,
+    events,
+    targetRings,
+    ghost,
+    relatives: preferredRelatives(ASSEMBLED, PART_TYPES),
+  });
+  const screen = (point: Vec3) => {
+    const v = new THREE.Vector3(...point).project(camera);
+    return { clientX: ((v.x + 1) / 2) * SIZE, clientY: ((1 - v.y) / 2) * SIZE };
+  };
+  // Pressed on a part and nudged past the tap distance, still held.
+  function drag(part: Part, dx = 0, dy = 12) {
+    const at = screen(part.mesh.position.toArray());
+    canvas.fire('pointerdown', at);
+    canvas.fire('pointermove', { clientX: at.clientX + dx / 2, clientY: at.clientY + dy / 2 });
+    const to = { clientX: at.clientX + dx, clientY: at.clientY + dy };
+    canvas.fire('pointermove', to);
+    return to;
+  }
+  // Pressed and let go where it is: a tap.
+  function tap(part: Part) {
+    const at = screen(part.mesh.position.toArray());
+    canvas.fire('pointerdown', at);
+    canvas.fire('pointerup', at);
+  }
+  const offered = () => offers.at(-1)?.target ?? null;
+  const hold = (frames: number) => {
+    for (let i = 0; i < frames; i++) router.update(FRAME);
+  };
+  const jointsMovedBy = (part: Part) => assembly.all().filter((j) => j.mover === part.id);
+  return { router, canvas, assembly, parts, side, dowels: dowelParts, panel: panel!, drag, tap, hold, screen, offered, offers, seats, shown, ghosts, jointsMovedBy };
+}
+
+const TOPS = [topOf(0), topOf(1)];
+
+describe('a carried panel seats on every matched hole (1.8.3.1 Step 3)', () => {
+  it('releases onto two seated dowels as two joints, the panel the mover, with two SEAT events', () => {
+    const h = harness({ panelAt: lowered(skewed(SEAT, 20 * DEG, TOPS[0], [0.02, 0.03, 0])) });
+    const at = h.drag(h.panel);
+    expect(h.router.dragging?.part).toBe(h.panel);
+    expect(h.offered()).toBe('dowel-1');
+    // The ghost shows the whole fit: the panel squarely on both dowels.
+    const ghost = h.ghosts.at(-1)!;
+    expect(gap(ghost.position, SEAT.position)).toBeLessThan(1e-6);
+    expect(angleBetween(ghost.rotation, SEAT.rotation)).toBeLessThan(1e-6);
+    h.canvas.fire('pointerup', at);
+    const joints = h.jointsMovedBy(h.panel);
+    expect(joints).toHaveLength(2);
+    expect(new Set(joints.map((j) => j.hardware))).toEqual(new Set(['dowel-1', 'dowel-2']));
+    expect(new Set(joints.map((j) => j.hostConnector))).toEqual(new Set([3, 4]));
+    expect(h.seats.map((e) => e.host)).toEqual(['topBottomPanel-1', 'topBottomPanel-1']);
+    expect(gap(h.panel.mesh.position.toArray(), SEAT.position)).toBeLessThan(1e-6);
+  });
+
+  it('then a tap on the panel pushes both dowels home', () => {
+    const h = harness({ panelAt: lowered(skewed(SEAT, 20 * DEG, TOPS[0], [0.02, 0.03, 0])) });
+    h.canvas.fire('pointerup', h.drag(h.panel));
+    h.tap(h.panel);
+    const joints = h.jointsMovedBy(h.panel);
+    expect(joints).toHaveLength(2);
+    for (const joint of joints) expect(isFastened(joint.fastener)).toBe(true);
+  });
+
+  it('seats a panel let go one hole off where it is put (a forced wrong fit)', () => {
+    // Its hole 3 over the second dowel, where hole 4 belongs; where it goes is out of reach.
+    const off = { ...SEAT, position: [SEAT.position[0], SEAT.position[1] + 0.02, SEAT.position[2] + (TOPS[1][2] - TOPS[0][2])] as Vec3 };
+    const h = harness({ panelAt: lowered(off) });
+    h.canvas.fire('pointerup', h.drag(h.panel));
+    const joints = h.jointsMovedBy(h.panel);
+    expect(joints).toHaveLength(1);
+    expect(joints[0].hardware).toBe('dowel-2');
+    expect(joints[0].hostConnector).toBe(3);
+  });
+
+  it('offers a panel far from any dowel nothing', () => {
+    const h = harness({ panelAt: lowered({ ...SEAT, position: [SEAT.position[0] - 0.4, SEAT.position[1] + 0.3, SEAT.position[2]] }) });
+    const at = h.drag(h.panel);
+    expect(h.router.dragging?.part).toBe(h.panel);
+    expect(h.offered()).toBeNull();
+    h.canvas.fire('pointerup', at);
+    expect(h.jointsMovedBy(h.panel)).toEqual([]);
+  });
+});
+
+describe('hardware and tools seat exactly as before (1.8.3.1 Step 3)', () => {
+  // A free side-panel hole's mouth and axis.
+  const mouth = (index: number) => sideHole(index);
+
+  it('seats a dowel by one end in a free hole, the dowel the mover', () => {
+    const hole = mouth(3);
+    const h = harness({ dowels: [], extra: [{ id: 'dowel-9', type: 'dowel', pose: lowered({ position: [hole.position[0] + 0.01, hole.position[1] + 0.03, hole.position[2]], rotation: IDENTITY }) }] });
+    const dowel = h.parts.at(-1)!;
+    h.canvas.fire('pointerup', h.drag(dowel));
+    const joints = h.jointsMovedBy(dowel);
+    expect(joints).toHaveLength(1);
+    expect(joints[0]).toMatchObject({ kind: KIND.DOWEL, host: 'sidePanel-1', hostConnector: 3 });
+    expect(h.seats).toHaveLength(1);
+    const end = connectorInWorld(PART_TYPES.dowel.connectors[joints[0].hardwareConnector], poseOf(dowel)).position;
+    expect(gap(end, hole.position)).toBeLessThan(1e-9);
+  });
+
+  it('seats a cam bolt by its thread', () => {
+    const hole = mouth(2);
+    const h = harness({ dowels: [], extra: [{ id: 'camLockBolt-9', type: 'camLockBolt', pose: lowered({ position: [hole.position[0], hole.position[1] + 0.03, hole.position[2]], rotation: IDENTITY }) }] });
+    const bolt = h.parts.at(-1)!;
+    h.canvas.fire('pointerup', h.drag(bolt));
+    const joints = h.jointsMovedBy(bolt);
+    expect(joints).toHaveLength(1);
+    expect(joints[0]).toMatchObject({ kind: KIND.BOLT, hostConnector: 2 });
+  });
+
+  it('seats an Allen key on a seated bolt', () => {
+    const hole = mouth(2);
+    const boltHalf = PART_TYPES.camLockBolt.size[1] / 2;
+    const head: Vec3 = [hole.position[0], hole.position[1] + 2 * boltHalf, hole.position[2]];
+    const tipDown: Quat = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+    const tip = rotateVector(tipDown, PART_TYPES.allenWrench.connectors[0].position);
+    const h = harness({
+      dowels: [],
+      extra: [
+        { id: 'camLockBolt-1', type: 'camLockBolt', pose: { position: [hole.position[0], hole.position[1] + boltHalf, hole.position[2]], rotation: IDENTITY } },
+        { id: 'allenWrench-1', type: 'allenWrench', pose: lowered({ position: [head[0] - tip[0], head[1] - tip[1] + 0.02, head[2] - tip[2]], rotation: tipDown }) },
+      ],
+    });
+    h.assembly.seat({ partA: 'camLockBolt-1', connectorA: 0, partB: 'sidePanel-1', connectorB: 2, mover: 'camLockBolt-1' });
+    const key = h.parts.at(-1)!;
+    h.canvas.fire('pointerup', h.drag(key));
+    expect(h.assembly.all().filter((j) => j.kind === KIND.TOOL)).toHaveLength(1);
+    expect(h.seats.at(-1)?.hardware).toBe('allenWrench-1');
+  });
+});

@@ -4,7 +4,8 @@ import { ANY, createBus, EVENT, fpsEvent, recoveryEvent, resetEvent, sessionEven
 import { createHaptics, CUE, cueFor, homeCue, patternFor } from './game/haptics.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
 import { createTunables, LIVE_KNOBS } from './game/tunables.js';
-import { PART_TYPES } from './game/item.js';
+import { ASSEMBLED, PART_TYPES } from './game/item.js';
+import { preferredRelatives } from './game/panelFit.js';
 import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
 import { fractionOf, heightAt, selectsDuringHold } from './game/liftLine.js';
@@ -204,6 +205,8 @@ const router = createGestureRouter({
   events,
   hold,
   turnRing,
+  // Where each panel goes in the finished JOHNNY: offered first, never a gate.
+  relatives: preferredRelatives(ASSEMBLED, PART_TYPES),
   // One tick a frame, however many eighths the turn crossed: a buzz can't land faster.
   onRatchet: () => haptics.cue(CUE.TICK),
   // A fastener backed off partway and turned home again buzzes as its first arrival did.

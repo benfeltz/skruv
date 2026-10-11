@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AIM, COLORS, DROP, FASTENER, GESTURE, PICK, RING, ROOM, SNAP, TURN_RING } from '../constants.js';
+import { AIM, COLORS, DROP, FASTENER, GESTURE, PANEL, PICK, RING, ROOM, SNAP, TURN_RING } from '../constants.js';
 import { areCompatible, COMPATIBLE, CONNECTOR, isFastenerEnd, KIND } from '../../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, rotateVector } from '../../tools/validate/lib/geometry.js';
 import { capture } from '../game/assembly.js';
@@ -20,11 +20,13 @@ import {
 } from '../game/events.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
+import { findFits, isPanelType, preferredPoses, rankFits } from '../game/panelFit.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
 import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
 import { dialEngagements, isHome, isStalled, pickDial, tightensClockwise } from '../game/turnRing.js';
 import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
+import type { FitPair, Relatives } from '../game/panelFit.js';
 import type { Snap } from '../game/snapMath.js';
 import type { Assembly, AssemblyJoint, Head, PartId } from '../game/assembly.js';
 import type { Bus } from '../game/events.js';
@@ -66,6 +68,12 @@ interface WorldConnector {
 
 type RouterSnap = Snap<WorldConnector, WorldConnector>;
 
+/**
+ * A seat on offer: the pose it holds the dragged part at and its snap. A panel's whole fit
+ * also carries every pair it seats, its snap the first.
+ */
+type Offer = Pose & { snap: RouterSnap; pairs?: FitPair<WorldConnector, WorldConnector>[] };
+
 /** One fastener end of a carried part — a tool's tip, a dowel's either end — and the seats that take it. */
 interface CarriedEnd {
   connector: (typeof PART_TYPES)[string]['connectors'][number];
@@ -93,7 +101,7 @@ interface Drag {
   centre: Vec3;
   rotation: Quat;
   held: Pose | null;
-  snapped: (Pose & { snap: RouterSnap }) | null;
+  snapped: Offer | null;
   offer: string | null;
   retarget: { from: number; to: number } | null;
   pointer: ClientPoint | null;
@@ -141,6 +149,7 @@ export interface GestureRouterOptions {
   turnRing?: { show(dials: readonly Dial[]): void; hide(): void };
   onRatchet?: (count: number) => void;
   onRehome?: (kind: FastenerKind) => void;
+  relatives?: Relatives;
 }
 
 // A hole marking on a part's mesh (src/game/partMesh.ts).
@@ -148,6 +157,9 @@ type Decal = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
 
 // Hardware (fastener or tool) has a fastener end; panels have only holes, or nothing.
 const isHardware = (type: string) => PART_TYPES[type].connectors.some((c) => c.type in COMPATIBLE);
+
+// A part that seats by a whole fit of its holes (src/game/panelFit.ts) — never hardware, the lid or the base.
+const isPanel = (type: string) => isPanelType(PART_TYPES[type]);
 
 // Fasteners and tools, never panels — the parts that get a fat hit proxy.
 const isSmall = (type: string) => isSmallPart(PART_TYPES[type].size, PICK);
@@ -220,11 +232,15 @@ const PULL_AXIS_PROBE = 0.05;
  *   onRehome — called with the fastener's kind when a bolt or cam backed off partway (still
  *            screwed or locked — it lets go only all the way out) is turned home again: the
  *            arrival no FASTEN event marks, since its state never changed. Haptics only too.
+ *   relatives — where each panel goes relative to the panels it meets in the finished item
+ *            (src/game/panelFit.ts `preferredRelatives`, worked out once by the caller): a
+ *            carried panel's fit there is offered first. Never a gate — any fit seats; without
+ *            it, fits rank by how many holes they seat.
  * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
  * turns carried hardware's end toward a seat near it (self-aim), eases a dragged part
  * toward the seat on offer (seat assist) and fades the seat flash.
  */
-export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, targetRings, events, hold, turnRing, onRatchet, onRehome }: GestureRouterOptions) {
+export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, targetRings, events, hold, turnRing, onRatchet, onRehome, relatives = new Map() }: GestureRouterOptions) {
   const state = createGestureState<Press>();
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -393,14 +409,34 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
         ? []
         : free(worldConnectors(other, other.mesh.position, other.mesh.quaternion)).filter((c) => isSeatTarget(c, seated)),
     );
+    if (isPanel(part.type)) return fitCandidate(dragged, others, { position: target, rotation: drag!.rotation });
     const snap = findSnap(dragged, others, SNAP);
     return snap && seatPose(snap, { position: target, rotation: drag!.rotation });
+  }
+
+  // A panel's offer: the best whole fit of its holes on the free ends near them that keeps it
+  // in the room — where it goes first, but any fit seats. Its snap is the first pair's.
+  function fitCandidate(holes: WorldConnector[], ends: WorldConnector[], from: Pose): Offer | null {
+    for (const fit of rankFits(findFits(holes, from, ends, PANEL), preferredFor(drag!.part), PANEL)) {
+      const [{ hole, end }] = fit.pairs;
+      const distance = Math.hypot(...end.position.map((v, i) => v - hole.position[i]));
+      const seat = seatPose({ from: hole, to: end, distance, angle: fit.angle, transform: fit.transform }, from);
+      if (seat) return { ...seat, pairs: fit.pairs };
+    }
+    return null;
+  }
+
+  // Where `panel` goes on each part in the room it meets in the finished item, as they lie now.
+  function preferredFor(panel: Part) {
+    return parts.flatMap((host) =>
+      host === panel ? [] : preferredPoses(relatives, host.type, { position: host.mesh.position.toArray(), rotation: host.mesh.quaternion.toArray() }, panel.type),
+    );
   }
 
   // Where `snap` seats the dragged part from `pose`. The alignment can swing a long part's
   // far end by up to SNAP.maxAngle (a ring drop's by more); refuse a seat that would hold it
   // through the floor or a wall.
-  function seatPose(snap: RouterSnap, from: Pose) {
+  function seatPose(snap: RouterSnap, from: Pose): Offer | null {
     const pose = applyTransform(snap.transform, from);
     const half = rotatedHalfExtents(PART_TYPES[drag!.part.type].size.map((d) => d / 2), pose.rotation);
     return fitsInRoom(pose.position, half, ROOM, SNAP.roomTolerance) ? { ...pose, snap } : null;
@@ -809,7 +845,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     // is made: a kinematic move lands on the next physics step, so until then the part reads
     // where it was, and a seat from a far ring drop would look stale.
     pruneStale();
-    if (snapped) {
+    if (snapped?.pairs) seatFit(part, snapped, snapped.pairs);
+    else if (snapped) {
       const { from, to } = snapped.snap;
       const joint = assembly.seat({ partA: part.id, connectorA: from.index, partB: to.part.id, connectorB: to.index, mover: part.id });
       events?.emit(seatEvent(joint));
@@ -824,6 +861,18 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     }
     stopDrag();
     return !!snapped;
+  }
+
+  // A panel let go on a whole fit seats every pair of it at once, the panel the mover of each,
+  // and is held there as any seated part is until a fastener engages.
+  function seatFit(part: Part, snapped: Pose, pairs: FitPair<WorldConnector, WorldConnector>[]) {
+    physics.move(part.body, snapped.position, snapped.rotation);
+    placed.add(part);
+    for (const { hole, end } of pairs) {
+      const joint = assembly.seat({ partA: part.id, connectorA: hole.index, partB: end.part.id, connectorB: end.index, mover: part.id });
+      events?.emit(seatEvent(joint));
+      flash(hole, end);
+    }
   }
 
   function cancelDrag() {
