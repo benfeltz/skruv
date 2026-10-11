@@ -17,6 +17,7 @@ import { createGhost } from './scene/ghost.js';
 import { createCompoundPhysics } from './scene/compoundPhysics.js';
 import { createDisplayShelf } from './scene/displayShelf.js';
 import { createDropGuide } from './scene/dropGuide.js';
+import { createTargetRings } from './scene/targetRings.js';
 import { createFpsGuard } from './scene/fpsGuard.js';
 import { createFlatpack } from './scene/flatpack.js';
 import { createGestureRouter } from './scene/gestureRouter.js';
@@ -144,6 +145,10 @@ scene.add(ghost.object);
 const dropGuide = createDropGuide();
 scene.add(dropGuide.object);
 
+// While a tool is carried: rings on the fasteners it can work right now.
+const targetRings = createTargetRings();
+scene.add(targetRings.object);
+
 // A model-kit handle on a selected fastener or tool, to drag millimetre hardware by.
 const sprue = createSprue();
 scene.add(sprue.object);
@@ -177,6 +182,7 @@ const router = createGestureRouter({
   ghost,
   sprue,
   dropGuide,
+  targetRings,
   events,
   hold,
 });
