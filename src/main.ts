@@ -1,7 +1,7 @@
 import { PICK, RENDER, RESET, ROOM, TUNE } from './constants.js';
 import { createAssembly } from './game/assembly.js';
 import { ANY, createBus, EVENT, fpsEvent, recoveryEvent, resetEvent, sessionEvent, tuneEvent } from './game/events.js';
-import { createHaptics, CUE, cueFor, patternFor } from './game/haptics.js';
+import { createHaptics, CUE, cueFor, homeCue, patternFor } from './game/haptics.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
 import { createTunables, LIVE_KNOBS } from './game/tunables.js';
 import { PART_TYPES } from './game/item.js';
@@ -206,6 +206,11 @@ const router = createGestureRouter({
   turnRing,
   // One tick a frame, however many eighths the turn crossed: a buzz can't land faster.
   onRatchet: () => haptics.cue(CUE.TICK),
+  // A fastener backed off partway and turned home again buzzes as its first arrival did.
+  onRehome: (kind) => {
+    const cue = homeCue(kind);
+    if (cue) haptics.cue(cue);
+  },
 });
 // The display shelf's physics joints, made by the same reconcile every tap and turn runs.
 router.sync();

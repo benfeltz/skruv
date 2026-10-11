@@ -24,6 +24,7 @@ import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
 import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
 import { dialEngagements, isHome, isStalled, pickDial, tightensClockwise } from '../game/turnRing.js';
+import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { Snap } from '../game/snapMath.js';
 import type { Assembly, AssemblyJoint, Head, PartId } from '../game/assembly.js';
 import type { Bus } from '../game/events.js';
@@ -139,6 +140,7 @@ export interface GestureRouterOptions {
   hold?: { readonly held: Part | null; readonly height: number; readonly goal: number; target(height: number): void; jump(height: number): void };
   turnRing?: { show(dials: readonly Dial[]): void; hide(): void };
   onRatchet?: (count: number) => void;
+  onRehome?: (kind: FastenerKind) => void;
 }
 
 // A hole marking on a part's mesh (src/game/partMesh.ts).
@@ -215,11 +217,14 @@ const PULL_AXIS_PROBE = 0.05;
  *   onRatchet — called with how many ratchet clicks (one per FASTENER.ratchetRadians of
  *            turn, either way) a crank or drive step crossed, when it crossed any. A haptic
  *            cue, not telemetry: nothing goes on the bus.
+ *   onRehome — called with the fastener's kind when a bolt or cam backed off partway (still
+ *            screwed or locked — it lets go only all the way out) is turned home again: the
+ *            arrival no FASTEN event marks, since its state never changed. Haptics only too.
  * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
  * turns carried hardware's end toward a seat near it (self-aim), eases a dragged part
  * toward the seat on offer (seat assist) and fades the seat flash.
  */
-export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, targetRings, events, hold, turnRing, onRatchet }: GestureRouterOptions) {
+export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, targetRings, events, hold, turnRing, onRatchet, onRehome }: GestureRouterOptions) {
   const state = createGestureState<Press>();
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -965,14 +970,17 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // A bolt or cam seat turned by `radians` (positive tightens) — cranked or driven — and
   // whatever that changed reported and reconciled; the ratchet clicks it crossed come first,
-  // so the last click lands before the fastener reports home.
+  // so the last click lands before the fastener reports home — by a FASTEN event, or, for one
+  // only backed off partway, by onRehome.
   function turnFastener(target: AssemblyJoint, radians: number) {
     const before = assembly.get(target.id)!.fastener;
     if (!assembly.apply(target.id, { type: 'crank', radians }, crankContext(target))) return;
+    const after = assembly.get(target.id)!.fastener;
     const span = spanOf(target);
-    const clicks = ratchetTicks(before.progress * span, assembly.get(target.id)!.fastener.progress * span, FASTENER.ratchetRadians);
+    const clicks = ratchetTicks(before.progress * span, after.progress * span, FASTENER.ratchetRadians);
     if (clicks > 0) onRatchet?.(clicks);
     reportFastening(target.id, isFastened(before));
+    if (isFastened(before) && !isHome(before) && isHome(after)) onRehome?.(target.kind);
     reconcile();
   }
 

@@ -12,7 +12,7 @@ import { connectorInWorld } from '../tools/validate/lib/geometry.js';
 import { FASTENER, GESTURE, TURN_RING } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
 import { STATE } from '../src/game/fasteners.js';
-import { createHaptics, CUE, cueFor } from '../src/game/haptics.js';
+import { createHaptics, CUE, cueFor, homeCue } from '../src/game/haptics.js';
 import { PART_TYPES } from '../src/game/item.js';
 import { ANY, createBus } from '../src/game/events.js';
 import { createGestureRouter } from '../src/scene/gestureRouter.js';
@@ -136,6 +136,10 @@ function bench({ boltSeated = true } = {}) {
     events,
     turnRing: { show: (shown) => dials.push([...shown]), hide: () => dials.push(null) },
     onRatchet: () => haptics.cue(CUE.TICK),
+    onRehome: (kind) => {
+      const cue = homeCue(kind);
+      if (cue) haptics.cue(cue);
+    },
   });
 
   let t = 0;
@@ -432,5 +436,44 @@ describe("the screwdriver's ring turns the cam with the key still on its home bo
       b.fire('pointerup', ringAt(b, angle));
     });
     expect(results).toEqual(results.map(({ deg }) => locked(deg)));
+  });
+});
+
+// Review round 4: a bolt backed off partway on its ring reads screwed until it is all the way
+// out, so driving it back fires no FASTEN — yet arriving home buzzes as the first time did.
+describe('a bolt backed off and driven home again buzzes home again (review round 4)', () => {
+  it('engage, ticks, home; then ticks backing off and driving back, and home again', () => {
+    const b = bench();
+    b.carry(b.on(b.key), HEAD);
+    const keyEnd: Vec3 = [-0.025, 0, 0];
+    const press = b.on(b.key, keyEnd);
+    b.fire('pointerdown', press);
+    b.frames(TAP_FRAMES + DRIVE_FRAMES);
+    b.fire('pointerup', press);
+    b.frames(FLASH_FRAMES);
+
+    // Backed off 120° on the key's ring, pressed on the side away from the key.
+    const [dial] = b.shownNow()!;
+    const k = b.on(b.key);
+    const away = Math.atan2(k.clientY - dial.centre[1], k.clientX - dial.centre[0]) + Math.PI;
+    const sense = dial.clockwise ? -1 : 1;
+    const at = (deg: number) => {
+      const a = away + (sense * deg * Math.PI) / 180;
+      return { clientX: dial.centre[0] + TURN_RING.radius * Math.cos(a), clientY: dial.centre[1] + TURN_RING.radius * Math.sin(a) };
+    };
+    b.fire('pointerdown', at(0));
+    for (let deg = 10; deg <= 120; deg += 10) {
+      b.fire('pointermove', at(deg));
+      b.frames(1);
+    }
+    b.fire('pointerup', at(120));
+    expect(b.assembly.get(b.boltSeat!.id)!.fastener).toMatchObject({ state: STATE.SCREWED });
+    expect(b.assembly.get(b.boltSeat!.id)!.fastener.progress).toBeLessThan(1);
+
+    b.fire('pointerdown', press);
+    b.frames(TAP_FRAMES + DRIVE_FRAMES);
+    b.fire('pointerup', press);
+    expect(b.assembly.get(b.boltSeat!.id)!.fastener.progress).toBe(1);
+    expect(runs(b.cues)).toEqual([CUE.ENGAGE, CUE.TICK, CUE.HOME, CUE.TICK, CUE.HOME]);
   });
 });

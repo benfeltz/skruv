@@ -107,6 +107,7 @@ function mount(parts: Part[]) {
   const turnRing = { show: (shown: readonly Dial[]) => dials.push([...shown]), hide: () => dials.push(null) };
   const taps: (Part | null)[] = [];
   const ratchet: number[] = [];
+  const rehomes: string[] = [];
 
   const canvas = new FakeCanvas();
   const router = createGestureRouter({
@@ -120,6 +121,7 @@ function mount(parts: Part[]) {
     turnRing,
     onTap: (part) => taps.push(part),
     onRatchet: (count) => ratchet.push(count),
+    onRehome: (kind) => rehomes.push(kind),
   });
   const screen = (point: Vec3 | THREE.Vector3) => {
     const v = (Array.isArray(point) ? new THREE.Vector3(...point) : point.clone()).project(camera);
@@ -150,7 +152,7 @@ function mount(parts: Part[]) {
     }
     canvas.fire('pointerup', at(degrees));
   }
-  return { router, canvas, assembly, log, dials, taps, ratchet, screen, hold, tap, fastens, clicks, circle };
+  return { router, canvas, assembly, log, dials, taps, ratchet, rehomes, screen, hold, tap, fastens, clicks, circle };
 }
 
 // `engaged`: the key is let go onto the seated bolt's head before the test starts.
@@ -255,6 +257,20 @@ describe('the turn ring shows on a seated tool (1.8.2.2 step 5)', () => {
     expect(h.progress()).toBe(1);
     expect(h.dials.some((d) => d?.[0]?.flashing)).toBe(true);
     expect(h.toolJoint()).not.toBeNull();
+    // Arriving home again is reported once, for the buzz, and never as a second FASTEN.
+    expect(h.rehomes).toEqual([KIND.BOLT]);
+    expect(h.fastens()).toEqual([]);
+  });
+
+  it('reports a first arrival home by its FASTEN event alone, never onRehome', () => {
+    const h = harness();
+    const at = h.screen(h.key.mesh.position);
+    h.canvas.fire('pointerdown', at);
+    h.hold(TAP_FRAMES + DRIVE_FRAMES);
+    h.canvas.fire('pointerup', at);
+    expect(h.progress()).toBe(1);
+    expect(h.fastens()).toHaveLength(1);
+    expect(h.rehomes).toEqual([]);
   });
 
   // Ben's phone test: a tool put on a fastener already partly or fully in shows where it stands.

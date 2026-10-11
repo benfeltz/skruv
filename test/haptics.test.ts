@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { HAPTICS } from '../src/constants.js';
 import { EVENT } from '../src/game/events.js';
-import { createHaptics, CUE, cueFor, patternFor } from '../src/game/haptics.js';
+import { createHaptics, CUE, cueFor, homeCue, patternFor } from '../src/game/haptics.js';
 import type { Cue } from '../src/game/haptics.js';
 
 // The haptics module (1.8.2.2 step 3): events to cues, cues to today's exact patterns, and
@@ -58,6 +58,15 @@ describe('cueFor', () => {
     [{ type: EVENT.GRAB }, null],
   ])('%o buzzes %s', (event, cue) => {
     expect(cueFor(event)).toBe(cue);
+  });
+});
+
+describe('homeCue', () => {
+  it('buzzes a bolt back home as home and a cam as lock, as their FASTEN events do', () => {
+    expect(homeCue(KIND.BOLT)).toBe(CUE.HOME);
+    expect(homeCue(KIND.CAM)).toBe(CUE.LOCK);
+    expect(homeCue(KIND.BOLT)).toBe(cueFor({ type: EVENT.FASTEN, kind: KIND.BOLT }));
+    expect(homeCue(KIND.DOWEL)).toBeNull();
   });
 });
 
