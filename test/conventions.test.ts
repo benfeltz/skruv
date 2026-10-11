@@ -44,6 +44,8 @@ describe('pure-logic modules', () => {
     'src/game/events.ts',
     'src/game/sessionBuffer.ts',
     'src/game/tunables.ts',
+    'src/game/toolTargets.ts',
+    'src/game/toolAim.ts',
     'src/scene/fpsGuard.ts',
   ];
 
@@ -70,6 +72,8 @@ describe('pure-logic modules', () => {
     'src/game/events.ts',
     'src/game/sessionBuffer.ts',
     'src/game/tunables.ts',
+    'src/game/toolTargets.ts',
+    'src/game/toolAim.ts',
     'src/scene/fpsGuard.ts',
   ])(
     '%s touches no DOM globals',
@@ -156,6 +160,39 @@ describe('drop guide (1.4.1, Ben)', () => {
   it('goes away when the drag ends, however it ends', () => {
     const stop = router.slice(router.indexOf('function stopDrag()'), router.indexOf('}', router.indexOf('function stopDrag()')));
     expect(stop).toMatch(/dropGuide\?\.hide\(\)/);
+  });
+});
+
+describe('target rings (1.8.2.1)', () => {
+  const router = read('src/scene/gestureRouter.ts');
+  const rings = read('src/scene/targetRings.ts');
+
+  it('render only — which targets light, and how brightly, is toolTargets.js', () => {
+    const imports = rings.match(/^import .*$/gm)!.join('\n');
+    expect(imports).not.toMatch(/physics|\/game\//);
+    expect(rings).not.toMatch(/\.intersectObjects?\(|physics\./);
+    expect(router).toMatch(/ringStrengths\(workable, /);
+    expect(router).toMatch(/isWorkable\(c, joints, catches\)/);
+  });
+
+  it('build their pool once; show and hide only update it', () => {
+    const perFrame = rings.slice(rings.indexOf('return {'));
+    expect(perFrame).not.toMatch(/new THREE\./);
+  });
+
+  it('go away when the drag ends, however it ends', () => {
+    const stop = router.slice(router.indexOf('function stopDrag()'), router.indexOf('}', router.indexOf('function stopDrag()')));
+    expect(stop).toMatch(/targetRings\?\.hide\(\)/);
+  });
+
+  // Review round 1: one connector sweep per frame on the phone path, shared by aim and rings.
+  it('share one sweep of the carried part\'s seats per frame with the aim', () => {
+    const update = router.slice(router.indexOf('function update('), router.indexOf('// --- effects from the state machine'));
+    expect(update.match(/carriedEnds\(\)/g)).toHaveLength(1);
+    expect(update).toMatch(/aimHardware\(ends, delta\)/);
+    expect(update).toMatch(/showRings\(ends\)/);
+    const perFrame = router.slice(router.indexOf('function aimHardware('), router.indexOf('// The bolt a seated cam lock'));
+    expect(perFrame).not.toMatch(/seatsFor\(|carriedEnds\(/);
   });
 });
 
