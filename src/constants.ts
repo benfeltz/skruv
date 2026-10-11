@@ -417,6 +417,11 @@ export const FASTENER = {
   // Crank motion this close (CSS px) to the fastener's on-screen centre is ignored — the
   // angle swings wildly there.
   crankDeadzone: 12,
+  // Hold-to-drive: a still press on a seated tool drives its fastener home in this many
+  // seconds, whatever its span — the cam's quarter turn as long as the bolt's two turns.
+  driveSeconds: 1.5,
+  // The ratchet ticks once every this much turn (an eighth), cranked or driven.
+  ratchetRadians: Math.PI / 4,
   // Dowel-stage connections: rigid in translation, this much angular play, and damped so
   // the carcass slumps to the limit and stays (no spring, no bounce). Cam-locked = rigid.
   angularPlayDegrees: 4,
