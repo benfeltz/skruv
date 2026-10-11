@@ -491,6 +491,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   const isBonded = (part: Part) => [...bonds.values()].some(({ a, b }) => a === part.id || b === part.id);
 
+  // A panel carried into seats by its hardware, not one of them yet pushed home.
+  const awaitsSeat = (part: Part) => assembly.all().some((j) => j.mover === part.id && j.hardware !== part.id && j.host !== part.id && !isFastened(j.fastener));
+
   function reconcile() {
     const wanted = new Map(assembly.bonds(poseOf).map((bond) => [bond.key, bond]));
     for (const [key, held] of bonds) {
@@ -506,7 +509,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     }
     for (const part of placed) {
       // The placed hold's removal condition: its first fastener has engaged, and the joints
-      // now hold it.
+      // now hold it — never while a seat it was carried into is still only seated (a panel
+      // carried in on dowels pushed home in it is bonded to them from the start).
+      if (awaitsSeat(part)) continue;
       if (!isBonded(part)) continue;
       placed.delete(part);
       physics.release(part.body);

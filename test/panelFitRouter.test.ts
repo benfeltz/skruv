@@ -140,18 +140,21 @@ function harness({ panelAt, dowels = [0, 1], home = [], extra = [], carrying }: 
     if (carrying === 'home') assembly.drive(joint.id);
   });
 
+  // Bodies under direct control: grabbed, not since released.
+  const kinematic = new Set<Body>();
   const simulation: GestureRouterOptions['physics'] = {
-    grab: () => {},
+    grab: (body: Body) => kinematic.add(body),
     move: (body: Body, position: Vec3, rotation?: Quat) => {
       const { mesh } = parts.find((part) => part.body === body)!;
       mesh.position.set(...position);
       if (rotation) mesh.quaternion.set(...rotation);
       mesh.updateMatrixWorld(true);
     },
-    release: () => {},
+    release: (body: Body) => kinematic.delete(body),
     join: () => ({}) as PhysicsJoint, // a fake joint: the router only hands it back to unjoin
     unjoin: () => {},
   };
+  const held = (part: Part) => kinematic.has(part.body);
   // A fastened compound moves as one, as main.ts wires it. A fake: the seam only calls what the router does.
   const physics = createCompoundPhysics(simulation as unknown as PhysicsWorld, parts, assembly);
   const offers: StampedEvent[] = [];
@@ -206,7 +209,7 @@ function harness({ panelAt, dowels = [0, 1], home = [], extra = [], carrying }: 
     for (let i = 0; i < frames; i++) router.update(FRAME);
   };
   const jointsMovedBy = (part: Part) => assembly.all().filter((j) => j.mover === part.id);
-  return { router, canvas, assembly, parts, side, dowels: dowelParts, carried: carriedParts, panel: panel!, drag, tap, hold, screen, offered, offers, seats, shown, ghosts, jointsMovedBy };
+  return { router, canvas, assembly, parts, side, dowels: dowelParts, carried: carriedParts, panel: panel!, held, drag, tap, hold, screen, offered, offers, seats, shown, ghosts, jointsMovedBy };
 }
 
 const TOPS = [topOf(0), topOf(1)];
@@ -510,6 +513,27 @@ describe('a panel carrying its own dowels (1.8.3.1, phone round 3)', () => {
     // Each dowel's free end at its hole's mouth.
     for (const joint of onSide) expect(gap(freeEnd(h.parts.find((p) => p.id === joint.hardware)!), sideHole(joint.hostConnector).position)).toBeLessThan(1e-6);
     expect(h.seats.filter((e) => e.host === h.side.id)).toHaveLength(2);
+  });
+
+  // Review round 4: bonded to its own dowels from the start, it must not be let go before a
+  // seat it was carried into holds it.
+  it.each([['seated', 'seated'], ['pushed home', 'home']] as const)('stays held on its seat, dowels %s, while another part is picked up and put down', (_, carrying) => {
+    const h = harness({ dowels: [], carrying, panelAt: NEAR, extra: [{ id: 'dowel-9', type: 'dowel', pose: { position: [0.6, 0.004, 0.4], rotation: [Math.SQRT1_2, 0, 0, Math.SQRT1_2] } }] });
+    h.canvas.fire('pointerup', h.drag(h.panel));
+    h.router.update(0);
+    const seat = poseOf(h.panel);
+    expect(h.held(h.panel)).toBe(true);
+    const loose = h.parts.find((p) => p.id === 'dowel-9')!;
+    h.canvas.fire('pointerup', h.drag(loose));
+    h.router.update(0);
+    expect(h.held(h.panel)).toBe(true);
+    expect(poseOf(h.panel)).toEqual(seat);
+    const onSide = h.assembly.all().filter((j) => j.host === h.side.id);
+    expect(onSide).toHaveLength(2);
+    for (const joint of onSide) expect(isFastened(joint.fastener)).toBe(false);
+    // Pushed home, its joints hold it: let go.
+    h.tap(h.panel);
+    expect(h.held(h.panel)).toBe(false);
   });
 
   it('then a tap on the panel pushes them home, and the panels are one', () => {
