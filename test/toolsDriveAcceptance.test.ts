@@ -239,8 +239,8 @@ describe("JOHNNY's tool steps by ring and hold (1.8.2.2 acceptance)", () => {
 // Review round 1: JOHNNY's cam recess sits a centimetre from the bolt head, so the
 // screwdriver's ring lies across most of the Allen key. A press on the key is the key's.
 describe("a neighbouring tool's ring never takes a press on a seated tool (review round 1)", () => {
-  // The bolt driven home under the key, then the screwdriver seated on the unlocked cam: the
-  // key has no ring now, the screwdriver's is live.
+  // The bolt driven home under the key, then the screwdriver seated on the unlocked cam: both
+  // dials show — the key's full on the home bolt, the screwdriver's empty on the cam.
   function bothSeated() {
     const b = bench();
     b.carry(b.on(b.key), HEAD);
@@ -249,12 +249,16 @@ describe("a neighbouring tool's ring never takes a press on a seated tool (revie
     b.carry(b.on(b.driver), SLOT);
     expect(b.toolOn(b.key)).not.toBeNull();
     expect(b.toolOn(b.driver)).toMatchObject({ host: 'camLock-1' });
-    const [dial] = b.shownNow()!;
+    const slot = b.screen(SLOT);
+    // The screwdriver's dial: the one round the slot on screen.
+    const dial = b.shownNow()!.find((d) => Math.hypot(d.centre[0] - slot.clientX, d.centre[1] - slot.clientY) < 1)!;
+    expect(dial).toMatchObject({ progress: 0, flashing: false });
+    expect(b.shownNow()).toHaveLength(2);
     const press = b.on(b.key, [-0.025, 0, 0]);
     // The press on the key lies in the screwdriver's ring band.
     const reach = Math.hypot(press.clientX - dial.centre[0], press.clientY - dial.centre[1]);
     expect(Math.abs(reach - TURN_RING.radius)).toBeLessThanOrEqual(TURN_RING.band);
-    return { ...b, press };
+    return { ...b, press, dial };
   }
 
   it('takes the key off on a tap on it', () => {
