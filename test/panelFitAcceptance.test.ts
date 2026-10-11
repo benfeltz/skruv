@@ -121,7 +121,7 @@ function harness(panelAt: Pose, { seated = false, beside = 'side' }: { seated?: 
   events.on(EVENT.SEAT, (event) => seats.push(event));
   events.on(EVENT.SNAP_CANDIDATE, (event) => offers.push(event));
   const shown: TargetRing[][] = [];
-  const ghosts: Pose[] = [];
+  const ghosts: (Pose & { whereItGoes: boolean })[] = [];
   const listeners = new Map<string, Listener>();
   const canvas = {
     addEventListener: (type: string, fn: Listener) => listeners.set(type, fn),
@@ -139,7 +139,7 @@ function harness(panelAt: Pose, { seated = false, beside = 'side' }: { seated?: 
     assembly,
     events,
     targetRings: { show: (rings) => shown.push([...rings]), hide: () => shown.push([]) },
-    ghost: { show: (_mesh, pose) => ghosts.push({ position: [...pose.position], rotation: [...pose.rotation] }), hide() {} },
+    ghost: { show: (_mesh, pose, whereItGoes = false) => ghosts.push({ position: [...pose.position], rotation: [...pose.rotation], whereItGoes }), hide() {} },
     relatives: preferredRelatives(ASSEMBLED, PART_TYPES),
   });
   const screen = (part: Part) => {
@@ -227,6 +227,8 @@ describe('a panel goes on its dowels by touch (1.8.3.1 acceptance)', () => {
     const joints = h.assembly.all().filter((j) => j.mover === h.panel.id);
     expect(joints).toHaveLength(1);
     expect(joints[0]).toMatchObject({ kind: KIND.DOWEL, hardware: 'dowel-2', hostConnector: 3 });
+    // Not where it goes: its ghost stayed amber.
+    expect(h.ghosts.at(-1)?.whereItGoes).toBe(false);
     expect(gap(h.panel.mesh.position.toArray(), SEAT.position)).toBeGreaterThan(0.1);
   });
 });
@@ -266,6 +268,9 @@ describe("the booklet's step 1 then step 3, by touch (1.8.3.1, phone round 3)", 
     expect(lit).toBe(true);
     expect(panelOffer()).toBe('sidePanel-1');
     h.hold(30);
+    // The ghost on offer is where it goes: green.
+    expect(h.ghosts.at(-1)?.whereItGoes).toBe(true);
+    expect(angleBetween(h.ghosts.at(-1)!.rotation, SEAT.rotation)).toBeLessThan(1e-6);
 
     // Let go: both dowels seat in the side panel, the panel the mover, and they ride with it.
     release();

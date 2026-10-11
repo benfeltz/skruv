@@ -159,7 +159,7 @@ export interface GestureRouterOptions {
   assembly: Assembly;
   rings?: Rings;
   onTap?: (part: Part | null) => void;
-  ghost?: { show(mesh: THREE.Mesh, pose: Pose): void; hide(): void };
+  ghost?: { show(mesh: THREE.Mesh, pose: Pose, whereItGoes?: boolean): void; hide(): void };
   sprue?: { selected: Part | null; hitTest(raycaster: THREE.Raycaster): HandleHit | null };
   dropGuide?: { show(from: Vec3, to: Vec3): void; hide(): void };
   targetRings?: { show(rings: readonly TargetRing[]): void; hide(): void };
@@ -214,7 +214,8 @@ const PULL_AXIS_PROBE = 0.05;
  *   rings  — `{ selected, hitTest(raycaster), start(hit, pointer), move(pointer), end(),
  *            cancel() }`; which of ring and part a press lands on is `resolveHit`'s call.
  *   onTap  — called with the tapped part, or null for empty space.
- *   ghost  — `{ show(mesh, pose), hide() }` snap preview (src/scene/ghost.ts).
+ *   ghost  — `{ show(mesh, pose, whereItGoes), hide() }` snap preview (src/scene/ghost.ts),
+ *            green when a panel's fit on offer is where it goes.
  *   dropGuide — `{ show(from, to), hide() }` line from a dragged part down to where it
  *            would land (src/scene/dropGuide.ts); a free hole there that takes the part
  *            glows, as does the seat the ghost shows.
@@ -297,6 +298,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const flashes = new Map<Decal, number>();
   // The hole marking lit under the drop line (or at the seat on offer), if any.
   let glowing: Decal | null = null;
+  let glowColor: number = COLORS.decalFlash;
   const down = new THREE.Vector3(0, -1, 0);
   // A carried part's end in the world, rewritten every frame (endAt).
   const endPoint: Vec3 = [0, 0, 0];
@@ -758,7 +760,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     // A compound carries its joints along; only a free part looks for a seat.
     drag!.snapped = drag!.mode === 'move' ? snapCandidate(target) : null;
     reportOffer();
-    if (drag!.snapped) ghost?.show(drag!.part.mesh, drag!.snapped);
+    if (drag!.snapped) ghost?.show(drag!.part.mesh, drag!.snapped, drag!.snapped.preferred);
     else ghost?.hide();
   }
 
@@ -1092,6 +1094,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
         // A hole still under the drop line (or the seat on offer) goes back to its glow.
         if (decal === glowing) {
           decal.material.emissiveIntensity = DROP.glowIntensity;
+          decal.material.emissive.setHex(glowColor);
         } else {
           decal.material.emissive.setHex(COLORS.unlit);
           decal.material.emissiveIntensity = 1;
@@ -1116,7 +1119,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     dropGuide?.show(from, to);
     if (drag.snapped) {
       const { from: a, to: b } = drag.snapped.snap;
-      return glow(decalOf(a) ?? decalOf(b));
+      return glow(decalOf(a) ?? decalOf(b), drag.snapped.preferred ? COLORS.whereItGoes : COLORS.decalFlash);
     }
     const under = hit && drag.mode === 'move' ? partByMesh.get(hit.object)! : null;
     const host = under === hold?.held ? null : under;
@@ -1134,13 +1137,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     );
   }
 
-  // Lights one hole marking at a time; a hole mid-flash keeps its flash.
-  function glow(decal: Decal | null) {
-    if (decal === glowing) return;
+  // Lights one hole marking at a time, in `color` — green under a fit that is where a panel
+  // goes; a hole mid-flash keeps its flash.
+  function glow(decal: Decal | null, color: number = COLORS.decalFlash) {
+    if (decal === glowing && color === glowColor) return;
     if (glowing && !flashes.has(glowing)) glowing.material.emissive.setHex(COLORS.unlit);
     glowing = decal;
+    glowColor = color;
     if (!decal || flashes.has(decal)) return;
-    decal.material.emissive.setHex(COLORS.decalFlash);
+    decal.material.emissive.setHex(color);
     decal.material.emissiveIntensity = DROP.glowIntensity;
   }
 

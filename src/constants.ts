@@ -39,6 +39,9 @@ export const COLORS = {
   uiAccent: 0xe0a64a,
   // Snap preview (src/scene/ghost.ts).
   ghost: 0xe0a64a,
+  // The ghost, and the glow on the hole it seats in, when a panel's fit on offer is where it
+  // goes in the finished item (src/game/panelFit.ts); any other fit keeps `ghost`'s amber.
+  whereItGoes: 0x6cc46a,
   // Hole markings (src/game/decals.ts) and the flash when a fastener seats in one.
   decal: 0x3a3029,
   decalFlash: 0xe0a64a,

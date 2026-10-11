@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CONTRACT, KIND } from '../tools/validate/lib/vocabulary.js';
+import { CONTRACT, isFastenerEnd, KIND } from '../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, multiplyQuaternions, rotateVector } from '../tools/validate/lib/geometry.js';
-import { GESTURE, PANEL } from '../src/constants.js';
+import { COLORS, GESTURE, PANEL } from '../src/constants.js';
 import { carryPose, createAssembly } from '../src/game/assembly.js';
 import { isFastened } from '../src/game/fasteners.js';
 import { ASSEMBLED, PART_TYPES } from '../src/game/item.js';
@@ -10,6 +10,7 @@ import { preferredRelatives } from '../src/game/panelFit.js';
 import { createBus, EVENT } from '../src/game/events.js';
 import { createCompoundPhysics } from '../src/scene/compoundPhysics.js';
 import { createGestureRouter } from '../src/scene/gestureRouter.js';
+import { createGhost } from '../src/scene/ghost.js';
 import type { StampedEvent } from '../src/game/events.js';
 import type { Part } from '../src/game/partMesh.js';
 import type { Body, PhysicsJoint, PhysicsWorld } from '../src/physics/world.js';
@@ -56,6 +57,10 @@ function makePart(id: string, type: string, { position, rotation }: Pose): Part 
   mesh.position.set(...position);
   mesh.quaternion.set(...rotation);
   mesh.updateMatrixWorld(true);
+  // A hole marking on each socket, as partMesh.ts gives it: only its glow is read here.
+  mesh.userData.decals = new Map(
+    PART_TYPES[type].connectors.flatMap((c, index) => (isFastenerEnd(c.type) ? [] : [[index, new THREE.Mesh(undefined, new THREE.MeshStandardMaterial())] as const])),
+  );
   const body = {
     id,
     isKinematic: () => true,
@@ -156,8 +161,11 @@ function harness({ panelAt, dowels = [0, 1], home = [], extra = [], carrying }: 
   events.on(EVENT.SEAT, (event) => seats.push(event));
   const shown: TargetRing[][] = [];
   const targetRings = { show: (rings: readonly TargetRing[]) => shown.push([...rings]), hide: () => shown.push([]) };
-  const ghosts: Pose[] = [];
-  const ghost = { show: (_mesh: THREE.Mesh, pose: Pose) => ghosts.push({ position: [...pose.position], rotation: [...pose.rotation] }), hide() {} };
+  const ghosts: (Pose & { whereItGoes: boolean })[] = [];
+  const ghost = {
+    show: (_mesh: THREE.Mesh, pose: Pose, whereItGoes = false) => ghosts.push({ position: [...pose.position], rotation: [...pose.rotation], whereItGoes }),
+    hide() {},
+  };
 
   const canvas = new FakeCanvas();
   const router = createGestureRouter({
@@ -548,5 +556,45 @@ describe('a panel carrying its own dowels (1.8.3.1, phone round 3)', () => {
     expect(h.assembly.all().filter((j) => j.host === h.side.id)).toEqual([]);
     expect(h.assembly.all().filter((j) => j.host === h.panel.id)).toHaveLength(2);
     expect(h.router.dragging).toEqual({ part: h.panel, mode: 'move' });
+  });
+});
+
+// Ben, phone round 3: the ghost (and the seat glow) is green when the fit on offer is where
+// the panel goes; any other fit keeps today's amber.
+describe('a green ghost where it goes (1.8.3.1, phone round 3)', () => {
+  const OFF_BY_ONE = lowered({ ...SEAT, position: [SEAT.position[0], SEAT.position[1] + 0.02, SEAT.position[2] + (TOPS[1][2] - TOPS[0][2])] });
+  // The hole marking glowing on the carried panel, if any, and its colour.
+  const glowing = (part: Part) => [...(part.mesh.userData.decals as Map<number, THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>>).values()].map((d) => d.material).find((m) => m.emissiveIntensity > 0 && m.emissive.getHex() !== COLORS.unlit);
+
+  it('shows where it goes green, and lights its hole green', () => {
+    const h = harness({ panelAt: lowered(skewed(SEAT, 20 * DEG, TOPS[0], [0.02, 0.03, 0])) });
+    h.drag(h.panel);
+    h.router.update(0);
+    expect(h.ghosts.at(-1)?.whereItGoes).toBe(true);
+    expect(glowing(h.panel)?.emissive.getHex()).toBe(COLORS.whereItGoes);
+  });
+
+  it('keeps a fit that is not where it goes amber', () => {
+    const h = harness({ panelAt: OFF_BY_ONE });
+    h.drag(h.panel);
+    h.router.update(0);
+    expect(h.ghosts.at(-1)?.whereItGoes).toBe(false);
+    expect(glowing(h.panel)?.emissive.getHex()).toBe(COLORS.decalFlash);
+  });
+
+  it('shows hardware seats amber, as before', () => {
+    const hole = sideHole(3);
+    const h = harness({ dowels: [], extra: [{ id: 'dowel-9', type: 'dowel', pose: lowered({ position: [hole.position[0] + 0.01, hole.position[1] + 0.03, hole.position[2]], rotation: IDENTITY }) }] });
+    h.drag(h.parts.at(-1)!);
+    expect(h.ghosts.at(-1)?.whereItGoes).toBe(false);
+  });
+
+  it('the ghost turns green or amber as told', () => {
+    const ghost = createGhost();
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    ghost.show(mesh, SEAT, true);
+    expect((ghost.object.material as THREE.MeshBasicMaterial).color.getHex()).toBe(COLORS.whereItGoes);
+    ghost.show(mesh, SEAT);
+    expect((ghost.object.material as THREE.MeshBasicMaterial).color.getHex()).toBe(COLORS.ghost);
   });
 });
