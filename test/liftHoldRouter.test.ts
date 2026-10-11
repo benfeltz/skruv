@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAssembly } from '../src/game/assembly.js';
 import { connectorInWorld, rotateVector } from '../tools/validate/lib/geometry.js';
 import { createCompoundPhysics } from '../src/scene/compoundPhysics.js';
-import { createLiftHold } from '../src/scene/liftHold.js';
+import { createLiftHold, liftRangeOf, ownReach } from '../src/scene/liftHold.js';
 import { PART_TYPES } from '../src/game/item.js';
 import { createBus, EVENT } from '../src/game/events.js';
 import { createGestureRouter } from '../src/scene/gestureRouter.js';
@@ -357,7 +357,7 @@ function assemblyHarness(extra: Part[] = []) {
     hold: line,
   });
   router.sync();
-  line.measure(router.halfHeightOf);
+  line.measure(router.verticalReachOf);
   // A frame as main.ts runs one: the hold eases, the simulation steps (a stub), the router follows.
   const frames = (n: number) => {
     for (let i = 0; i < n; i++) {
@@ -399,12 +399,30 @@ describe('the line for a selected assembly (1.8.3.4 Step 4)', () => {
     expect(h.router.carries(h.side)).toBe(false);
   });
 
-  it("measures the line's range by the whole assembly's reach", () => {
+  // Review round 1: the reach is the box on whichever side it lies — the bottom panel stands
+  // above the side panel, never below it.
+  it("measures the line's range by the whole assembly's reach, on whichever side it lies", () => {
     const h = assemblyHarness();
-    const own = PART_TYPES.sidePanel.size[0] / 2;
-    // The bottom panel stands its length above the side panel lying flat.
-    expect(h.router.halfHeightOf(h.side, FLAT_SIDE.rotation)).toBeGreaterThan(PART_TYPES.topBottomPanel.size[0]);
-    expect(h.router.halfHeightOf(h.side, FLAT_SIDE.rotation)).toBeGreaterThan(10 * own);
+    const [min, max] = liftRangeOf(h.side, FLAT_SIDE.rotation, h.router.verticalReachOf);
+    const [, ownMax] = liftRangeOf(h.side, FLAT_SIDE.rotation, ownReach);
+    // Lying on the floor already: the floor is where it lies.
+    expect(min).toBeCloseTo(FLAT_SIDE.position[1], 9);
+    // The bottom panel standing on it comes off the ceiling.
+    expect(ownMax - max).toBeGreaterThan(PART_TYPES.topBottomPanel.size[0]);
+    // Held by the bottom panel: its floor is where it stands, on the side panel.
+    const [bottomMin] = liftRangeOf(h.bottom, h.bottom.mesh.quaternion.toArray(), h.router.verticalReachOf);
+    expect(bottomMin).toBeCloseTo(h.bottom.mesh.position.y, 9);
+  });
+
+  // Review round 1: an assembly taken up where it lies stays there — no jump on the first frame.
+  it.each([['side panel', 'side'], ['bottom panel', 'bottom']] as const)('holds a pair taken up by its %s where it lies', (_, by) => {
+    const h = assemblyHarness();
+    const part = by === 'side' ? h.side : h.bottom;
+    const before = [h.side, ...h.members].map((p) => p.mesh.position.y);
+    h.line.begin(part, 'line');
+    h.line.target(part.mesh.position.y);
+    h.frames(1);
+    [h.side, ...h.members].forEach((p, n) => expect(p.mesh.position.y, p.id).toBeCloseTo(before[n], 9));
   });
 
   it('raises every member together on the line, the dowel only seated in it included', () => {

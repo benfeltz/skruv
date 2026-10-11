@@ -7,9 +7,13 @@ import { clampLift } from './dragMath.js';
 /** A part's centre-height range [min, max]: resting on the floor up to the lift ceiling. */
 export type LiftRange = [number, number];
 
-/** The lift range for a part of half-height `halfHeight` — clampLift's own bounds. */
-export function liftRange(halfHeight: number): LiftRange {
-  const at = (y: number) => clampLift(y, halfHeight, ROOM, GESTURE.ceilingMargin);
+/**
+ * The lift range for a part reaching `halfHeight` either side of a point `centre` above its
+ * own centre — clampLift's own bounds for that point, given back as the part's centre. An
+ * assembly held by its bottom panel reaches far above it and barely below.
+ */
+export function liftRange(halfHeight: number, centre = 0): LiftRange {
+  const at = (y: number) => clampLift(y, halfHeight, ROOM, GESTURE.ceilingMargin) - centre;
   return [at(-Infinity), at(Infinity)];
 }
 

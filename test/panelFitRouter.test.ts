@@ -208,7 +208,7 @@ function harness({ panelAt, dowels = [0, 1], home = [], extra = [], carrying, li
   // The joints the setup made, as the game's would be: physics follows the graph.
   router.sync();
   // As main.ts: the line measures a held part's reach by the router's.
-  line?.measure(router.halfHeightOf);
+  line?.measure(router.verticalReachOf);
   const screen = (point: Vec3) => {
     const v = new THREE.Vector3(...point).project(camera);
     return { clientX: ((v.x + 1) / 2) * SIZE, clientY: ((1 - v.y) / 2) * SIZE };
@@ -756,8 +756,21 @@ describe('a panel carries its whole assembly (1.8.3.4 Step 1)', () => {
       h.router.update(FRAME);
     }
     for (const part of [h.side, ...h.members]) expect(lowest(part), part.id).toBeGreaterThan(-1e-6);
-    // The line's range is the whole assembly's: the standing bottom panel holds the side up.
-    expect(lowest(h.side)).toBeGreaterThan(PART_TYPES.topBottomPanel.size[0] / 2);
+    // Review round 1: the reach is on whichever side it lies — down to the floor, never
+    // held up by the bottom panel standing on it.
+    expect(lowest(h.side)).toBeLessThan(0.002);
+  });
+
+  // Review round 1: a lift by the wheel raises it by the wheel's travel, never by the height
+  // of what stands on the grabbed panel.
+  it('lifts a pair grabbed by its bottom-most panel by the wheel, without a jump', () => {
+    const h = pair();
+    const at = h.grabSide();
+    const before = h.side.mesh.position.y;
+    h.canvas.fire('wheel', { ...at, deltaY: -10 });
+    const rise = h.side.mesh.position.y - before;
+    expect(rise).toBeGreaterThan(0);
+    expect(rise).toBeLessThan(0.05);
   });
 
   it('grabbing a piece of hardware of the assembly is never a carry: it drags the compound, as before', () => {

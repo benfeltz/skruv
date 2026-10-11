@@ -153,7 +153,7 @@ function harness(start: (pose: Pose) => Pose) {
     relatives: preferredRelatives(ASSEMBLED, PART_TYPES),
   });
   router.sync();
-  line.measure(router.halfHeightOf);
+  line.measure(router.verticalReachOf);
   const shelf = byId(SHELF);
   const screen = (point: Vec3) => {
     const v = new THREE.Vector3(...point).project(camera);

@@ -38,6 +38,7 @@ import type { PhysicsJoint, PhysicsWorld } from '../physics/world.js';
 import type { RingHit } from './gizmo.js';
 import type { HandleHit } from './sprue.js';
 import type { TargetRing } from './targetRings.js';
+import type { VerticalReach } from './liftHold.js';
 import type { Engagement } from '../game/turnRing.js';
 import type { Dial } from '../ui/turnRing.js';
 import type { Pose, Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
@@ -144,7 +145,7 @@ interface Rings {
 /** What `createGestureRouter` returns — see there. */
 export interface GestureRouter {
   readonly dragging: { part: Part; mode: Drag['mode'] } | null;
-  halfHeightOf(part: Part, rotation: Quat): number;
+  verticalReachOf(part: Part, rotation: Quat): VerticalReach;
   carries(part: Part): boolean;
   update(delta?: number): void;
   sync(): void;
@@ -716,28 +717,36 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   // The carried panel's reach with it turned to `rotation`, kept on the drag, as the lift
-  // and the wall clamp read it.
+  // and the wall clamp read it: the box's half-extents, and its centre's offset from the
+  // panel's, as a compound's footprint keeps them.
   function clampCarried(rotation: Quat) {
-    const half = reachOf(drag!.part, rotation);
+    const { centre, half } = reachOf(drag!.part, rotation);
+    drag!.centre = centre;
     drag!.half = [half[0], half[2]];
     drag!.halfHeight = half[1];
-    return half[1];
   }
 
-  // How far `part` reaches about its centre with it turned to `rotation`: its own box,
-  // widened to take in everything it carries — its assembly's other panels and hardware, as
-  // the drag carries them, else as they sit now — so no clamp, the elevation line's included,
-  // lets a dowel or a joined panel through the floor or a wall.
-  function reachOf(part: Part, rotation: Quat): Vec3 {
-    const half = rotatedHalfExtents(PART_TYPES[part.type].size.map((d) => d / 2), rotation);
+  // The box `part` fills with it turned to `rotation` — its centre's offset from the part's,
+  // and its half-extents: its own box, widened to take in everything it carries (its
+  // assembly's other panels and hardware, as the drag carries them, else as they sit now) on
+  // whichever side it lies, so no clamp, the elevation line's included, lets a dowel or a
+  // joined panel through the floor or a wall, nor lifts a panel by what stands on it.
+  function reachOf(part: Part, rotation: Quat): { centre: Vec3; half: Vec3 } {
+    const own = rotatedHalfExtents(PART_TYPES[part.type].size.map((d) => d / 2), rotation);
+    const min = own.map((v) => -v);
+    const max = [...own];
     const carry = drag?.part === part && drag.carry ? drag.carry : carriedNow(part);
     const at: Pose = { position: [0, 0, 0], rotation };
     for (const { part: rider, start } of carry?.riders ?? []) {
       const pose = carryPose(carry!.start, at, start);
       const reach = rotatedHalfExtents(PART_TYPES[rider.type].size.map((d) => d / 2), pose.rotation);
-      for (let i = 0; i < 3; i++) half[i] = Math.max(half[i], Math.abs(pose.position[i]) + reach[i]);
+      for (let i = 0; i < 3; i++) {
+        min[i] = Math.min(min[i], pose.position[i] - reach[i]);
+        max[i] = Math.max(max[i], pose.position[i] + reach[i]);
+      }
     }
-    return half;
+    // map keeps the length; TS widens a mapped tuple to number[].
+    return { centre: min.map((v, i) => (v + max[i]) / 2) as Vec3, half: min.map((v, i) => (max[i] - v) / 2) as Vec3 };
   }
 
   // What `part` would carry, as it all sits now.
@@ -1067,9 +1076,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // events, so the offer the turn brings is looked for here too.
   function aimPanel(goal: PanelGoal | null, delta: number) {
     if (!goal || drag!.snapped?.preferred) return;
-    const { part, held, centre } = drag!;
+    const { part, held } = drag!;
     const rotation = aimStep(drag!.rotation, goal.pose.rotation, aimWeight(goal.distance, PANEL.zone), PANEL.rate, delta);
-    const hy = clampCarried(rotation);
+    clampCarried(rotation);
     drag!.rotation = rotation;
     // A fit on offer that is not where it goes — one a turning panel passed on its way in (a
     // side panel's plinth holes lie beside its bottom panel's): seat assist has the pose, but
@@ -1080,7 +1089,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     // Turned clear of the floor: the lift re-places it from the finger and looks for an offer.
     // An offer found there leaves it where it was held, so it goes to the lifted height
     // itself — never a frame through the floor — and seat assist eases it in from there.
-    if (clampLift(drag!.height + centre[1], hy, ROOM, GESTURE.ceilingMargin) - centre[1] !== drag!.height) {
+    const { centre, halfHeight } = drag!;
+    if (clampLift(drag!.height + centre[1], halfHeight, ROOM, GESTURE.ceilingMargin) - centre[1] !== drag!.height) {
       liftDrag(0, 0);
       if (!drag!.snapped) return;
       const [x, , z] = held!.position;
@@ -1687,9 +1697,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     get dragging() {
       return drag && { part: drag.part, mode: drag.mode };
     },
-    // How far a part reaches above and below its centre turned to `rotation`: a panel's
-    // own box, widened by everything it carries — the elevation line's floor clearance.
-    halfHeightOf: (part, rotation) => reachOf(part, rotation)[1],
+    // How far a part reaches up and down turned to `rotation`: a panel's own box, widened by
+    // everything it carries on whichever side it lies — the elevation line's floor and
+    // ceiling clearance.
+    verticalReachOf: (part, rotation) => {
+      const { centre, half } = reachOf(part, rotation);
+      return { half: half[1], centre: centre[1] };
+    },
     // Whether the elevation line may take up `part`, selected and sitting in a seat: a panel
     // carrying its assembly, or its hardware, that sits on nothing else.
     carries,
