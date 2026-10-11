@@ -1,14 +1,17 @@
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAssembly } from '../src/game/assembly.js';
+import { connectorInWorld, rotateVector } from '../tools/validate/lib/geometry.js';
+import { createCompoundPhysics } from '../src/scene/compoundPhysics.js';
+import { createLiftHold } from '../src/scene/liftHold.js';
 import { PART_TYPES } from '../src/game/item.js';
 import { createBus, EVENT } from '../src/game/events.js';
 import { createGestureRouter } from '../src/scene/gestureRouter.js';
 import type { StampedEvent } from '../src/game/events.js';
 import type { Part } from '../src/game/partMesh.js';
-import type { Body, PhysicsJoint } from '../src/physics/world.js';
+import type { Body, PhysicsJoint, PhysicsWorld } from '../src/physics/world.js';
 import type { GestureRouterOptions } from '../src/scene/gestureRouter.js';
-import type { Quat, Vec3 } from '../tools/validate/lib/geometry.js';
+import type { Pose, Quat, Vec3 } from '../tools/validate/lib/geometry.js';
 
 // The real gesture router dragging the part the elevation line holds (1.8.1 review round 1):
 // the drag rides at the line's height, so a seat is offered only where the part really is,
@@ -298,5 +301,138 @@ describe('a drag of the held part rides at the line height (review round 1)', ()
     router.update(0);
     expect(targets).toHaveLength(2);
     expect(targets[1]).toBeCloseTo(seatY, 3);
+  });
+});
+
+// 1.8.3.4 Step 4: a selected panel of a joined assembly gets the line, and holding it up
+// carries the whole assembly — the dowel only seated in it too. The real hold over the real
+// compound seam, wired as main.ts wires them; the simulation is a stub that lands every move.
+const FLAT_SIDE: Pose = { position: [0, 0.008, 0], rotation: [0, 0, Math.SQRT1_2, Math.SQRT1_2] }; // holes up
+const DOWN: Quat = [0, 0, -Math.SQRT1_2, Math.SQRT1_2]; // the bottom panel's holes 3 and 4 facing down
+const FRAME = 1 / 60;
+const holeAt = (index: number) => connectorInWorld(PART_TYPES.sidePanel.connectors[index], FLAT_SIDE);
+const standing = (index: number, by: number): Vec3 => holeAt(index).position.map((v, i) => v + (i === 1 ? by : 0)) as Vec3;
+
+// A side panel lying flat; a dowel pushed home in its hole 3 and the bottom panel pushed home
+// on it, standing up (one assembly); a dowel seated only in its hole 4. `extra` parts lie aside.
+function assemblyHarness(extra: Part[] = []) {
+  const dowelHalf = PART_TYPES.dowel.size[1] / 2;
+  const side = makePart('sidePanel-1', 'sidePanel', FLAT_SIDE.position, FLAT_SIDE.rotation);
+  const joiner = makePart('dowel-1', 'dowel', standing(3, dowelHalf));
+  const hole3 = rotateVector(DOWN, PART_TYPES.topBottomPanel.connectors[3].position);
+  const bottom = makePart('topBottomPanel-1', 'topBottomPanel', standing(3, 2 * dowelHalf).map((v, i) => v - hole3[i]) as Vec3, DOWN);
+  const loose = makePart('dowel-2', 'dowel', standing(4, dowelHalf));
+  const parts = [side, joiner, bottom, loose, ...extra];
+  const typeById = new Map(parts.map(({ id, type }) => [id, type]));
+  const assembly = createAssembly((id) => typeById.get(id)!);
+  assembly.drive(assembly.seat({ partA: joiner.id, connectorA: 0, partB: side.id, connectorB: 3, mover: joiner.id }).id);
+  assembly.drive(assembly.seat({ partA: bottom.id, connectorA: 3, partB: joiner.id, connectorB: 1, mover: bottom.id }).id);
+  assembly.seat({ partA: loose.id, connectorA: 0, partB: side.id, connectorB: 4, mover: loose.id });
+
+  // Bodies under direct control: grabbed, not since released.
+  const kinematic = new Set<Body>();
+  for (const part of parts) Object.assign(part.body, { isKinematic: () => kinematic.has(part.body) });
+  const simulation = {
+    grab: (body: Body) => kinematic.add(body),
+    move: (body: Body, position: Vec3, rotation?: Quat) => {
+      const { mesh } = parts.find((part) => part.body === body)!;
+      mesh.position.set(...position);
+      if (rotation) mesh.quaternion.set(...rotation);
+      mesh.updateMatrixWorld(true);
+    },
+    release: (body: Body) => kinematic.delete(body),
+    join: () => ({}) as PhysicsJoint, // a fake joint: the router only hands it back to unjoin
+    unjoin: () => {},
+  };
+  // A fake: the seams only call what the router and the hold do.
+  const line = createLiftHold(createCompoundPhysics(simulation as unknown as PhysicsWorld, parts, assembly));
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
+  const router = createGestureRouter({
+    domElement: new FakeCanvas() as unknown as HTMLElement, // a fake: listeners and a bounding rect only
+    camera,
+    cameraControls: { enable() {}, disable() {} },
+    physics: line,
+    parts,
+    assembly,
+    hold: line,
+  });
+  router.sync();
+  line.measure(router.halfHeightOf);
+  // A frame as main.ts runs one: the hold eases, the simulation steps (a stub), the router follows.
+  const frames = (n: number) => {
+    for (let i = 0; i < n; i++) {
+      line.update(FRAME);
+      router.update(FRAME);
+    }
+  };
+  const held = (part: Part) => kinematic.has(part.body);
+  return { router, line, assembly, side, joiner, bottom, loose, frames, held, members: [joiner, bottom, loose] };
+}
+
+describe('the line for a selected assembly (1.8.3.4 Step 4)', () => {
+  it('carries a selected panel of a free-standing joined pair, whichever panel', () => {
+    const h = assemblyHarness();
+    expect(h.router.carries(h.side)).toBe(true);
+    expect(h.router.carries(h.bottom)).toBe(true);
+  });
+
+  it('never carries hardware, a bare panel, or a panel with a tool on its assembly', () => {
+    const bare = makePart('fixedShelf-1', 'fixedShelf', [1, 0.008, 1]);
+    const bolt = makePart('camLockBolt-1', 'camLockBolt', standing(6, PART_TYPES.camLockBolt.size[1] / 2));
+    const key = makePart('allenWrench-1', 'allenWrench', [0.5, 0.002, 0.5]);
+    const h = assemblyHarness([bare, bolt, key]);
+    expect(h.router.carries(h.joiner)).toBe(false);
+    expect(h.router.carries(bare)).toBe(false);
+    h.assembly.drive(h.assembly.seat({ partA: bolt.id, connectorA: 0, partB: h.side.id, connectorB: 6, mover: bolt.id }).id);
+    expect(h.router.carries(h.side)).toBe(true);
+    h.assembly.seat({ partA: key.id, connectorA: 0, partB: bolt.id, connectorB: 1, mover: key.id });
+    expect(h.router.carries(h.side)).toBe(false);
+  });
+
+  it('never carries an assembly sitting in a seat outside itself', () => {
+    // A dowel pushed home in a shelf lying aside, the bottom panel's free hole seated on it.
+    const shelf = makePart('fixedShelf-1', 'fixedShelf', [1, 0.008, 1]);
+    const other = makePart('dowel-9', 'dowel', [1, 0.03, 1]);
+    const h = assemblyHarness([shelf, other]);
+    h.assembly.drive(h.assembly.seat({ partA: other.id, connectorA: 0, partB: shelf.id, connectorB: 0, mover: other.id }).id);
+    h.assembly.seat({ partA: h.bottom.id, connectorA: 4, partB: other.id, connectorB: 1, mover: h.bottom.id });
+    expect(h.router.carries(h.side)).toBe(false);
+  });
+
+  it("measures the line's range by the whole assembly's reach", () => {
+    const h = assemblyHarness();
+    const own = PART_TYPES.sidePanel.size[0] / 2;
+    // The bottom panel stands its length above the side panel lying flat.
+    expect(h.router.halfHeightOf(h.side, FLAT_SIDE.rotation)).toBeGreaterThan(PART_TYPES.topBottomPanel.size[0]);
+    expect(h.router.halfHeightOf(h.side, FLAT_SIDE.rotation)).toBeGreaterThan(10 * own);
+  });
+
+  it('raises every member together on the line, the dowel only seated in it included', () => {
+    const h = assemblyHarness();
+    const before = [h.side, ...h.members].map((part) => part.mesh.position.y);
+    h.line.begin(h.side, 'line');
+    h.line.target(h.side.mesh.position.y + 0.4);
+    h.frames(240);
+    const rise = h.side.mesh.position.y - before[0];
+    expect(rise).toBeGreaterThan(0.3);
+    [h.side, ...h.members].forEach((part, n) => expect(part.mesh.position.y - before[n], part.id).toBeCloseTo(rise, 6));
+    // Nothing came out of it.
+    expect(h.assembly.all()).toHaveLength(3);
+  });
+
+  it('lets it all go as one when the line does, the seated dowel still riding in its panel', () => {
+    const h = assemblyHarness();
+    h.line.begin(h.side, 'line');
+    h.line.target(h.side.mesh.position.y + 0.4);
+    h.frames(60);
+    for (const part of [h.side, h.joiner, h.bottom]) expect(h.held(part), part.id).toBe(true);
+    h.line.end('line');
+    h.router.update(FRAME);
+    for (const part of [h.side, h.joiner, h.bottom]) expect(h.held(part), part.id).toBe(false);
+    // The simulation drops the side panel: the dowel only seated in it goes with it.
+    const gap = h.loose.mesh.position.y - h.side.mesh.position.y;
+    h.side.mesh.position.y -= 0.2;
+    h.router.update(FRAME);
+    expect(h.loose.mesh.position.y - h.side.mesh.position.y).toBeCloseTo(gap, 9);
   });
 });

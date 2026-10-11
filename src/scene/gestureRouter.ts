@@ -145,6 +145,7 @@ interface Rings {
 export interface GestureRouter {
   readonly dragging: { part: Part; mode: Drag['mode'] } | null;
   halfHeightOf(part: Part, rotation: Quat): number;
+  carries(part: Part): boolean;
   update(delta?: number): void;
   sync(): void;
   unseatAll(ids: PartId[]): void;
@@ -311,6 +312,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // A press on a seated tool (or its turn ring) not yet a drag: how long it has been held
   // still (ms), and whether it has been held past a tap and so drives (hold-to-drive).
   let press: { id: number; tool: Part; ms: number; held: boolean } | null = null;
+  // The part the elevation line held at the last frame, so a new hold is seen once (carryHeld).
+  let lifted: Part | null = null;
 
   function aim({ clientX, clientY }: ClientPoint) {
     const rect = domElement.getBoundingClientRect();
@@ -682,6 +685,34 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       physics.grab(rider.body);
       placed.add(rider);
     }
+  }
+
+  // Whether the elevation line can take `part` up as it stands, selected: a panel this would
+  // carry, its assembly sitting in no seat outside itself — so nothing is torn off it, and
+  // none of it is held at a seat.
+  function carries(part: Part) {
+    const carried = carryOf(part);
+    if (!carried || placed.has(part)) return false;
+    const ids = new Set([part, ...carried].map((p) => p.id));
+    return [...ids].every((id) => assembly.jointsOf(id).every((j) => ids.has(j.hardware) && ids.has(j.host)));
+  }
+
+  // A panel the line took up outside a drag carries what a drag of it would: its assembly
+  // through the physics seam, as the hold grabs it, and the hardware only seated in it held
+  // where it sits in its panel (riders) — none left hovering, none dropping out. The hold may
+  // have raised the assembly before this frame sees it, so that hardware is placed by its seat
+  // in its panel as the panel is now, never where it was left.
+  function carryHeld() {
+    const held = hold?.held ?? null;
+    if (held === lifted) return;
+    lifted = held;
+    if (!held || drag?.part === held) return;
+    const carried = carryOf(held);
+    if (!carried) return;
+    const members = assembly.compoundOf(held.id);
+    const startOf = (rider: Part) =>
+      members.has(rider.id) ? poseOf(rider.id) : assembly.restPose(assembly.jointsOf(rider.id).find((j) => members.has(j.host))!.id, poseOf);
+    takeUp(held, { start: poseOf(held.id), riders: carried.map((rider) => ({ part: rider, start: startOf(rider) })) });
   }
 
   // The carried panel's reach with it turned to `rotation`, kept on the drag, as the lift
@@ -1445,6 +1476,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // --- per frame: fastener progress drawn on top of the simulated poses ---
 
   function update(delta = 0) {
+    carryHeld();
     followHold();
     driveHeld(delta);
     // Swept once, for the aim and the rings.
@@ -1658,6 +1690,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     // How far a part reaches above and below its centre turned to `rotation`: a panel's
     // own box, widened by everything it carries — the elevation line's floor clearance.
     halfHeightOf: (part, rotation) => reachOf(part, rotation)[1],
+    // Whether the elevation line may take up `part`, selected and sitting in a seat: a panel
+    // carrying its assembly, or its hardware, that sits on nothing else.
+    carries,
     update,
     // Brings the physics joints in line with the graph after a change made outside a
     // gesture — the display shelf seated pre-fastened — through the same reconcile a tap

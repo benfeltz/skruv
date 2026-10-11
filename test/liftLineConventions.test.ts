@@ -37,6 +37,12 @@ describe('which part the line shows for (review round 1)', () => {
   it('takes a dragged part only in a plain move, never a compound, crank or pull', () => {
     expect(body(main, 'liftablePart')).toMatch(/dragging \? \(dragging\.mode === 'move' \? dragging\.part : null\) : gizmo\.selected/);
   });
+
+  // 1.8.3.4 (deliberate): a selected panel sitting in seats is liftable when the router
+  // carries it — its assembly and dowels, standing on nothing else. The router decides.
+  it('takes a selected part with no seats, or one the router carries', () => {
+    expect(body(main, 'liftablePart')).toMatch(/return dragging \|\| assembly\.jointsOf\(part\.id\)\.length === 0 \|\| router\.carries\(part\) \? part : null;/);
+  });
 });
 
 // Ben's manual pass (2026-10-09): taps switch the held part between turning and moving.

@@ -219,7 +219,7 @@ const router = createGestureRouter({
     if (cue) haptics.cue(cue);
   },
 });
-// The line keeps a panel's carried dowels off the floor too: the router knows what it carries.
+// The line keeps whatever a panel carries (its dowels, its assembly) off the floor too: the router knows what it carries.
 hold.measure(router.halfHeightOf);
 // The display shelf's physics joints, made by the same reconcile every tap and turn runs.
 router.sync();
@@ -252,13 +252,14 @@ document.body.append(createResetButton({ onReset: repack }).element);
 
 // The elevation line's part: the one being moved (never cranked or pulled, nor a compound,
 // whose range is not one part's), else the selected one — never the box, nor a part
-// sitting in a seat.
+// sitting in a seat unless it is a panel the router carries with all it holds (its
+// assembly, its dowels), standing on nothing else.
 function liftablePart() {
   if (hold.held) return hold.held;
   const dragging = router.dragging;
   const part = dragging ? (dragging.mode === 'move' ? dragging.part : null) : gizmo.selected;
   if (!part || part === flatpack.base) return null;
-  return dragging || assembly.jointsOf(part.id).length === 0 ? part : null;
+  return dragging || assembly.jointsOf(part.id).length === 0 || router.carries(part) ? part : null;
 }
 
 const rangeOf = (part: Part) => liftRangeOf(part, part.mesh.quaternion.toArray(), router.halfHeightOf);
