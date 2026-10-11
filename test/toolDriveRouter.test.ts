@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { connectorInWorld } from '../tools/validate/lib/geometry.js';
-import { TURN_RING } from '../src/constants.js';
+import { FASTENER, GESTURE, TURN_RING } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
+import { STATE } from '../src/game/fasteners.js';
 import { PART_TYPES } from '../src/game/item.js';
 import { createBus, EVENT } from '../src/game/events.js';
 import { createGestureRouter } from '../src/scene/gestureRouter.js';
@@ -70,21 +71,14 @@ const HEAD: Vec3 = [HOLE[0], HOLE[1] + 2 * BOLT_HALF, HOLE[2]];
 const TIP_DOWN: Quat = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
 const TIP = PART_TYPES.allenWrench.connectors[0].position;
 
-// `engaged`: the key is let go onto the seated bolt's head before the test starts.
-function harness({ engaged = true } = {}) {
+// The real router over `parts`, a recording bus and dial overlay, and a fake canvas.
+function mount(parts: Part[]) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   camera.position.set(0, 1.2, 0.8);
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld(true);
-
-  const panel = makePart('sidePanel-1', 'sidePanel', PANEL_POSE.position, PANEL_POSE.rotation);
-  const bolt = makePart('camLockBolt-1', 'camLockBolt', [HOLE[0], HOLE[1] + BOLT_HALF, HOLE[2]]);
-  const tipOffset = new THREE.Vector3(...TIP).applyQuaternion(new THREE.Quaternion(...TIP_DOWN));
-  const key = makePart('allenWrench-1', 'allenWrench', [HEAD[0] - tipOffset.x, HEAD[1] - tipOffset.y + 0.02, HEAD[2] - tipOffset.z], TIP_DOWN);
-  const parts = [panel, bolt, key];
   const typeById = new Map(parts.map(({ id, type }) => [id, type]));
   const assembly = createAssembly((id) => typeById.get(id)!);
-  const boltSeat = assembly.seat({ partA: bolt.id, connectorA: 0, partB: panel.id, connectorB: CAM_BOLT_HOLE, mover: bolt.id });
 
   const physics: GestureRouterOptions['physics'] = {
     grab: () => {},
@@ -125,6 +119,23 @@ function harness({ engaged = true } = {}) {
   const hold = (frames: number) => {
     for (let i = 0; i < frames; i++) router.update(FRAME);
   };
+  const tap = (at: { clientX: number; clientY: number }) => {
+    canvas.fire('pointerdown', at);
+    canvas.fire('pointerup', at);
+  };
+  const fastens = () => log.filter((e) => e.type === EVENT.FASTEN);
+  return { router, canvas, assembly, log, dials, taps, screen, hold, tap, fastens };
+}
+
+// `engaged`: the key is let go onto the seated bolt's head before the test starts.
+function harness({ engaged = true } = {}) {
+  const panel = makePart('sidePanel-1', 'sidePanel', PANEL_POSE.position, PANEL_POSE.rotation);
+  const bolt = makePart('camLockBolt-1', 'camLockBolt', [HOLE[0], HOLE[1] + BOLT_HALF, HOLE[2]]);
+  const tipOffset = new THREE.Vector3(...TIP).applyQuaternion(new THREE.Quaternion(...TIP_DOWN));
+  const key = makePart('allenWrench-1', 'allenWrench', [HEAD[0] - tipOffset.x, HEAD[1] - tipOffset.y + 0.02, HEAD[2] - tipOffset.z], TIP_DOWN);
+  const m = mount([panel, bolt, key]);
+  const { router, canvas, assembly, log, dials, screen, hold } = m;
+  const boltSeat = assembly.seat({ partA: bolt.id, connectorA: 0, partB: panel.id, connectorB: CAM_BOLT_HOLE, mover: bolt.id });
   const toolJoint = () => assembly.all().find((j) => j.kind === KIND.TOOL) ?? null;
   const progress = () => assembly.get(boltSeat.id)!.fastener.progress;
   const centre = () => screen(HEAD);
@@ -158,11 +169,6 @@ function harness({ engaged = true } = {}) {
     return mode;
   }
 
-  const tap = (at: { clientX: number; clientY: number }) => {
-    canvas.fire('pointerdown', at);
-    canvas.fire('pointerup', at);
-  };
-
   if (engaged) {
     // Pressed on the key, nudged off and back past the tap distance, let go on the head.
     const at = screen(key.mesh.position);
@@ -174,7 +180,7 @@ function harness({ engaged = true } = {}) {
     log.length = 0;
     dials.length = 0;
   }
-  return { router, canvas, assembly, key, bolt, boltSeat, log, dials, taps, screen, hold, toolJoint, progress, centre, ringAt, keyBearing, awayFromKey, sweep, tap };
+  return { ...m, key, bolt, boltSeat, toolJoint, progress, centre, ringAt, keyBearing, awayFromKey, sweep };
 }
 
 describe('the turn ring shows on a seated tool (1.8.2.2 step 5)', () => {
@@ -255,5 +261,94 @@ describe('the turn ring takes presses (1.8.2.2 step 5)', () => {
     const h = harness({ engaged: false });
     h.tap(h.ringAt(h.awayFromKey()));
     expect(h.taps.map((part) => part?.id ?? null)).toEqual(['sidePanel-1']);
+  });
+});
+
+// A shelf lying recess-up with a cam lock seated in its recess and the screwdriver standing
+// on its slot — no screwed bolt anywhere, so the cam can turn but never lock.
+function camBench() {
+  const shelf = makePart('topBottomPanel-1', 'topBottomPanel', [0.35, 0.008, 0], [1, 0, 0, 0]);
+  const cam = makePart('camLock-1', 'camLock', [0, 0.022, 0]);
+  const driver = makePart('screwdriver-1', 'screwdriver', [0, 0.128, 0]);
+  const m = mount([shelf, cam, driver]);
+  const camSeat = m.assembly.seat({ partA: cam.id, connectorA: 0, partB: shelf.id, connectorB: 2, mover: cam.id });
+  m.assembly.seat({ partA: driver.id, connectorA: 0, partB: cam.id, connectorB: 1, mover: driver.id });
+  return { ...m, driver, camSeat };
+}
+
+// Frames past a tap, then enough to drive any fastener home, with a few to spare.
+const TAP_FRAMES = Math.ceil(GESTURE.tapMaxMs / 1000 / FRAME);
+const DRIVE_FRAMES = Math.ceil(FASTENER.driveSeconds / FRAME) + 5;
+
+describe('a still hold drives the fastener home (1.8.2.2 step 6)', () => {
+  it('drives a seated bolt to screwed and stops there, and the key stays on after', () => {
+    const h = harness();
+    const at = h.screen(h.key.mesh.position);
+    h.canvas.fire('pointerdown', at);
+    h.hold(TAP_FRAMES + DRIVE_FRAMES);
+    expect(h.assembly.get(h.boltSeat.id)!.fastener).toMatchObject({ state: STATE.SCREWED, progress: 1 });
+    h.hold(30);
+    expect(h.progress()).toBe(1);
+    expect(h.fastens()).toHaveLength(1);
+    h.canvas.fire('pointerup', at);
+    expect(h.toolJoint()).not.toBeNull();
+    expect(h.log.filter((e) => e.type === EVENT.UNSEAT)).toEqual([]);
+  });
+
+  it('drives from a hold on the ring too', () => {
+    const h = harness();
+    const at = h.ringAt(h.awayFromKey());
+    h.canvas.fire('pointerdown', at);
+    h.hold(TAP_FRAMES + DRIVE_FRAMES);
+    expect(h.progress()).toBe(1);
+    h.canvas.fire('pointerup', at);
+    expect(h.toolJoint()).not.toBeNull();
+  });
+
+  it('takes nothing for a press let go before a tap is up: it taps the key off', () => {
+    const h = harness();
+    const at = h.screen(h.key.mesh.position);
+    h.canvas.fire('pointerdown', at);
+    h.hold(TAP_FRAMES - 2);
+    expect(h.progress()).toBe(0);
+    h.canvas.fire('pointerup', at);
+    expect(h.toolJoint()).toBeNull();
+  });
+
+  it('turns a cam with no screwed bolt in reach all the way, but never locks it', () => {
+    const c = camBench();
+    c.canvas.fire('pointerdown', c.screen(c.driver.mesh.position));
+    c.hold(TAP_FRAMES + DRIVE_FRAMES);
+    expect(c.assembly.get(c.camSeat.id)!.fastener).toMatchObject({ state: STATE.SEATED, progress: 1 });
+    expect(c.fastens()).toEqual([]);
+  });
+
+  it('only ever tightens', () => {
+    const h = harness();
+    h.assembly.apply(h.boltSeat.id, { type: 'crank', radians: FASTENER.screwRadians / 2 });
+    h.canvas.fire('pointerdown', h.screen(h.key.mesh.position));
+    let last = h.progress();
+    for (let i = 0; i < TAP_FRAMES + DRIVE_FRAMES; i++) {
+      h.hold(1);
+      expect(h.progress()).toBeGreaterThanOrEqual(last);
+      last = h.progress();
+    }
+    expect(last).toBe(1);
+  });
+
+  it('hands over to the crank once the press moves', () => {
+    const h = harness();
+    const start = h.awayFromKey();
+    h.canvas.fire('pointerdown', h.ringAt(start));
+    h.hold(TAP_FRAMES + 10);
+    const driven = h.progress();
+    expect(driven).toBeGreaterThan(0);
+    // Swept back the loosening way: the crank turns it back, the hold no longer drives.
+    for (let d = 10; d <= 90; d += 10) {
+      h.canvas.fire('pointermove', h.ringAt(start - (d * Math.PI) / 180));
+      h.hold(1);
+    }
+    expect(h.router.dragging?.mode).toBe('crank');
+    expect(h.progress()).toBeLessThan(driven);
   });
 });

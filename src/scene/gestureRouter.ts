@@ -6,6 +6,7 @@ import { capture } from '../game/assembly.js';
 import { PART_TYPES } from '../game/item.js';
 import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
+import { driveRadians } from '../game/driveMath.js';
 import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rebaseDragOffset, rotatedHalfExtents } from '../game/dragMath.js';
 import { isFastened } from '../game/fasteners.js';
 import {
@@ -206,6 +207,10 @@ const PULL_AXIS_PROBE = 0.05;
  *            the fastener as circling does, a tap does nothing; only a tap on the tool
  *            itself takes it off. Which tools get a dial, and where it is grabbed, is
  *            src/game/turnRing.ts's call.
+ * Hold-to-drive: a press on a seated tool or its ring held still past a tap
+ * (GESTURE.tapMaxMs) drives its fastener home in FASTENER.driveSeconds, tightening only,
+ * and stops there; letting go after it is never a tap, so the tool stays on. A press that
+ * moves becomes the crank as before.
  * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
  * turns carried hardware's end toward a seat near it (self-aim), eases a dragged part
  * toward the seat on offer (seat assist) and fades the seat flash.
@@ -249,6 +254,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // Tools whose dial showed last frame, and tool id → ms of home flash left on its dial.
   let dialed = new Set<PartId>();
   const dialFlashes = new Map<PartId, number>();
+  // A press on a seated tool (or its turn ring) not yet a drag: how long it has been held
+  // still (ms), and whether it has been held past a tap and so drives (hold-to-drive).
+  let press: { id: number; tool: Part; ms: number; held: boolean } | null = null;
 
   function aim({ clientX, clientY }: ClientPoint) {
     const rect = domElement.getBoundingClientRect();
@@ -945,12 +953,37 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (!delta) return;
     const into = connectorWorld(target.hardware, target.hardwareConnector).axis;
     const view = scratch.fromArray(head).sub(camera.position).toArray();
-    const radians = tightenSign(into, view) * delta;
+    turnFastener(target, tightenSign(into, view) * delta);
+  }
+
+  // A bolt or cam seat turned by `radians` (positive tightens) — cranked or driven — and
+  // whatever that changed reported and reconciled.
+  function turnFastener(target: AssemblyJoint, radians: number) {
     const was = isFastened(assembly.get(target.id)!.fastener);
-    if (assembly.apply(target.id, { type: 'crank', radians }, crankContext(target))) {
-      reportFastening(target.id, was);
-      reconcile();
+    if (!assembly.apply(target.id, { type: 'crank', radians }, crankContext(target))) return;
+    reportFastening(target.id, was);
+    reconcile();
+  }
+
+  // The turn that takes a bolt or cam seat from out to home.
+  const spanOf = (joint: AssemblyJoint) => (joint.kind === KIND.BOLT ? FASTENER.screwRadians : FASTENER.quarterTurn);
+
+  // --- hold-to-drive: a still press on a seated tool drives its fastener home ---
+
+  // Every frame while the press is still pending: past a tap it drives, until home. A press
+  // that became a drag is the crank's from then on.
+  function driveHeld(delta: number) {
+    if (!press) return;
+    if (state.phase !== 'pending') {
+      press = null;
+      return;
     }
+    press.ms += delta * 1000;
+    if (press.ms <= GESTURE.tapMaxMs) return;
+    press.held = true;
+    const target = assembly.crankTarget(press.tool.id)?.target;
+    if (!target || isFastened(target.fastener)) return;
+    turnFastener(target, driveRadians(spanOf(target), FASTENER.driveSeconds, delta));
   }
 
   // --- turn ring: a dial round each fastener a seated tool can still drive ---
@@ -1055,6 +1088,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   function update(delta = 0) {
     followHold();
+    driveHeld(delta);
     // Swept once, for the aim and the rings.
     const ends = carriedEnds();
     aimHardware(ends, delta);
@@ -1068,7 +1102,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       const { mesh, body } = partById.get(joint.hardware)!;
       const { progress } = joint.fastener;
       const axis = scratch.fromArray(assembly.hardwareConnector(joint).axis);
-      const turns = joint.kind === KIND.BOLT ? FASTENER.screwRadians : FASTENER.quarterTurn;
+      const turns = spanOf(joint);
       // A bolt partway in is still held at the mouth; draw it as far in as it has turned.
       const sink = joint.kind === KIND.BOLT && !isFastened(joint.fastener) ? FASTENER.sinkDepth.bolt! * progress : 0;
       const r = body.rotation();
@@ -1163,20 +1197,35 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     state.down(pointer(event, hit));
     syncCamera();
     if (wasCamera && !state.cameraEnabled) domElement.setPointerCapture(event.pointerId);
+    // A press on a seated tool, or on its ring, may turn out a hold.
+    if (hit?.kind === 'part' && state.owner === OWNER.DRAG_PART && (hit.dial || assembly.crankTarget(hit.part.id)?.target)) {
+      press = { id: event.pointerId, tool: hit.part, ms: 0, held: false };
+    }
   }
 
   function onPointerMove(event: PointerEvent) {
     apply(state.move(pointer(event)), event);
   }
 
+  // The press a pointer ends, if it was a hold: its release ends the drive, never a tap.
+  function endPress(id: number) {
+    if (press?.id !== id) return false;
+    const { held } = press;
+    press = null;
+    return held;
+  }
+
   function onPointerUp(event: PointerEvent) {
-    apply(state.up(pointer(event)), event);
+    const effect = state.up(pointer(event));
+    const held = endPress(event.pointerId);
+    apply(held && effect?.type === 'tap' ? null : effect, event);
     syncCamera();
   }
 
   // pointercancel (OS gesture, notification pull-down) and lost capture end the gesture
   // without a drop target; the state machine ignores ids it has already let go of.
   function onPointerCancel(event: PointerEvent) {
+    endPress(event.pointerId);
     apply(state.cancel(pointer(event)), event);
     syncCamera();
   }
@@ -1193,6 +1242,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   function onInterrupted() {
+    press = null;
     state.modifier(false);
     apply(state.cancelAll());
     syncCamera();
