@@ -57,7 +57,7 @@ function mount() {
   return { ring, svg, shown, dashOf };
 }
 
-const dial = (over: Partial<Dial> = {}): Dial => ({ centre: [100, 200], progress: 0, clockwise: true, flashing: false, ...over });
+const dial = (over: Partial<Dial> = {}): Dial => ({ centre: [100, 200], progress: 0, clockwise: true, flashing: false, stalled: false, ...over });
 const full = 2 * Math.PI * TURN_RING.radius;
 
 describe('the turn-ring overlay', () => {
@@ -112,6 +112,17 @@ describe('the turn-ring overlay', () => {
     ring.show([dial()]);
     expect(shown()).toHaveLength(1);
     expect(svg.all('turn-ring__dial')).toHaveLength(2);
+  });
+
+  it('marks a stalled dial, and draws it muted with a dashed track — a full ring only means home', () => {
+    const { ring, shown } = mount();
+    ring.show([dial({ progress: 1, stalled: true }), dial({ progress: 0.5 })]);
+    const [stalled, turning] = shown();
+    expect(stalled.attributes['data-stalled']).toBe('true');
+    expect(turning.attributes['data-stalled']).toBe('false');
+    const style = head.children[0].textContent;
+    expect(style).toMatch(/\[data-stalled='true'\] \.turn-ring__arc \{[^}]*stroke-opacity/);
+    expect(style).toMatch(/\[data-stalled='true'\] \.turn-ring__track \{[^}]*stroke-dasharray/);
   });
 
   it('follows the radius knob live', () => {

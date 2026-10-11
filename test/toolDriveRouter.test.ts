@@ -218,7 +218,7 @@ describe('the turn ring shows on a seated tool (1.8.2.2 step 5)', () => {
     expect(shown).toHaveLength(1);
     expect(shown[0].centre[0]).toBeCloseTo(h.centre().clientX, 6);
     expect(shown[0].centre[1]).toBeCloseTo(h.centre().clientY, 6);
-    expect(shown[0]).toMatchObject({ progress: 0, flashing: false });
+    expect(shown[0]).toMatchObject({ progress: 0, flashing: false, stalled: false });
   });
 
   it('flashes once the bolt is home, then goes', () => {
@@ -226,7 +226,7 @@ describe('the turn ring shows on a seated tool (1.8.2.2 step 5)', () => {
     h.hold(1);
     h.assembly.drive(h.boltSeat.id);
     h.hold(1);
-    expect(h.dials.at(-1)).toMatchObject([{ progress: 1, flashing: true }]);
+    expect(h.dials.at(-1)).toMatchObject([{ progress: 1, flashing: true, stalled: false }]);
     h.hold(Math.ceil(TURN_RING.flashMs / 1000 / FRAME) + 1);
     expect(h.dials.at(-1)).toBeNull();
   });
@@ -350,6 +350,8 @@ describe('a still hold drives the fastener home (1.8.2.2 step 6)', () => {
     c.hold(TAP_FRAMES + DRIVE_FRAMES);
     expect(c.assembly.get(c.camSeat.id)!.fastener).toMatchObject({ state: STATE.SEATED, progress: 1 });
     expect(c.fastens()).toEqual([]);
+    // Its dial stays, full but stalled — never a home flash.
+    expect(c.dials.at(-1)).toMatchObject([{ progress: 1, flashing: false, stalled: true }]);
   });
 
   it('only ever tightens', () => {

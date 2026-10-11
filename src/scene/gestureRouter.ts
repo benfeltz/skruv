@@ -1005,7 +1005,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const { target } = engagement;
     const into = connectorWorld(target.hardware, target.hardwareConnector).axis;
     const view = scratch.fromArray(head).sub(camera.position).toArray();
-    return { centre: screenPoint(head, rect), progress: assembly.get(target.id)!.fastener.progress, clockwise: tightensClockwise(into, view), flashing };
+    const { progress } = assembly.get(target.id)!.fastener;
+    // Turned all the way but not home (a cam with no bolt to catch): the arc is full, not done.
+    const stalled = !flashing && progress >= 1;
+    return { centre: screenPoint(head, rect), progress, clockwise: tightensClockwise(into, view), flashing, stalled };
   }
 
   // Every frame: a dial on each tool whose fastener isn't home; one that just went home

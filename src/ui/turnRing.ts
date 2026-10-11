@@ -11,12 +11,17 @@ const STYLE_ID = 'skruv-turn-ring';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 
-/** One dial to draw: round `centre` (client px), `progress` 0..1 home, arrows clockwise or not. */
+/**
+ * One dial to draw: round `centre` (client px), `progress` 0..1 home, arrows clockwise or
+ * not. `flashing`: just went home. `stalled`: turned all the way yet not home — a cam with
+ * no screwed bolt to catch — so its full arc must not read as done.
+ */
 export interface Dial {
   centre: ScreenPoint;
   progress: number;
   clockwise: boolean;
   flashing: boolean;
+  stalled: boolean;
 }
 
 function injectStyle() {
@@ -51,6 +56,13 @@ function injectStyle() {
       stroke: ${css(COLORS.uiSurface)};
       stroke-width: 1;
       stroke-linejoin: round;
+    }
+    .turn-ring__dial[data-stalled='true'] .turn-ring__arc {
+      stroke: ${css(COLORS.uiText)};
+      stroke-opacity: 0.45;
+    }
+    .turn-ring__dial[data-stalled='true'] .turn-ring__track {
+      stroke-dasharray: 6 6;
     }
     .turn-ring__dial[data-flashing='true'] .turn-ring__track {
       stroke: ${css(COLORS.uiAccent)};
@@ -134,6 +146,7 @@ export function createTurnRing(container: HTMLElement) {
         group.removeAttribute('hidden');
         group.setAttribute('transform', `translate(${dial.centre[0]} ${dial.centre[1]})`);
         group.setAttribute('data-flashing', String(dial.flashing));
+        group.setAttribute('data-stalled', String(dial.stalled));
         const mirror = dial.clockwise ? '' : 'scale(-1 1) ';
         arc.setAttribute('transform', `${mirror}rotate(-90)`);
         arc.setAttribute('stroke-dasharray', `${arcLength(dial.progress)} ${circumference}`);
