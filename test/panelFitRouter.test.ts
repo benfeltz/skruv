@@ -401,3 +401,50 @@ describe('the dowel ends where a carried panel goes light up (1.8.3.1 Step 5)', 
     expect(lit(h.shown).some(({ position, strength }) => strength > 0 && gap(position, hole.position) < 1e-9)).toBe(true);
   });
 });
+
+// Test plan (1.8.3.1): edges the manual plan would otherwise carry.
+describe('panel fit edges (1.8.3.1 test plan)', () => {
+  it('lifts a flat panel clear of the floor as it turns toward where it goes, never through it, and seats it', () => {
+    // Lying flat a little above the side panel, beside where it goes standing up.
+    const flat: Pose = { position: [SEAT.position[0] - 0.03, 0.1, SEAT.position[2]], rotation: IDENTITY };
+    const h = harness({ panelAt: lowered(flat) });
+    const at = h.drag(h.panel);
+    expect(h.offered()).toBeNull();
+    for (let frame = 0; frame < 180; frame++) {
+      h.router.update(FRAME);
+      expect(new THREE.Box3().setFromObject(h.panel.mesh).min.y, `frame ${frame}`).toBeGreaterThan(-1e-6);
+    }
+    expect(h.offered()).not.toBeNull();
+    h.canvas.fire('pointerup', at);
+    expect(h.jointsMovedBy(h.panel)).toHaveLength(2);
+  });
+
+  it("reports the whole fit's first pair as the offer, once per offer, and its withdrawal", () => {
+    const h = harness({ panelAt: lowered(skewed(SEAT, 20 * DEG, TOPS[0], [0.02, 0.03, 0])) });
+    const at = h.drag(h.panel);
+    const offers = h.offers.filter((e) => e.target !== null);
+    expect(offers).toHaveLength(1);
+    const [offer] = offers;
+    expect(offer.part).toBe('topBottomPanel-1');
+    expect(['dowel-1', 'dowel-2']).toContain(offer.target);
+    expect([3, 4]).toContain(offer.connector);
+    // A dowel's top end: its second connector.
+    expect(offer.targetConnector).toBe(1);
+    const count = h.offers.length;
+    h.hold(30);
+    expect(h.offers.length).toBe(count);
+    // Carried well away: withdrawn (an absent field reports as null).
+    h.canvas.fire('pointermove', { clientX: at.clientX - 400, clientY: at.clientY - 300 });
+    expect(h.offers.at(-1)?.target).toBeNull();
+  });
+
+  it('never seats a panel whose drag is cancelled, and puts its rings away', () => {
+    const h = harness({ panelAt: lowered(skewed(SEAT, 20 * DEG, TOPS[0], [0.02, 0.03, 0])) });
+    const at = h.drag(h.panel);
+    h.router.update(0);
+    expect((h.shown.at(-1) ?? []).length).toBeGreaterThan(0);
+    h.canvas.fire('pointercancel', at);
+    expect(h.jointsMovedBy(h.panel)).toEqual([]);
+    expect(h.shown.at(-1)).toEqual([]);
+  });
+});
