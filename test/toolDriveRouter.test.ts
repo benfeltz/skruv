@@ -237,6 +237,26 @@ describe('the turn ring shows on a seated tool (1.8.2.2 step 5)', () => {
     expect(h.dials.at(-1)).toBeNull();
   });
 
+  // Review round 3: a screwed bolt stays screwed until it is all the way out, but backed off
+  // partway it is no longer home — a hold drives it back, and arriving flashes again.
+  it('drives a bolt backed off with the ring back home on a hold, and flashes as it arrives', () => {
+    const h = harness({ progress: 1 });
+    h.hold(Math.ceil(TURN_RING.flashMs / 1000 / FRAME) + 2);
+    const start = h.awayFromKey();
+    h.sweep(h.ringAt(start), start, -150);
+    const backed = h.progress();
+    expect(backed).toBeLessThan(1);
+    expect(h.assembly.get(h.boltSeat.id)!.fastener.state).toBe(STATE.SCREWED);
+    h.dials.length = 0;
+    const at = h.screen(h.key.mesh.position);
+    h.canvas.fire('pointerdown', at);
+    h.hold(TAP_FRAMES + DRIVE_FRAMES);
+    h.canvas.fire('pointerup', at);
+    expect(h.progress()).toBe(1);
+    expect(h.dials.some((d) => d?.[0]?.flashing)).toBe(true);
+    expect(h.toolJoint()).not.toBeNull();
+  });
+
   // Ben's phone test: a tool put on a fastener already partly or fully in shows where it stands.
   it.each([
     ['fully screwed', 1],

@@ -993,7 +993,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (press.ms <= GESTURE.tapMaxMs) return;
     press.held = true;
     const target = assembly.crankTarget(press.tool.id)?.target;
-    if (!target || isFastened(target.fastener)) return;
+    // Fully turned: home, or a cam turned onto nothing. A screwed bolt backed off partway still drives.
+    if (!target || target.fastener.progress >= 1) return;
     turnFastener(target, driveRadians(spanOf(target), FASTENER.driveSeconds, delta));
   }
 
@@ -1012,15 +1013,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   // Every frame: a dial on each seated tool with a fastener to turn. One whose fastener went
-  // home since last frame flashes for TURN_RING.flashMs; a tool put on a fastener already
-  // home shows it full, without a flash.
+  // home since last frame flashes for TURN_RING.flashMs — again after being backed off and
+  // driven back — while a tool put on a fastener already home shows it full, without a flash.
   function showDials(delta: number) {
     if (!turnRing) return;
     const rect = domElement.getBoundingClientRect();
     const seen = new Map<PartId, boolean>();
     const dials = dialEngagements(assembly.all()).map((engagement) => {
       const id = engagement.tool.hardware;
-      const home = isFastened(engagement.target.fastener);
+      const home = isHome(engagement.target.fastener);
       if (home && dialed.get(id) === false) dialFlashes.set(id, TURN_RING.flashMs);
       else if (!home) dialFlashes.delete(id);
       seen.set(id, home);
