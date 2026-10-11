@@ -100,6 +100,12 @@ const lowered = ({ position, rotation }: Pose): Pose => ({ position: [position[0
 
 const angleBetween = (a: Quat, b: Quat) => 2 * Math.acos(Math.min(1, Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3])));
 const gap = (a: Vec3, b: Vec3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+// A part's lowest point: its own box, not the hit proxy a small part carries.
+function lowest({ mesh }: Part) {
+  mesh.updateMatrixWorld(true);
+  mesh.geometry.computeBoundingBox();
+  return new THREE.Box3().copy(mesh.geometry.boundingBox!).applyMatrix4(mesh.matrixWorld).min.y;
+}
 const poseOf = (part: Part): Pose => ({ position: part.mesh.position.toArray(), rotation: part.mesh.quaternion.toArray() });
 
 interface Options {
@@ -200,6 +206,8 @@ function harness({ panelAt, dowels = [0, 1], home = [], extra = [], carrying, li
   });
   // The joints the setup made, as the game's would be: physics follows the graph.
   router.sync();
+  // As main.ts: the line measures a held part's reach by the router's.
+  line?.measure(router.halfHeightOf);
   const screen = (point: Vec3) => {
     const v = new THREE.Vector3(...point).project(camera);
     return { clientX: ((v.x + 1) / 2) * SIZE, clientY: ((1 - v.y) / 2) * SIZE };
@@ -566,6 +574,25 @@ describe('a panel carrying its own dowels (1.8.3.1, phone round 3)', () => {
       expect(gap(freeEnd(h.parts.find((p) => p.id === joint.hardware)!), sideHole(joint.hostConnector).position)).toBeLessThan(1e-6);
     }
     expect(h.line!.held).toBeNull();
+  });
+
+  // Review round 4: the line is the phone's lift, and its own range knew only the panel.
+  it.each([['seated', 'seated'], ['pushed home', 'home']] as const)('never lowers the dowels it carries, %s, through the floor on the line', (_, carrying) => {
+    // Upright, its dowels pointing down, well clear of the side panel and anything to seat on.
+    const away = lowered({ position: [SEAT.position[0] - 0.7, SEAT.position[1] + 0.3, SEAT.position[2] + 0.5], rotation: SEAT.rotation });
+    const h = harness({ dowels: [], carrying, panelAt: away, lift: true });
+    h.drag(h.panel);
+    h.line!.begin(h.panel, 'line');
+    // The line's knob dragged to the bottom.
+    h.line!.target(0);
+    for (let frame = 0; frame < 240; frame++) {
+      h.line!.update(FRAME);
+      h.router.update(FRAME);
+    }
+    // Standing on its dowels: a dowel sink or two proud, pushed home or only seated.
+    expect(lowest(h.panel)).toBeGreaterThan(0.01);
+    for (const dowel of h.carried) expect(lowest(dowel), dowel.id).toBeGreaterThan(-1e-6);
+    expect(Math.min(...h.carried.map(lowest))).toBeLessThan(0.002);
   });
 
   it('then a tap on the panel pushes them home, and the panels are one', () => {

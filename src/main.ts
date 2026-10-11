@@ -215,6 +215,8 @@ const router = createGestureRouter({
     if (cue) haptics.cue(cue);
   },
 });
+// The line keeps a panel's carried dowels off the floor too: the router knows what it carries.
+hold.measure(router.halfHeightOf);
 // The display shelf's physics joints, made by the same reconcile every tap and turn runs.
 router.sync();
 
@@ -255,7 +257,7 @@ function liftablePart() {
   return dragging || assembly.jointsOf(part.id).length === 0 ? part : null;
 }
 
-const rangeOf = (part: Part) => liftRangeOf(part, part.mesh.quaternion.toArray());
+const rangeOf = (part: Part) => liftRangeOf(part, part.mesh.quaternion.toArray(), router.halfHeightOf);
 const heightOf = (part: Part) => (hold.held === part ? hold.height : part.mesh.position.y);
 
 // A finger on the line holds the part: a press on the line eases it toward the finger, one

@@ -143,6 +143,7 @@ interface Rings {
 /** What `createGestureRouter` returns — see there. */
 export interface GestureRouter {
   readonly dragging: { part: Part; mode: Drag['mode'] } | null;
+  halfHeightOf(part: Part, rotation: Quat): number;
   update(delta?: number): void;
   sync(): void;
   unseatAll(ids: PartId[]): void;
@@ -638,21 +639,35 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     clampCarried(drag!.rotation);
   }
 
-  // The carried panel's reach with it turned to `rotation`, about its centre: its own box
-  // widened to take in the hardware it carries, so no clamp lets a dowel through the floor
-  // or a wall. Kept on the drag, as the lift and the wall clamp read it.
+  // The carried panel's reach with it turned to `rotation`, kept on the drag, as the lift
+  // and the wall clamp read it.
   function clampCarried(rotation: Quat) {
-    const { part, carry } = drag!;
+    const half = reachOf(drag!.part, rotation);
+    drag!.half = [half[0], half[2]];
+    drag!.halfHeight = half[1];
+    return half[1];
+  }
+
+  // How far `part` reaches about its centre with it turned to `rotation`: its own box,
+  // widened to take in the hardware it carries — as the drag carries it, else as it sits in
+  // it now — so no clamp, the elevation line's included, lets a dowel through the floor or
+  // a wall.
+  function reachOf(part: Part, rotation: Quat): Vec3 {
     const half = rotatedHalfExtents(PART_TYPES[part.type].size.map((d) => d / 2), rotation);
+    const carry = drag?.part === part && drag.carry ? drag.carry : carriedNow(part);
     const at: Pose = { position: [0, 0, 0], rotation };
     for (const { part: rider, start } of carry?.riders ?? []) {
       const pose = carryPose(carry!.start, at, start);
       const reach = rotatedHalfExtents(PART_TYPES[rider.type].size.map((d) => d / 2), pose.rotation);
       for (let i = 0; i < 3; i++) half[i] = Math.max(half[i], Math.abs(pose.position[i]) + reach[i]);
     }
-    drag!.half = [half[0], half[2]];
-    drag!.halfHeight = half[1];
-    return half[1];
+    return half;
+  }
+
+  // The hardware `part` would carry, as it sits in it now.
+  function carriedNow(part: Part): Carry | null {
+    const riders = carryOf(part);
+    return riders && { start: poseOf(part.id), riders: riders.map((rider) => ({ part: rider, start: poseOf(rider.id) })) };
   }
 
   function beginMove(part: Part, [px, py, pz]: number[], event: ClientPoint, mode: 'move' | 'compound', carry: Carry | null = null) {
@@ -1568,6 +1583,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     get dragging() {
       return drag && { part: drag.part, mode: drag.mode };
     },
+    // How far a part reaches above and below its centre turned to `rotation`: a panel's
+    // own box, widened by the hardware it carries — the elevation line's floor clearance.
+    halfHeightOf: (part, rotation) => reachOf(part, rotation)[1],
     update,
     // Brings the physics joints in line with the graph after a change made outside a
     // gesture — the display shelf seated pre-fastened — through the same reconcile a tap
