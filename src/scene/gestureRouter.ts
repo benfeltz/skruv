@@ -23,7 +23,7 @@ import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
 import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
-import { dialEngagements, dialHit, isStalled, tightensClockwise } from '../game/turnRing.js';
+import { dialEngagements, isHome, isStalled, pickDial, tightensClockwise } from '../game/turnRing.js';
 import type { Snap } from '../game/snapMath.js';
 import type { Assembly, AssemblyJoint, Head, PartId } from '../game/assembly.js';
 import type { Bus } from '../game/events.js';
@@ -288,15 +288,17 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // A press on a turn ring's band: nearer than anything under it, but never over a seated
   // tool — its own or a neighbour's (JOHNNY's cam ring all but covers the bolt's): a press on
   // a tool is that tool's, so a tap there still takes it off and a hold drives its fastener.
+  // Where bands overlap, the fastener still to go home takes it (pickDial).
   function dialUnder({ clientX, clientY }: ClientPoint, picked: Part | null): PartPress | null {
     if (picked && assembly.crankTarget(picked.id)) return null;
     const rect = domElement.getBoundingClientRect();
-    for (const engagement of dialEngagements(assembly.all())) {
-      const tool = partById.get(engagement.tool.hardware)!;
+    const dials = dialEngagements(assembly.all()).map((engagement) => {
       const head = headOf(engagement);
-      if (dialHit([clientX, clientY], screenPoint(head, rect))) return { kind: 'part', part: tool, point: head, distance: 0, dial: engagement };
-    }
-    return null;
+      return { engagement, head, centre: screenPoint(head, rect), home: isHome(engagement.target.fastener) };
+    });
+    const hit = pickDial([clientX, clientY], dials);
+    if (!hit) return null;
+    return { kind: 'part', part: partById.get(hit.engagement.tool.hardware)!, point: hit.head, distance: 0, dial: hit.engagement };
   }
 
   // The nearest proxy hit per small part, with how far the ray passes from the real part

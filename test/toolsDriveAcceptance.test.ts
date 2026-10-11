@@ -362,3 +362,75 @@ describe('the ring and the hold leave the rest of the gesture alone (1.8.2.2 tes
     expect(b.cues).toEqual([CUE.SEAT]);
   });
 });
+
+// Review round 3: with every seated tool keeping its dial, the key's full ring on the home
+// bolt all but covers the screwdriver's — a press on the screwdriver's ring is the cam's.
+describe("the screwdriver's ring turns the cam with the key still on its home bolt (review round 3)", () => {
+  function bothSeated() {
+    const b = bench();
+    b.carry(b.on(b.key), HEAD);
+    b.assembly.drive(b.boltSeat!.id);
+    b.frames(FLASH_FRAMES);
+    b.carry(b.on(b.driver), SLOT);
+    const slot = b.screen(SLOT);
+    const dial = b.shownNow()!.find((d) => Math.hypot(d.centre[0] - slot.clientX, d.centre[1] - slot.clientY) < 1)!;
+    return { ...b, dial };
+  }
+
+  // Bearings on screen (radians, clockwise from three o'clock) round the slot, a tool's
+  // middle from its dial's centre — presses within 50° of one land on the tool itself.
+  const bearing = (b: ReturnType<typeof bothSeated>, part: Part) => {
+    const at = b.on(part);
+    return Math.atan2(at.clientY - b.dial.centre[1], at.clientX - b.dial.centre[0]);
+  };
+  const apart = (a: number, c: number) => Math.abs(Math.atan2(Math.sin(a - c), Math.cos(a - c)));
+  const ringAt = (b: ReturnType<typeof bothSeated>, angle: number) => ({
+    clientX: b.dial.centre[0] + TURN_RING.radius * Math.cos(angle),
+    clientY: b.dial.centre[1] + TURN_RING.radius * Math.sin(angle),
+  });
+  // Twelve angles round the ring, 30° apart, less those within 50° of either tool's bearing.
+  function clearAngles() {
+    const b = bothSeated();
+    const tools = [bearing(b, b.key), bearing(b, b.driver)];
+    return Array.from({ length: 12 }, (_, i) => (i * Math.PI) / 6).filter((a) => tools.every((t) => apart(a, t) > (50 * Math.PI) / 180));
+  }
+  // The cam and the bolt after `press` on a fresh bench, from each clear angle in turn.
+  function fromEveryAngle(press: (b: ReturnType<typeof bothSeated>, angle: number) => void) {
+    const angles = clearAngles();
+    expect(angles.length).toBeGreaterThanOrEqual(4);
+    return angles.map((angle) => {
+      const b = bothSeated();
+      press(b, angle);
+      return {
+        deg: Math.round((angle * 180) / Math.PI),
+        cam: b.assembly.get(b.camSeat.id)!.fastener.state,
+        bolt: b.assembly.get(b.boltSeat!.id)!.fastener,
+        toolsOn: !!b.toolOn(b.key) && !!b.toolOn(b.driver),
+      };
+    });
+  }
+  const locked = (deg: number) => ({ deg, cam: STATE.LOCKED, bolt: expect.objectContaining({ state: STATE.SCREWED, progress: 1 }), toolsOn: true });
+
+  it('locks the cam from a drag round its ring, pressed anywhere clear of the tools', () => {
+    const results = fromEveryAngle((b, start) => {
+      const sense = b.dial.clockwise ? 1 : -1;
+      const at = (deg: number) => ringAt(b, start + (sense * deg * Math.PI) / 180);
+      b.fire('pointerdown', at(0));
+      for (let deg = 10; deg <= 150; deg += 10) {
+        b.fire('pointermove', at(deg));
+        b.frames(1);
+      }
+      b.fire('pointerup', at(150));
+    });
+    expect(results).toEqual(results.map(({ deg }) => locked(deg)));
+  });
+
+  it('locks the cam from a hold on its ring, anywhere clear of the tools', () => {
+    const results = fromEveryAngle((b, angle) => {
+      b.fire('pointerdown', ringAt(b, angle));
+      b.frames(TAP_FRAMES + DRIVE_FRAMES);
+      b.fire('pointerup', ringAt(b, angle));
+    });
+    expect(results).toEqual(results.map(({ deg }) => locked(deg)));
+  });
+});

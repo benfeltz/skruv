@@ -51,6 +51,21 @@ export function dialEngagements(joints: readonly AssemblyJoint[]): Engagement[] 
   });
 }
 
+/** All the way home: fastened and fully turned — a screwed bolt backed off partway is not. */
+export const isHome = (fastener: Fastener) => isFastened(fastener) && fastener.progress >= 1;
+
+/**
+ * Of the dials whose grab band takes `point`, the one a press there means: one whose
+ * fastener is still to go home before one that is (JOHNNY's cam ring all but covers the bolt
+ * head's), then the one whose ring line is nearest the press. Null if no band takes it.
+ */
+export function pickDial<T extends { centre: ScreenPoint; home: boolean }>(point: ScreenPoint, dials: readonly T[], ring: { radius: number; band: number } = TURN_RING): T | null {
+  const off = (dial: T) => Math.abs(Math.hypot(point[0] - dial.centre[0], point[1] - dial.centre[1]) - ring.radius);
+  const hits = dials.filter((dial) => dialHit(point, dial.centre, ring));
+  hits.sort((a, b) => Number(a.home) - Number(b.home) || off(a) - off(b));
+  return hits[0] ?? null;
+}
+
 /**
  * Turned all the way yet not home — a cam with no screwed bolt to catch: its arc is full,
  * but must not read as done.

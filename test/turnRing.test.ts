@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { TURN_RING } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
-import { arcLength, dialEngagements, dialHit, isStalled, tightensClockwise } from '../src/game/turnRing.js';
+import { arcLength, dialEngagements, dialHit, isHome, isStalled, pickDial, tightensClockwise } from '../src/game/turnRing.js';
 import { createFastener, STATE } from '../src/game/fasteners.js';
 
 // The turn ring's maths (1.8.2.2 step 1): headless, plain points and joints.
@@ -86,6 +86,45 @@ describe('dialEngagements', () => {
     const assembly = createAssembly((id) => types[id]);
     assembly.seat({ partA: 'bolt', connectorA: 0, partB: 'panel', connectorB: 2, mover: 'bolt' });
     expect(dialEngagements(assembly.all())).toEqual([]);
+  });
+});
+
+describe('isHome', () => {
+  const bolt = createFastener(KIND.BOLT);
+
+  it('is fastened and fully turned', () => {
+    expect(isHome({ ...bolt, state: STATE.SCREWED, progress: 1 })).toBe(true);
+  });
+
+  it('is not a screwed bolt backed off partway, nor a full turn that never fastened', () => {
+    expect(isHome({ ...bolt, state: STATE.SCREWED, progress: 0.8 })).toBe(false);
+    expect(isHome({ ...bolt, progress: 1 })).toBe(false);
+  });
+});
+
+describe('pickDial', () => {
+  // Two dials 14 px apart, as JOHNNY's bolt head and cam recess sit on screen.
+  const bolt = { name: 'bolt', centre: [500, 500] as [number, number], home: true };
+  const cam = { name: 'cam', centre: [514, 500] as [number, number], home: false };
+  const onCamRing = (angle: number): [number, number] => [cam.centre[0] + TURN_RING.radius * Math.cos(angle), cam.centre[1] + TURN_RING.radius * Math.sin(angle)];
+
+  it('gives an overlapping press to the fastener still to go home, from any angle', () => {
+    for (let a = 0; a < 2 * Math.PI; a += Math.PI / 6) expect(pickDial(onCamRing(a), [bolt, cam])?.name).toBe('cam');
+  });
+
+  it('gives it to the nearer ring line when both are still to go, or both home', () => {
+    const live = { ...bolt, home: false };
+    expect(pickDial(onCamRing(0), [live, cam])?.name).toBe('cam');
+    expect(pickDial([bolt.centre[0] - TURN_RING.radius, 500], [live, cam])?.name).toBe('bolt');
+    expect(pickDial(onCamRing(0), [bolt, { ...cam, home: true }])?.name).toBe('cam');
+  });
+
+  it('takes a home dial when it is the only band under the press', () => {
+    expect(pickDial([bolt.centre[0] - TURN_RING.radius - TURN_RING.band + 2, 500], [bolt, cam])?.name).toBe('bolt');
+  });
+
+  it('is null off every band', () => {
+    expect(pickDial([500, 500], [bolt, cam])).toBeNull();
   });
 });
 
