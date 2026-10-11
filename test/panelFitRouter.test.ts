@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CONTRACT, isFastenerEnd, KIND } from '../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, multiplyQuaternions, rotateVector } from '../tools/validate/lib/geometry.js';
 import { COLORS, GESTURE, PANEL } from '../src/constants.js';
-import { carryPose, createAssembly } from '../src/game/assembly.js';
+import { carryPose, createAssembly, relativePose } from '../src/game/assembly.js';
 import { isFastened } from '../src/game/fasteners.js';
 import { ASSEMBLED, PART_TYPES } from '../src/game/item.js';
 import { preferredRelatives } from '../src/game/panelFit.js';
@@ -679,5 +679,111 @@ describe('a green ghost where it goes (1.8.3.1, phone round 3)', () => {
     expect((ghost.object.material as THREE.MeshBasicMaterial).color.getHex()).toBe(COLORS.whereItGoes);
     ghost.show(mesh, SEAT);
     expect((ghost.object.material as THREE.MeshBasicMaterial).color.getHex()).toBe(COLORS.ghost);
+  });
+});
+
+// 1.8.3.4: once two panels are joined, grabbing either carries the whole assembly as one
+// panel is carried — the one carry, its single-panel case the assembly of one.
+// A joined pair: the bottom panel pushed home on two dowels pushed home in the side panel
+// (one assembly), and a dowel seated only in the side panel's hole 3, standing at its mouth.
+const SINK = CONTRACT.sinkDepth.dowel!;
+const HOME_SEAT: Pose = { ...SEAT, position: [SEAT.position[0], SEAT.position[1] - 2 * SINK, SEAT.position[2]] };
+// A point on the side panel's top face, clear of everything standing on it.
+const ON_SIDE: Vec3 = [0.4, 0.016, 0.05];
+// A cam bolt standing in the side panel's middle cam-bolt hole, in view, and its head.
+const BOLT_HALF = PART_TYPES.camLockBolt.size[1] / 2;
+const BOLT_IN_SIDE = { id: 'camLockBolt-1', type: 'camLockBolt', pose: { position: sideHole(6).position.map((v, i) => v + (i === 1 ? BOLT_HALF : 0)) as Vec3, rotation: IDENTITY } };
+const BOLT_HEAD = sideHole(6).position.map((v, i) => v + (i === 1 ? 2 * BOLT_HALF : 0)) as Vec3;
+const TIP_DOWN: Quat = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+
+function pair({ extra = [], lift = false }: Pick<Options, 'extra' | 'lift'> = {}) {
+  const h = harness({ home: [0, 1], panelAt: HOME_SEAT, lift, extra: [{ id: 'dowel-3', type: 'dowel', pose: dowelIn(3) }, ...extra] });
+  [3, 4].forEach((hole, n) => {
+    const joint = h.assembly.seat({ partA: h.panel.id, connectorA: hole, partB: `dowel-${n + 1}`, connectorB: 1, mover: h.panel.id });
+    h.assembly.drive(joint.id);
+  });
+  h.assembly.seat({ partA: 'dowel-3', connectorA: 0, partB: h.side.id, connectorB: 3, mover: 'dowel-3' });
+  h.router.sync();
+  const loose = h.parts.find((p) => p.id === 'dowel-3')!;
+  // Pressed on the side panel and nudged past the tap distance, still held.
+  function grabSide(dx = 0, dy = 12) {
+    const at = h.screen(ON_SIDE);
+    h.canvas.fire('pointerdown', at);
+    h.canvas.fire('pointermove', { clientX: at.clientX + dx / 2, clientY: at.clientY + dy / 2 });
+    const to = { clientX: at.clientX + dx, clientY: at.clientY + dy };
+    h.canvas.fire('pointermove', to);
+    return to;
+  }
+  return { ...h, loose, grabSide, members: [h.panel, ...h.dowels, loose] };
+}
+
+describe('a panel carries its whole assembly (1.8.3.4 Step 1)', () => {
+  const inSide = (h: ReturnType<typeof pair>, part: Part) => relativePose(poseOf(h.side), poseOf(part));
+
+  it('grabbing the side panel of a joined pair is a carry, not a compound drag', () => {
+    const h = pair();
+    expect(h.assembly.compoundOf(h.side.id).has(h.panel.id)).toBe(true);
+    h.grabSide();
+    expect(h.router.dragging).toEqual({ part: h.side, mode: 'move' });
+  });
+
+  it('moves every member rigidly with the grabbed panel, the dowel seated only in it too', () => {
+    const h = pair();
+    const before = h.members.map((part) => inSide(h, part));
+    const at = h.grabSide();
+    h.canvas.fire('pointermove', { clientX: at.clientX - 80, clientY: at.clientY + 40 });
+    h.router.update(0);
+    expect(gap(poseOf(h.side).position, ON_SIDE)).toBeGreaterThan(0.01);
+    h.members.forEach((part, n) => {
+      const now = inSide(h, part);
+      expect(gap(now.anchor, before[n].anchor), part.id).toBeLessThan(1e-6);
+      expect(angleBetween(now.rotation, before[n].rotation), part.id).toBeLessThan(1e-6);
+    });
+    // Nothing inside it is unseated: the pair's four seats and the loose dowel's.
+    expect(h.assembly.all()).toHaveLength(5);
+    // The seated-only dowel is held where it sits, not left to the simulation.
+    expect(h.held(h.loose)).toBe(true);
+  });
+
+  it('keeps the lowest member above the floor on the line, however low the line is taken', () => {
+    const h = pair({ lift: true });
+    h.grabSide();
+    h.line!.begin(h.side, 'line');
+    h.line!.target(0);
+    for (let frame = 0; frame < 240; frame++) {
+      h.line!.update(FRAME);
+      h.router.update(FRAME);
+    }
+    for (const part of [h.side, ...h.members]) expect(lowest(part), part.id).toBeGreaterThan(-1e-6);
+    // The line's range is the whole assembly's: the standing bottom panel holds the side up.
+    expect(lowest(h.side)).toBeGreaterThan(PART_TYPES.topBottomPanel.size[0] / 2);
+  });
+
+  it('grabbing a piece of hardware of the assembly is never a carry: it drags the compound, as before', () => {
+    const h = pair({ extra: [BOLT_IN_SIDE] });
+    h.assembly.drive(h.assembly.seat({ partA: 'camLockBolt-1', connectorA: 0, partB: h.side.id, connectorB: 6, mover: 'camLockBolt-1' }).id);
+    h.router.sync();
+    const bolt = h.parts.find((p) => p.id === 'camLockBolt-1')!;
+    const at = h.drag(bolt);
+    expect(h.router.dragging).toEqual({ part: bolt, mode: 'compound' });
+    // Let go by the side panel's free dowel holes: a compound never seats.
+    h.canvas.fire('pointerup', at);
+    expect(h.seats).toEqual([]);
+  });
+
+  it('a panel pushed home onto another still pulls back off it, as before', () => {
+    const h = pair();
+    h.drag(h.panel);
+    expect(h.router.dragging).toEqual({ part: h.panel, mode: 'pull' });
+  });
+
+  it('a tool on any member refuses the carry: the assembly drags as a compound, as before', () => {
+    const tip = rotateVector(TIP_DOWN, PART_TYPES.allenWrench.connectors[0].position);
+    const h = pair({ extra: [BOLT_IN_SIDE, { id: 'allenWrench-1', type: 'allenWrench', pose: { position: BOLT_HEAD.map((v, i) => v - tip[i]) as Vec3, rotation: TIP_DOWN } }] });
+    h.assembly.drive(h.assembly.seat({ partA: 'camLockBolt-1', connectorA: 0, partB: h.side.id, connectorB: 6, mover: 'camLockBolt-1' }).id);
+    h.assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'camLockBolt-1', connectorB: 1, mover: 'allenWrench-1' });
+    h.router.sync();
+    h.grabSide();
+    expect(h.router.dragging).toEqual({ part: h.side, mode: 'compound' });
   });
 });
