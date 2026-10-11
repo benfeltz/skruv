@@ -171,3 +171,117 @@ export function findFits<H extends WorldConnector, E extends WorldConnector>(
   });
   return [...fits.values()];
 }
+
+// --- where it goes: the panel's place in the finished item ---
+
+/** What "where it goes" is read from: the assembled item's parts and joints (src/game/item.ts's ASSEMBLED), passed in. */
+export interface AssembledItem {
+  parts: readonly ({ id: string; type: string } & Pose)[];
+  joints: readonly { hardware: string; host: string }[];
+}
+
+/** host type → panel type → each pose the panel sits at in the host's frame, in the finished item. */
+export type Relatives = ReadonlyMap<string, ReadonlyMap<string, readonly Pose[]>>;
+
+/** Where it goes, and how near a fit must come to it (see PANEL). */
+export interface PreferWindow {
+  matchTolerance: number;
+  matchAngle: number;
+  preferSlide: number;
+}
+
+const conjugate = ([x, y, z, w]: Quat): Quat => [-x, -y, -z, w];
+
+/** Angle (radians) of the rotation between two orientations. */
+const turnBetween = (a: Quat, b: Quat) => 2 * Math.acos(Math.min(1, Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3])));
+
+// The same pose to within rounding.
+const SAME = 1e-6;
+
+/**
+ * Each panel's pose relative to every panel it shares a piece of hardware with (a dowel) in
+ * `assembled`, keyed by part type, both ways round — every instance pairing kept, so either
+ * of two identical side panels counts. Computed once.
+ */
+export function preferredRelatives(assembled: AssembledItem, partTypes: Readonly<Record<string, { connectors: readonly { type: ConnectorType }[] }>>): Relatives {
+  const byId = new Map(assembled.parts.map((part) => [part.id, part]));
+  const hostsOf = new Map<string, Set<string>>();
+  for (const { hardware, host } of assembled.joints) {
+    if (!hostsOf.has(hardware)) hostsOf.set(hardware, new Set());
+    hostsOf.get(hardware)!.add(host);
+  }
+  const relatives = new Map<string, Map<string, Pose[]>>();
+  for (const hosts of hostsOf.values()) {
+    const panels = [...hosts].map((id) => byId.get(id)!).filter((part) => isPanelType(partTypes[part.type]));
+    for (const host of panels) {
+      for (const panel of panels) {
+        if (panel === host) continue;
+        const inverse = conjugate(host.rotation);
+        const relative: Pose = {
+          position: rotateVector(inverse, sub(panel.position, host.position)),
+          rotation: normalizeQuaternion(multiplyQuaternions(inverse, panel.rotation)),
+        };
+        if (!relatives.has(host.type)) relatives.set(host.type, new Map());
+        const byPanel = relatives.get(host.type)!;
+        const poses = byPanel.get(panel.type) ?? [];
+        const known = poses.some((p) => length(sub(p.position, relative.position)) < SAME && turnBetween(p.rotation, relative.rotation) < SAME);
+        if (!known) byPanel.set(panel.type, [...poses, relative]);
+      }
+    }
+  }
+  return relatives;
+}
+
+/** Where a `panelType` goes on a `hostType` posed at `hostPose`: each of its relatives placed there. */
+export function preferredPoses(relatives: Relatives, hostType: string, hostPose: Pose, panelType: string): Pose[] {
+  return (relatives.get(hostType)?.get(panelType) ?? []).map((relative) => ({
+    position: add(hostPose.position, rotateVector(hostPose.rotation, relative.position)),
+    rotation: normalizeQuaternion(multiplyQuaternions(hostPose.rotation, relative.rotation)),
+  }));
+}
+
+// `offset` within matchTolerance across unit `axis` and preferSlide along it.
+function alongAxis(offset: Vec3, axis: Vec3, { matchTolerance, preferSlide }: PreferWindow) {
+  const along = dot(offset, axis);
+  return Math.abs(along) <= preferSlide && length(sub(offset, scale(axis, along))) <= matchTolerance;
+}
+
+/**
+ * True when `fit` puts the panel where one of `preferred` has it: turned within matchAngle,
+ * and off it within matchTolerance across its seed end's axis and preferSlide along it (the
+ * dowels may not yet be pushed home).
+ */
+export function isPreferred(fit: Fit, preferred: readonly Pose[], window: PreferWindow) {
+  const axis = fit.pairs[0].end.axis;
+  return preferred.some(
+    (pose) => turnBetween(fit.pose.rotation, pose.rotation) <= window.matchAngle && alongAxis(sub(fit.pose.position, pose.position), axis, window),
+  );
+}
+
+/** `fits` best first, each marked: where it goes first, then the most pairs, then the nearest. Every fit stays on offer. */
+export function rankFits<H extends WorldConnector, E extends WorldConnector>(fits: readonly Fit<H, E>[], preferred: readonly Pose[], window: PreferWindow) {
+  return fits
+    .map((fit) => ({ ...fit, preferred: isPreferred(fit, preferred, window) }))
+    .sort((a, b) => Number(b.preferred) - Number(a.preferred) || b.pairs.length - a.pairs.length || a.distance - b.distance);
+}
+
+/**
+ * The ends a panel where it goes would sit on: of `ends`, each the nearest compatible one to
+ * a hole of `holes` (the panel's, world space at that pose), axis against axis within
+ * matchAngle, within matchTolerance across it and preferSlide along it. One end per hole.
+ */
+export function preferredTargets<E extends WorldConnector>(holes: readonly WorldConnector[], ends: readonly E[], window: PreferWindow): E[] {
+  const out: E[] = [];
+  for (const hole of holes) {
+    let best: { end: E; distance: number } | null = null;
+    for (const end of ends) {
+      if (out.includes(end) || !areCompatible(hole.type, end.type) || misalignment(hole.axis, end.axis) > window.matchAngle) continue;
+      const offset = sub(end.position, hole.position);
+      if (!alongAxis(offset, end.axis, window)) continue;
+      const distance = length(offset);
+      if (!best || distance < best.distance) best = { end, distance };
+    }
+    if (best) out.push(best.end);
+  }
+  return out;
+}

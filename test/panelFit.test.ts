@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { CONNECTOR } from '../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, multiplyQuaternions, rotateVector } from '../tools/validate/lib/geometry.js';
 import { PANEL } from '../src/constants.js';
-import { PART_TYPES } from '../src/game/item.js';
-import { findFits, isPanelType } from '../src/game/panelFit.js';
+import { ASSEMBLED, PART_TYPES } from '../src/game/item.js';
+import { findFits, isPanelType, preferredPoses, preferredRelatives, preferredTargets, rankFits } from '../src/game/panelFit.js';
 import type { WorldConnector } from '../src/game/snapMath.js';
 import type { Pose, Quat, Vec3 } from '../tools/validate/lib/geometry.js';
 
@@ -97,5 +97,61 @@ describe('isPanelType (1.8.3.1 Step 1)', () => {
     for (const type of ['dowel', 'camLockBolt', 'camLock', 'shelfPin', 'backFitting', 'allenWrench', 'screwdriver', 'boxLid', 'boxBase', 'adjustableShelf']) {
       expect(isPanelType(PART_TYPES[type]), type).toBe(false);
     }
+  });
+});
+
+describe('where it goes, and ranking (1.8.3.1 Step 2)', () => {
+  const relatives = preferredRelatives(ASSEMBLED, PART_TYPES);
+  const assembled = (id: string) => ASSEMBLED.parts.find((part) => part.id === id)!;
+  // Where the bottom panel goes on the flat side panel.
+  const preferred = preferredPoses(relatives, 'sidePanel', SIDE, 'topBottomPanel');
+
+  it("places the bottom panel on a side panel as the finished JOHNNY has it", () => {
+    const side = assembled('sidePanel-1');
+    const bottom = assembled('topBottomPanel-1');
+    const poses = preferredPoses(relatives, 'sidePanel', side, 'topBottomPanel');
+    expect(poses.some((pose) => gap(pose.position, bottom.position) < 1e-9 && angleBetween(pose.rotation, bottom.rotation) < 1e-6)).toBe(true);
+    // Either side panel counts: the other one's pairing is kept too.
+    const other = preferredPoses(relatives, 'sidePanel', assembled('sidePanel-2'), 'topBottomPanel');
+    expect(other.some((pose) => gap(pose.position, bottom.position) < 1e-9 && angleBetween(pose.rotation, bottom.rotation) < 1e-6)).toBe(true);
+    // Hardware is never a host or a panel.
+    expect(relatives.has('dowel')).toBe(false);
+    for (const byPanel of relatives.values()) expect(byPanel.has('dowel')).toBe(false);
+  });
+
+  it('ranks where it goes first, and still offers a fit one hole off after it', () => {
+    // Halfway between the right seat and one hole along: both in the window.
+    const from = { ...SEAT, position: [SEAT.position[0], SEAT.position[1] + 0.03, SEAT.position[2] + 0.09] as Vec3 };
+    const ranked = rankFits(findFits(world('topBottomPanel', from), from, ENDS, PANEL), preferred, PANEL);
+    expect(ranked[0].preferred).toBe(true);
+    expect(ranked[0].pairs).toHaveLength(2);
+    expect(gap(ranked[0].pose.position, SEAT.position)).toBeLessThan(1e-6);
+    // Its hole 3 on the dowel where hole 4 belongs: one pair, not where it goes.
+    const hole3 = world('topBottomPanel', from)[3];
+    const off = ranked.findIndex(({ pairs: [first, ...rest] }) => rest.length === 0 && first.end === ENDS[1] && gap(first.hole.position, hole3.position) < 1e-9);
+    expect(off).toBeGreaterThan(0);
+    expect(ranked[off].preferred).toBe(false);
+  });
+
+  it('with nothing where it goes, ranks the fit with the most pairs first, then the nearest', () => {
+    const from = { ...SEAT, position: [SEAT.position[0], SEAT.position[1] + 0.03, SEAT.position[2] + 0.09] as Vec3 };
+    const ranked = rankFits(findFits(world('topBottomPanel', from), from, ENDS, PANEL), [], PANEL);
+    expect(ranked.every((fit) => !fit.preferred)).toBe(true);
+    expect(ranked[0].pairs).toHaveLength(2);
+    for (let i = 1; i < ranked.length; i++) {
+      const [a, b] = [ranked[i - 1], ranked[i]];
+      expect(a.pairs.length > b.pairs.length || (a.pairs.length === b.pairs.length && a.distance <= b.distance)).toBe(true);
+    }
+  });
+
+  it('finds the dowel ends where it goes, standing proud or not', () => {
+    const at = preferred.find((pose) => angleBetween(pose.rotation, SEAT.rotation) < 1e-6)!;
+    expect(preferredTargets(world('topBottomPanel', at), ENDS, PANEL)).toEqual(ENDS);
+    // Pushed home: each end a dowel sink lower.
+    const home = ENDS.map((end) => ({ ...end, position: [end.position[0], end.position[1] - 0.015, end.position[2]] as Vec3 }));
+    expect(preferredTargets(world('topBottomPanel', at), home, PANEL)).toEqual(home);
+    // Nowhere near: nothing.
+    const away = { ...at, position: [at.position[0] + 0.5, at.position[1], at.position[2]] as Vec3 };
+    expect(preferredTargets(world('topBottomPanel', away), ENDS, PANEL)).toEqual([]);
   });
 });

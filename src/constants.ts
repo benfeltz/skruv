@@ -344,6 +344,10 @@ export const PANEL = {
   // axis within matchAngle (radians), seats on it too.
   matchTolerance: 0.01,
   matchAngle: (5 * Math.PI) / 180,
+  // Where it goes: a fit is the panel's place in the finished item when it sits there within
+  // matchTolerance across the dowels and matchAngle, and up to this far (metres) along them —
+  // a dowel not yet pushed home in either panel stands that much proud (two dowel sinks).
+  preferSlide: 0.035,
   // Magnetism: within `zone` metres (panel centre to where it goes), a carried panel with no
   // fit on offer turns toward where it goes, at `rate` (1/s) at full strength.
   zone: 0.4,
