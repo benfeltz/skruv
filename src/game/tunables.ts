@@ -177,6 +177,10 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
     object: CAMERA, prop: 'mobileStartScale', min: 1, max: 1.75, step: 0.05, unit: 'x', group: 'camera',
     desc: 'How much further out a phone starts than the desktop view (re-frames on change)',
   },
+  'camera.pivotOnParts': {
+    object: CAMERA, prop: 'pivotOnParts', min: 0, max: 1, step: 1, unit: '', group: 'camera',
+    desc: 'Orbit about the first part in the middle of the screen (1) or the floor behind it, as before (0)',
+  },
 });
 
 /**

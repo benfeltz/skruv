@@ -129,6 +129,11 @@ export const CAMERA = {
   // same view, so a cold load frames the room without pinching out first. Dialed on
   // device through ?tune (camera.mobileStartScale) before freezing.
   mobileStartScale: 1.4,
+  // Where a camera gesture pivots (src/scene/cameraControls.ts): 1, the first part (or the
+  // box) along the line through the middle of the screen, else the floor, held for the
+  // whole gesture; 0, today's floor pivot, re-seated every update. A 0/1 switch because
+  // ?tune knobs hold numbers. Temporary: the losing mode goes once Ben picks on the phone.
+  pivotOnParts: 1,
 };
 
 // Orbit limits (src/scene/cameraLimits.ts, applied by src/scene/cameraControls.ts). The
