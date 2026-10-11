@@ -477,3 +477,67 @@ describe('a bolt backed off and driven home again buzzes home again (review roun
     expect(runs(b.cues)).toEqual([CUE.ENGAGE, CUE.TICK, CUE.HOME, CUE.TICK, CUE.HOME]);
   });
 });
+
+// Test plan (1.8.2.2, after review rounds 3–5): the cam's side of re-homing, and a home dial
+// still taking a press where no other ring lies under it.
+describe('re-homing and home dials, end to end (1.8.2.2 test plan, round 5)', () => {
+  // The bolt home under the key, the key off, the screwdriver on the cam and the cam locked by a hold.
+  function camLocked() {
+    const b = bench();
+    b.assembly.drive(b.boltSeat!.id);
+    b.carry(b.on(b.driver), SLOT);
+    const press = b.on(b.driver, [0, 0.05, 0]);
+    b.fire('pointerdown', press);
+    b.frames(TAP_FRAMES + DRIVE_FRAMES);
+    b.fire('pointerup', press);
+    b.frames(FLASH_FRAMES);
+    expect(b.assembly.get(b.camSeat.id)!.fastener.state).toBe(STATE.LOCKED);
+    const [dial] = b.shownNow()!;
+    return { ...b, dial, press };
+  }
+
+  // Swept `degrees` round `dial` from `from` (radians), the loosening way when `loosen`.
+  function sweep(b: ReturnType<typeof camLocked>, from: number, degrees: number, loosen: boolean) {
+    const sense = (b.dial.clockwise ? 1 : -1) * (loosen ? -1 : 1);
+    const at = (deg: number) => {
+      const a = from + (sense * deg * Math.PI) / 180;
+      return { clientX: b.dial.centre[0] + TURN_RING.radius * Math.cos(a), clientY: b.dial.centre[1] + TURN_RING.radius * Math.sin(a) };
+    };
+    b.fire('pointerdown', at(0));
+    for (let deg = 10; deg <= degrees; deg += 10) {
+      b.fire('pointermove', at(deg));
+      b.frames(1);
+    }
+    b.fire('pointerup', at(degrees));
+  }
+
+  it('buzzes lock again for a cam backed off partway on its ring and locked again', () => {
+    const b = camLocked();
+    // Below the slot on screen, clear of the screwdriver standing up from it.
+    sweep(b, Math.PI / 2, 40, true);
+    const cam = b.assembly.get(b.camSeat.id)!.fastener;
+    expect(cam.state).toBe(STATE.LOCKED);
+    expect(cam.progress).toBeLessThan(1);
+    expect(cam.progress).toBeGreaterThan(0);
+    b.fire('pointerdown', b.press);
+    b.frames(TAP_FRAMES + DRIVE_FRAMES);
+    b.fire('pointerup', b.press);
+    expect(b.assembly.get(b.camSeat.id)!.fastener.progress).toBe(1);
+    expect(runs(b.cues)).toEqual([CUE.ENGAGE, CUE.TICK, CUE.LOCK, CUE.TICK, CUE.LOCK]);
+  });
+
+  it("turns a home bolt back from its full ring where no other ring lies, with only the key on", () => {
+    const b = bench();
+    b.carry(b.on(b.key), HEAD);
+    b.assembly.drive(b.boltSeat!.id);
+    b.frames(FLASH_FRAMES);
+    const shown = b.shownNow()!;
+    expect(shown).toMatchObject([{ progress: 1, flashing: false, stalled: false }]);
+    const [dial] = shown;
+    const k = b.on(b.key);
+    const away = Math.atan2(k.clientY - dial.centre[1], k.clientX - dial.centre[0]) + Math.PI;
+    sweep({ ...b, dial, press: k }, away, 90, true);
+    expect(b.assembly.get(b.boltSeat!.id)!.fastener.progress).toBeLessThan(1);
+    expect(b.toolOn(b.key)).not.toBeNull();
+  });
+});
