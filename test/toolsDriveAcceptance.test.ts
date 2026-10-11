@@ -195,14 +195,16 @@ describe("JOHNNY's tool steps by ring and hold (1.8.2.2 acceptance)", () => {
     b.fire('pointerup', press);
     expect(b.toolOn(b.key)).not.toBeNull();
 
-    // Home: the dial flashes, then goes.
+    // Home: the dial flashes, then stays full while the key is on.
     expect(b.shownNow()).toMatchObject([{ progress: 1, flashing: true }]);
     b.frames(FLASH_FRAMES);
-    expect(b.shownNow()).toBeNull();
+    expect(b.shownNow()).toMatchObject([{ progress: 1, flashing: false, stalled: false }]);
 
-    // A tap on the key takes it off.
+    // A tap on the key takes it off, and its dial with it.
     b.tap(b.on(b.key, keyEnd));
     expect(b.toolOn(b.key)).toBeNull();
+    b.frames(1);
+    expect(b.shownNow()).toBeNull();
 
     // The screwdriver onto the cam lock's slot: it engages, and its dial shows.
     b.carry(b.on(b.driver), SLOT);
@@ -226,7 +228,7 @@ describe("JOHNNY's tool steps by ring and hold (1.8.2.2 acceptance)", () => {
     expect(b.assembly.get(b.camSeat.id)).toMatchObject({ captured: 'camLockBolt-1', fastener: { state: STATE.LOCKED } });
     expect(b.toolOn(b.driver)).not.toBeNull();
     b.frames(FLASH_FRAMES);
-    expect(b.shownNow()).toBeNull();
+    expect(b.shownNow()).toMatchObject([{ progress: 1, flashing: false, stalled: false }]);
 
     // engage, ticks, home; engage, ticks, lock — the last tick before each home.
     expect(runs(b.cues)).toEqual([CUE.ENGAGE, CUE.TICK, CUE.HOME, CUE.ENGAGE, CUE.TICK, CUE.LOCK]);

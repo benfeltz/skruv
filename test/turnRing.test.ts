@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { TURN_RING } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
-import { arcLength, dialEngagements, dialHit, tightensClockwise } from '../src/game/turnRing.js';
+import { arcLength, dialEngagements, dialHit, isStalled, tightensClockwise } from '../src/game/turnRing.js';
+import { createFastener, STATE } from '../src/game/fasteners.js';
 
 // The turn ring's maths (1.8.2.2 step 1): headless, plain points and joints.
 
@@ -72,9 +73,11 @@ describe('dialEngagements', () => {
     expect(dialEngagements(assembly.all())).toEqual([{ tool: key, target: bolt }]);
   });
 
-  it('gives a tool on a fastener that is home none', () => {
-    const { assembly, bolt } = bench();
+  it('keeps the dial of a tool on a fastener that is home, for as long as the tool is on', () => {
+    const { assembly, bolt, key } = bench();
     assembly.drive(bolt.id);
+    expect(dialEngagements(assembly.all())).toEqual([{ tool: key, target: assembly.get(bolt.id) }]);
+    assembly.unseat(key.id);
     expect(dialEngagements(assembly.all())).toEqual([]);
   });
 
@@ -83,6 +86,19 @@ describe('dialEngagements', () => {
     const assembly = createAssembly((id) => types[id]);
     assembly.seat({ partA: 'bolt', connectorA: 0, partB: 'panel', connectorB: 2, mover: 'bolt' });
     expect(dialEngagements(assembly.all())).toEqual([]);
+  });
+});
+
+describe('isStalled', () => {
+  const cam = createFastener(KIND.CAM);
+
+  it('marks a full turn that is not home', () => {
+    expect(isStalled({ ...cam, progress: 1 })).toBe(true);
+  });
+
+  it('never marks a fastener that is home, or one partway', () => {
+    expect(isStalled({ ...cam, progress: 1, state: STATE.LOCKED })).toBe(false);
+    expect(isStalled({ ...cam, progress: 0.5 })).toBe(false);
   });
 });
 

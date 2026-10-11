@@ -371,14 +371,15 @@ export const RING = {
 };
 
 // Turn ring (src/game/turnRing.ts decides, src/ui/turnRing.ts draws): a flat dial facing
-// the screen round the head of each fastener a seated tool can still drive, with arrows the
-// tightening way and an arc filling as it goes home. CSS px; it flashes this long at home.
+// the screen round the head of each fastener a seated tool is on, with arrows the
+// tightening way and an arc filled to how far home it is. CSS px; it flashes this long as
+// the fastener goes home.
 export const TURN_RING = {
   // Radius of the drawn ring — a comfortable finger's reach from the head.
   radius: 64,
   // Half-width of the grab band either side of the ring: a fingertip.
   band: 24,
-  // How long the ring flashes once its fastener is home, then goes.
+  // How long the ring flashes as its fastener goes home.
   flashMs: 400,
   // Drawn ring and arc widths, and the arrowheads' size.
   width: 4,

@@ -8,6 +8,7 @@ import { isCrankKind, isFastened } from './fasteners.js';
 import { tightenSign } from './crankMath.js';
 import { KIND } from '../../tools/validate/lib/vocabulary.js';
 import type { AssemblyJoint } from './assembly.js';
+import type { Fastener } from './fasteners.js';
 import type { ScreenPoint } from './dragMath.js';
 
 /** A seated tool and the bolt or cam seat it drives. */
@@ -38,13 +39,20 @@ export function arcLength(progress: number, radius: number = TURN_RING.radius) {
 export const tightensClockwise = (intoHole: number[], viewDirection: number[]) => tightenSign(intoHole, viewDirection) > 0;
 
 /**
- * The seated tools that get a dial: each tool joint whose host has a bolt or cam seat, that
- * fastener not yet home — as `crankTarget` pairs them.
+ * The seated tools that get a dial: each tool joint whose host has a bolt or cam seat, as
+ * `crankTarget` pairs them — for as long as the tool is seated, home or not, so a tool put
+ * on a fastener already partly or fully in shows where it stands.
  */
 export function dialEngagements(joints: readonly AssemblyJoint[]): Engagement[] {
   return joints.flatMap((tool) => {
     if (tool.kind !== KIND.TOOL) return [];
     const target = joints.find((j) => j.hardware === tool.host && isCrankKind(j.kind));
-    return target && !isFastened(target.fastener) ? [{ tool, target }] : [];
+    return target ? [{ tool, target }] : [];
   });
 }
+
+/**
+ * Turned all the way yet not home — a cam with no screwed bolt to catch: its arc is full,
+ * but must not read as done.
+ */
+export const isStalled = (fastener: Fastener) => fastener.progress >= 1 && !isFastened(fastener);

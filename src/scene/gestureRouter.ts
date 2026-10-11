@@ -23,7 +23,7 @@ import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
 import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
-import { dialEngagements, dialHit, tightensClockwise } from '../game/turnRing.js';
+import { dialEngagements, dialHit, isStalled, tightensClockwise } from '../game/turnRing.js';
 import type { Snap } from '../game/snapMath.js';
 import type { Assembly, AssemblyJoint, Head, PartId } from '../game/assembly.js';
 import type { Bus } from '../game/events.js';
@@ -203,8 +203,8 @@ const PULL_AXIS_PROBE = 0.05;
  *            gone; a lift (second finger, Shift, wheel) moves the line with it. A part the
  *            line holds is never a seat for another: it drops when the line lets go.
  *   turnRing — `{ show(dials), hide() }` (src/ui/turnRing.ts): a dial round the head of
- *            each fastener a seated tool can still drive, its arc filling as it goes and
- *            flashing at home. A press on its band is the tool's crank — a drag there turns
+ *            each fastener a seated tool is on, for as long as it is on, its arc at the
+ *            fastener's progress (full at home) and flashing as it goes home. A press on its band is the tool's crank — a drag there turns
  *            the fastener as circling does, a tap does nothing; only a tap on the tool
  *            itself takes it off. Which tools get a dial, and where it is grabbed, is
  *            src/game/turnRing.ts's call.
@@ -255,8 +255,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const down = new THREE.Vector3(0, -1, 0);
   // A carried part's end in the world, rewritten every frame (endAt).
   const endPoint: Vec3 = [0, 0, 0];
-  // Tools whose dial showed last frame, and tool id → ms of home flash left on its dial.
-  let dialed = new Set<PartId>();
+  // Tool id → whether its fastener was home last frame, and → ms of home flash left on its dial.
+  let dialed = new Map<PartId, boolean>();
   const dialFlashes = new Map<PartId, number>();
   // A press on a seated tool (or its turn ring) not yet a drag: how long it has been held
   // still (ms), and whether it has been held past a tap and so drives (hold-to-drive).
@@ -995,7 +995,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     turnFastener(target, driveRadians(spanOf(target), FASTENER.driveSeconds, delta));
   }
 
-  // --- turn ring: a dial round each fastener a seated tool can still drive ---
+  // --- turn ring: a dial round each fastener a seated tool is on ---
 
   // The head a tool sits on, where the crank measures its sweep about.
   const headOf = ({ tool }: Engagement) => connectorWorld(tool.host, tool.hostConnector).position;
@@ -1005,39 +1005,33 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const { target } = engagement;
     const into = connectorWorld(target.hardware, target.hardwareConnector).axis;
     const view = scratch.fromArray(head).sub(camera.position).toArray();
-    const { progress } = assembly.get(target.id)!.fastener;
-    // Turned all the way but not home (a cam with no bolt to catch): the arc is full, not done.
-    const stalled = !flashing && progress >= 1;
-    return { centre: screenPoint(head, rect), progress, clockwise: tightensClockwise(into, view), flashing, stalled };
+    const { fastener } = target;
+    return { centre: screenPoint(head, rect), progress: fastener.progress, clockwise: tightensClockwise(into, view), flashing, stalled: isStalled(fastener) };
   }
 
-  // Every frame: a dial on each tool whose fastener isn't home; one that just went home
-  // flashes for TURN_RING.flashMs, then goes.
+  // Every frame: a dial on each seated tool with a fastener to turn. One whose fastener went
+  // home since last frame flashes for TURN_RING.flashMs; a tool put on a fastener already
+  // home shows it full, without a flash.
   function showDials(delta: number) {
     if (!turnRing) return;
-    const live = dialEngagements(assembly.all());
-    const tools = new Set(live.map(({ tool }) => tool.hardware));
-    for (const id of dialed) if (!tools.has(id) && homeOf(id)) dialFlashes.set(id, TURN_RING.flashMs);
-    dialed = tools;
     const rect = domElement.getBoundingClientRect();
-    const dials = live.map((engagement) => dialOf(engagement, false, rect));
+    const seen = new Map<PartId, boolean>();
+    const dials = dialEngagements(assembly.all()).map((engagement) => {
+      const id = engagement.tool.hardware;
+      const home = isFastened(engagement.target.fastener);
+      if (home && dialed.get(id) === false) dialFlashes.set(id, TURN_RING.flashMs);
+      else if (!home) dialFlashes.delete(id);
+      seen.set(id, home);
+      return dialOf(engagement, dialFlashes.has(id), rect);
+    });
     for (const [id, left] of dialFlashes) {
-      const home = homeOf(id);
       const remaining = left - delta * 1000;
-      if (!home || remaining <= 0) dialFlashes.delete(id);
-      else {
-        dialFlashes.set(id, remaining);
-        dials.push(dialOf(home, true, rect));
-      }
+      if (!seen.has(id) || remaining <= 0) dialFlashes.delete(id);
+      else dialFlashes.set(id, remaining);
     }
+    dialed = seen;
     if (dials.length > 0) turnRing.show(dials);
     else turnRing.hide();
-  }
-
-  // A seated tool's engagement while its fastener is home, else null.
-  function homeOf(tool: PartId): Engagement | null {
-    const engagement = assembly.crankTarget(tool);
-    return engagement?.target && isFastened(engagement.target.fastener) ? (engagement as Engagement) : null;
   }
 
   // A cam catches the nearest screwed bolt head within reach of its recess, any bolt.

@@ -2,7 +2,7 @@ import { COLORS, TURN_RING } from '../constants.js';
 import { arcLength } from '../game/turnRing.js';
 import type { ScreenPoint } from '../game/dragMath.js';
 
-// The turn ring: a flat dial over the head of each fastener a seated tool can still drive —
+// The turn ring: a flat dial over the head of each fastener a seated tool is on —
 // a ring, two arrowheads the tightening way, and an arc filling as it goes home. It only
 // draws, in client px over the canvas; where the dials are and what a press on one does are
 // the router's (src/scene/gestureRouter.ts), so it never takes a pointer itself.
