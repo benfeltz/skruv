@@ -71,9 +71,11 @@ export function createCameraControls(camera: Camera, domElement: HTMLElement, { 
 
   // A gesture's pivot, picked once as it starts — from the unclamped eye, down the line
   // OrbitControls orbits along. Every press handler has only recorded screen positions by
-  // then (and the wheel fires it before zooming), so moving the target here is safe.
+  // then (and the wheel fires it before zooming), so moving the target here is safe. While
+  // the wall clamp has pushed the camera, that line is not the one on screen — moving the
+  // target along it would turn the view — so the target stays.
   function pickPivot() {
-    if (!CAMERA.pivotOnParts) return;
+    if (!CAMERA.pivotOnParts || camera.position.distanceTo(free) > 1e-6) return;
     const eye = free.toArray();
     const target = controls.target.toArray();
     const direction = controls.target.clone().sub(free).normalize().toArray();

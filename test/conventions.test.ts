@@ -216,7 +216,7 @@ describe('the wall clamp never shrinks the orbit (1.4.1 review)', () => {
     // pivot is picked once, on OrbitControls' `start`, and holds through the gesture.
     expect(controls).toMatch(/const orbitUpdate = controls\.update\.bind\(controls\);\s*controls\.update = \(deltaSeconds\) => \{\s*unconfine\(\);[\s\S]*?if \(!CAMERA\.pivotOnParts\) controls\.target\.set\(\.\.\.seatOnFloor\(free\.toArray\(\)[^\n]*\n\s*const changed = orbitUpdate\(deltaSeconds\);\s*confine\(\);/);
     expect(controls).toMatch(/controls\.addEventListener\('start', pickPivot\);/);
-    expect(controls).toMatch(/function pickPivot\(\) \{\s*if \(!CAMERA\.pivotOnParts\) return;\s*const eye = free\.toArray\(\);[\s\S]*?pivotAlongView\(eye,/);
+    expect(controls).toMatch(/function pickPivot\(\) \{\s*if \(!CAMERA\.pivotOnParts \|\| camera\.position\.distanceTo\(free\) > 1e-6\) return;\s*const eye = free\.toArray\(\);[\s\S]*?pivotAlongView\(eye,/);
     expect(controls).toMatch(/function unconfine\(\) \{\s*camera\.position\.copy\(free\);/);
     expect(controls).toMatch(/free\.copy\(camera\.position\);[\s\S]*clampCamera\(free\.toArray\(\)/);
     expect(update).not.toMatch(/unconfine\(\)/);

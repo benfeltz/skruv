@@ -113,6 +113,17 @@ describe('the camera pivots about what is in the middle of the screen (1.8.3.2)'
     expect(facing).toBeCloseTo(1, 9);
   });
 
+  it('leaves the target be while the wall clamp has pushed the camera — no view jump (round 1 review)', () => {
+    const { camera, canvas, controls } = setUp(2.305);
+    // Out past the front wall: the free eye is at z = 5.5, the drawn camera clamped to 4.6,
+    // so the free line (the 2.305 m stub lands at y ≈ 1.5) is not the line on screen.
+    controls.frame({ position: [0, 3, 5.5], target: [0, 0, 2] });
+    const before = camera.getWorldDirection(new THREE.Vector3());
+    canvas.dispatch('pointerdown', { ...pointer, clientX: 400, clientY: 400 });
+    controls.update(1 / 60);
+    expect(camera.getWorldDirection(new THREE.Vector3()).angleTo(before)).toBeLessThan(1e-9);
+  });
+
   it('re-picks on a wheel too, before it zooms', () => {
     const { canvas, picks } = setUp(1.5);
     canvas.dispatch('wheel', { ...pointer, clientX: 400, clientY: 400, deltaY: -100, deltaMode: 0 });
