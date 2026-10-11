@@ -53,6 +53,9 @@ const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const length = (a: Vec3) => Math.sqrt(dot(a, a));
 
+// The same pose to within rounding.
+const SAME = 1e-6;
+
 /** A part type a fit seats: it has connectors, every one a hole — no fastener end, so not hardware or a tool. */
 export const isPanelType = ({ connectors }: { connectors: readonly { type: ConnectorType }[] }) =>
   connectors.length > 0 && !connectors.some((c) => isFastenerEnd(c.type));
@@ -147,6 +150,9 @@ export function findFits<H extends WorldConnector, E extends WorldConnector>(
   window: FitWindow,
 ): Fit<H, E>[] {
   const fits = new Map<string, Fit<H, E>>();
+  // How far each kept fit's seed pair was apart: of fits seating the same pairs from the same
+  // pose, the one seeded by the nearest pair is kept, so the pair reported first is stable.
+  const reach = new Map<string, number>();
   holes.forEach((hole, h) => {
     ends.forEach((end, e) => {
       const seed = findSnap([hole], [end], window);
@@ -159,7 +165,9 @@ export function findFits<H extends WorldConnector, E extends WorldConnector>(
         const distance = length(sub(moved.position, pose.position));
         const key = pairs.map((p) => `${p.hole}:${p.end}`).sort().join(',');
         const known = fits.get(key);
-        if (known && known.distance <= distance) continue;
+        const same = known && Math.abs(known.distance - distance) < SAME;
+        if (known && (same ? reach.get(key)! <= seed.distance : known.distance < distance)) continue;
+        reach.set(key, seed.distance);
         // The seed pair first: it is the one reported.
         const ordered = [pairs.find((p) => p.hole === h)!, ...pairs.filter((p) => p.hole !== h)];
         fits.set(key, {
@@ -197,9 +205,6 @@ const conjugate = ([x, y, z, w]: Quat): Quat => [-x, -y, -z, w];
 
 /** Angle (radians) of the rotation between two orientations. */
 const turnBetween = (a: Quat, b: Quat) => 2 * Math.acos(Math.min(1, Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3])));
-
-// The same pose to within rounding.
-const SAME = 1e-6;
 
 /**
  * Each panel's pose relative to every panel it shares a piece of hardware with (a dowel) in
