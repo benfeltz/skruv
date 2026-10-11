@@ -463,13 +463,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const connectorsAt = (part: Part, pose: Pose): WorldConnector[] =>
     PART_TYPES[part.type].connectors.map((c, index) => ({ type: c.type, ...connectorInWorld(c, pose), part, index }));
 
-  // What the carried panel seats by with it at `pose`: its free holes, and the free fastener
-  // ends of the hardware it carries (a dowel's other end), riding along rigidly.
+  // What the carried panel seats by with it at `pose`: its free holes and those of every
+  // other panel it carries, and the free fastener ends of the hardware it carries (a dowel's
+  // other end) — all riding along rigidly.
   function carriedConnectors(pose: Pose, isTaken = occupied()) {
     const { part, carry } = drag!;
     const own = connectorsAt(part, pose).filter((c) => !isTaken(c));
     const riding = (carry?.riders ?? []).flatMap(({ part: rider, start }) =>
-      connectorsAt(rider, carryPose(carry!.start, pose, start)).filter((c) => isFastenerEnd(c.type) && !isTaken(c)),
+      connectorsAt(rider, carryPose(carry!.start, pose, start)).filter((c) => (isPanel(rider.type) || isFastenerEnd(c.type)) && !isTaken(c)),
     );
     return [...own, ...riding];
   }
@@ -494,8 +495,16 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   const isBonded = (part: Part) => [...bonds.values()].some(({ a, b }) => a === part.id || b === part.id);
 
-  // A panel carried into seats by its hardware, not one of them yet pushed home.
-  const awaitsSeat = (part: Part) => assembly.all().some((j) => j.mover === part.id && j.hardware !== part.id && j.host !== part.id && !isFastened(j.fastener));
+  // A panel carried into seats by its hardware, not one of them yet pushed home — or by any
+  // panel of a joined assembly, which is bonded inside itself from the start, so its bonds say
+  // nothing about the seats. Seats inside the assembly are its own, never awaited.
+  function awaitsSeat(part: Part) {
+    const members = assembly.compoundOf(part.id);
+    const joined = members.size > 1;
+    return assembly
+      .all()
+      .some((j) => members.has(j.mover) && !isFastened(j.fastener) && !(members.has(j.hardware) && members.has(j.host)) && (joined || (j.hardware !== j.mover && j.host !== j.mover)));
+  }
 
   function reconcile() {
     const wanted = new Map(assembly.bonds(poseOf).map((bond) => [bond.key, bond]));
@@ -1090,22 +1099,35 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return !!snapped;
   }
 
-  // A panel let go on a whole fit seats every pair of it at once — its holes, and the ends of
-  // the hardware it carries — the panel the mover of each, and is held there as any seated
-  // part is until a fastener engages.
+  // A panel let go on a whole fit seats every pair of it at once — the holes of every panel it
+  // carries, and the ends of the hardware it carries — and is held there as any seated part
+  // is until a fastener engages; its assembly and hardware go there with it. Each pair's mover
+  // is the carried panel its connector is on, or that its hardware sits in: the grabbed one's
+  // own, or another of the assembly's.
   function seatFit(part: Part, snapped: Pose, pairs: FitPair<WorldConnector, WorldConnector>[]) {
     // The seats first, as the single-pair path has it: their SEAT events end the elevation
     // line's hold, so the move below lands at the seat, never at the line's height.
     for (const { hole, end } of pairs) {
-      const joint = assembly.seat({ partA: hole.part.id, connectorA: hole.index, partB: end.part.id, connectorB: end.index, mover: part.id });
+      const joint = assembly.seat({ partA: hole.part.id, connectorA: hole.index, partB: end.part.id, connectorB: end.index, mover: moverOf(hole) });
       events?.emit(seatEvent(joint));
       flash(hole, end);
     }
+    // One move: the physics seam takes the assembly with it.
     physics.move(part.body, snapped.position, snapped.rotation);
     placed.add(part);
     // Held where it seats: its hardware goes there with it.
     drag!.held = { position: snapped.position, rotation: snapped.rotation };
     followRiders();
+    // Physics follows the graph once, for every pair at once.
+    reconcile();
+  }
+
+  // The carried panel `connector` is on — or, for a piece of hardware's end, the carried panel
+  // that hardware sits in.
+  function moverOf({ part }: WorldConnector): PartId {
+    if (isPanel(part.type)) return part.id;
+    const carried = new Set([drag!.part, ...drag!.carry!.riders.map((rider) => rider.part)].map((p) => p.id));
+    return assembly.jointsOf(part.id).find((j) => j.hardware === part.id && carried.has(j.host))!.host;
   }
 
   function cancelDrag() {
@@ -1385,14 +1407,18 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (!placed.has(part)) onTap?.(part);
   }
 
-  // A panel carried in on its hardware sits in seats it touches only through that hardware
-  // (a shelf's dowels in a side panel): a tap on it pushes those home too.
-  const pressCarried = (part: Part) =>
-    assembly
+  // A panel carried in on its hardware, or with its assembly, sits in seats it touches only
+  // through them (a shelf's dowels in a side panel; a carcass's in the second side panel): a
+  // tap on it pushes those home too. Seats inside the assembly are its own.
+  function pressCarried(part: Part) {
+    if (!isPanel(part.type)) return [];
+    const members = assembly.compoundOf(part.id);
+    return assembly
       .all()
-      .filter((j) => j.mover === part.id && j.hardware !== part.id && j.host !== part.id && isTapKind(j.kind))
+      .filter((j) => members.has(j.mover) && j.hardware !== part.id && j.host !== part.id && isTapKind(j.kind) && !(members.has(j.hardware) && members.has(j.host)))
       .filter((j) => assembly.apply(j.id, { type: 'tap' }, behindFitting(j)))
       .map((j) => j.id);
+  }
 
   // A back fitting pressed home lands in whichever panel lies behind its hole.
   function behindFitting(joint: AssemblyJoint): ApplyContext {

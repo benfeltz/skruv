@@ -320,9 +320,11 @@ function dropHold() {
 events.on(EVENT.SEAT, ({ hardware, host }) => {
   if (hold.held && (hardware === hold.held.id || host === hold.held.id)) hold.end();
 });
-// A panel carried in on its dowels seats through them: it is neither side of the joint, but its mover.
+// A panel carried in on its dowels seats through them: it is neither side of the joint, but its
+// mover — or another panel of the assembly it carries is.
 events.on(EVENT.SEAT, ({ joint }) => {
-  if (hold.held && typeof joint === 'number' && assembly.get(joint)?.mover === hold.held.id) hold.end();
+  const mover = typeof joint === 'number' ? assembly.get(joint)?.mover : undefined;
+  if (hold.held && mover && assembly.compoundOf(hold.held.id).has(mover)) hold.end();
 });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') dropHold();
