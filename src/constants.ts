@@ -464,11 +464,15 @@ export const TUNE = {
 };
 
 // Android haptics (navigator.vibrate; iOS Safari has none), in ms: a tick when a part
-// seats, a double tick when a cam lock locks. 0 turns one off.
+// seats (a tool engaging too), a double tick when a cam lock locks, a buzz when a bolt goes
+// home, and a ratchet tick every FASTENER.ratchetRadians a fastener turns. 0 turns one off.
+// The cues they back are src/game/haptics.ts's; a native shell maps those its own way.
 export const HAPTICS = {
   seatMs: 10,
   lockMs: 18,
   lockGapMs: 60,
+  tickMs: 4,
+  homeMs: 24,
 };
 
 // Dev stream (dev server only — never in a build): the socket a dev session streams its
