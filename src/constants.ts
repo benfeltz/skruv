@@ -39,6 +39,9 @@ export const COLORS = {
   uiAccent: 0xe0a64a,
   // Snap preview (src/scene/ghost.ts).
   ghost: 0xe0a64a,
+  // The ghost, and the glow on the hole it seats in, when a panel's fit on offer is where it
+  // goes in the finished item (src/game/panelFit.ts); any other fit keeps `ghost`'s amber.
+  whereItGoes: 0x6cc46a,
   // Hole markings (src/game/decals.ts) and the flash when a fastener seats in one.
   decal: 0x3a3029,
   decalFlash: 0xe0a64a,
@@ -330,6 +333,31 @@ export const SNAP = {
   assistStrength: 9,
   // How long the hole's decal glows after a fastener seats in it.
   flashMs: 450,
+};
+
+// Panel fit (src/game/panelFit.ts, driven by src/scene/gestureRouter.ts): a carried panel
+// seats by all its holes at once onto free fastener ends — a dowel standing in another
+// panel. Its own window, wider than SNAP's: a small finger move swings a panel's holes a
+// long way. SNAP stays hardware's.
+export const PANEL = {
+  // A hole this near a free end (metres), and its axis this far off (radians), seeds a fit.
+  maxDistance: 0.15,
+  maxAngle: (60 * Math.PI) / 180,
+  // With the fit seated, any other hole this near a compatible end across its axis (metres),
+  // up to seatSlack along it, axis against axis within matchAngle (radians), seats on it too.
+  // The slack is a dowel sink and a little: one dowel tapped home stands a sink lower than
+  // one only seated at its hole's mouth, and a panel over both still seats on both.
+  matchTolerance: 0.01,
+  seatSlack: 0.02,
+  matchAngle: (5 * Math.PI) / 180,
+  // Where it goes: a fit is the panel's place in the finished item when it sits there within
+  // matchTolerance across the dowels and matchAngle, and up to this far (metres) along them —
+  // a dowel not yet pushed home in either panel stands that much proud (two dowel sinks).
+  preferSlide: 0.035,
+  // Magnetism: within `zone` metres (panel centre to where it goes), a carried panel with no
+  // fit on offer turns toward where it goes, at `rate` (1/s) at full strength.
+  zone: 0.4,
+  rate: 6,
 };
 
 // Self-aim (src/game/toolAim.ts, driven by src/scene/gestureRouter.ts): dragged hardware —

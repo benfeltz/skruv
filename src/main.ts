@@ -4,7 +4,8 @@ import { ANY, createBus, EVENT, fpsEvent, recoveryEvent, resetEvent, sessionEven
 import { createHaptics, CUE, cueFor, homeCue, patternFor } from './game/haptics.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
 import { createTunables, LIVE_KNOBS } from './game/tunables.js';
-import { PART_TYPES } from './game/item.js';
+import { ASSEMBLED, PART_TYPES } from './game/item.js';
+import { preferredRelatives } from './game/panelFit.js';
 import { createPartMesh } from './game/partMesh.js';
 import { hasEscaped } from './game/dragMath.js';
 import { fractionOf, heightAt, selectsDuringHold } from './game/liftLine.js';
@@ -204,6 +205,8 @@ const router = createGestureRouter({
   events,
   hold,
   turnRing,
+  // Where each panel goes in the finished JOHNNY: offered first, never a gate.
+  relatives: preferredRelatives(ASSEMBLED, PART_TYPES),
   // One tick a frame, however many eighths the turn crossed: a buzz can't land faster.
   onRatchet: () => haptics.cue(CUE.TICK),
   // A fastener backed off partway and turned home again buzzes as its first arrival did.
@@ -212,6 +215,8 @@ const router = createGestureRouter({
     if (cue) haptics.cue(cue);
   },
 });
+// The line keeps a panel's carried dowels off the floor too: the router knows what it carries.
+hold.measure(router.halfHeightOf);
 // The display shelf's physics joints, made by the same reconcile every tap and turn runs.
 router.sync();
 
@@ -252,7 +257,7 @@ function liftablePart() {
   return dragging || assembly.jointsOf(part.id).length === 0 ? part : null;
 }
 
-const rangeOf = (part: Part) => liftRangeOf(part, part.mesh.quaternion.toArray());
+const rangeOf = (part: Part) => liftRangeOf(part, part.mesh.quaternion.toArray(), router.halfHeightOf);
 const heightOf = (part: Part) => (hold.held === part ? hold.height : part.mesh.position.y);
 
 // A finger on the line holds the part: a press on the line eases it toward the finger, one
@@ -310,6 +315,10 @@ function dropHold() {
 }
 events.on(EVENT.SEAT, ({ hardware, host }) => {
   if (hold.held && (hardware === hold.held.id || host === hold.held.id)) hold.end();
+});
+// A panel carried in on its dowels seats through them: it is neither side of the joint, but its mover.
+events.on(EVENT.SEAT, ({ joint }) => {
+  if (hold.held && typeof joint === 'number' && assembly.get(joint)?.mover === hold.held.id) hold.end();
 });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') dropHold();

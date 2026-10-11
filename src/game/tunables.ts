@@ -11,7 +11,7 @@
 // never a JS object path — and units are the schema's, in the engine's own units; a key
 // once published is renamed only with a profile format bump.
 
-import { AIM, CAMERA, FASTENER, GESTURE, HAPTICS, LIFT_LINE, PHYSICS, RENDER, RING, SNAP, TUNE, TURN_RING } from '../constants.js';
+import { AIM, CAMERA, FASTENER, GESTURE, HAPTICS, LIFT_LINE, PANEL, PHYSICS, RENDER, RING, SNAP, TUNE, TURN_RING } from '../constants.js';
 
 /** Bumped whenever a key is renamed or its unit changes, so old profiles stay readable. */
 export const PROFILE_FORMAT = 1;
@@ -72,6 +72,22 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
   'aim.toolRate': {
     object: AIM, prop: 'toolRate', min: 0, max: 30, step: 0.5, unit: '1/s', group: 'aim',
     desc: 'How fast a carried tool turns toward a bolt head or cam slot at full strength (0: no aim)',
+  },
+  'panel.maxDistance': {
+    object: PANEL, prop: 'maxDistance', min: 0.02, max: 0.4, step: 0.005, unit: 'm', group: 'panel',
+    desc: "How near one of a carried panel's holes must come to a free dowel end before a fit is offered",
+  },
+  'panel.maxAngle': {
+    object: PANEL, prop: 'maxAngle', min: 5 * DEGREE, max: 90 * DEGREE, step: DEGREE, unit: 'rad', group: 'panel',
+    desc: "How far off a dowel's axis a carried panel's hole may be and still be offered a fit",
+  },
+  'panel.zone': {
+    object: PANEL, prop: 'zone', min: 0.05, max: 1, step: 0.01, unit: 'm', group: 'panel',
+    desc: 'How near where it goes a carried panel must come before it turns toward it and its dowel ends light',
+  },
+  'panel.rate': {
+    object: PANEL, prop: 'rate', min: 0, max: 30, step: 0.5, unit: '1/s', group: 'panel',
+    desc: 'How fast a carried panel turns toward where it goes at full strength (0: no magnetism)',
   },
   'rings.screenRadius': {
     object: RING, prop: 'screenRadius', min: 30, max: 300, step: 5, unit: 'px', group: 'rings',
