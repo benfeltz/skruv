@@ -380,6 +380,10 @@ export const TURN_RING = {
   band: 24,
   // How long the ring flashes once its fastener is home, then goes.
   flashMs: 400,
+  // Drawn ring and arc widths, and the arrowheads' size.
+  width: 4,
+  arcWidth: 6,
+  arrowSize: 14,
 };
 
 // Hole markings (src/game/decals.ts, drawn by src/game/partMesh.ts). Radii are keyed by
