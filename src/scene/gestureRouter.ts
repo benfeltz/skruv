@@ -285,13 +285,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return resolveHit(ring, picked);
   }
 
-  // A press on a turn ring's band: nearer than anything under it, but never over its own tool
-  // — a press on the tool is the tool's, so a tap there still takes it off.
+  // A press on a turn ring's band: nearer than anything under it, but never over a seated
+  // tool — its own or a neighbour's (JOHNNY's cam ring all but covers the bolt's): a press on
+  // a tool is that tool's, so a tap there still takes it off and a hold drives its fastener.
   function dialUnder({ clientX, clientY }: ClientPoint, picked: Part | null): PartPress | null {
+    if (picked && assembly.crankTarget(picked.id)) return null;
     const rect = domElement.getBoundingClientRect();
     for (const engagement of dialEngagements(assembly.all())) {
       const tool = partById.get(engagement.tool.hardware)!;
-      if (tool === picked) continue;
       const head = headOf(engagement);
       if (dialHit([clientX, clientY], screenPoint(head, rect))) return { kind: 'part', part: tool, point: head, distance: 0, dial: engagement };
     }

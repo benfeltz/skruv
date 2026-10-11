@@ -227,3 +227,41 @@ describe("JOHNNY's tool steps by ring and hold (1.8.2.2 acceptance)", () => {
     expect(b.cues.filter((cue) => cue === CUE.TICK)).toHaveLength(16 + 2);
   });
 });
+
+// Review round 1: JOHNNY's cam recess sits a centimetre from the bolt head, so the
+// screwdriver's ring lies across most of the Allen key. A press on the key is the key's.
+describe("a neighbouring tool's ring never takes a press on a seated tool (review round 1)", () => {
+  // The bolt driven home under the key, then the screwdriver seated on the unlocked cam: the
+  // key has no ring now, the screwdriver's is live.
+  function bothSeated() {
+    const b = bench();
+    b.carry(b.on(b.key), HEAD);
+    b.assembly.drive(b.boltSeat.id);
+    b.frames(FLASH_FRAMES);
+    b.carry(b.on(b.driver), SLOT);
+    expect(b.toolOn(b.key)).not.toBeNull();
+    expect(b.toolOn(b.driver)).toMatchObject({ host: 'camLock-1' });
+    const [dial] = b.shownNow()!;
+    const press = b.on(b.key, [-0.025, 0, 0]);
+    // The press on the key lies in the screwdriver's ring band.
+    const reach = Math.hypot(press.clientX - dial.centre[0], press.clientY - dial.centre[1]);
+    expect(Math.abs(reach - TURN_RING.radius)).toBeLessThanOrEqual(TURN_RING.band);
+    return { ...b, press };
+  }
+
+  it('takes the key off on a tap on it', () => {
+    const b = bothSeated();
+    b.tap(b.press);
+    expect(b.toolOn(b.key)).toBeNull();
+    expect(b.toolOn(b.driver)).not.toBeNull();
+  });
+
+  it('never turns the cam from a hold on the key', () => {
+    const b = bothSeated();
+    b.fire('pointerdown', b.press);
+    b.frames(TAP_FRAMES + DRIVE_FRAMES);
+    b.fire('pointerup', b.press);
+    expect(b.assembly.get(b.camSeat.id)!.fastener).toMatchObject({ state: STATE.SEATED, progress: 0 });
+    expect(b.toolOn(b.key)).not.toBeNull();
+  });
+});
