@@ -61,6 +61,7 @@ describe('LIVE_KNOBS', () => {
       'haptics.tickMs',
       'haptics.homeMs',
       'camera.mobileStartScale',
+      'camera.pivotOnParts',
     ]);
   });
 });

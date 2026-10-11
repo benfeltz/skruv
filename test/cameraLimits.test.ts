@@ -4,7 +4,7 @@ import { CAMERA, CAMERA_LIMITS, ROOM } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/item.js';
 import { createPackedWorldLayout } from '../src/game/boxLayout.js';
 import { LIVE_KNOBS } from '../src/game/tunables.js';
-import { clampCamera, clampTarget, clampTargetAlongView, panSpeedAt, seatOnFloor, startPosition } from '../src/scene/cameraLimits.js';
+import { clampCamera, clampTarget, clampTargetAlongView, panSpeedAt, pivotAlongView, seatOnFloor, startPosition } from '../src/scene/cameraLimits.js';
 import type { Vec3 } from '../tools/validate/lib/geometry.js';
 
 const room = { width: 10, depth: 8, height: 3 };
@@ -188,5 +188,77 @@ describe('seatOnFloor (zoom reaches the parts on the floor — Ben, 1.4.1)', () 
 
   it('is a no-op for a target already on the floor', () => {
     seatOnFloor([1, 2, 1], [0.3, 0, -0.2], seat).forEach((v, i) => expect(v).toBeCloseTo([0.3, 0, -0.2][i], 12));
+  });
+});
+
+describe('pivotAlongView (the orbit turns about what is in the middle of the screen — 1.8.3.2)', () => {
+  const limits = { targetHeight: [0, 2.2], targetMargin: 0.6, minDistance: 0.15, maxDistance: 6 };
+  const room = { width: 10, depth: 10 };
+  const eye: Vec3 = [0, 2, 2];
+  // 45° down toward the floor at the origin: the floor is 2√2 ≈ 2.83 m away.
+  const target: Vec3 = [0, 1, 1];
+  const floorReach = 2 * Math.SQRT2;
+  const distanceFrom = (p: Vec3) => Math.hypot(...p.map((v, i) => v - eye[i]));
+  const onLine = (p: Vec3) => {
+    const a = target.map((v, i) => v - eye[i]);
+    const b = p.map((v, i) => v - eye[i]);
+    return Math.hypot(a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]);
+  };
+
+  it('stops at a part hit nearer than the floor', () => {
+    const pivot = pivotAlongView(eye, target, 1.2, room, limits);
+    expect(distanceFrom(pivot)).toBeCloseTo(1.2, 12);
+    expect(onLine(pivot)).toBeCloseTo(0, 12);
+  });
+
+  it('falls back to the floor when the hit is farther than it, or there is none', () => {
+    for (const hit of [4, null]) {
+      const pivot = pivotAlongView(eye, target, hit, room, limits);
+      expect(pivot[1]).toBeCloseTo(0, 12);
+      expect(distanceFrom(pivot)).toBeCloseTo(floorReach, 12);
+    }
+  });
+
+  it('ignores a hit inside minDistance or beyond maxDistance', () => {
+    expect(distanceFrom(pivotAlongView(eye, target, 0.1, room, limits))).toBeCloseTo(floorReach, 12);
+    // Looking level, the floor is no candidate: an out-of-range hit leaves the target be.
+    expect(pivotAlongView([0, 1, 1], [0, 1, 0], 7, room, limits)).toEqual([0, 1, 0]);
+    expect(pivotAlongView([0, 1, 1], [0, 1, 0], 0.1, room, limits)).toEqual([0, 1, 0]);
+  });
+
+  it('ignores floor out of reach', () => {
+    // Nearly level: the floor is 20 m away.
+    expect(pivotAlongView([0, 1, 0], [0, 0.95, -1], null, room, limits)).toEqual([0, 0.95, -1]);
+  });
+
+  it('leaves the target alone looking level or upward with no hit', () => {
+    expect(pivotAlongView([0, 1, 1], [0, 1, 0], null, room, limits)).toEqual([0, 1, 0]);
+    expect(pivotAlongView([0, 1, 1], [0, 1.5, 0], null, room, limits)).toEqual([0, 1.5, 0]);
+  });
+
+  it('looking upward, still stops at a part in range', () => {
+    const pivot = pivotAlongView([0, 1, 1], [0, 1.5, 0], 0.5, room, limits);
+    const up = 0.5 / Math.hypot(0.5, 1);
+    [0, 1 + 0.5 * up, 1 - 0.5 * 2 * up].forEach((v, i) => expect(pivot[i]).toBeCloseTo(v, 12));
+  });
+
+  it('always lands on the line from the eye through the target', () => {
+    for (const hit of [0.2, 1, 2.5, 5, null]) expect(onLine(pivotAlongView(eye, target, hit, room, limits))).toBeCloseTo(0, 12);
+  });
+
+  it('ignores a candidate the target clamp would pull off the line, near a wall', () => {
+    // Toward the back wall (z = -5; the target is kept to z ≥ -4.4): a part 1.9 m off is at
+    // z ≈ -4.89, past the bound, and the floor is 10 m away — neither holds.
+    const wallEye: Vec3 = [0, 1, -3];
+    const wallTarget: Vec3 = [0, 0.9, -4];
+    expect(pivotAlongView(wallEye, wallTarget, 1.9, room, limits)).toEqual(wallTarget);
+    expect(pivotAlongView(wallEye, wallTarget, null, room, limits)).toEqual(wallTarget);
+    // A part well inside the bounds still wins.
+    const pivot = pivotAlongView(wallEye, wallTarget, 1, room, limits);
+    expect(pivot[2]).toBeCloseTo(-3 - 1 / Math.hypot(0.1, 1), 12);
+  });
+
+  it('returns the target when the eye sits on it', () => {
+    expect(pivotAlongView(target, target, 1, room, limits)).toEqual(target);
   });
 });

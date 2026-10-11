@@ -13,6 +13,7 @@ import { baseRest, boxPlacement, boxPoseOf, createPackedWorldLayout, lidRest, re
 import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
+import { createPivotPick } from './scene/pivotPick.js';
 import { clampPixelRatio } from './scene/clamp.js';
 import { createGhost } from './scene/ghost.js';
 import { createCompoundPhysics } from './scene/compoundPhysics.js';
@@ -58,7 +59,6 @@ document.addEventListener('visibilitychange', () => events.emit(sessionEvent(doc
 const { renderer, scene, camera, startPose } = createScene(document.getElementById('app')!);
 scene.add(createRoom());
 
-const cameraControls = createCameraControls(camera, renderer.domElement);
 const physics = await createPhysicsWorld();
 
 // Live tuning: a knob set writes through to the constants every module reads; values baked
@@ -99,6 +99,10 @@ for (const { id, type, position, rotation } of createPackedWorldLayout()) {
 const display = createDisplayShelf(physics);
 for (const part of display.parts) scene.add(part.mesh);
 parts.push(...display.parts);
+
+// The camera pivots about the first of these along the middle of the screen as a gesture
+// starts: every part and the box, never the overlays.
+const cameraControls = createCameraControls(camera, renderer.domElement, { pickDistance: createPivotPick(parts.map((part) => part.mesh)) });
 
 // What is seated on and fastened to what — every type-compatible pair, right or wrong.
 const typeById = new Map(parts.map(({ id, type }) => [id, type]));
