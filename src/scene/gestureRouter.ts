@@ -1053,16 +1053,18 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // the hardware it carries — the panel the mover of each, and is held there as any seated
   // part is until a fastener engages.
   function seatFit(part: Part, snapped: Pose, pairs: FitPair<WorldConnector, WorldConnector>[]) {
-    physics.move(part.body, snapped.position, snapped.rotation);
-    placed.add(part);
-    // Held where it seats: its hardware goes there with it.
-    drag!.held = { position: snapped.position, rotation: snapped.rotation };
-    followRiders();
+    // The seats first, as the single-pair path has it: their SEAT events end the elevation
+    // line's hold, so the move below lands at the seat, never at the line's height.
     for (const { hole, end } of pairs) {
       const joint = assembly.seat({ partA: hole.part.id, connectorA: hole.index, partB: end.part.id, connectorB: end.index, mover: part.id });
       events?.emit(seatEvent(joint));
       flash(hole, end);
     }
+    physics.move(part.body, snapped.position, snapped.rotation);
+    placed.add(part);
+    // Held where it seats: its hardware goes there with it.
+    drag!.held = { position: snapped.position, rotation: snapped.rotation };
+    followRiders();
   }
 
   function cancelDrag() {

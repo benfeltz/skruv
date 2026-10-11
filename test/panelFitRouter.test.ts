@@ -11,6 +11,7 @@ import { createBus, EVENT } from '../src/game/events.js';
 import { createCompoundPhysics } from '../src/scene/compoundPhysics.js';
 import { createGestureRouter } from '../src/scene/gestureRouter.js';
 import { createGhost } from '../src/scene/ghost.js';
+import { createLiftHold } from '../src/scene/liftHold.js';
 import type { StampedEvent } from '../src/game/events.js';
 import type { Part } from '../src/game/partMesh.js';
 import type { Body, PhysicsJoint, PhysicsWorld } from '../src/physics/world.js';
@@ -112,9 +113,11 @@ interface Options {
   // The bottom panel carries two dowels of its own in its holes 3 and 4, their free ends
   // down — pushed home in it (bonded) or only seated.
   carrying?: 'seated' | 'home';
+  // The elevation line's hold over the compound seam, wired as main.ts wires it.
+  lift?: boolean;
 }
 
-function harness({ panelAt, dowels = [0, 1], home = [], extra = [], carrying }: Options = {}) {
+function harness({ panelAt, dowels = [0, 1], home = [], extra = [], carrying, lift = false }: Options = {}) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   camera.position.set(0.9, 1.3, 1.1);
   camera.lookAt(0.9, 0.2, 0);
@@ -156,12 +159,23 @@ function harness({ panelAt, dowels = [0, 1], home = [], extra = [], carrying }: 
   };
   const held = (part: Part) => kinematic.has(part.body);
   // A fastened compound moves as one, as main.ts wires it. A fake: the seam only calls what the router does.
-  const physics = createCompoundPhysics(simulation as unknown as PhysicsWorld, parts, assembly);
+  const seam = createCompoundPhysics(simulation as unknown as PhysicsWorld, parts, assembly);
+  const line = lift ? createLiftHold(seam) : null;
+  const physics = line ?? seam;
   const offers: StampedEvent[] = [];
   const seats: StampedEvent[] = [];
   const events = createBus();
   events.on(EVENT.SNAP_CANDIDATE, (event) => offers.push(event));
   events.on(EVENT.SEAT, (event) => seats.push(event));
+  if (line) {
+    // As main.ts: a seat naming the held part, or moved by it, ends the hold.
+    events.on(EVENT.SEAT, ({ hardware, host }) => {
+      if (line.held && (hardware === line.held.id || host === line.held.id)) line.end();
+    });
+    events.on(EVENT.SEAT, ({ joint }) => {
+      if (line.held && typeof joint === 'number' && assembly.get(joint)?.mover === line.held.id) line.end();
+    });
+  }
   const shown: TargetRing[][] = [];
   const targetRings = { show: (rings: readonly TargetRing[]) => shown.push([...rings]), hide: () => shown.push([]) };
   const ghosts: (Pose & { whereItGoes: boolean })[] = [];
@@ -181,6 +195,7 @@ function harness({ panelAt, dowels = [0, 1], home = [], extra = [], carrying }: 
     events,
     targetRings,
     ghost,
+    hold: line ?? undefined,
     relatives: preferredRelatives(ASSEMBLED, PART_TYPES),
   });
   // The joints the setup made, as the game's would be: physics follows the graph.
@@ -209,7 +224,7 @@ function harness({ panelAt, dowels = [0, 1], home = [], extra = [], carrying }: 
     for (let i = 0; i < frames; i++) router.update(FRAME);
   };
   const jointsMovedBy = (part: Part) => assembly.all().filter((j) => j.mover === part.id);
-  return { router, canvas, assembly, parts, side, dowels: dowelParts, carried: carriedParts, panel: panel!, held, drag, tap, hold, screen, offered, offers, seats, shown, ghosts, jointsMovedBy };
+  return { router, canvas, assembly, parts, side, dowels: dowelParts, carried: carriedParts, panel: panel!, held, line, drag, tap, hold, screen, offered, offers, seats, shown, ghosts, jointsMovedBy };
 }
 
 const TOPS = [topOf(0), topOf(1)];
@@ -534,6 +549,23 @@ describe('a panel carrying its own dowels (1.8.3.1, phone round 3)', () => {
     // Pushed home, its joints hold it: let go.
     h.tap(h.panel);
     expect(h.held(h.panel)).toBe(false);
+  });
+
+  // Review round 4: let go while the line holds it, it seats where the ghost showed — not at
+  // the line's height, its dowels floating over their holes.
+  it.each([['seated', 'seated'], ['pushed home', 'home']] as const)('seats at the ghost, not the line, when let go with the line held, dowels %s', (_, carrying) => {
+    const h = harness({ dowels: [], carrying, panelAt: NEAR, lift: true });
+    const at = h.drag(h.panel);
+    const ghost = h.ghosts.at(-1)!;
+    // The line takes it as it is, then the finger lets go before the line's ease lands.
+    h.line!.begin(h.panel, 'line');
+    h.canvas.fire('pointerup', at);
+    expect(gap(h.panel.mesh.position.toArray(), ghost.position)).toBeLessThan(1e-6);
+    h.router.update(0);
+    for (const joint of h.assembly.all().filter((j) => j.host === h.side.id)) {
+      expect(gap(freeEnd(h.parts.find((p) => p.id === joint.hardware)!), sideHole(joint.hostConnector).position)).toBeLessThan(1e-6);
+    }
+    expect(h.line!.held).toBeNull();
   });
 
   it('then a tap on the panel pushes them home, and the panels are one', () => {
