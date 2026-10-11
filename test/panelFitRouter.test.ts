@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, multiplyQuaternions, rotateVector } from '../tools/validate/lib/geometry.js';
-import { GESTURE } from '../src/constants.js';
+import { GESTURE, PANEL } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
 import { isFastened } from '../src/game/fasteners.js';
 import { ASSEMBLED, PART_TYPES } from '../src/game/item.js';
@@ -275,5 +275,67 @@ describe('hardware and tools seat exactly as before (1.8.3.1 Step 3)', () => {
     h.canvas.fire('pointerup', h.drag(key));
     expect(h.assembly.all().filter((j) => j.kind === KIND.TOOL)).toHaveLength(1);
     expect(h.seats.at(-1)?.hardware).toBe('allenWrench-1');
+  });
+});
+
+// `pose` tipped `angle` about the horizontal z line through its own centre.
+function tipped(pose: Pose, angle: number): Pose {
+  return { position: pose.position, rotation: multiplyQuaternions([0, 0, Math.sin(angle / 2), Math.cos(angle / 2)], pose.rotation) };
+}
+
+describe('a carried panel turns toward where it goes (1.8.3.1 Step 4)', () => {
+  // Over where it goes but tipped 30°: its holes swing ~19 cm off the dowels, and 30° off them.
+  const TIPPED = lowered(tipped({ ...SEAT, position: [SEAT.position[0], SEAT.position[1] + 0.02, SEAT.position[2]] }, 30 * DEG));
+
+  it('turns a still panel, 30° off near where it goes, until the whole fit is on offer — the finger keeps its position', () => {
+    const h = harness({ panelAt: TIPPED });
+    const at = h.drag(h.panel);
+    expect(h.offered()).toBeNull();
+    const position = h.panel.mesh.position.toArray();
+    const before = angleBetween(poseOf(h.panel).rotation, SEAT.rotation);
+    h.hold(1);
+    expect(angleBetween(poseOf(h.panel).rotation, SEAT.rotation)).toBeLessThan(before);
+    expect(h.offered()).toBeNull();
+    expect(h.panel.mesh.position.toArray()).toEqual(position);
+    h.hold(120);
+    expect(h.offered()).not.toBeNull();
+    h.canvas.fire('pointerup', at);
+    expect(h.jointsMovedBy(h.panel)).toHaveLength(2);
+    expect(angleBetween(poseOf(h.panel).rotation, SEAT.rotation)).toBeLessThan(1e-6);
+  });
+
+  it('leaves a panel outside PANEL.zone as it was picked up', () => {
+    const away = { ...TIPPED, position: [TIPPED.position[0] - PANEL.zone - 0.05, TIPPED.position[1], TIPPED.position[2]] as Vec3 };
+    const h = harness({ panelAt: away });
+    h.drag(h.panel);
+    const before = h.panel.mesh.quaternion.toArray();
+    h.hold(60);
+    expect(h.panel.mesh.quaternion.toArray()).toEqual(before);
+    expect(h.offered()).toBeNull();
+  });
+
+  it('never turns toward a fit that is not where it goes', () => {
+    // Dowels in the side panel's plinth holes, beside where the bottom panel goes: it fits
+    // them only one at a time, and where it goes has no dowel to go on.
+    const h = harness({ dowels: [14, 15], panelAt: TIPPED });
+    h.drag(h.panel);
+    expect(h.offered()).toBeNull();
+    const before = h.panel.mesh.quaternion.toArray();
+    h.hold(60);
+    expect(h.panel.mesh.quaternion.toArray()).toEqual(before);
+  });
+
+  it('still aims a carried dowel into a free hole', () => {
+    const hole = sideHole(3);
+    const flat: Quat = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+    const h = harness({ dowels: [], extra: [{ id: 'dowel-9', type: 'dowel', pose: lowered({ position: [hole.position[0], hole.position[1] + 0.05, hole.position[2] - 0.02], rotation: flat }) }] });
+    const dowel = h.parts.at(-1)!;
+    const at = h.drag(dowel);
+    expect(h.router.dragging?.part).toBe(dowel);
+    expect(h.offered()).toBeNull();
+    h.hold(60);
+    expect(h.offered()).toBe('sidePanel-1');
+    h.canvas.fire('pointerup', at);
+    expect(h.jointsMovedBy(dowel)).toHaveLength(1);
   });
 });

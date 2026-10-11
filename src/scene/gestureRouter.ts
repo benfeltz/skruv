@@ -20,7 +20,7 @@ import {
 } from '../game/events.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
-import { findFits, isPanelType, preferredPoses, rankFits } from '../game/panelFit.js';
+import { findFits, isPanelType, preferredPoses, preferredTargets, rankFits } from '../game/panelFit.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
 import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
@@ -79,6 +79,13 @@ interface CarriedEnd {
   connector: (typeof PART_TYPES)[string]['connectors'][number];
   index: number;
   seats: WorldConnector[];
+}
+
+/** Where a carried panel goes, near it: the pose, how far its centre is from the panel's, and the free ends it would sit on. */
+interface PanelGoal {
+  pose: Pose;
+  distance: number;
+  ends: WorldConnector[];
 }
 
 /** Where a pointer is, in client coordinates. */
@@ -258,6 +265,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const scratch = new THREE.Vector3();
   const offset = new THREE.Vector3();
   const twist = new THREE.Quaternion();
+  const other = new THREE.Quaternion();
   const toolPose = new THREE.Matrix4();
   const hardwarePose = new THREE.Matrix4();
   const unitScale = new THREE.Vector3(1, 1, 1);
@@ -825,6 +833,54 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     targetRings.show(lit.map(({ target, strength }) => ({ position: target.position, axis: target.axis, strength })));
   }
 
+  // --- panel magnetism: a carried panel turns toward where it goes ---
+
+  // A part's connectors as plain world records at `pose`, for the pure fit maths.
+  const connectorsAt = (part: Part, pose: Pose) => PART_TYPES[part.type].connectors.map((c) => ({ type: c.type, ...connectorInWorld(c, pose) }));
+
+  // The carried panel's nearest place where it goes, inside PANEL.zone centre to centre, with
+  // a free end there for it to go on — of two places as near (a panel that fits either way
+  // round), the lesser turn — or null, and null for anything but a carried panel. Swept once
+  // per frame, for the magnetism and the rings.
+  function panelGoal(): PanelGoal | null {
+    if (drag?.mode !== 'move' || !drag.held || !isPanel(drag.part.type)) return null;
+    const { part, held } = drag;
+    const seats = seatsFor(part);
+    twist.fromArray(held.rotation);
+    let best: (PanelGoal & { turn: number }) | null = null;
+    for (const pose of preferredFor(part)) {
+      const distance = Math.hypot(...pose.position.map((v, i) => v - held.position[i]));
+      if (distance >= PANEL.zone || (best && distance > best.distance + PANEL.matchTolerance)) continue;
+      const turn = twist.angleTo(other.fromArray(pose.rotation));
+      if (best && distance >= best.distance - PANEL.matchTolerance && turn >= best.turn) continue;
+      const ends = preferredTargets(connectorsAt(part, pose), seats, PANEL);
+      if (ends.length > 0) best = { pose, distance, ends, turn };
+    }
+    return best;
+  }
+
+  // Panel magnetism: a carried panel near where it goes, with no fit on offer, turns toward
+  // it there, harder the nearer — the same law as self-aim, tuned apart (PANEL.zone/rate). It
+  // only ever turns, and only ever toward where it goes: the finger keeps the position (a
+  // turn that would put the panel through the floor lifts it clear, as any lift does), and
+  // once a fit is on offer seat assist eases it in. Every frame — a still finger sends no
+  // events, so the offer the turn brings is looked for here too.
+  function aimPanel(goal: PanelGoal | null, delta: number) {
+    if (!goal || drag!.snapped) return;
+    const { part, held, centre } = drag!;
+    const rotation = aimStep(drag!.rotation, goal.pose.rotation, aimWeight(goal.distance, PANEL.zone), PANEL.rate, delta);
+    const [hx, hy, hz] = rotatedHalfExtents(PART_TYPES[part.type].size.map((d) => d / 2), rotation);
+    drag!.half = [hx, hz];
+    drag!.halfHeight = hy;
+    drag!.rotation = rotation;
+    drag!.held = { position: held!.position, rotation };
+    physics.move(part.body, held!.position, rotation);
+    // Turned clear of the floor: the lift re-places it from the finger and looks for an offer.
+    if (clampLift(drag!.height + centre[1], hy, ROOM, GESTURE.ceilingMargin) - centre[1] !== drag!.height) return liftDrag(0, 0);
+    // The full fit search runs only once the turn has brought a hole within the window of an end where it goes.
+    if (findSnap(connectorsAt(part, drag!.held), goal.ends, PANEL)) refreshOffer(held!.position);
+  }
+
   // Seat assist: only while a seat is on offer, the held part glides toward it.
   function assist(delta: number) {
     if (!drag?.snapped || !drag.held) return;
@@ -1157,7 +1213,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     driveHeld(delta);
     // Swept once, for the aim and the rings.
     const ends = carriedEnds();
+    const goal = panelGoal();
     aimHardware(ends, delta);
+    aimPanel(goal, delta);
     assist(delta);
     fadeFlashes(delta);
     guideDrop();
