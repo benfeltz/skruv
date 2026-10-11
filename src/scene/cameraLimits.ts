@@ -5,6 +5,10 @@
 // and its hole. The camera itself is clamped every frame: `wallMargin` inside the walls
 // horizontally, `floorClearance` above the floor, unbounded above (zoomed out it rises over
 // the wall tops — the dollhouse view).
+//
+// Where along the line of sight the target sits is the pivot: `pivotAlongView` stops it at
+// the first part in the middle of the screen as a gesture starts (else the floor), and
+// `seatOnFloor` is the floor-only pivot it replaced, kept behind ?tune camera.pivotOnParts 0.
 
 import type { CAMERA_LIMITS, ROOM } from '../constants.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
