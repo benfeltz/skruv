@@ -37,11 +37,12 @@ export interface Fit<H extends WorldConnector = WorldConnector, E extends WorldC
   angle: number;
 }
 
-/** The fit search's window: seeding reach and skew, and how exactly a further hole must sit. */
+/** The fit search's window: seeding reach and skew, and how exactly a further hole must sit (across and along its end's axis). */
 export interface FitWindow {
   maxDistance: number;
   maxAngle: number;
   matchTolerance: number;
+  seatSlack: number;
   matchAngle: number;
 }
 
@@ -108,17 +109,19 @@ function spins<H extends WorldConnector, E extends WorldConnector>(
 
 /**
  * The pairs `transform` seats: each hole carried by it onto the nearest compatible end within
- * `matchTolerance`, axis against axis within `matchAngle`, one end per hole — as indices.
+ * `matchTolerance` across the end's axis and `seatSlack` along it (dowels stand at different
+ * depths, pushed home or not), axis against axis within `matchAngle`, one end per hole — as indices.
  */
-function pairsOf(transform: SnapTransform, holes: readonly WorldConnector[], ends: readonly WorldConnector[], { matchTolerance, matchAngle }: FitWindow) {
+function pairsOf(transform: SnapTransform, holes: readonly WorldConnector[], ends: readonly WorldConnector[], { matchTolerance, seatSlack, matchAngle }: FitWindow) {
   const candidates: { hole: number; end: number; distance: number }[] = [];
   holes.forEach((hole, i) => {
     const position = carry(transform, hole.position);
     const axis = rotateVector(transform.rotation, hole.axis);
     ends.forEach((end, j) => {
       if (!areCompatible(hole.type, end.type)) return;
-      const distance = length(sub(end.position, position));
-      if (distance <= matchTolerance && misalignment(axis, end.axis) <= matchAngle) candidates.push({ hole: i, end: j, distance });
+      const offset = sub(end.position, position);
+      if (!alongAxis(offset, end.axis, matchTolerance, seatSlack) || misalignment(axis, end.axis) > matchAngle) return;
+      candidates.push({ hole: i, end: j, distance: length(offset) });
     });
   });
   candidates.sort((a, b) => a.distance - b.distance);
@@ -240,10 +243,10 @@ export function preferredPoses(relatives: Relatives, hostType: string, hostPose:
   }));
 }
 
-// `offset` within matchTolerance across unit `axis` and preferSlide along it.
-function alongAxis(offset: Vec3, axis: Vec3, { matchTolerance, preferSlide }: PreferWindow) {
-  const along = dot(offset, axis);
-  return Math.abs(along) <= preferSlide && length(sub(offset, scale(axis, along))) <= matchTolerance;
+// `offset` within `across` of unit `axis`'s line and `along` along it.
+function alongAxis(offset: Vec3, axis: Vec3, across: number, along: number) {
+  const slide = dot(offset, axis);
+  return Math.abs(slide) <= along && length(sub(offset, scale(axis, slide))) <= across;
 }
 
 /**
@@ -254,7 +257,7 @@ function alongAxis(offset: Vec3, axis: Vec3, { matchTolerance, preferSlide }: Pr
 export function isPreferred(fit: Fit, preferred: readonly Pose[], window: PreferWindow) {
   const axis = fit.pairs[0].end.axis;
   return preferred.some(
-    (pose) => turnBetween(fit.pose.rotation, pose.rotation) <= window.matchAngle && alongAxis(sub(fit.pose.position, pose.position), axis, window),
+    (pose) => turnBetween(fit.pose.rotation, pose.rotation) <= window.matchAngle && alongAxis(sub(fit.pose.position, pose.position), axis, window.matchTolerance, window.preferSlide),
   );
 }
 
@@ -277,7 +280,7 @@ export function preferredTargets<E extends WorldConnector>(holes: readonly World
     for (const end of ends) {
       if (out.includes(end) || !areCompatible(hole.type, end.type) || misalignment(hole.axis, end.axis) > window.matchAngle) continue;
       const offset = sub(end.position, hole.position);
-      if (!alongAxis(offset, end.axis, window)) continue;
+      if (!alongAxis(offset, end.axis, window.matchTolerance, window.preferSlide)) continue;
       const distance = length(offset);
       if (!best || distance < best.distance) best = { end, distance };
     }

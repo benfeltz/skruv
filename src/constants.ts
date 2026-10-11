@@ -340,9 +340,12 @@ export const PANEL = {
   // A hole this near a free end (metres), and its axis this far off (radians), seeds a fit.
   maxDistance: 0.15,
   maxAngle: (60 * Math.PI) / 180,
-  // With the fit seated, any other hole this near a compatible end (metres), axis against
-  // axis within matchAngle (radians), seats on it too.
+  // With the fit seated, any other hole this near a compatible end across its axis (metres),
+  // up to seatSlack along it, axis against axis within matchAngle (radians), seats on it too.
+  // The slack is a dowel sink and a little: one dowel tapped home stands a sink lower than
+  // one only seated at its hole's mouth, and a panel over both still seats on both.
   matchTolerance: 0.01,
+  seatSlack: 0.02,
   matchAngle: (5 * Math.PI) / 180,
   // Where it goes: a fit is the panel's place in the finished item when it sits there within
   // matchTolerance across the dowels and matchAngle, and up to this far (metres) along them —

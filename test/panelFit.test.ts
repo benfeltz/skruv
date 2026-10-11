@@ -60,6 +60,14 @@ describe('findFits (1.8.3.1 Step 1)', () => {
     expect(new Set(fit.pairs.map((p) => p.hole.type))).toEqual(new Set([CONNECTOR.DOWEL_HOLE]));
   });
 
+  // Review round 1: one dowel tapped home a sink lower, the other still proud.
+  it('pairs both holes over dowels standing at different depths', () => {
+    const home: WorldConnector = { ...ENDS[0], position: [ENDS[0].position[0], ENDS[0].position[1] - 0.015, ENDS[0].position[2]] };
+    const from = skewed(SEAT, 20 * DEG, ENDS[1].position, [0.02, 0.03, 0]);
+    const fits = findFits(world('topBottomPanel', from), from, [home, ENDS[1]], PANEL);
+    expect(fits.filter((fit) => fit.pairs.length === 2)).toHaveLength(1);
+  });
+
   it('gives a one-pair fit on a single dowel', () => {
     const from = skewed(SEAT, 10 * DEG, ENDS[0].position, [0, 0.03, 0]);
     const fits = findFits(world('topBottomPanel', from), from, [ENDS[0]], PANEL);

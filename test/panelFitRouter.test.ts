@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { KIND } from '../tools/validate/lib/vocabulary.js';
+import { CONTRACT, KIND } from '../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, multiplyQuaternions, rotateVector } from '../tools/validate/lib/geometry.js';
 import { GESTURE, PANEL } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
@@ -100,22 +100,31 @@ interface Options {
   panelAt?: Pose;
   // Side-panel holes with a dowel standing in them.
   dowels?: number[];
+  // Of those dowels (by position in `dowels`), the ones tapped home: a dowel sink lower, and fastened.
+  home?: number[];
   extra?: { id: string; type: string; pose: Pose }[];
 }
 
-function harness({ panelAt, dowels = [0, 1], extra = [] }: Options = {}) {
+function harness({ panelAt, dowels = [0, 1], home = [], extra = [] }: Options = {}) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   camera.position.set(0.9, 1.3, 1.1);
   camera.lookAt(0.9, 0.2, 0);
   camera.updateMatrixWorld(true);
 
   const side = makePart('sidePanel-1', 'sidePanel', SIDE);
-  const dowelParts = dowels.map((index, n) => makePart(`dowel-${n + 1}`, 'dowel', dowelIn(index)));
+  const dowelParts = dowels.map((index, n) => {
+    const { position, rotation } = dowelIn(index);
+    const sink = home.includes(n) ? CONTRACT.sinkDepth.dowel! : 0;
+    return makePart(`dowel-${n + 1}`, 'dowel', { position: [position[0], position[1] - sink, position[2]], rotation });
+  });
   const panel = panelAt ? makePart('topBottomPanel-1', 'topBottomPanel', panelAt) : null;
   const parts = [side, ...dowelParts, ...(panel ? [panel] : []), ...extra.map(({ id, type, pose }) => makePart(id, type, pose))];
   const typeById = new Map(parts.map(({ id, type }) => [id, type]));
   const assembly = createAssembly((id) => typeById.get(id)!);
-  dowels.forEach((index, n) => assembly.seat({ partA: `dowel-${n + 1}`, connectorA: 0, partB: side.id, connectorB: index, mover: `dowel-${n + 1}` }));
+  dowels.forEach((index, n) => {
+    const joint = assembly.seat({ partA: `dowel-${n + 1}`, connectorA: 0, partB: side.id, connectorB: index, mover: `dowel-${n + 1}` });
+    if (home.includes(n)) assembly.drive(joint.id);
+  });
 
   const physics: GestureRouterOptions['physics'] = {
     grab: () => {},
@@ -198,6 +207,16 @@ describe('a carried panel seats on every matched hole (1.8.3.1 Step 3)', () => {
     expect(new Set(joints.map((j) => j.hostConnector))).toEqual(new Set([3, 4]));
     expect(h.seats.map((e) => e.host)).toEqual(['topBottomPanel-1', 'topBottomPanel-1']);
     expect(gap(h.panel.mesh.position.toArray(), SEAT.position)).toBeLessThan(1e-6);
+  });
+
+  // Review round 1: a dowel tapped home stands a sink lower than one only at its hole's mouth.
+  it('seats both holes over one dowel pushed home and one not', () => {
+    const h = harness({ home: [0], panelAt: lowered(skewed(SEAT, 20 * DEG, TOPS[0], [0.02, 0.03, 0])) });
+    expect(isFastened(h.assembly.all().find((j) => j.hardware === 'dowel-1')!.fastener)).toBe(true);
+    h.canvas.fire('pointerup', h.drag(h.panel));
+    const joints = h.jointsMovedBy(h.panel);
+    expect(new Set(joints.map((j) => j.hardware))).toEqual(new Set(['dowel-1', 'dowel-2']));
+    expect(h.seats).toHaveLength(2);
   });
 
   it('then a tap on the panel pushes both dowels home', () => {
