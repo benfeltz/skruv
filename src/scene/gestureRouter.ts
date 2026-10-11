@@ -20,7 +20,7 @@ import {
 } from '../game/events.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
-import { findFits, isPanelType, preferredPoses, preferredTargets, rankFits } from '../game/panelFit.js';
+import { findFits, isPanelType, preferredPoses, preferredTargets, preferredThrough, rankFits } from '../game/panelFit.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
 import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
@@ -475,11 +475,21 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return [...own, ...riding];
   }
 
-  // Where `panel` goes on each part in the room it meets in the finished item, as they lie now.
+  // Where `panel` goes on each part in the room it meets in the finished item, as they lie
+  // now — and, carried, where it goes when any panel it carries goes on one: that member's
+  // place, with `panel` at the offset it had from it when picked up.
   function preferredFor(panel: Part) {
-    return parts.flatMap((host) =>
-      host === panel ? [] : preferredPoses(relatives, host.type, { position: host.mesh.position.toArray(), rotation: host.mesh.quaternion.toArray() }, panel.type),
-    );
+    const carry = drag?.part === panel ? drag.carry : null;
+    const members = (carry?.riders ?? []).filter(({ part }) => isPanel(part.type));
+    const carried = new Set([panel, ...(carry?.riders ?? []).map(({ part }) => part)]);
+    return parts.flatMap((host) => {
+      if (carried.has(host)) return [];
+      const at: Pose = { position: host.mesh.position.toArray(), rotation: host.mesh.quaternion.toArray() };
+      return [
+        ...preferredPoses(relatives, host.type, at, panel.type),
+        ...members.flatMap(({ part, start }) => preferredPoses(relatives, host.type, at, part.type).map((pose) => preferredThrough(pose, start, carry!.start))),
+      ];
+    });
   }
 
   // Where `snap` seats the dragged part from `pose`. The alignment can swing a long part's

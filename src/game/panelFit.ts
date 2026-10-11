@@ -248,6 +248,21 @@ export function preferredPoses(relatives: Relatives, hostType: string, hostPose:
   }));
 }
 
+/**
+ * Where a carried panel goes when a panel it carries goes at `preferred`: kept at the offset
+ * it had from that member when picked up (`member` and `grabbed`, their poses then), so an
+ * assembly carried by any of its panels is where it goes when any of them is.
+ */
+export function preferredThrough(preferred: Pose, member: Pose, grabbed: Pose): Pose {
+  const inverse = conjugate(member.rotation);
+  const anchor = rotateVector(inverse, sub(grabbed.position, member.position));
+  const turn = multiplyQuaternions(inverse, grabbed.rotation);
+  return {
+    position: add(preferred.position, rotateVector(preferred.rotation, anchor)),
+    rotation: normalizeQuaternion(multiplyQuaternions(preferred.rotation, turn)),
+  };
+}
+
 // `offset` within `across` of unit `axis`'s line and `along` along it.
 function alongAxis(offset: Vec3, axis: Vec3, across: number, along: number) {
   const slide = dot(offset, axis);

@@ -894,3 +894,35 @@ describe('a carried assembly seats by every member (1.8.3.4 Step 2)', () => {
     expect(gap(poseOf(h.panel).position, SEAT.position)).toBeLessThan(1e-6);
   });
 });
+
+// 1.8.3.4 Step 3: where an assembly goes is where any of its panels goes.
+describe('where a carried assembly goes (1.8.3.4 Step 3)', () => {
+  it('shows the fit green when a member, not the grabbed panel, is where it goes', () => {
+    // Side panel 2 goes nowhere on side panel 1; the bottom panel it carries does.
+    const h = stack();
+    h.grabTop();
+    h.router.update(0);
+    expect(h.ghosts.at(-1)?.whereItGoes).toBe(true);
+  });
+
+  it('keeps a fit one hole off amber, and still seats it', () => {
+    const off = lowered({ ...SEAT, position: [SEAT.position[0], SEAT.position[1] + 0.02, SEAT.position[2] + (TOPS[1][2] - TOPS[0][2])] });
+    const h = stack({ panelAt: off });
+    const at = h.grabTop();
+    h.router.update(0);
+    expect(h.ghosts.at(-1)?.whereItGoes).toBe(false);
+    h.canvas.fire('pointerup', at);
+    const onDowels = h.assembly.all().filter((j) => j.host === h.panel.id && (j.hardware === 'dowel-1' || j.hardware === 'dowel-2'));
+    expect(onDowels).toHaveLength(1);
+    expect(onDowels[0]).toMatchObject({ hardware: 'dowel-2', hostConnector: 3, mover: h.panel.id });
+  });
+
+  it('lights the dowel ends where the member goes', () => {
+    const h = stack();
+    h.grabTop();
+    h.router.update(0);
+    const lit = h.shown.at(-1) ?? [];
+    expect(lit).toHaveLength(2);
+    for (const top of TOPS) expect(lit.some(({ position }) => gap(position, top) < 1e-9)).toBe(true);
+  });
+});

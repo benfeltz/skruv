@@ -3,7 +3,7 @@ import { CONNECTOR } from '../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, multiplyQuaternions, rotateVector } from '../tools/validate/lib/geometry.js';
 import { PANEL } from '../src/constants.js';
 import { ASSEMBLED, PART_TYPES } from '../src/game/item.js';
-import { findFits, isPanelType, preferredPoses, preferredRelatives, preferredTargets, rankFits } from '../src/game/panelFit.js';
+import { findFits, isPanelType, preferredPoses, preferredRelatives, preferredTargets, preferredThrough, rankFits } from '../src/game/panelFit.js';
 import type { WorldConnector } from '../src/game/snapMath.js';
 import type { Pose, Quat, Vec3 } from '../tools/validate/lib/geometry.js';
 
@@ -161,5 +161,39 @@ describe('where it goes, and ranking (1.8.3.1 Step 2)', () => {
     // Nowhere near: nothing.
     const away = { ...at, position: [at.position[0] + 0.5, at.position[1], at.position[2]] as Vec3 };
     expect(preferredTargets(world('topBottomPanel', away), ENDS, PANEL)).toEqual([]);
+  });
+});
+
+describe('where it goes through a panel it carries (1.8.3.4 Step 3)', () => {
+  const byRole = (id: string): Pose => ASSEMBLED.parts.find((part) => part.id === id)!;
+  const gap = (a: Vec3, b: Vec3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const turn = (a: Quat, b: Quat) => 2 * Math.acos(Math.min(1, Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3])));
+  // A rigid move: a quarter turn about a tilted axis, then a shift.
+  const SPIN: Quat = (() => {
+    const axis: Vec3 = [0.3, 0.8, -0.5];
+    const n = Math.hypot(...axis);
+    const s = Math.sin(Math.PI / 4);
+    return [(axis[0] / n) * s, (axis[1] / n) * s, (axis[2] / n) * s, Math.cos(Math.PI / 4)];
+  })();
+  const moved = ({ position, rotation }: Pose): Pose => ({
+    position: rotateVector(SPIN, position).map((v, i) => v + [0.7, 0.2, -1.1][i]) as Vec3,
+    rotation: multiplyQuaternions(SPIN, rotation),
+  });
+
+  it("maps a member at its assembled place to the grabbed panel's assembled place", () => {
+    // The fixed shelf and the bottom panel picked up together, as they sit in the finished
+    // JOHNNY but anywhere in the room: the shelf where it goes puts the bottom panel where it goes.
+    const shelf = byRole('fixedShelf-1');
+    const bottom = byRole('topBottomPanel-1');
+    const pose = preferredThrough(shelf, moved(shelf), moved(bottom));
+    expect(gap(pose.position, bottom.position)).toBeLessThan(1e-9);
+    expect(turn(pose.rotation, bottom.rotation)).toBeLessThan(1e-6);
+  });
+
+  it('is the identity for the grabbed panel itself', () => {
+    const bottom = moved(byRole('topBottomPanel-1'));
+    const pose = preferredThrough(bottom, bottom, bottom);
+    expect(gap(pose.position, bottom.position)).toBeLessThan(1e-9);
+    expect(turn(pose.rotation, bottom.rotation)).toBeLessThan(1e-6);
   });
 });
