@@ -441,8 +441,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const dragged = free(worldConnectors(part, scratch.clone().fromArray(target), rotation)).filter((c) => isSeatTarget(c, seated));
     if (dragged.length === 0) return null;
     // A part the elevation line holds up is no seat: it drops when the line lets go.
+    const up = heldUp();
     const others = parts.flatMap((other) =>
-      other === part || other === hold?.held
+      other === part || up.has(other)
         ? []
         : free(worldConnectors(other, other.mesh.position, other.mesh.quaternion)).filter((c) => isSeatTarget(c, seated)),
     );
@@ -698,6 +699,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return [...ids].every((id) => assembly.jointsOf(id).every((j) => ids.has(j.hardware) && ids.has(j.host)));
   }
 
+  // What the elevation line holds up: its part and all that part carries — its assembly, its
+  // seated hardware. None of it is a seat: it all drops when the line lets go.
+  function heldUp(): Set<Part> {
+    const held = hold?.held;
+    return new Set(held ? [held, ...(carryOf(held) ?? [])] : []);
+  }
+
   // A panel the line took up outside a drag carries what a drag of it would: its assembly
   // through the physics seam, as the hold grabs it, and the hardware only seated in it held
   // where it sits in its panel (riders) — none left hovering, none dropping out. The hold may
@@ -907,14 +915,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   // Where a carried part could seat: free connectors on seated hardware or any hole, never
-  // on the part the elevation line holds, nor on hardware a panel carries — as snapCandidate
+  // on what the elevation line holds up, nor on what a panel carries — as snapCandidate
   // offers them.
   function seatsFor(carried: Part) {
     const isTaken = occupied();
     const seated = seatedHardware(assembly.all());
     const riding = new Set(drag?.carry?.riders.map((r) => r.part));
+    const up = heldUp();
     return parts.flatMap((other) =>
-      other === carried || other === hold?.held || riding.has(other)
+      other === carried || up.has(other) || riding.has(other)
         ? []
         : worldConnectors(other, other.mesh.position, other.mesh.quaternion).filter((c) => !isTaken(c) && isSeatTarget(c, seated)),
     );
@@ -1243,7 +1252,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       return glow(decalOf(a) ?? decalOf(b), drag.snapped.preferred ? COLORS.whereItGoes : COLORS.decalFlash);
     }
     const under = hit && drag.mode === 'move' ? partByMesh.get(hit.object)! : null;
-    const host = under === hold?.held ? null : under;
+    const host = under && heldUp().has(under) ? null : under;
     glow(host ? decalOf(socketUnder(to, freeSocketsFor(part, host), DROP.holeReach)) : null);
   }
 

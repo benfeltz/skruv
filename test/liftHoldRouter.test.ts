@@ -64,18 +64,25 @@ function makePart(id: string, type: string, position: Vec3, rotation: Quat = [0,
   return { id, type, mesh, body } as unknown as Part;
 }
 
-function harness() {
+function harness({ joined = false } = {}) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   camera.position.set(0, 1.2, 0.8);
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld(true);
 
   // A side panel lying flat, its holes facing up; a loose dowel standing beside hole 3.
+  // `joined`: the bottom panel pushed home on a dowel pushed home in its hole 0 (1.8.3.4).
   const panel = makePart('panel', 'sidePanel', [0, 0.008, 0], [0, 0, Math.SQRT1_2, Math.SQRT1_2]);
   const dowel = makePart('dowel', 'dowel', [0.05, 0.031, -0.11]);
-  const parts = [panel, dowel];
+  const joiner = makePart('joiner', 'dowel', [0.942, 0.031, -0.09]);
+  const bottom = makePart('bottom', 'topBottomPanel', [0.942, 0.43, 0], [0, 0, -Math.SQRT1_2, Math.SQRT1_2]);
+  const parts = [panel, dowel, ...(joined ? [joiner, bottom] : [])];
   const typeById = new Map(parts.map(({ id, type }) => [id, type]));
   const assembly = createAssembly((id) => typeById.get(id)!);
+  if (joined) {
+    assembly.drive(assembly.seat({ partA: joiner.id, connectorA: 0, partB: panel.id, connectorB: 0, mover: joiner.id }).id);
+    assembly.drive(assembly.seat({ partA: bottom.id, connectorA: 3, partB: joiner.id, connectorB: 1, mover: bottom.id }).id);
+  }
 
   const moves: Vec3[] = [];
   const physics: GestureRouterOptions['physics'] = {
@@ -126,7 +133,7 @@ function harness() {
     return { clientX: at.clientX - 32, clientY: at.clientY };
   }
   const offered = () => offers.at(-1)?.target ?? null;
-  return { router, canvas, hold, panel, dowel, moves, targets, jumps, dragDowel, offered };
+  return { router, canvas, hold, panel, dowel, bottom, moves, targets, jumps, dragDowel, offered };
 }
 
 describe('a drag of the held part rides at the line height (review round 1)', () => {
@@ -214,6 +221,21 @@ describe('a drag of the held part rides at the line height (review round 1)', ()
     hold.height = 0.008;
     dragDowel();
     expect(offered()).toBeNull();
+  });
+
+  // Review round 1 (1.8.3.4): the line holding one panel of an assembly holds it all up.
+  it('offers no seat on any part of an assembly the line holds up by another of its panels', () => {
+    const h = harness({ joined: true });
+    expect(h.router.carries(h.bottom)).toBe(true);
+    h.hold.held = h.bottom;
+    h.dragDowel();
+    expect(h.offered()).toBeNull();
+  });
+
+  it('still offers the seat when the line holds nothing — the joined fixture works', () => {
+    const { dragDowel, offered } = harness({ joined: true });
+    dragDowel();
+    expect(offered()).toBe('panel');
   });
 
   it('leaves a drag of any other part alone', () => {
