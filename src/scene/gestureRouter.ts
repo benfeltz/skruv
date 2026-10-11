@@ -881,6 +881,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (findSnap(connectorsAt(part, drag!.held), goal.ends, PANEL)) refreshOffer(held!.position);
   }
 
+  // Rings for a carried panel: the free ends where it goes light, brighter the nearer it is —
+  // only ever where it goes, never another fit. Hardware's rings are showRings'.
+  function showPanelRings(goal: PanelGoal | null) {
+    if (!targetRings || drag?.mode !== 'move' || !isPanel(drag.part.type)) return;
+    if (!goal) return targetRings.hide();
+    const strength = aimWeight(goal.distance, PANEL.zone);
+    targetRings.show(goal.ends.map(({ position, axis }) => ({ position, axis, strength })));
+  }
+
   // Seat assist: only while a seat is on offer, the held part glides toward it.
   function assist(delta: number) {
     if (!drag?.snapped || !drag.held) return;
@@ -1220,6 +1229,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     fadeFlashes(delta);
     guideDrop();
     showRings(ends);
+    showPanelRings(goal);
     showDials(delta);
     for (const joint of assembly.all()) {
       if (joint.kind !== KIND.BOLT && joint.kind !== KIND.CAM) continue;

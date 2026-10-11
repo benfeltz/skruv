@@ -339,3 +339,46 @@ describe('a carried panel turns toward where it goes (1.8.3.1 Step 4)', () => {
     expect(h.jointsMovedBy(dowel)).toHaveLength(1);
   });
 });
+
+describe('the dowel ends where a carried panel goes light up (1.8.3.1 Step 5)', () => {
+  const TIPPED = lowered(tipped({ ...SEAT, position: [SEAT.position[0], SEAT.position[1] + 0.02, SEAT.position[2]] }, 30 * DEG));
+  const lit = (shown: TargetRing[][]) => shown.at(-1) ?? [];
+
+  it('lights exactly the dowel ends of where it goes, brighter the nearer', () => {
+    const h = harness({ panelAt: TIPPED });
+    h.drag(h.panel);
+    h.router.update(0);
+    const rings = lit(h.shown);
+    expect(rings).toHaveLength(2);
+    for (const top of TOPS) expect(rings.some(({ position }) => gap(position, top) < 1e-9)).toBe(true);
+    for (const { strength } of rings) expect(strength).toBeGreaterThan(0);
+    const near = rings[0].strength;
+    // Carried further off (still inside the zone), they dim.
+    const far = harness({ panelAt: { ...TIPPED, position: [TIPPED.position[0] - 0.2, TIPPED.position[1], TIPPED.position[2]] } });
+    far.drag(far.panel);
+    far.router.update(0);
+    expect(lit(far.shown)[0].strength).toBeLessThan(near);
+  });
+
+  it('lights nothing outside PANEL.zone', () => {
+    const h = harness({ panelAt: { ...TIPPED, position: [TIPPED.position[0] - PANEL.zone - 0.05, TIPPED.position[1], TIPPED.position[2]] } });
+    h.drag(h.panel);
+    h.router.update(0);
+    expect(lit(h.shown)).toEqual([]);
+  });
+
+  it('lights no fit that is not where it goes', () => {
+    const h = harness({ dowels: [14, 15], panelAt: TIPPED });
+    h.drag(h.panel);
+    h.router.update(0);
+    expect(lit(h.shown)).toEqual([]);
+  });
+
+  it("still lights a carried dowel's free hole", () => {
+    const hole = sideHole(3);
+    const h = harness({ dowels: [], extra: [{ id: 'dowel-9', type: 'dowel', pose: lowered({ position: [hole.position[0], hole.position[1] + 0.05, hole.position[2] - 0.02], rotation: IDENTITY }) }] });
+    h.drag(h.parts.at(-1)!);
+    h.router.update(0);
+    expect(lit(h.shown).some(({ position, strength }) => strength > 0 && gap(position, hole.position) < 1e-9)).toBe(true);
+  });
+});
