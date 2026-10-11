@@ -873,10 +873,18 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     drag!.half = [hx, hz];
     drag!.halfHeight = hy;
     drag!.rotation = rotation;
+    // Turned clear of the floor: the lift re-places it from the finger and looks for an offer.
+    // An offer found there leaves it where it was held, so it goes to the lifted height
+    // itself — never a frame through the floor — and seat assist eases it in from there.
+    if (clampLift(drag!.height + centre[1], hy, ROOM, GESTURE.ceilingMargin) - centre[1] !== drag!.height) {
+      liftDrag(0, 0);
+      if (!drag!.snapped) return;
+      const [x, , z] = held!.position;
+      drag!.held = { position: [x, drag!.height, z], rotation };
+      return physics.move(part.body, drag!.held.position, rotation);
+    }
     drag!.held = { position: held!.position, rotation };
     physics.move(part.body, held!.position, rotation);
-    // Turned clear of the floor: the lift re-places it from the finger and looks for an offer.
-    if (clampLift(drag!.height + centre[1], hy, ROOM, GESTURE.ceilingMargin) - centre[1] !== drag!.height) return liftDrag(0, 0);
     // The full fit search runs only once the turn has brought a hole within the window of an end where it goes.
     if (findSnap(connectorsAt(part, drag!.held), goal.ends, PANEL)) refreshOffer(held!.position);
   }
