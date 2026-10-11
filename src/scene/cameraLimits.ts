@@ -63,6 +63,26 @@ export function clampTargetAlongView(target: Vec3, eye: Vec3, room: Room, limits
   return clampTarget(target, room, limits);
 }
 
+/** The unit direction from `eye` toward `target`, or null when they coincide. */
+function viewDirection(eye: Vec3, target: Vec3): Vec3 | null {
+  const toward = target.map((v, i) => v - eye[i]);
+  const length = Math.hypot(...toward);
+  // map keeps the length; TS widens a mapped tuple to number[].
+  return length > 0 ? (toward.map((v) => v / length) as Vec3) : null;
+}
+
+/** How far along `direction` (unit) from `eye` the floor at height `floor` is; null looking level or upward, or from the floor. */
+function floorReach(eye: Vec3, direction: Vec3, floor: number): number | null {
+  const down = -direction[1];
+  return eye[1] > floor && down > 1e-6 ? (eye[1] - floor) / down : null;
+}
+
+/** The point `distance` along `direction` (unit) from `eye`. */
+function along(eye: Vec3, direction: Vec3, distance: number): Vec3 {
+  // map keeps the length; TS widens a mapped tuple to number[].
+  return eye.map((v, i) => v + direction[i] * distance) as Vec3;
+}
+
 /**
  * The orbit target moved along the line of sight from `eye` to where it meets the floor
  * (the bottom of `targetHeight`), when that is within `maxDistance`. The view is unchanged,
@@ -71,14 +91,34 @@ export function clampTargetAlongView(target: Vec3, eye: Vec3, room: Room, limits
  * Looking level or upward, or at floor out of reach, the target stays where it is.
  */
 export function seatOnFloor(eye: Vec3, target: Vec3, limits: Pick<Limits, 'targetHeight' | 'maxDistance'>): Vec3 {
-  const toward = target.map((v, i) => v - eye[i]);
-  const length = Math.hypot(...toward);
-  const floor = limits.targetHeight[0];
-  if (!(length > 0) || eye[1] <= floor) return target;
-  const down = -toward[1] / length;
-  if (down <= 1e-6) return target;
-  const reach = (eye[1] - floor) / down;
-  if (reach > limits.maxDistance) return target;
-  // map keeps the length; TS widens a mapped tuple to number[].
-  return eye.map((v, i) => v + (toward[i] / length) * reach) as Vec3;
+  const direction = viewDirection(eye, target);
+  const reach = direction && floorReach(eye, direction, limits.targetHeight[0]);
+  if (!direction || reach === null || reach > limits.maxDistance) return target;
+  return along(eye, direction, reach);
+}
+
+/**
+ * The pivot for a gesture about to start: the orbit target moved along the line of sight
+ * from `eye` to the nearer of `hitDistance` (the first part that line meets, or null) and
+ * the floor — only ever along the line already being looked down, so the view never jumps.
+ * A candidate nearer than `minDistance` or farther than `maxDistance` is ignored (holding
+ * the camera to those would jerk it), and so is one `clampTarget` would move (outside the
+ * target's bounds, the clamp would pull it off the line); with none left the target stays.
+ */
+export function pivotAlongView(
+  eye: Vec3,
+  target: Vec3,
+  hitDistance: number | null,
+  room: Room,
+  limits: Pick<Limits, 'targetHeight' | 'targetMargin' | 'minDistance' | 'maxDistance'>,
+): Vec3 {
+  const direction = viewDirection(eye, target);
+  if (!direction) return target;
+  const holds = (d: number) => {
+    const point = along(eye, direction, d);
+    return clampTarget(point, room, limits).every((v, i) => Math.abs(v - point[i]) < 1e-9);
+  };
+  const inReach = [hitDistance, floorReach(eye, direction, limits.targetHeight[0])]
+    .filter((d): d is number => d !== null && d >= limits.minDistance && d <= limits.maxDistance && holds(d));
+  return inReach.length ? along(eye, direction, Math.min(...inReach)) : target;
 }
