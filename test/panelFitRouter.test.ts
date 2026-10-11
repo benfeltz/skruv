@@ -939,3 +939,28 @@ describe('where a carried assembly goes (1.8.3.4 Step 3)', () => {
     for (const top of TOPS) expect(lit.some(({ position }) => gap(position, top) < 1e-9)).toBe(true);
   });
 });
+
+// Test plan (1.8.3.4): an assembly carry let go away from anything, or interrupted.
+describe('an assembly carry let go or cancelled (1.8.3.4 test plan)', () => {
+  it.each([['let go away from anything', 'pointerup'], ['cancelled', 'pointercancel']] as const)('%s: nothing seats, it is let go as one, and the dowel only seated in it still rides', (_, type) => {
+    const h = pair();
+    const at = h.grabSide();
+    // Carried well away from the bottom panel's free holes and anything else.
+    const away = { clientX: at.clientX - 300, clientY: at.clientY + 200 };
+    h.canvas.fire('pointermove', away);
+    h.router.update(0);
+    expect(h.offered()).toBeNull();
+    const inSide = (part: Part) => relativePose(poseOf(h.side), poseOf(part));
+    const before = h.members.map(inSide);
+    h.canvas.fire(type, away);
+    h.router.update(0);
+    expect(h.seats).toEqual([]);
+    expect(h.assembly.all()).toHaveLength(5);
+    for (const part of [h.side, h.panel, ...h.dowels]) expect(h.held(part), part.id).toBe(false);
+    expect(h.held(h.loose)).toBe(true);
+    // The simulation drops the side panel: the seated dowel goes with it.
+    h.side.mesh.position.y -= 0.1;
+    h.router.update(0);
+    h.members.slice(-1).forEach((part) => expect(gap(inSide(part).anchor, before.at(-1)!.anchor), part.id).toBeLessThan(1e-6));
+  });
+});

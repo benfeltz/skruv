@@ -84,7 +84,8 @@ function startOf(angle: number, shift: Vec3, axis: Vec3 = [0, 1, 0]): (pose: Pos
   };
 }
 
-function harness(start: (pose: Pose) => Pose) {
+// `locked`: the cams turned on side panel 1's bolts (booklet step 5), or only seated in their recesses.
+function harness(start: (pose: Pose) => Pose, { locked = true } = {}) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   camera.position.set(0.8, 0.45, 1.5);
   camera.lookAt(0, 0.4, 0);
@@ -97,12 +98,11 @@ function harness(start: (pose: Pose) => Pose) {
   const typeById = new Map(parts.map(({ id, type }) => [id, type]));
   const assembly = createAssembly((id) => typeById.get(id)!);
   const inCarcass = new Set(CARCASS);
-  seatHome(
-    assembly,
-    ASSEMBLED.joints
-      .filter((j) => inCarcass.has(j.hardware) && inCarcass.has(j.host))
-      .map((j) => ({ partA: j.hardware, connectorA: j.hardwareConnector, partB: j.host, connectorB: j.hostConnector, mover: j.mover, ctx: { through: j.through, captured: j.captured } })),
-  );
+  const pairs = ASSEMBLED.joints
+    .filter((j) => inCarcass.has(j.hardware) && inCarcass.has(j.host))
+    .map((j) => ({ kind: j.kind, partA: j.hardware, connectorA: j.hardwareConnector, partB: j.host, connectorB: j.hostConnector, mover: j.mover, ctx: { through: j.through, captured: j.captured } }));
+  seatHome(assembly, pairs.filter((p) => locked || p.kind !== KIND.CAM));
+  if (!locked) for (const pair of pairs.filter((p) => p.kind === KIND.CAM)) assembly.seat(pair);
 
   const simulation = {
     grab: (body: Body) => kinematic.add(body),
@@ -167,9 +167,10 @@ function harness(start: (pose: Pose) => Pose) {
     }
   };
   // The shelf pressed on its face toward the camera and nudged, still held.
-  function grabShelf() {
-    const face = connectorInWorld({ position: [0.1, PART_TYPES.fixedShelf.size[1] / 2, 0.05], axis: [0, 1, 0] }, poseOf(shelf)).position;
-    const from = screen(face);
+  const grabShelf = () => grabAt(connectorInWorld({ position: [0.1, PART_TYPES.fixedShelf.size[1] / 2, 0.05], axis: [0, 1, 0] }, poseOf(shelf)).position);
+  // Pressed at world `point` and nudged, still held.
+  function grabAt(point: Vec3) {
+    const from = screen(point);
     fire('pointerdown', from);
     fire('pointermove', { clientX: from.clientX, clientY: from.clientY + 6 });
     const to = { clientX: from.clientX, clientY: from.clientY + 12 };
@@ -182,7 +183,7 @@ function harness(start: (pose: Pose) => Pose) {
     fire('pointerup', at);
     return part;
   }
-  return { router, assembly, line, parts, byId, shelf, target: byId(TARGET), frames, grabShelf, tap, seats, ghosts, lit };
+  return { router, assembly, line, parts, byId, shelf, target: byId(TARGET), frames, grabShelf, grabAt, tap, seats, ghosts, lit };
 }
 
 describe('JOHNNY: the half-built carcass onto the second side panel (1.8.3.4 Step 5)', () => {
@@ -243,5 +244,37 @@ describe('JOHNNY: the half-built carcass onto the second side panel (1.8.3.4 Ste
     const seated = h.assembly.all().filter((j) => j.host === TARGET);
     expect(seated.length).toBeGreaterThan(0);
     expect(seated.length).toBeLessThan(INTO_TARGET.length);
+  });
+});
+
+// Test plan (1.8.3.4): pull or carry, by the booklet's own movers — side panel 1 is the panel
+// laid onto the horizontals' dowels, so it is the one that pulls back off them.
+describe('pull or carry in the half-built carcass (1.8.3.4 test plan)', () => {
+  const START = startOf(0, [0, 0.05, 0]);
+  // On side panel 1's underside, toward the camera and clear of the horizontals.
+  const UNDER_SIDE: Vec3 = (() => {
+    const side = LAID.get('sidePanel-1')!;
+    return connectorInWorld({ position: [PART_TYPES.sidePanel.size[0] / 2, 0.5, 0.1], axis: [1, 0, 0] }, START(side)).position;
+  })();
+
+  it('before the cams lock, side panel 1 pulls back off the horizontals, and the shelf still carries it all', () => {
+    const pulling = harness(START, { locked: false });
+    expect(pulling.assembly.pullable('sidePanel-1').length).toBeGreaterThan(0);
+    pulling.grabAt(UNDER_SIDE);
+    expect(pulling.router.dragging).toEqual({ part: pulling.byId('sidePanel-1'), mode: 'pull' });
+    const carrying = harness(START, { locked: false });
+    carrying.grabShelf();
+    expect(carrying.router.dragging).toEqual({ part: carrying.shelf, mode: 'move' });
+  });
+
+  // The cams lock the three cammed horizontals to side panel 1; the plinth has no cam, so
+  // side panel 1 still pulls off the plinth's dowel, as on main. The carcass carries by a
+  // horizontal.
+  it('once the cams lock, side panel 1 pulls only off the plinth, which no cam holds', () => {
+    const h = harness(START);
+    const pullable = h.assembly.pullable('sidePanel-1');
+    expect(pullable.map((j) => h.assembly.all().find((k) => k.hardware === j.hardware && k.host !== 'sidePanel-1')?.host)).toEqual(['plinth-1']);
+    h.grabAt(UNDER_SIDE);
+    expect(h.router.dragging).toEqual({ part: h.byId('sidePanel-1'), mode: 'pull' });
   });
 });
