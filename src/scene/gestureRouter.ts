@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AIM, COLORS, DROP, FASTENER, GESTURE, PICK, RING, ROOM, SNAP } from '../constants.js';
+import { AIM, COLORS, DROP, FASTENER, GESTURE, PICK, RING, ROOM, SNAP, TURN_RING } from '../constants.js';
 import { areCompatible, COMPATIBLE, CONNECTOR, isFastenerEnd, KIND } from '../../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, rotateVector } from '../../tools/validate/lib/geometry.js';
 import { capture } from '../game/assembly.js';
@@ -22,6 +22,7 @@ import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
 import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
+import { dialEngagements, dialHit, tightensClockwise } from '../game/turnRing.js';
 import type { Snap } from '../game/snapMath.js';
 import type { Assembly, AssemblyJoint, Head, PartId } from '../game/assembly.js';
 import type { Bus } from '../game/events.js';
@@ -33,6 +34,8 @@ import type { PhysicsJoint, PhysicsWorld } from '../physics/world.js';
 import type { RingHit } from './gizmo.js';
 import type { HandleHit } from './sprue.js';
 import type { TargetRing } from './targetRings.js';
+import type { Engagement } from '../game/turnRing.js';
+import type { Dial } from '../ui/turnRing.js';
 import type { Pose, Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
 import type { ConnectorType } from '../../tools/validate/lib/vocabulary.js';
 
@@ -43,7 +46,9 @@ interface PartHit {
   distance: number;
 }
 
-type PartPress = { kind: 'part' } & PartHit;
+// A press on a turn ring is its tool's, carrying the engagement it turns: the state machine
+// owns it as any part press, but it never taps.
+type PartPress = { kind: 'part'; dial?: Engagement } & PartHit;
 type RingPress = { kind: 'ring' } & RingHit;
 /** What a press landed on, as the state machine carries it. */
 type Press = PartPress | RingPress;
@@ -131,6 +136,7 @@ export interface GestureRouterOptions {
   targetRings?: { show(rings: readonly TargetRing[]): void; hide(): void };
   events?: Pick<Bus, 'emit'>;
   hold?: { readonly held: Part | null; readonly height: number; readonly goal: number; target(height: number): void; jump(height: number): void };
+  turnRing?: { show(dials: readonly Dial[]): void; hide(): void };
 }
 
 // A hole marking on a part's mesh (src/game/partMesh.ts).
@@ -194,11 +200,17 @@ const PULL_AXIS_PROBE = 0.05;
  *            height, as seat assist eases everything else, and back once the offer is
  *            gone; a lift (second finger, Shift, wheel) moves the line with it. A part the
  *            line holds is never a seat for another: it drops when the line lets go.
+ *   turnRing — `{ show(dials), hide() }` (src/ui/turnRing.ts): a dial round the head of
+ *            each fastener a seated tool can still drive, its arc filling as it goes and
+ *            flashing at home. A press on its band is the tool's crank — a drag there turns
+ *            the fastener as circling does, a tap does nothing; only a tap on the tool
+ *            itself takes it off. Which tools get a dial, and where it is grabbed, is
+ *            src/game/turnRing.ts's call.
  * Call `update(delta)` once per frame after the physics step: it draws fastener progress,
  * turns carried hardware's end toward a seat near it (self-aim), eases a dragged part
  * toward the seat on offer (seat assist) and fades the seat flash.
  */
-export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, targetRings, events, hold }: GestureRouterOptions) {
+export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, targetRings, events, hold, turnRing }: GestureRouterOptions) {
   const state = createGestureState<Press>();
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -234,6 +246,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const down = new THREE.Vector3(0, -1, 0);
   // A carried part's end in the world, rewritten every frame (endAt).
   const endPoint: Vec3 = [0, 0, 0];
+  // Tools whose dial showed last frame, and tool id → ms of home flash left on its dial.
+  let dialed = new Set<PartId>();
+  const dialFlashes = new Map<PartId, number>();
 
   function aim({ clientX, clientY }: ClientPoint) {
     const rect = domElement.getBoundingClientRect();
@@ -249,11 +264,26 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       ? { part: partByMesh.get(first.object)!, point: first.point.toArray(), distance: first.distance }
       : null;
     const picked = preferHit(partHit, proxyHits(), PICK);
+    const dial = dialUnder(event, picked?.part ?? null);
+    if (dial) return dial;
     const handle = sprue?.hitTest(raycaster) ?? null;
     if (handle && sprue!.selected && [ring, picked].every((hit) => !hit || handle.distance <= hit.distance)) {
       return resolveHit<RingHit, PartHit>(null, { part: sprue!.selected, ...handle });
     }
     return resolveHit(ring, picked);
+  }
+
+  // A press on a turn ring's band: nearer than anything under it, but never over its own tool
+  // — a press on the tool is the tool's, so a tap there still takes it off.
+  function dialUnder({ clientX, clientY }: ClientPoint, picked: Part | null): PartPress | null {
+    const rect = domElement.getBoundingClientRect();
+    for (const engagement of dialEngagements(assembly.all())) {
+      const tool = partById.get(engagement.tool.hardware)!;
+      if (tool === picked) continue;
+      const head = headOf(engagement);
+      if (dialHit([clientX, clientY], screenPoint(head, rect))) return { kind: 'part', part: tool, point: head, distance: 0, dial: engagement };
+    }
+    return null;
   }
 
   // The nearest proxy hit per small part, with how far the ray passes from the real part
@@ -923,6 +953,48 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     }
   }
 
+  // --- turn ring: a dial round each fastener a seated tool can still drive ---
+
+  // The head a tool sits on, where the crank measures its sweep about.
+  const headOf = ({ tool }: Engagement) => connectorWorld(tool.host, tool.hostConnector).position;
+
+  function dialOf(engagement: Engagement, flashing: boolean, rect: DOMRect): Dial {
+    const head = headOf(engagement);
+    const { target } = engagement;
+    const into = connectorWorld(target.hardware, target.hardwareConnector).axis;
+    const view = scratch.fromArray(head).sub(camera.position).toArray();
+    return { centre: screenPoint(head, rect), progress: assembly.get(target.id)!.fastener.progress, clockwise: tightensClockwise(into, view), flashing };
+  }
+
+  // Every frame: a dial on each tool whose fastener isn't home; one that just went home
+  // flashes for TURN_RING.flashMs, then goes.
+  function showDials(delta: number) {
+    if (!turnRing) return;
+    const live = dialEngagements(assembly.all());
+    const tools = new Set(live.map(({ tool }) => tool.hardware));
+    for (const id of dialed) if (!tools.has(id) && homeOf(id)) dialFlashes.set(id, TURN_RING.flashMs);
+    dialed = tools;
+    const rect = domElement.getBoundingClientRect();
+    const dials = live.map((engagement) => dialOf(engagement, false, rect));
+    for (const [id, left] of dialFlashes) {
+      const home = homeOf(id);
+      const remaining = left - delta * 1000;
+      if (!home || remaining <= 0) dialFlashes.delete(id);
+      else {
+        dialFlashes.set(id, remaining);
+        dials.push(dialOf(home, true, rect));
+      }
+    }
+    if (dials.length > 0) turnRing.show(dials);
+    else turnRing.hide();
+  }
+
+  // A seated tool's engagement while its fastener is home, else null.
+  function homeOf(tool: PartId): Engagement | null {
+    const engagement = assembly.crankTarget(tool);
+    return engagement?.target && isFastened(engagement.target.fastener) ? (engagement as Engagement) : null;
+  }
+
   // A cam catches the nearest screwed bolt head within reach of its recess, any bolt.
   function crankContext(joint: AssemblyJoint): ApplyContext {
     if (joint.kind !== KIND.CAM) return {};
@@ -990,6 +1062,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     fadeFlashes(delta);
     guideDrop();
     showRings(ends);
+    showDials(delta);
     for (const joint of assembly.all()) {
       if (joint.kind !== KIND.BOLT && joint.kind !== KIND.CAM) continue;
       const { mesh, body } = partById.get(joint.hardware)!;
@@ -1034,15 +1107,19 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function apply(effect: GestureEffect<Press> | null, event?: MouseEvent) {
     if (!effect) return;
     if (effect.type === 'tap') {
-      if (effect.hit?.kind === 'ring') return;
+      // A ring is for turning: a tap on a gizmo ring or a turn ring does nothing.
+      if (effect.hit?.kind === 'ring' || effect.hit?.dial) return;
       if (effect.hit) tapPart(effect.hit.part);
       else onTap?.(null);
       return;
     }
     if (effect.owner === OWNER.DRAG_PART) {
       if (effect.type === 'dragStart') {
-        // The part's own gesture: its press is on a part, and came with a pointer event.
-        beginDrag((effect.hit as PartPress).part, (effect.hit as PartPress).point, event!);
+        // The part's own gesture: its press is on a part, and came with a pointer event. A
+        // turn ring's is its tool's crank.
+        const { part, point, dial } = effect.hit as PartPress;
+        if (dial) beginCrank(part, dial, event!);
+        else beginDrag(part, point, event!);
         if (drag) events?.emit(grabEvent(drag.part.id, drag.mode));
       }
       else if (!drag) return;
