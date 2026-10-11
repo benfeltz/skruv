@@ -332,6 +332,24 @@ export const SNAP = {
   flashMs: 450,
 };
 
+// Panel fit (src/game/panelFit.ts, driven by src/scene/gestureRouter.ts): a carried panel
+// seats by all its holes at once onto free fastener ends — a dowel standing in another
+// panel. Its own window, wider than SNAP's: a small finger move swings a panel's holes a
+// long way. SNAP stays hardware's.
+export const PANEL = {
+  // A hole this near a free end (metres), and its axis this far off (radians), seeds a fit.
+  maxDistance: 0.15,
+  maxAngle: (60 * Math.PI) / 180,
+  // With the fit seated, any other hole this near a compatible end (metres), axis against
+  // axis within matchAngle (radians), seats on it too.
+  matchTolerance: 0.01,
+  matchAngle: (5 * Math.PI) / 180,
+  // Magnetism: within `zone` metres (panel centre to where it goes), a carried panel with no
+  // fit on offer turns toward where it goes, at `rate` (1/s) at full strength.
+  zone: 0.4,
+  rate: 6,
+};
+
 // Self-aim (src/game/toolAim.ts, driven by src/scene/gestureRouter.ts): dragged hardware —
 // a tool, a dowel, a bolt, a cam lock, a pin, a fitting — whose fastener end comes within
 // `zone` of a seat that takes it turns that end to point in, harder the nearer it is, so
