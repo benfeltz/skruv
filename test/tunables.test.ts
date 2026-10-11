@@ -42,6 +42,8 @@ describe('LIVE_KNOBS', () => {
       'gesture.detentStep',
       'gesture.liftLineX',
       'gesture.liftLineEase',
+      'gesture.turnRingRadius',
+      'fastener.driveSeconds',
       'joint.angularPlay',
       'joint.playDamping',
       'physics.linearDamping',
@@ -52,6 +54,8 @@ describe('LIVE_KNOBS', () => {
       'render.fpsWindow',
       'haptics.seatMs',
       'haptics.lockMs',
+      'haptics.tickMs',
+      'haptics.homeMs',
       'camera.mobileStartScale',
     ]);
   });

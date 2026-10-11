@@ -1,7 +1,7 @@
-import { HAPTICS, PICK, RENDER, RESET, ROOM, TUNE } from './constants.js';
+import { PICK, RENDER, RESET, ROOM, TUNE } from './constants.js';
 import { createAssembly } from './game/assembly.js';
 import { ANY, createBus, EVENT, fpsEvent, recoveryEvent, resetEvent, sessionEvent, tuneEvent } from './game/events.js';
-import { KIND } from '../tools/validate/lib/vocabulary.js';
+import { createHaptics, CUE, cueFor, homeCue, patternFor } from './game/haptics.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
 import { createTunables, LIVE_KNOBS } from './game/tunables.js';
 import { PART_TYPES } from './game/item.js';
@@ -31,6 +31,7 @@ import { createSprue } from './scene/sprue.js';
 import { createBookletPages } from './scene/bookletPages.js';
 import { createBookletSheet } from './ui/booklet.js';
 import { createLiftLine } from './ui/liftLine.js';
+import { createTurnRing } from './ui/turnRing.js';
 import type { PartId } from './game/assembly.js';
 import type { Part } from './game/partMesh.js';
 import type { Pose, Vec3 } from '../tools/validate/lib/geometry.js';
@@ -168,6 +169,23 @@ function select(part: Part | null) {
   else sprue.hide();
 }
 
+// Haptics: every moment buzzes a named cue through the buzzer slot. The web's buzzer plays
+// HAPTICS patterns through navigator.vibrate (absent on iOS Safari; a 0 ms knob is silent); a
+// native shell plugs its own in with haptics.setBuzzer.
+const haptics = createHaptics({
+  buzzer: (cue) => {
+    const pattern = patternFor(cue);
+    if (pattern !== null) navigator.vibrate?.(pattern);
+  },
+});
+events.on(ANY, (event) => {
+  const cue = cueFor(event);
+  if (cue) haptics.cue(cue);
+});
+
+// On a seated tool: the dial showing which way and how far to turn it.
+const turnRing = createTurnRing(document.body);
+
 const router = createGestureRouter({
   domElement: renderer.domElement,
   camera,
@@ -185,6 +203,14 @@ const router = createGestureRouter({
   targetRings,
   events,
   hold,
+  turnRing,
+  // One tick a frame, however many eighths the turn crossed: a buzz can't land faster.
+  onRatchet: () => haptics.cue(CUE.TICK),
+  // A fastener backed off partway and turned home again buzzes as its first arrival did.
+  onRehome: (kind) => {
+    const cue = homeCue(kind);
+    if (cue) haptics.cue(cue);
+  },
 });
 // The display shelf's physics joints, made by the same reconcile every tap and turn runs.
 router.sync();
@@ -316,16 +342,6 @@ function sweep(delta: number) {
   const spots = respawnSpots(loose.map((part) => part.type), boxPose());
   loose.forEach(({ body }, i) => physics.place(body, spots[i].position, spots[i].rotation));
 }
-
-// Android haptics, off the event stream: a tick on a seat, a double tick on a cam lock.
-// navigator.vibrate is absent on iOS; a 0 ms knob turns one off.
-const vibrate = (pattern: number | number[]) => navigator.vibrate?.(pattern);
-events.on(EVENT.SEAT, () => {
-  if (HAPTICS.seatMs > 0) vibrate(HAPTICS.seatMs);
-});
-events.on(EVENT.FASTEN, ({ kind }) => {
-  if (kind === KIND.CAM && HAPTICS.lockMs > 0) vibrate([HAPTICS.lockMs, HAPTICS.lockGapMs, HAPTICS.lockMs]);
-});
 
 // Under sustained load the room renders every other frame; everything else runs every frame.
 const fps = createFpsGuard();

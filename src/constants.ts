@@ -370,6 +370,23 @@ export const RING = {
   pool: 12,
 };
 
+// Turn ring (src/game/turnRing.ts decides, src/ui/turnRing.ts draws): a flat dial facing
+// the screen round the head of each fastener a seated tool is on, with arrows the
+// tightening way and an arc filled to how far home it is. CSS px; it flashes this long as
+// the fastener goes home.
+export const TURN_RING = {
+  // Radius of the drawn ring — a comfortable finger's reach from the head.
+  radius: 64,
+  // Half-width of the grab band either side of the ring: a fingertip.
+  band: 24,
+  // How long the ring flashes as its fastener goes home.
+  flashMs: 400,
+  // Drawn ring and arc widths, and the arrowheads' size.
+  width: 4,
+  arcWidth: 6,
+  arrowSize: 14,
+};
+
 // Hole markings (src/game/decals.ts, drawn by src/game/partMesh.ts). Radii are keyed by
 // the catalog's socket connector type and sized a touch wider than what fills them, so a
 // seated fastener still shows a rim.
@@ -405,6 +422,11 @@ export const FASTENER = {
   // Crank motion this close (CSS px) to the fastener's on-screen centre is ignored — the
   // angle swings wildly there.
   crankDeadzone: 12,
+  // Hold-to-drive: a still press on a seated tool drives its fastener home in this many
+  // seconds, whatever its span — the cam's quarter turn as long as the bolt's two turns.
+  driveSeconds: 1.5,
+  // The ratchet ticks once every this much turn (an eighth), cranked or driven.
+  ratchetRadians: Math.PI / 4,
   // Dowel-stage connections: rigid in translation, this much angular play, and damped so
   // the carcass slumps to the limit and stays (no spring, no bounce). Cam-locked = rigid.
   angularPlayDegrees: 4,
@@ -447,11 +469,15 @@ export const TUNE = {
 };
 
 // Android haptics (navigator.vibrate; iOS Safari has none), in ms: a tick when a part
-// seats, a double tick when a cam lock locks. 0 turns one off.
+// seats (a tool engaging too), a double tick when a cam lock locks, a buzz when a bolt goes
+// home, and a ratchet tick every FASTENER.ratchetRadians a fastener turns. 0 turns one off.
+// The cues they back are src/game/haptics.ts's; a native shell maps those its own way.
 export const HAPTICS = {
   seatMs: 10,
   lockMs: 18,
   lockGapMs: 60,
+  tickMs: 4,
+  homeMs: 24,
 };
 
 // Dev stream (dev server only — never in a build): the socket a dev session streams its
