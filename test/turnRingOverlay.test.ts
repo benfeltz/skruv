@@ -114,6 +114,21 @@ describe('the turn-ring overlay', () => {
     expect(svg.all('turn-ring__dial')).toHaveLength(2);
   });
 
+  it('follows the radius knob live', () => {
+    const { ring, shown, dashOf } = mount();
+    ring.show([dial({ progress: 1 })]);
+    const before = TURN_RING.radius;
+    TURN_RING.radius = before * 2;
+    try {
+      ring.show([dial({ progress: 1 })]);
+      const [d] = shown();
+      expect(d.all('turn-ring__track')[0].attributes.r).toBe(String(before * 2));
+      expect(dashOf(d)).toBeCloseTo(2 * full, 6);
+    } finally {
+      TURN_RING.radius = before;
+    }
+  });
+
   it('hide hides them all, as does showing none', () => {
     const { ring, svg } = mount();
     ring.show([dial(), dial()]);

@@ -73,30 +73,36 @@ const svg = (tag: string, className: string) => {
 // moved by its group: the arc starts at twelve o'clock and runs clockwise (an anticlockwise
 // dial is the same, mirrored); the arrowheads sit at three and nine, pointing along the ring.
 function createDialElements() {
-  const { radius, width, arcWidth, arrowSize: s } = TURN_RING;
   const group = svg('g', 'turn-ring__dial');
   const track = svg('circle', 'turn-ring__track');
-  track.setAttribute('r', String(radius));
-  track.setAttribute('stroke-width', String(width));
   const arc = svg('circle', 'turn-ring__arc');
-  arc.setAttribute('r', String(radius));
-  arc.setAttribute('stroke-width', String(arcWidth));
   const arrows = svg('g', 'turn-ring__arrows');
-  const arrowAt3 = `${radius},${s / 2} ${radius - s / 2},${-s / 2} ${radius + s / 2},${-s / 2}`;
-  for (const turn of [0, 180]) {
+  const heads = [0, 180].map((turn) => {
     const arrow = svg('polygon', 'turn-ring__arrow');
-    arrow.setAttribute('points', arrowAt3);
     arrow.setAttribute('transform', `rotate(${turn})`);
     arrows.append(arrow);
-  }
+    return arrow;
+  });
   group.append(track, arc, arrows);
-  return { group, arc, arrows };
+  let sized = 0;
+  // Sized from TURN_RING, and again whenever its radius knob has moved since.
+  function size() {
+    const { radius, width, arcWidth, arrowSize: s } = TURN_RING;
+    if (sized === radius) return;
+    sized = radius;
+    track.setAttribute('r', String(radius));
+    track.setAttribute('stroke-width', String(width));
+    arc.setAttribute('r', String(radius));
+    arc.setAttribute('stroke-width', String(arcWidth));
+    for (const arrow of heads) arrow.setAttribute('points', `${radius},${s / 2} ${radius - s / 2},${-s / 2} ${radius + s / 2},${-s / 2}`);
+  }
+  return { group, arc, arrows, size };
 }
 
 /**
  * The dial overlay, appended to `container` and hidden until `show(dials)`; one group per
  * dial, grown on demand and reused, so a frame only rewrites attributes. `hide()` hides them
- * all. Sizes read TURN_RING when a dial is first built.
+ * all. Sizes read TURN_RING as each frame draws, so the ?tune radius knob acts live.
  */
 export function createTurnRing(container: HTMLElement) {
   injectStyle();
@@ -121,9 +127,10 @@ export function createTurnRing(container: HTMLElement) {
         pool.push(made);
       }
       const circumference = arcLength(1);
-      pool.forEach(({ group, arc, arrows }, i) => {
+      pool.forEach(({ group, arc, arrows, size }, i) => {
         const dial = dials[i];
         if (!dial) return group.setAttribute('hidden', '');
+        size();
         group.removeAttribute('hidden');
         group.setAttribute('transform', `translate(${dial.centre[0]} ${dial.centre[1]})`);
         group.setAttribute('data-flashing', String(dial.flashing));

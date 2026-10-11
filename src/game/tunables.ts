@@ -11,7 +11,7 @@
 // never a JS object path — and units are the schema's, in the engine's own units; a key
 // once published is renamed only with a profile format bump.
 
-import { AIM, CAMERA, FASTENER, GESTURE, HAPTICS, LIFT_LINE, PHYSICS, RENDER, RING, SNAP, TUNE } from '../constants.js';
+import { AIM, CAMERA, FASTENER, GESTURE, HAPTICS, LIFT_LINE, PHYSICS, RENDER, RING, SNAP, TUNE, TURN_RING } from '../constants.js';
 
 /** Bumped whenever a key is renamed or its unit changes, so old profiles stay readable. */
 export const PROFILE_FORMAT = 1;
@@ -101,6 +101,14 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
     object: LIFT_LINE, prop: 'easeRate', min: 1, max: 30, step: 0.5, unit: '1/s', group: 'gesture',
     desc: 'How fast a touch on the elevation line eases the part to that height',
   },
+  'gesture.turnRingRadius': {
+    object: TURN_RING, prop: 'radius', min: 32, max: 160, step: 4, unit: 'px', group: 'gesture',
+    desc: "How far from a seated tool's fastener its turn ring sits — where a finger grabs to crank it",
+  },
+  'fastener.driveSeconds': {
+    object: FASTENER, prop: 'driveSeconds', min: 0.25, max: 5, step: 0.25, unit: 's', group: 'fastener',
+    desc: 'How long a still hold on a seated tool takes to drive its fastener home',
+  },
   'joint.angularPlay': {
     object: FASTENER, prop: 'angularPlayDegrees', min: 0, max: 15, step: 0.5, unit: 'deg', group: 'joint',
     desc: 'Angular play a dowel-stage joint slumps through before it stops',
@@ -140,6 +148,14 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
   'haptics.lockMs': {
     object: HAPTICS, prop: 'lockMs', min: 0, max: 80, step: 1, unit: 'ms', group: 'haptics',
     desc: 'Each tick of the double vibration when a cam lock locks (Android; 0: off)',
+  },
+  'haptics.tickMs': {
+    object: HAPTICS, prop: 'tickMs', min: 0, max: 30, step: 1, unit: 'ms', group: 'haptics',
+    desc: 'Ratchet tick every eighth of a turn while a fastener is cranked or driven (Android; 0: off)',
+  },
+  'haptics.homeMs': {
+    object: HAPTICS, prop: 'homeMs', min: 0, max: 80, step: 1, unit: 'ms', group: 'haptics',
+    desc: 'Vibration when a bolt is screwed home (Android; 0: off)',
   },
   'camera.mobileStartScale': {
     object: CAMERA, prop: 'mobileStartScale', min: 1, max: 1.75, step: 0.05, unit: 'x', group: 'camera',
