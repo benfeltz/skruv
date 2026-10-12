@@ -263,6 +263,43 @@ export function preferredThrough(preferred: Pose, member: Pose, grabbed: Pose): 
   };
 }
 
+/** How long a fit on offer holds (see PANEL): how far the finger may move the panel, and turn it, since the offer was taken, and how much nearer another fit as good must be. */
+export interface HoldWindow {
+  holdReach: number;
+  holdTurn: number;
+  offerMargin: number;
+}
+
+/**
+ * A fit as offered: the pose it seats the panel at, which pairs it seats (`key`, the same for
+ * the same pairs), whether it is where it goes, its pairs, and where the finger had the panel
+ * when it was first offered (`taken`).
+ */
+export type Offered = Pose & { key: string; preferred?: boolean; pairs?: readonly FitPair[]; taken?: Pose };
+
+/**
+ * The fit on offer with the carried panel at `finger`, given the one on offer now (`current`)
+ * and the best the search finds from there (`next`). The current one holds, pose and all —
+ * hysteresis, so a trembling finger, the line easing or a target the panel nudges never flips
+ * it, nor has seat assist chase it — until the finger has moved or turned the panel out of
+ * `window` since it was taken, or `next` is better (where it goes, else more pairs), or as good
+ * and `offerMargin` nearer the finger. What it seats is judged afresh at release (the router).
+ */
+export function heldOffer<T extends Offered>(current: T | null, next: T | null, finger: Pose, window: HoldWindow): T | null {
+  const fresh = (offer: T | null): T | null => offer && { ...offer, taken: finger };
+  if (!current?.taken) return fresh(next);
+  const { taken } = current;
+  if (length(sub(finger.position, taken.position)) > window.holdReach || turnBetween(finger.rotation, taken.rotation) > window.holdTurn) return fresh(next);
+  if (!next) return current;
+  // The same fit found again: as offered, unless it has since come to be where it goes.
+  if (next.key === current.key) return next.preferred && !current.preferred ? { ...next, taken } : current;
+  if (!!next.preferred !== !!current.preferred) return next.preferred ? fresh(next) : current;
+  const pairs = (offer: T) => offer.pairs?.length ?? 0;
+  if (pairs(next) !== pairs(current)) return pairs(next) > pairs(current) ? fresh(next) : current;
+  const off = (offer: T) => length(sub(offer.position, finger.position));
+  return off(next) + window.offerMargin < off(current) ? fresh(next) : current;
+}
+
 // `offset` within `across` of unit `axis`'s line and `along` along it.
 function alongAxis(offset: Vec3, axis: Vec3, across: number, along: number) {
   const slide = dot(offset, axis);

@@ -964,3 +964,55 @@ describe('an assembly carry let go or cancelled (1.8.3.4 test plan)', () => {
     h.members.slice(-1).forEach((part) => expect(gap(inSide(part).anchor, before.at(-1)!.anchor), part.id).toBeLessThan(1e-6));
   });
 });
+
+// 1.8.3.4 phone finding 1 (Fable review): what a fit on offer seats on is held still under it,
+// and a fit is judged again at release, so it never seats onto something that has moved off.
+describe('the target of a fit on offer (1.8.3.4 phone finding 1)', () => {
+  it('is held still while the fit is on offer, and let go when the drag ends', () => {
+    // Side panel 1 with its dowels pushed home: one free assembly, nothing holding it.
+    const h = stack({ home: [0, 1] });
+    const target = h.side;
+    expect(h.held(target)).toBe(false);
+    const at = h.grabTop();
+    expect(h.offered()).not.toBeNull();
+    expect(h.held(target)).toBe(true);
+    h.canvas.fire('pointercancel', at);
+    expect(h.held(target)).toBe(false);
+  });
+
+  it('stays held still with the panel seated on it until a tap pushes the seats home', () => {
+    const h = stack({ home: [0, 1] });
+    h.canvas.fire('pointerup', h.grabTop());
+    h.router.update(0);
+    expect(h.assembly.all().filter((j) => j.host === h.panel.id && !isFastened(j.fastener))).toHaveLength(2);
+    expect(h.held(h.side)).toBe(true);
+    h.tap(h.top);
+    expect(h.held(h.top)).toBe(false);
+    expect(h.held(h.side)).toBe(false);
+  });
+
+  it('is handed back the moment the player picks it up', () => {
+    const h = stack({ home: [0, 1] });
+    h.canvas.fire('pointerup', h.grabTop());
+    expect(h.held(h.side)).toBe(true);
+    // Grabbed on its face, clear of what stands on it, and let go in place.
+    const at = h.screen([0.4, 0.016, 0.05]);
+    h.canvas.fire('pointerdown', at);
+    h.canvas.fire('pointermove', { clientX: at.clientX, clientY: at.clientY + 12 });
+    h.canvas.fire('pointercancel', at);
+    expect(h.held(h.side)).toBe(false);
+  });
+
+  it('seats nothing when what the fit seats on has moved off since it was offered', () => {
+    const h = stack();
+    const at = h.grabTop();
+    expect(h.offered()).not.toBeNull();
+    // Knocked away under the held fit: the side panel and its dowels, 30 cm off.
+    for (const part of [h.side, ...h.dowels]) {
+      part.mesh.position.x += 0.3;
+      part.mesh.updateMatrixWorld(true);
+    }
+    h.canvas.fire('pointerup', at);
+    expect(h.assembly.all().filter((j) => j.hardware === 'dowel-1' || j.hardware === 'dowel-2').filter((j) => j.host === h.panel.id)).toEqual([]);
+  });
+});
