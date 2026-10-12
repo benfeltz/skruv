@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PHYSICS, RESET, ROOM } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/item.js';
 import { hasEscaped } from '../src/game/dragMath.js';
-import { baseRest, boxPoseOf, createPackedWorldLayout, lidRest, PACKED_BOX as BOX, respawnSpots } from '../src/game/boxLayout.js';
+import { baseRest, boxPoseOf, createPackedWorldLayout, lidRest, packedBox, respawnSpots } from '../src/game/boxLayout.js';
 import { createPhysicsWorld } from '../src/physics/world.js';
 import type { Body, PhysicsWorld } from '../src/physics/world.js';
 import type { PackedPart } from '../src/game/boxLayout.js';
@@ -23,6 +23,7 @@ const poseOf = (body: Body): Pose => {
   return { position: [t.x, t.y, t.z], rotation: [r.x, r.y, r.z, r.w] };
 };
 const yawed = (yaw: number): Quat => [0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)];
+const BOX = packedBox();
 const [width] = BOX.inner;
 
 function spawnBox(physics: PhysicsWorld) {

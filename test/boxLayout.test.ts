@@ -8,7 +8,7 @@ import {
   boxPoseOf,
   createPackedWorldLayout,
   lidRest,
-  PACKED_BOX as BOX,
+  packedBox,
   respawnSpots,
 } from '../src/game/boxLayout.js';
 import { MANIFEST, PACKING, PART_TYPES } from '../src/game/item.js';
@@ -17,6 +17,7 @@ import type { Pose, Quat, Vec3 } from '../tools/validate/lib/geometry.js';
 // The flatpack in the room: the pack's packed placements carried to where the box stands,
 // the lid closed over them, and the patch recovered parts are set down in.
 
+const BOX = packedBox();
 const [width, height, length] = BOX.inner;
 const EPS = 1e-9;
 
