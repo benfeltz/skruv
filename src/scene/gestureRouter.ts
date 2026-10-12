@@ -8,7 +8,7 @@ import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
 import { driveRadians, ratchetTicks } from '../game/driveMath.js';
 import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rebaseDragOffset, rotatedHalfExtents } from '../game/dragMath.js';
-import { isFastened, isTapKind } from '../game/fasteners.js';
+import { isFastened, isTapKind, spanOf } from '../game/fasteners.js';
 import {
   fastenEvent,
   grabEvent,
@@ -1466,7 +1466,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const before = assembly.get(target.id)!.fastener;
     if (!assembly.apply(target.id, { type: 'crank', radians }, crankContext(target))) return;
     const after = assembly.get(target.id)!.fastener;
-    const span = spanOf(target);
+    const span = spanOf(target.kind);
     const clicks = ratchetTicks(before.progress * span, after.progress * span, FASTENER.ratchetRadians);
     // Joints turned together click and buzz once, on the first.
     if (ratchet && clicks > 0) onRatchet?.(clicks);
@@ -1474,12 +1474,6 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (ratchet && isFastened(before) && !isHome(before) && isHome(after)) onRehome?.(target.kind);
     reconcile();
   }
-
-  // The turn that takes a bolt, stud or cam seat from out to home.
-  const spanOf = (joint: AssemblyJoint) => {
-    if (joint.kind === KIND.BOLT) return FASTENER.screwRadians;
-    return joint.kind === KIND.STUD ? FASTENER.studRadians : FASTENER.quarterTurn;
-  };
 
   // --- hold-to-drive: a still press on a seated tool drives its fastener home ---
 
@@ -1498,7 +1492,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const [target] = joints;
     // Fully turned: home, or a cam turned onto nothing. A screwed bolt backed off partway still drives.
     if (!target || target.fastener.progress >= 1) return;
-    joints.forEach((joint, i) => turnFastener(joint, driveRadians(spanOf(joint), FASTENER.driveSeconds, delta), i === 0));
+    joints.forEach((joint, i) => turnFastener(joint, driveRadians(spanOf(joint.kind), FASTENER.driveSeconds, delta), i === 0));
   }
 
   // --- turn ring: a dial round each fastener a seated tool is on ---
@@ -1654,7 +1648,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       const { mesh, body } = partById.get(byHand ? joint.host : joint.hardware)!;
       const { progress } = joint.fastener;
       const axis = scratch.fromArray(byHand ? assembly.hostConnector(joint).axis : assembly.hardwareConnector(joint).axis);
-      const turns = spanOf(joint);
+      const turns = spanOf(joint.kind);
       // A bolt or stud partway in is still held at the mouth; draw it as far in as it has turned.
       const sink = (joint.kind === KIND.BOLT || joint.kind === KIND.STUD) && !isFastened(joint.fastener) ? FASTENER.sinkDepth[joint.kind]! * progress : 0;
       const r = body.rotation();

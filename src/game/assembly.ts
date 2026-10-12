@@ -25,6 +25,7 @@ import {
   isCrankKind,
   isHandTurned,
   isTapKind,
+  spanOf,
   STATE,
   transition,
 } from './fasteners.js';
@@ -177,9 +178,7 @@ const pairKey = (a: PartId, b: PartId) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 // a tool (it fastens nothing).
 function homeEvent(kind: FastenerKind): FastenerEvent | null {
   if (isTapKind(kind)) return { type: 'tap' };
-  if (kind === KIND.BOLT) return { type: 'crank', radians: FASTENER.screwRadians };
-  if (kind === KIND.CAM) return { type: 'crank', radians: FASTENER.quarterTurn };
-  if (kind === KIND.STUD) return { type: 'crank', radians: FASTENER.studRadians };
+  if (isCrankKind(kind)) return { type: 'crank', radians: spanOf(kind) };
   return null;
 }
 

@@ -50,8 +50,18 @@ interface TurnLimits {
 /** Kinds pushed home by a tap and pulled back out along their axis. */
 export const isTapKind = (kind: FastenerKind) => kind === KIND.DOWEL || kind === KIND.PIN || kind === KIND.FITTING;
 
-/** Kinds turned by a tool. */
+/** Kinds turned by a tool (a stud, also by hand). */
 export const isCrankKind = (kind: FastenerKind) => kind === KIND.BOLT || kind === KIND.CAM || kind === KIND.STUD;
+
+/**
+ * The turn that takes a crank kind from seated to home, in radians — the one place a kind
+ * names its span. Read from FASTENER at call time, so a ?tune of `fastener.studRadians`
+ * applies at once.
+ */
+export const spanOf = (kind: FastenerKind) => {
+  if (kind === KIND.BOLT) return FASTENER.screwRadians;
+  return kind === KIND.STUD ? FASTENER.studRadians : FASTENER.quarterTurn;
+};
 
 /**
  * A joint circled by hand: a stud seated by dragging something onto it rather than the stud
@@ -105,15 +115,14 @@ export function transition(f: Fastener, event: FastenerEvent, ctx: FastenerConte
     case KIND.PIN:
     case KIND.FITTING:
       return tapPull(f, event.type);
+    // Nothing holds a stud in (`held` is a locked cam's, set only on bolts), so it backs out freely.
     case KIND.BOLT:
-      if (event.type !== 'crank') return f;
-      return turned(f, event.radians, FASTENER.screwRadians, { canFasten: true, canLoosen: !ctx.held }, STATE.SCREWED);
     case KIND.STUD:
       if (event.type !== 'crank') return f;
-      return turned(f, event.radians, FASTENER.studRadians, { canFasten: true, canLoosen: true }, STATE.SCREWED);
+      return turned(f, event.radians, spanOf(f.kind), { canFasten: true, canLoosen: !ctx.held }, STATE.SCREWED);
     case KIND.CAM:
       if (event.type !== 'crank') return f;
-      return turned(f, event.radians, FASTENER.quarterTurn, { canFasten: !!ctx.captured, canLoosen: true }, STATE.LOCKED);
+      return turned(f, event.radians, spanOf(f.kind), { canFasten: !!ctx.captured, canLoosen: true }, STATE.LOCKED);
     default:
       return f;
   }

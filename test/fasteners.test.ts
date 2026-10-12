@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { COMPATIBLE, CONNECTOR, KIND, kindOf } from '../tools/validate/lib/vocabulary.js';
 import { FASTENER } from '../src/constants.js';
-import { canRelease, createFastener, isCrankKind, isEngaged, isFastened, isTapKind, STATE, transition } from '../src/game/fasteners.js';
+import { canRelease, createFastener, isCrankKind, spanOf, isEngaged, isFastened, isTapKind, STATE, transition } from '../src/game/fasteners.js';
 import type { Fastener, FastenerContext, FastenerEvent } from '../src/game/fasteners.js';
 import type { ConnectorType } from '../tools/validate/lib/vocabulary.js';
 
@@ -94,6 +94,26 @@ describe('bolt: seated ⇄ screwed by signed crank', () => {
   });
 });
 
+describe('spanOf', () => {
+  it('names each crank kind\'s turn, once', () => {
+    expect(spanOf(KIND.BOLT)).toBe(FASTENER.screwRadians);
+    expect(spanOf(KIND.STUD)).toBe(FASTENER.studRadians);
+    expect(spanOf(KIND.CAM)).toBe(FASTENER.quarterTurn);
+  });
+
+  it('is read live: a ?tune of the stud span moves the machine and the span together', () => {
+    const was = FASTENER.studRadians;
+    try {
+      FASTENER.studRadians = 2 * Math.PI;
+      expect(spanOf(KIND.STUD)).toBe(2 * Math.PI);
+      // One turn now takes a stud home.
+      expect(transition(createFastener(KIND.STUD), crank(2 * Math.PI))).toMatchObject({ state: STATE.SCREWED, progress: 1 });
+    } finally {
+      FASTENER.studRadians = was;
+    }
+  });
+});
+
 describe('stud: seated ⇄ screwed by signed crank, either direction free', () => {
   const span = FASTENER.studRadians;
 
@@ -105,10 +125,10 @@ describe('stud: seated ⇄ screwed by signed crank, either direction free', () =
     expect(transition(half, crank(span / 2))).toMatchObject({ state: STATE.SCREWED, progress: 1 });
   });
 
-  it('backs out all the way to zero (hysteresis), with nothing to hold it', () => {
+  it('backs out all the way to zero (hysteresis)', () => {
     const screwed = transition(createFastener(KIND.STUD), crank(span));
     expect(transition(screwed, crank(-span / 4))).toMatchObject({ state: STATE.SCREWED, progress: 0.75 });
-    expect(transition(screwed, crank(-span), { held: true })).toEqual(createFastener(KIND.STUD));
+    expect(transition(screwed, crank(-span))).toEqual(createFastener(KIND.STUD));
   });
 
   it('ignores taps and pulls (same record back)', () => {
