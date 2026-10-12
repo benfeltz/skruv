@@ -4,7 +4,7 @@ import { coverLayout, extentOf } from '../game/coverLayout.js';
 import { itemById } from '../game/item.js';
 import { createViewRenderer } from './bookletPages.js';
 import { createPageCache, FAINT, font, INK, newPage, PAPER } from './pagePaper.js';
-import type { CatalogPage } from '../game/catalogModel.js';
+import type { CatalogPage, ItemPage } from '../game/catalogModel.js';
 import type { ViewItem } from './bookletPages.js';
 import { placeLayout } from '../../tools/validate/lib/geometry.js';
 import type { Size, Vec3 } from '../../tools/validate/lib/geometry.js';
@@ -75,7 +75,7 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
   }
 
   // The item built, its name and box count, and BUILD IT or SOLD OUT.
-  function item(ctx: Ctx, page: Extract<CatalogPage, { kind: 'item' }>) {
+  function item(ctx: Ctx, page: ItemPage) {
     ctx.fillStyle = INK;
     ctx.font = font(layout.nameSize, 800);
     ctx.fillText(page.name, m, m + layout.nameSize * layout.baseline);

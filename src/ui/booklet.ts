@@ -261,9 +261,10 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
   const viewCanvas = pageCanvas(pageW, pageH);
   viewCanvas.setAttribute('role', 'img');
   // A page control rides on the canvas in a frame of its own; a sheet without one keeps the
-  // canvas straight in the view.
-  const actionButton = action ? button('', '') : null;
-  if (action && actionButton) {
+  // canvas straight in the view. `showAction` shows the open page's control, or hides it.
+  let showAction = () => {};
+  if (action) {
+    const actionButton = button('', '');
     const frame = document.createElement('div');
     frame.className = 'booklet-frame';
     actionButton.className = 'booklet-action';
@@ -280,6 +281,11 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
     actionButton.addEventListener('click', () => action.at(page)?.run());
     frame.append(viewCanvas, actionButton);
     view.append(frame);
+    showAction = () => {
+      const control = action.at(page);
+      actionButton.hidden = !control;
+      actionButton.setAttribute('aria-label', control?.label ?? '');
+    };
   } else view.append(viewCanvas);
 
   const controls = document.createElement('div');
@@ -317,11 +323,7 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
     next.disabled = page === pages.count - 1;
     element.dataset.open = String(open);
     thumb.hidden = open;
-    if (action && actionButton) {
-      const control = action.at(page);
-      actionButton.hidden = !control;
-      actionButton.setAttribute('aria-label', control?.label ?? '');
-    }
+    showAction();
     syncSheets();
     for (const fn of listeners) fn({ page, expanded: open });
   }
