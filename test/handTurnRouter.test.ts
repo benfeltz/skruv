@@ -41,10 +41,11 @@ function bench({ turned = 0 } = {}) {
   if (turned > 0) m.assembly.apply(inLeg.id, { type: 'crank', radians: turned * FASTENER.studRadians });
   const progress = () => m.assembly.get(inLeg.id)!.fastener.progress;
   const seated = () => m.assembly.get(inLeg.id) !== null;
-  // Which way round the screen tightens, from where the camera is.
-  const into = connectorInWorld(PART_TYPES.doubleEndedStud.connectors[1], { position: STUD_AT, rotation: FLIPPED }).axis;
+  // Which way round the screen tightens, from where the camera is: a nut — the leg — about
+  // its own hole's axis, the one its drawn twist is about.
+  const holeAxis = connectorInWorld(PART_TYPES.leg.connectors[0], { position: LEG_AT, rotation: FLIPPED }).axis;
   const view = new THREE.Vector3(...FREE_END).sub(m.camera.position).toArray();
-  const tighten = Math.sign(tightenSign(into, view));
+  const tighten = Math.sign(tightenSign(holeAxis, view));
   return { ...m, top, stud, leg, inLeg, progress, seated, tighten };
 }
 
@@ -64,6 +65,17 @@ describe('handTarget', () => {
 });
 
 describe('circling a leg', () => {
+  // A leg going down onto an upward stud tightens clockwise from above, as a nut does — the
+  // way its drawn twist turns, not the way a screw in the same stud would.
+  it('tightens clockwise on screen from above, the way the leg is drawn turning', () => {
+    const b = bench();
+    expect(b.tighten).toBe(1);
+    b.circle(b.screen(b.leg.mesh.position), FREE_END, 90, 0, TURN_RING.radius);
+    expect(b.progress()).toBeGreaterThan(0);
+    b.hold(1);
+    expect(b.dials.at(-1)![0].clockwise).toBe(true);
+  });
+
   it('turns it up the stud going the tightening way round, and back out the other', () => {
     const b = bench();
     const at = b.screen(b.leg.mesh.position);
@@ -235,8 +247,8 @@ describe('a top set onto four studs', () => {
     expect(b.assembly.handTargets('top-1')).toHaveLength(4);
     b.hold(1);
     expect(b.dials.at(-1)).toHaveLength(1);
-    // Counter-clockwise tightens: the studs point up into the top, seen from above.
-    b.circle(b.screen(b.top.mesh.position), b.hole, -120, 0, TURN_RING.radius);
+    // Clockwise tightens: the top is the nut going down onto studs that point up, seen from above.
+    b.circle(b.screen(b.top.mesh.position), b.hole, 120, 0, TURN_RING.radius);
     const [first, ...rest] = b.progresses();
     expect(first).toBeGreaterThan(0);
     for (const p of rest) expect(p).toBeCloseTo(first, 9);

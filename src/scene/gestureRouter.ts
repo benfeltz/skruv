@@ -1472,9 +1472,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const head = headOf(engagement);
     const delta = drag!.crank.move(screenPoint(head), [event.clientX, event.clientY]);
     if (!delta) return;
-    const into = connectorWorld(target.hardware, target.hardwareConnector).axis;
     const view = scratch.fromArray(head).sub(camera.position).toArray();
-    const radians = tightenSign(into, view) * delta;
+    const radians = tightenSign(tightenAxis(engagement), view) * delta;
     // A part set onto several studs turns them all; a tool turns its one.
     const joints = engagement.tool ? [target] : assembly.handTargets(target.mover);
     joints.forEach((joint, i) => turnFastener(joint, radians, i === 0));
@@ -1530,6 +1529,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // Every dial's engagement: each seated tool with its far end, then the hand-turned parts.
   const engagements = () => dialEngagements(assembly.all(), (tool) => assembly.crankTarget(tool.hardware)?.target ?? null);
 
+  // The axis a turn tightens about, in the world. A tool turns a screw: the hardware's
+  // into-hole axis, clockwise seen along it. A part circled by hand is the nut — or carries
+  // the screw — and turns about the axis of the hole it sits on (handSeat), which the drawn
+  // twist is about too: clockwise seen along it, whichever way round the part is.
+  function tightenAxis({ tool, target }: Engagement) {
+    const hand = tool ? null : assembly.handSeat(target);
+    return (hand ? connectorWorld(hand.part, hand.connector) : connectorWorld(target.hardware, target.hardwareConnector)).axis;
+  }
+
   // The head a tool sits on — or, circled by hand, the hole the part sits in — where the
   // crank measures its sweep about.
   const headOf = ({ tool, target }: Engagement) => {
@@ -1541,10 +1549,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function dialOf(engagement: Engagement, flashing: boolean, rect: DOMRect): Dial {
     const head = headOf(engagement);
     const { target } = engagement;
-    const into = connectorWorld(target.hardware, target.hardwareConnector).axis;
     const view = scratch.fromArray(head).sub(camera.position).toArray();
     const { fastener } = target;
-    return { centre: screenPoint(head, rect), progress: fastener.progress, clockwise: tightensClockwise(into, view), flashing, stalled: isStalled(fastener) };
+    return { centre: screenPoint(head, rect), progress: fastener.progress, clockwise: tightensClockwise(tightenAxis(engagement), view), flashing, stalled: isStalled(fastener) };
   }
 
   // Every frame: a dial on each seated tool with a fastener to turn. One whose fastener went
