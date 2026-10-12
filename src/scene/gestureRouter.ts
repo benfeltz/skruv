@@ -1626,12 +1626,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const engagement = assembly.crankTarget(part.id);
     if (engagement) return unseat(engagement.tool);
     // A part set onto its stud and not yet turned lifts off on a tap; once turned it only
-    // comes off by backing out.
+    // comes off by backing out — and the tap is whatever else it is on the part (a dowel
+    // pushed home), never swallowed by the studs.
     const hand = assembly.handTargets(part.id);
-    if (hand.length > 0) {
-      if (hand.every((joint) => joint.fastener.progress === 0)) hand.forEach(unseat);
-      return;
-    }
+    if (hand.length > 0 && hand.every((joint) => joint.fastener.progress === 0)) return hand.forEach(unseat);
     const pressed = [...assembly.tap(part.id, behindFitting), ...pressCarried(part)];
     for (const id of pressed) reportFastening(id, false);
     if (pressed.length > 0) return reconcile();

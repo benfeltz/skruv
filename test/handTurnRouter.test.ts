@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { connectorInWorld } from '../tools/validate/lib/geometry.js';
 import { FASTENER, GESTURE, TURN_RING } from '../src/constants.js';
@@ -222,11 +222,22 @@ describe('a tap on a leg', () => {
     expect(b.assembly.handTarget('leg-1')).toBeNull();
   });
 
-  it('does nothing once it is part-turned', () => {
+  it('does not take it off once it is part-turned, and is the ordinary tap there: pushing home what taps push', () => {
     const b = bench({ turned: 0.5 });
+    const tapped = vi.spyOn(b.assembly, 'tap');
     b.tap(b.screen(b.leg.mesh.position));
     expect(b.seated()).toBe(true);
     expect(b.progress()).toBeCloseTo(0.5, 9);
+    // The tap went on to the part's tap-kind fasteners, as on any part.
+    expect(tapped).toHaveBeenCalledWith('leg-1', expect.any(Function));
+  });
+
+  it('is not the ordinary tap while it is lifted off: the studs take it', () => {
+    const b = bench();
+    const tapped = vi.spyOn(b.assembly, 'tap');
+    b.tap(b.screen(b.leg.mesh.position));
+    expect(b.seated()).toBe(false);
+    expect(tapped).not.toHaveBeenCalled();
   });
 });
 
