@@ -362,7 +362,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // and likewise a part turned by hand (a leg on its stud): a press on it is its own circle,
   // whichever neighbour's ring it lies in. Where bands overlap, the fastener still to go home takes it (pickDial).
   function dialUnder({ clientX, clientY }: ClientPoint, picked: Part | null): PartPress | null {
-    if (picked && turnTarget(picked)) return null;
+    if (picked && (assembly.crankTarget(picked.id) || turnTarget(picked))) return null;
     const rect = domElement.getBoundingClientRect();
     const dials = engagements()
       .filter((engagement) => isDrawn(engagement, dialFlashes.has(engagedPart(engagement))))

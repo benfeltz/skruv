@@ -360,6 +360,33 @@ describe("a press on a leg lying in a neighbour's ring (review)", () => {
   });
 });
 
+describe("a press on a seated tool with nothing to turn, in a neighbour's ring (review)", () => {
+  // The key seated on a buried hex has no joint to turn — but it is still a seated tool, and
+  // a press on it is its own, as before: a neighbour's ring must not take it.
+  it('stays the tool\'s own: a tap takes it off', () => {
+    const top = makePart('top-1', 'top', TOP_POSE.position, TOP_POSE.rotation);
+    const spots = [0, 1].map((i) => connectorInWorld(PART_TYPES.top.connectors[i], TOP_POSE).position);
+    const studs = spots.map((at, i) => makePart(`doubleEndedStud-${i + 1}`, 'doubleEndedStud', [at[0], at[1] + STUD_HALF - SINK, at[2]], FLIPPED));
+    const leg = makePart('leg-1', 'leg', [spots[0][0], spots[0][1] + 2 * STUD_HALF - SINK + LEG_HALF, spots[0][2]], FLIPPED);
+    // The key lying where leg 1's ring band is, seated by the graph on stud 2's buried hex.
+    const head = connectorInWorld(PART_TYPES.doubleEndedStud.connectors[1], { position: [spots[1][0], spots[1][1] + STUD_HALF - SINK, spots[1][2]], rotation: FLIPPED }).position;
+    const key = makePart('allenWrench-1', 'allenWrench', head);
+    const m = mount([top, ...studs, leg, key], [0, 7, 5]);
+    const inTop = m.assembly.seat({ partA: 'doubleEndedStud-2', connectorA: 0, partB: 'top-1', connectorB: 1, mover: 'doubleEndedStud-2' });
+    m.assembly.drive(inTop.id);
+    m.assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 0, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
+    m.assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 1, partB: 'leg-1', connectorB: 0, mover: 'leg-1' });
+    const tool = m.assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'doubleEndedStud-2', connectorB: 2, mover: 'allenWrench-1' });
+    expect(m.assembly.crankTarget('allenWrench-1')).toMatchObject({ tool: { id: tool.id }, target: null });
+    // Precondition: the key's middle is inside leg 1's grab band.
+    const ring = m.screen(connectorInWorld(PART_TYPES.leg.connectors[0], { position: leg.mesh.position.toArray() as Vec3, rotation: FLIPPED }).position);
+    const at = m.screen(key.mesh.position);
+    expect(Math.abs(Math.hypot(at.clientX - ring.clientX, at.clientY - ring.clientY) - TURN_RING.radius)).toBeLessThanOrEqual(TURN_RING.band);
+    m.tap(at);
+    expect(m.assembly.get(tool.id)).toBeNull();
+  });
+});
+
 describe('JOHNNY has no hand-turned part', () => {
   it('never gives a part a hand target: bolts are turned by their wrench, panel dragged on or not', () => {
     setItem('johnny');
