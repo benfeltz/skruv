@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CAMERA, PHYSICS } from '../src/constants.js';
 import { createBus } from '../src/game/events.js';
 import { createHaptics } from '../src/game/haptics.js';
-import { MANIFEST } from '../src/game/item.js';
+import { ITEM_ID, MANIFEST, setItem } from '../src/game/item.js';
+import { createItemSlot } from '../src/game/itemSlot.js';
 import { createPhysicsWorld } from '../src/physics/world.js';
 import { createCameraControls } from '../src/scene/cameraControls.js';
 import { createItemWorld } from '../src/scene/itemWorld.js';
@@ -205,5 +206,27 @@ describe('the item world comes and goes without a trace', () => {
     // Only the camera's own capture listener and OrbitControls' remain — exactly the baseline set.
     expect(canvas.listeners.length).toBe(baseline.canvasListeners);
     expect(() => canvas.dispatch('pointerdown', { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 400, clientY: 400, preventDefault() {} })).not.toThrow();
+  });
+});
+
+describe('the swap: picking from the catalog (1.9.1)', () => {
+  it('pick → repick → repick holds exactly one world, and its manual arrives docked', async () => {
+    const { deps, census } = await engine();
+    const baseline = census();
+    const items = createItemSlot({ select: setItem, build: () => createItemWorld(deps) });
+
+    items.pick('johnny');
+    const one = census();
+    expect(one.physics.registered).toBeGreaterThan(MANIFEST.length);
+    for (let round = 0; round < 2; round++) {
+      run(items.current!, 0.3);
+      items.pick('johnny');
+      expect(ITEM_ID).toBe('johnny');
+      // The old world gone before the new one came: one world's worth, never two.
+      expect(census(), `repick ${round}`).toEqual(one);
+      expect(items.current!.booklet.expanded, `repick ${round}`).toBe(false);
+    }
+    items.current!.dispose();
+    expect(census()).toEqual(baseline);
   });
 });

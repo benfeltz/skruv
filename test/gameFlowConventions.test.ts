@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 // behaviour itself is a manual device check.
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const world = read('src/scene/itemWorld.ts');
+const main = read('src/main.ts');
 const router = read('src/scene/gestureRouter.ts');
 
 describe('repack reset (decision 9)', () => {
@@ -117,15 +118,16 @@ describe('booklet focus (PR #12 review)', () => {
   });
 });
 
-describe('boot with the manual up; tap off to put it down (1.6.1)', () => {
+describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1)', () => {
   const booklet = read('src/ui/booklet.ts');
 
   it('opens on the cover, without moving focus onto a control', () => {
-    // A sheet starts open on its cover unless told otherwise (the catalog docks behind the
-    // manual, 1.9.1); the manual is still created with no `open`, so it boots up.
+    // A sheet starts on its cover, open unless told otherwise. Since 1.9.1 the catalog is the
+    // one that boots up; a manual arrives docked, since a pick goes straight into the room.
     expect(booklet).toMatch(/open: startsOpen = true/);
     expect(booklet).toMatch(/let page = 0;\s*let open = startsOpen;/);
-    expect(world).toMatch(/createBookletSheet\(\{ pages: bookletPages \}\)/);
+    expect(main).toMatch(/createCatalogSheet\(\{\s*pages: catalogPages,\s*open: true,/);
+    expect(world).toMatch(/createBookletSheet\(\{ pages: bookletPages, open: false \}\)/);
   });
 
   it('puts the scrim over the room and the sheet over the scrim, mounted by the item world', () => {

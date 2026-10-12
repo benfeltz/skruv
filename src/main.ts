@@ -2,7 +2,8 @@ import { CATALOG, RENDER, TUNE } from './constants.js';
 import { catalogEntries, createCatalog, pickableSet } from './game/catalogModel.js';
 import { ANY, createBus, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
 import { createHaptics, cueFor, patternFor } from './game/haptics.js';
-import { ITEM_IDS } from './game/item.js';
+import { ITEM_IDS, setItem } from './game/item.js';
+import { createItemSlot } from './game/itemSlot.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
 import { createTunables, LIVE_KNOBS } from './game/tunables.js';
 import { createPhysicsWorld } from './physics/world.js';
@@ -53,8 +54,11 @@ tunables.subscribe((key, value) => {
 });
 
 // The camera pivots about the first part along the middle of the screen as a gesture
-// starts — the item world's parts, never the overlays (src/scene/itemWorld.ts).
-const cameraControls = createCameraControls(camera, renderer.domElement, { pickDistance: (origin, direction) => world.pickDistance(origin, direction) });
+// starts — the item world's parts, never the overlays (src/scene/itemWorld.ts); before the
+// first pick there are none, and it pivots about the floor.
+const cameraControls = createCameraControls(camera, renderer.domElement, {
+  pickDistance: (origin, direction) => items.current?.pickDistance(origin, direction) ?? null,
+});
 
 // Rotation is free by default; the toggle turns 90° detents on.
 const snapRotate = createToggleButton({ label: 'Snap rotate' });
@@ -74,39 +78,54 @@ events.on(ANY, (event) => {
   if (cue) haptics.cue(cue);
 });
 
-// The catalog: every item the game carries, buildable or sold out by the build's flag. It
-// outlives item worlds, so it is the room's, mounted before any manual — behind it in the
-// corner stack. BUILD IT puts it down.
+// The item in the room — its flatpack, display, booklet and everything that works them
+// (src/scene/itemWorld.ts) — none until the first pick. A pick swaps it in-scene: the old
+// world disposed, the door turned to the new pack, the new world built (src/game/itemSlot.ts).
+const items = createItemSlot({
+  select: setItem,
+  build: () =>
+    createItemWorld({
+      scene,
+      camera,
+      domElement: renderer.domElement,
+      physics,
+      cameraControls,
+      events,
+      haptics,
+      isFree: () => !snapRotate.pressed,
+      // Its controls page shows the device in hand: a coarse pointer is a touch screen.
+      pages: () => createBookletPages(renderer, { scheme: matchMedia('(pointer: coarse)').matches ? 'touch' : 'desktop' }),
+    }),
+});
+
+// The catalog is the splash: the game boots with it open on its cover, and it outlives
+// item worlds, so it is the room's — mounted before any manual, behind it in the corner
+// stack. BUILD IT goes straight into the room: the item is built, the catalog put down,
+// and both wait in the corner (the new manual docked in front). Until the first pick there
+// is no room to go back to, so nothing puts it down.
 const catalogPages = createCatalogPages(renderer, createCatalog(catalogEntries(), CATALOG.order, pickableSet(CATALOG.pickable, ITEM_IDS)));
-const catalog = createCatalogSheet({ pages: catalogPages, onPick: () => catalog.setOpen(false) });
+const catalog = createCatalogSheet({
+  pages: catalogPages,
+  open: true,
+  canClose: () => items.current !== null,
+  onPick: (id) => {
+    items.pick(id);
+    catalog.setOpen(false);
+  },
+});
 document.body.append(catalog.scrim, catalog.thumb, catalog.element);
 catalogPages.prerender();
-
-// The item in the room — its flatpack, display, booklet and everything that works them
-// (src/scene/itemWorld.ts). The game opens with its booklet in hand, on its cover.
-const world = createItemWorld({
-  scene,
-  camera,
-  domElement: renderer.domElement,
-  physics,
-  cameraControls,
-  events,
-  haptics,
-  isFree: () => !snapRotate.pressed,
-  // Its controls page shows the device in hand: a coarse pointer is a touch screen.
-  pages: () => createBookletPages(renderer, { scheme: matchMedia('(pointer: coarse)').matches ? 'touch' : 'desktop' }),
-});
 // The real sheet now covers index.html's stand-in; it goes in the frame that first paints it.
 requestAnimationFrame(() => document.getElementById('pre-splash')?.remove());
 
-document.body.append(createResetButton({ onReset: () => world.repack() }).element);
+document.body.append(createResetButton({ onReset: () => items.current?.repack() }).element);
 
 // Under sustained load the room renders every other frame; everything else runs every frame.
 const fps = createFpsGuard();
 
 createLoop((delta, rawDelta) => {
   cameraControls.update(delta);
-  world.update(delta);
+  items.current?.update(delta);
   // Measured on the true delta: the clamped one would floor every slow device at 15 fps.
   const { render, sample } = fps.frame(rawDelta);
   if (sample) events.emit(fpsEvent(Math.round(sample.fps * 10) / 10, sample.skipping));

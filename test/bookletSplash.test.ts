@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOOKLET_UI, GESTURE } from '../src/constants.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
+import { createCatalogSheet } from '../src/ui/catalogSheet.js';
+import type { CatalogPage } from '../src/game/catalogModel.js';
 
 // The real booklet sheet (src/ui/booklet.ts), driven headlessly on a minimal fake DOM:
 // it boots open on the cover, and whenever it is open a tap on the room puts it down and
@@ -21,6 +23,7 @@ class FakeElement {
   disabled: boolean;
   textContent: string;
   captured: number[];
+  style: Record<string, string>;
   declare id?: string; // set by the sheet on its style element
 
   constructor(tag: string) {
@@ -34,6 +37,7 @@ class FakeElement {
     this.disabled = false;
     this.textContent = '';
     this.captured = [];
+    this.style = {};
   }
   setAttribute(name: string, value: string) {
     this.attributes[name] = value;
@@ -410,3 +414,96 @@ describe('tap to put down, from the 1.6.2 test plan', () => {
     expect(changes).toEqual([{ page: 0, expanded: false }]);
   });
 });
+
+// 1.9.1: the catalog is the splash — the same sheet, mounted as src/main.ts mounts it: open
+// on its cover at boot, nothing putting it down until a pick has built a room, BUILD IT laid
+// over a buildable item's tag only.
+describe('boot with the catalog up (1.9.1)', () => {
+  const catalogPages: CatalogPage[] = [
+    { kind: 'cover' },
+    { kind: 'item', id: 'johnny', name: 'JOHNNY', partCount: 60, pickable: false },
+    { kind: 'item', id: 'blank', name: 'BLANK', partCount: 9, pickable: true },
+  ];
+
+  function mountCatalog() {
+    let room = false;
+    const picks: string[] = [];
+    const catalog = createCatalogSheet({
+      pages: { count: catalogPages.length, pages: catalogPages, canvas: () => ({}) as CanvasImageSource },
+      open: true,
+      canClose: () => room,
+      onPick: (id) => {
+        picks.push(id);
+        room = true;
+        catalog.setOpen(false);
+      },
+    }) as unknown as FakeBooklet;
+    dom.body.append(catalog.scrim, catalog.thumb, catalog.element);
+    const [handle, view, controls] = catalog.element.children;
+    const [, buildIt] = view.children[0].children;
+    const next = controls.children[2];
+    const key = (k: string) => dom.windowListeners.get('keydown')!.forEach((fn) => fn({ key: k }));
+    return { catalog, handle, view, buildIt, next, key, picks };
+  }
+
+  it('boots open on its cover, with no BUILD IT on the cover', () => {
+    const { catalog, buildIt } = mountCatalog();
+    expect(catalog.expanded).toBe(true);
+    expect(catalog.currentPage).toBe(0);
+    expect(buildIt.hidden).toBe(true);
+  });
+
+  it('before any pick, nothing puts it down: the room, the sheet, the handle, Escape, a swipe', () => {
+    const { catalog, handle, view, key } = mountCatalog();
+    tapRoom(catalog.scrim);
+    press(view);
+    handle.fire('click');
+    key('Escape');
+    press(view, { dy: BOOKLET_UI.swipeDistance });
+    expect(catalog.expanded).toBe(true);
+  });
+
+  it('a sold-out page has no BUILD IT, and tapping its stamp builds nothing', () => {
+    const { catalog, buildIt, next, view, picks } = mountCatalog();
+    next.fire('click');
+    expect(catalog.currentPage).toBe(1);
+    expect(buildIt.hidden).toBe(true);
+    press(view);
+    expect(picks).toEqual([]);
+    expect(catalog.expanded).toBe(true);
+  });
+
+  it('BUILD IT on a buildable page picks it and goes straight into the room, the catalog docked', () => {
+    const { catalog, buildIt, next, picks } = mountCatalog();
+    next.fire('click');
+    next.fire('click');
+    expect(buildIt.hidden).toBe(false);
+    expect(buildIt.attributes['aria-label']).toBe('Build BLANK');
+    // A press on the tag is the tag's: no sheet tap, no swipe.
+    press(buildIt);
+    expect(catalog.expanded).toBe(true);
+    buildIt.fire('click');
+    expect(picks).toEqual(['blank']);
+    expect(catalog.expanded).toBe(false);
+    expect(catalog.thumb.hidden).toBe(false);
+  });
+
+  it('after a pick it is a booklet like any other: reopened from the stack, a tap off puts it down', () => {
+    const { catalog, buildIt, next } = mountCatalog();
+    next.fire('click');
+    next.fire('click');
+    buildIt.fire('click');
+    catalog.thumb.fire('click');
+    expect(catalog.expanded).toBe(true);
+    tapRoom(catalog.scrim);
+    expect(catalog.expanded).toBe(false);
+  });
+
+  it('sits behind the manual in the corner stack, fanned up', () => {
+    const { catalog } = mountCatalog();
+    expect(catalog.thumb.style.transform).toMatch(/^translate\(\d+px, -\d+px\) rotate\(-?[\d.]+rad\)$/);
+    const manual = mount();
+    expect(manual.booklet.thumb.style.transform).toBeUndefined();
+  });
+});
+

@@ -123,10 +123,11 @@ export function createItemWorld({ scene, camera, domElement, physics, cameraCont
   add(gizmo.object);
 
   // The booklet: pages drawn from the same models, flipped freely — reference, never a gate.
-  // It opens in hand, on its cover; while it is open, a tap outside the sheet puts it down
-  // and does nothing else.
+  // It arrives docked in the corner, in front of the catalog: BUILD IT goes straight into the
+  // room, so nothing opens on a pick (Ben, 1.9.1). Opened, a tap outside the sheet puts it
+  // down and does nothing else.
   const bookletPages = pages();
-  const booklet = createBookletSheet({ pages: bookletPages });
+  const booklet = createBookletSheet({ pages: bookletPages, open: false });
   document.body.append(booklet.scrim, booklet.thumb, booklet.element);
 
   // While the booklet is open, the open page's parts glow — the player's own set only, never
