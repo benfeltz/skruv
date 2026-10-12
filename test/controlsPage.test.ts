@@ -43,6 +43,6 @@ describe('CONTROLS', () => {
     expect(main).toMatch(/createBookletPages\(renderer, \{ scheme: matchMedia\('\(pointer: coarse\)'\)\.matches \? 'touch' : 'desktop' \}\)/);
     const pages = readFileSync(new URL('../src/scene/bookletPages.ts', import.meta.url), 'utf8');
     expect(pages).not.toMatch(/matchMedia/);
-    expect(pages).toMatch(/gamePages: \[\{ kind: 'controls', scheme \}\]/);
+    expect(pages).toMatch(/gamePages: gamePagesFor\(scheme\)/);
   });
 });

@@ -42,6 +42,9 @@ export interface BuildStep {
  */
 export type GamePage = { kind: 'controls'; scheme: Scheme };
 
+/** The pages the game adds to the booklet, in order, for a device using `scheme`. */
+export const gamePagesFor = (scheme: Scheme): GamePage[] => [{ kind: 'controls', scheme }];
+
 /** One booklet page as drawn — see `createBooklet`. */
 export type BookletPage =
   | GamePage

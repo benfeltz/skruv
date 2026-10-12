@@ -3,7 +3,7 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { BOOKLET, COLORS } from '../constants.js';
-import { createBooklet } from '../game/bookletModel.js';
+import { createBooklet, gamePagesFor } from '../game/bookletModel.js';
 import { CONTROLS } from '../game/controlsPage.js';
 import { ASSEMBLED, IDENTITY, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../game/item.js';
 import type { InstanceId } from '../game/item.js';
@@ -76,7 +76,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     manifest: MANIFEST,
     partTypes: PART_TYPES,
     resolve: resolveConnector,
-    gamePages: [{ kind: 'controls', scheme }],
+    gamePages: gamePagesFor(scheme),
   });
   const [pageW, pageH] = BOOKLET.pageSize;
   const cache = new Map<number, HTMLCanvasElement>();
