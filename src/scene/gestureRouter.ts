@@ -287,6 +287,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const offset = new THREE.Vector3();
   const twist = new THREE.Quaternion();
   const other = new THREE.Quaternion();
+  const pivot = new THREE.Vector3();
+  // The parts whose turn the update loop has drawn this frame (a top on four studs once).
+  const turnedNow = new Set<Part>();
   const toolPose = new THREE.Matrix4();
   const hardwarePose = new THREE.Matrix4();
   const unitScale = new THREE.Vector3(1, 1, 1);
@@ -1639,15 +1642,21 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     showRings(ends);
     showPanelRings(goal);
     showDials(delta);
+    turnedNow.clear();
     for (const joint of assembly.all()) {
       if (joint.kind !== KIND.BOLT && joint.kind !== KIND.CAM && joint.kind !== KIND.STUD) continue;
       // What turns on screen is the side that was dragged into the seat: a bolt, cam or stud
       // driven by its tool, or a leg circled by hand onto its stud — the hole side, turning
       // and advancing about its own hole's axis instead of the hardware's.
       const byHand = joint.kind === KIND.STUD && joint.mover === joint.host;
-      const { mesh, body } = partById.get(byHand ? joint.host : joint.hardware)!;
+      const turned = partById.get(byHand ? joint.host : joint.hardware)!;
+      // A part set onto several studs is drawn once, by its first: the hole its dial is on.
+      if (byHand && turnedNow.has(turned)) continue;
+      turnedNow.add(turned);
+      const { mesh, body } = turned;
       const { progress } = joint.fastener;
-      const axis = scratch.fromArray(byHand ? assembly.hostConnector(joint).axis : assembly.hardwareConnector(joint).axis);
+      const seat = byHand ? assembly.hostConnector(joint) : assembly.hardwareConnector(joint);
+      const axis = scratch.fromArray(seat.axis);
       const turns = spanOf(joint.kind);
       // A bolt or stud partway in is still held at the mouth; draw it as far in as it has turned.
       const sink = (joint.kind === KIND.BOLT || joint.kind === KIND.STUD) && !isFastened(joint.fastener) ? FASTENER.sinkDepth[joint.kind]! * progress : 0;
@@ -1656,7 +1665,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       mesh.quaternion.set(r.x, r.y, r.z, r.w);
       mesh.position.set(t.x, t.y, t.z).add(offset.copy(axis).multiplyScalar(sink).applyQuaternion(mesh.quaternion));
       // Tightening turns clockwise seen from the head: positive about the into-hole axis.
-      mesh.quaternion.multiply(twist.setFromAxisAngle(axis, progress * turns));
+      twist.setFromAxisAngle(axis, progress * turns);
+      // About the seat's own line — a hole off the part's origin (a top's) stays on its stud
+      // — which for hardware, whose seat is on its axis, is the origin's line too.
+      pivot.fromArray(seat.position);
+      offset.copy(pivot).sub(scratch.copy(pivot).applyQuaternion(twist)).applyQuaternion(mesh.quaternion);
+      mesh.position.add(offset);
+      mesh.quaternion.multiply(twist);
     }
     followRiders();
     for (const [id, { fastener, grip }] of toolGrips) {

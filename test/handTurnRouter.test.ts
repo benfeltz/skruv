@@ -177,6 +177,27 @@ describe('a top set onto four studs', () => {
     b.canvas.fire('pointerup', at);
   });
 
+  // Review: the twist is about the stud's line through the hole, not the top's own centre —
+  // a hole far from the origin must stay on its stud while the top turns.
+  it('turns about its first hole, which stays on its stud — the rest of the top swings round it', () => {
+    const b = tableBench();
+    const holeNow = () =>
+      connectorInWorld(PART_TYPES.top.connectors[0], {
+        position: b.top.mesh.position.toArray() as Vec3,
+        rotation: b.top.mesh.quaternion.toArray() as Quat,
+      }).position;
+    const before = holeNow();
+    // A quarter turn (an eighth of the span).
+    for (const joint of b.onTop) b.assembly.apply(joint.id, { type: 'crank', radians: FASTENER.studRadians / 8 });
+    b.hold(1);
+    const after = holeNow();
+    expect(after[0]).toBeCloseTo(before[0], 9);
+    expect(after[2]).toBeCloseTo(before[2], 9);
+    // The top itself has turned: its centre is no longer where it was, nor its orientation.
+    expect(b.top.mesh.quaternion.angleTo(new THREE.Quaternion())).toBeGreaterThan(0);
+    expect(Math.hypot(b.top.mesh.position.x, b.top.mesh.position.z)).toBeGreaterThan(0);
+  });
+
   it('lifts the top off all four on a tap at zero', () => {
     const b = tableBench();
     b.tap(b.screen(b.top.mesh.position));
