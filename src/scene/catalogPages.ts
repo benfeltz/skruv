@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { BOOKLET, CATALOG, COLORS } from '../constants.js';
+import { BOOKLET, CATALOG } from '../constants.js';
 import { rotatedHalfExtents } from '../game/dragMath.js';
 import { itemById } from '../game/item.js';
 import { createViewRenderer } from './bookletPages.js';
+import { createPageCache, FAINT, font, INK, newPage, PAPER } from './pagePaper.js';
 import type { CatalogPage } from '../game/catalogModel.js';
 import type { ViewItem } from './bookletPages.js';
 import type { Size, Vec3 } from '../../tools/validate/lib/geometry.js';
@@ -19,11 +20,6 @@ import type { Size, Vec3 } from '../../tools/validate/lib/geometry.js';
 type Ctx = CanvasRenderingContext2D;
 type Rect = [number, number, number, number];
 
-const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
-const INK = css(COLORS.bookletInk);
-const FAINT = css(COLORS.bookletFaint);
-const PAPER = css(COLORS.bookletPaper);
-const font = (size: number, weight = 700) => `${weight} ${size}px ${BOOKLET.font}`;
 // A view item's type names its item too: `johnny/sidePanel`, or `room/floor` for the cover's walls.
 const typeOf = (item: string, type: string) => `${item}/${type}`;
 
@@ -44,21 +40,6 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
   for (const id of items) for (const [type, { size }] of Object.entries(itemById(id).partTypes)) sizes.set(typeOf(id, type), size);
   const views = createViewRenderer(renderer, (type) => sizes.get(type)!);
 
-  const cache = new Map<number, HTMLCanvasElement>();
-
-  function newPage() {
-    const canvas = document.createElement('canvas');
-    canvas.width = pageW;
-    canvas.height = pageH;
-    // A canvas always gives a 2D context the first time it is asked.
-    const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = PAPER;
-    ctx.fillRect(0, 0, pageW, pageH);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.textBaseline = 'alphabetic';
-    return { canvas, ctx };
-  }
 
   function drawView(ctx: Ctx, viewItems: ViewItem[], [x, y, w, h]: Rect) {
     ctx.drawImage(views.render(viewItems, Math.round(w), Math.round(h)), x, y, w, h);
@@ -186,34 +167,7 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
     return sheet.canvas;
   }
 
-  function canvas(index: number) {
-    if (!cache.has(index)) cache.set(index, draw(index));
-    return cache.get(index)!;
-  }
-
-  // Set by dispose(): a catalog put away for good stops drawing in idle time.
-  let disposed = false;
-
-  function prerender() {
-    const idle: (fn: () => void) => unknown = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 1));
-    const next = (i: number) => {
-      if (i >= pages.length) return;
-      idle(() => {
-        if (disposed) return;
-        canvas(i);
-        next(i + 1);
-      });
-    };
-    next(0);
-  }
-
-  /** Stops any idle drawing still to come and frees the drawings' GPU resources. */
-  function dispose() {
-    disposed = true;
-    views.dispose();
-  }
-
-  return { count: pages.length, pages, canvas, prerender, dispose };
+  return { count: pages.length, pages, ...createPageCache(pages.length, draw, views.dispose) };
 }
 
 export type CatalogPages = ReturnType<typeof createCatalogPages>;

@@ -4,11 +4,13 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { BOOKLET, COLORS } from '../constants.js';
 import { createBooklet, gamePagesFor } from '../game/bookletModel.js';
+import { createPageCache, FAINT, font, INK, newPage, PAPER } from './pagePaper.js';
 import { CONTROLS } from '../game/controlsPage.js';
 import { ASSEMBLED, IDENTITY, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../game/item.js';
 import type { InstanceId } from '../game/item.js';
 import type { BuildStep, PartCount } from '../game/bookletModel.js';
 import type { PictogramId, Scheme } from '../game/controlsPage.js';
+import type { Sheet } from './pagePaper.js';
 import type { Quat, Size, Vec3 } from '../../tools/validate/lib/geometry.js';
 
 // The booklet's pages, drawn from the same part models the room uses, so a page can never
@@ -34,16 +36,7 @@ export interface ViewItem {
   weight: Weight;
 }
 
-/** A page being drawn: its canvas and that canvas's context. */
-interface Sheet {
-  canvas: HTMLCanvasElement;
-  ctx: Ctx;
-}
 
-const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
-const INK = css(COLORS.bookletInk);
-const FAINT = css(COLORS.bookletFaint);
-const PAPER = css(COLORS.bookletPaper);
 const QUARTER_TURN = Math.SQRT1_2;
 // How the carcass lies on a page. On its left side: a quarter turn about z lays -x down.
 // Face down: a quarter turn about x lays the front (+z) down, back up.
@@ -54,7 +47,6 @@ const ORIENTATION = { lying: LYING, faceDown: FACE_DOWN, upright: UPRIGHT };
 // A loose panel is drawn lying on its largest face: the quarter turn that brings its
 // thinnest axis (x, y or z) up.
 const LAY_FLAT: THREE.Quaternion[] = [LYING, UPRIGHT, new THREE.Quaternion(-QUARTER_TURN, 0, 0, QUARTER_TURN)];
-const font = (size: number, weight = 700) => `${weight} ${size}px ${BOOKLET.font}`;
 
 // Render targets come back linear; the page canvas wants sRGB bytes.
 const TO_SRGB = Uint8ClampedArray.from({ length: 256 }, (_, i) => {
@@ -79,7 +71,6 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     gamePages: gamePagesFor(scheme),
   });
   const [pageW, pageH] = BOOKLET.pageSize;
-  const cache = new Map<number, HTMLCanvasElement>();
   const views = createViewRenderer(renderer, (type) => PART_TYPES[type].size);
 
   const partById = new Map(layout.parts.map((p) => [p.id, p]));
@@ -91,19 +82,6 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     }
     return ids;
   };
-
-  function newPage(): Sheet {
-    const canvas = document.createElement('canvas');
-    canvas.width = pageW;
-    canvas.height = pageH;
-    // A canvas always gives a 2D context the first time it is asked.
-    const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = PAPER;
-    ctx.fillRect(0, 0, pageW, pageH);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    return { canvas, ctx };
-  }
 
   // An outline drawing of `items` into the rectangle [x, y, w, h] of the page.
   function drawView(ctx: Ctx, items: ViewItem[], [x, y, w, h]: Rect, orientation = UPRIGHT) {
@@ -347,34 +325,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     return sheet.canvas;
   }
 
-  function canvas(index: number) {
-    if (!cache.has(index)) cache.set(index, draw(index));
-    return cache.get(index)!;
-  }
-
-  // Set by dispose(): a booklet put away for good stops drawing in idle time.
-  let disposed = false;
-
-  function prerender() {
-    const idle: (fn: () => void) => unknown = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 1));
-    const next = (i: number) => {
-      if (i >= pages.length) return;
-      idle(() => {
-        if (disposed) return;
-        canvas(i);
-        next(i + 1);
-      });
-    };
-    next(0);
-  }
-
-  /** Stops any idle drawing still to come and frees the drawings' GPU resources — the item's booklet is going away. */
-  function dispose() {
-    disposed = true;
-    views.dispose();
-  }
-
-  return { count: pages.length, pages, canvas, prerender, dispose };
+  return { count: pages.length, pages, ...createPageCache(pages.length, draw, views.dispose) };
 }
 
 /**
