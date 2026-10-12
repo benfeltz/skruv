@@ -28,6 +28,9 @@ export const COLORS = {
   partWrench: 0x2f3136,
   partScrewdriver: 0xd9a21b,
   partFitting: 0x5d5853,
+  // Second tones on a shaped piece (src/game/partShapes.ts): bare metal (the screwdriver's
+  // blade and shaft) reuses partMetal; a recess, like the slot across a cam lock, is dark.
+  partRecess: 0x2b2826,
   cardboard: 0xb48a5a,
   // Rotate gizmo rings, one per world axis, x/y/z in the usual red/green/blue.
   gizmoX: 0xe5534b,
