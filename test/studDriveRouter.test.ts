@@ -106,6 +106,35 @@ describe('the key on a stud', () => {
   });
 });
 
+describe('the end under the key (review)', () => {
+  it('takes no leg: the hex the key sits in shares its spot with the stud end, so a leg is not dropped over it', () => {
+    const top = makePart('top-1', 'top', TOP_POSE.position, TOP_POSE.rotation);
+    const stud = makePart('doubleEndedStud-1', 'doubleEndedStud', STUD_AT, FLIPPED);
+    const tipOffset = new THREE.Vector3(...TIP).applyQuaternion(new THREE.Quaternion(...TIP_DOWN));
+    const key = makePart('allenWrench-1', 'allenWrench', [HEAD[0] - tipOffset.x, HEAD[1] - tipOffset.y + 0.02, HEAD[2] - tipOffset.z], TIP_DOWN);
+    // The leg hung over the free end, hole down and a hair above it.
+    const leg = makePart('leg-1', 'leg', [HEAD[0], HEAD[1] + PART_TYPES.leg.size[1] / 2 + 0.005, HEAD[2]], FLIPPED);
+    const m = mount([top, stud, key, leg]);
+    m.assembly.seat({ partA: stud.id, connectorA: 0, partB: top.id, connectorB: 0, mover: stud.id });
+    // The key onto the free hex, the way the bench does.
+    const at = m.screen(key.mesh.position);
+    m.canvas.fire('pointerdown', at);
+    m.canvas.fire('pointermove', { clientX: at.clientX, clientY: at.clientY + 15 });
+    m.canvas.fire('pointermove', at);
+    m.canvas.fire('pointerup', at);
+    m.hold(1);
+    expect(m.assembly.all().some((j) => j.kind === KIND.TOOL)).toBe(true);
+    // Then the leg let go over the end the key sits in.
+    const over = m.screen(leg.mesh.position);
+    m.canvas.fire('pointerdown', over);
+    m.canvas.fire('pointermove', { clientX: over.clientX, clientY: over.clientY + 15 });
+    m.canvas.fire('pointermove', over);
+    m.canvas.fire('pointerup', over);
+    m.hold(1);
+    expect(m.assembly.all().filter((j) => j.host === 'leg-1')).toEqual([]);
+  });
+});
+
 describe('the buried hex (review)', () => {
   it('takes no key: let go over the hex at the end sunk in the top, it seats nowhere', () => {
     const b = bench({ engaged: false });
@@ -127,4 +156,3 @@ describe('the buried hex (review)', () => {
     expect(b.toolJoint()?.hostConnector ?? HEX_AT_FREE_END).toBe(HEX_AT_FREE_END);
   });
 });
-

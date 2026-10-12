@@ -441,8 +441,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     for (const j of assembly.all()) {
       taken.add(`${j.hardware}#${j.hardwareConnector}`);
       taken.add(`${j.host}#${j.hostConnector}`);
-      // A stud's hex at an end sunk in a hole is as taken as the end: no key seats in the wood.
+      // Whatever shares a spot with a taken connector is as taken: a stud's hex at an end sunk
+      // in a hole (no key seats in the wood), and the end under a key sitting in its hex (no
+      // leg drops over it, burying the key).
       for (const index of assembly.coincident(j.hardware, j.hardwareConnector)) taken.add(`${j.hardware}#${index}`);
+      for (const index of assembly.coincident(j.host, j.hostConnector)) taken.add(`${j.host}#${index}`);
     }
     return (c: WorldConnector) => taken.has(`${c.part.id}#${c.index}`);
   }
