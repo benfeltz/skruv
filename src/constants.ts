@@ -134,7 +134,7 @@ export const BOOKLET_UI = {
 // (src/game/catalogModel.ts lays it out). Its items' names and part counts are their packs'.
 export const CATALOG = {
   // Which items this build lets you build: a comma list of ids from the build-time flag
-  // VITE_PICKABLE (`VITE_PICKABLE=blank npm run build`), or every item when it is unset or
+  // VITE_PICKABLE (`VITE_PICKABLE=johnny npm run build`), or every item when it is unset or
   // empty. Every build ships every pack; the rest show SOLD OUT. (vite.config.ts reads this
   // file in plain Node, where import.meta.env doesn't exist.)
   pickable: import.meta.env?.VITE_PICKABLE ?? '',
