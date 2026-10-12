@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BOOKLET, CATALOG } from '../constants.js';
-import { rotatedHalfExtents } from '../game/dragMath.js';
+import { coverLayout, extentOf } from '../game/coverLayout.js';
 import { itemById } from '../game/item.js';
 import { createViewRenderer } from './bookletPages.js';
 import { createPageCache, FAINT, font, INK, newPage, PAPER } from './pagePaper.js';
@@ -40,7 +40,6 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
   for (const id of items) for (const [type, { size }] of Object.entries(itemById(id).partTypes)) sizes.set(typeOf(id, type), size);
   const views = createViewRenderer(renderer, (type) => sizes.get(type)!);
 
-
   // Item `id` built, as its pack poses it, moved by `offset`: its parts, drawn `weight`.
   const built = (id: string, offset: Vec3, weight: ViewItem['weight']): ViewItem[] =>
     placeLayout(itemById(id).assembled.parts, { position: offset, rotation: [0, 0, 0, 1] }).map(({ type, position, rotation }) => ({
@@ -49,21 +48,6 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
       rotation,
       weight,
     }));
-
-  // Item `id` built: how far it reaches either way along x and z, and how tall it stands.
-  function bounds(id: string) {
-    const { assembled, partTypes } = itemById(id);
-    const min: Vec3 = [Infinity, Infinity, Infinity];
-    const max: Vec3 = [-Infinity, -Infinity, -Infinity];
-    for (const { type, position, rotation } of assembled.parts) {
-      const half = rotatedHalfExtents(partTypes[type].size.map((d) => d / 2), rotation);
-      for (let i = 0; i < 3; i++) {
-        min[i] = Math.min(min[i], position[i] - half[i]);
-        max[i] = Math.max(max[i], position[i] + half[i]);
-      }
-    }
-    return { min, max };
-  }
 
   // SKRUV over a room corner — floor, back wall, left wall, all faint — with every item
   // standing in it, built and bold, side by side along the back wall.
@@ -74,27 +58,14 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
     ctx.font = font(layout.taglineSize, 600);
     ctx.fillText(words.tagline, m + layout.taglineIndent, m + layout.wordmarkSize * layout.baseline + layout.taglineSize * layout.subtitleDrop);
 
-    const { gap, margin, wallRise, slab } = CATALOG.cover;
-    const viewItems: ViewItem[] = [];
-    let x = 0;
-    let depth = 0;
-    let height = 0;
-    for (const id of items) {
-      const { min, max } = bounds(id);
-      // Back face against the line z = 0, left edge at x.
-      viewItems.push(...built(id, [x - min[0], -min[1], -min[2]], 'bold'));
-      x += max[0] - min[0] + gap;
-      depth = Math.max(depth, max[2] - min[2]);
-      height = Math.max(height, max[1] - min[1]);
-    }
-    const width = Math.max(0, x - gap) + 2 * margin;
-    const floorDepth = depth + 2 * margin;
-    const wall = height * wallRise;
-    const room: { name: string; size: Size; at: Vec3 }[] = [
-      { name: 'floor', size: [width, slab, floorDepth], at: [width / 2 - margin, -slab / 2, floorDepth / 2 - margin] },
-      { name: 'back', size: [width, wall, slab], at: [width / 2 - margin, wall / 2, -margin - slab / 2] },
-      { name: 'left', size: [slab, wall, floorDepth], at: [-margin - slab / 2, wall / 2, floorDepth / 2 - margin] },
-    ];
+    const { offsets, room } = coverLayout(
+      items.map((id) => {
+        const { assembled, partTypes } = itemById(id);
+        return extentOf(assembled.parts, (type) => partTypes[type].size);
+      }),
+      CATALOG.cover,
+    );
+    const viewItems: ViewItem[] = items.flatMap((id, i) => built(id, offsets[i], 'bold'));
     for (const { name, size, at } of room) {
       sizes.set(typeOf('room', name), size);
       viewItems.push({ type: typeOf('room', name), position: at, rotation: [0, 0, 0, 1], weight: 'faint' });
