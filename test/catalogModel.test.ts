@@ -1,6 +1,8 @@
+import { existsSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CATALOG } from '../src/constants.js';
-import { catalogEntries, createCatalog, pickableSet } from '../src/game/catalogModel.js';
+import { catalogEntries, createCatalog } from '../src/game/catalogModel.js';
+import { pickableSet } from '../src/game/pickable.js';
 import { ITEM_IDS, itemById } from '../src/game/item.js';
 
 // The catalog as data (1.9.1): a cover, then a page per item, each buildable or sold out by
@@ -53,6 +55,18 @@ describe('createCatalog', () => {
     const pages = createCatalog(catalogEntries(), CATALOG.order, pickableSet(CATALOG.pickable, ITEM_IDS));
     expect(pages.length).toBe(1 + ITEM_IDS.length);
     expect(pages.every((page) => page.kind === 'cover' || page.pickable)).toBe(true);
+  });
+});
+
+describe('the registry and the items/ folders', () => {
+  // vite.config.ts checks VITE_PICKABLE against the folders that hold a pack, not the
+  // registry: the two must name the same items.
+  it('carries exactly the items that have a pack folder', () => {
+    const root = new URL('../items/', import.meta.url);
+    const folders = readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && existsSync(new URL(`${entry.name}/flatpack.json`, root)))
+      .map((entry) => entry.name);
+    expect([...ITEM_IDS].sort()).toEqual(folders.sort());
   });
 });
 

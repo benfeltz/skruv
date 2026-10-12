@@ -1,5 +1,6 @@
 import { CATALOG, RENDER, TUNE } from './constants.js';
-import { catalogEntries, createCatalog, pickableSet } from './game/catalogModel.js';
+import { catalogEntries, createCatalog } from './game/catalogModel.js';
+import { pickableSet } from './game/pickable.js';
 import { ANY, createBus, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
 import { createHaptics, cueFor, patternFor } from './game/haptics.js';
 import { ITEM_ID, ITEM_IDS, setItem } from './game/item.js';

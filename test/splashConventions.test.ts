@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, BOOKLET_UI, CATALOG, COLORS } from '../src/constants.js';
-import { catalogEntries, createCatalog, pickableSet } from '../src/game/catalogModel.js';
+import { catalogEntries, createCatalog } from '../src/game/catalogModel.js';
+import { pickableSet } from '../src/game/pickable.js';
 import { ITEM_IDS } from '../src/game/item.js';
 
 // 1.6.1, re-pinned for 1.9.1 (the catalog is the splash): index.html's pre-splash is plain
