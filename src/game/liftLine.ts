@@ -37,6 +37,16 @@ export function easeHeight(current: number, target: number, rate: number, delta:
   return current + (target - current) * (1 - Math.exp(-rate * delta));
 }
 
+/**
+ * Shift + scroll as a lift of the held part (CSS px, up positive), or null without Shift —
+ * the wheel's own business then. Scrolling down lowers. With Shift down macOS turns a
+ * vertical scroll sideways, so `deltaX` stands in when `deltaY` is 0.
+ */
+export function shiftScroll({ deltaX, deltaY, shiftKey }: { deltaX: number; deltaY: number; shiftKey: boolean }) {
+  if (!shiftKey) return null;
+  return -(deltaY !== 0 ? deltaY : deltaX);
+}
+
 /** True when a press at screen y `pointerY` lands on the knob drawn at `knobY`. */
 export function pressOnKnob(pointerY: number, knobY: number, radius: number) {
   return Math.abs(pointerY - knobY) <= radius;

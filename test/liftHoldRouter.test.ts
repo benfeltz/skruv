@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { GESTURE } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
 import { connectorInWorld, rotateVector } from '../tools/validate/lib/geometry.js';
 import { createCompoundPhysics } from '../src/scene/compoundPhysics.js';
@@ -23,8 +24,10 @@ type FakeListener = (event: object) => void;
 
 class FakeCanvas {
   listeners = new Map<string, FakeListener>();
-  addEventListener(type: string, fn: FakeListener) {
+  options = new Map<string, unknown>();
+  addEventListener(type: string, fn: FakeListener, options?: unknown) {
     this.listeners.set(type, fn);
+    this.options.set(type, options);
   }
   removeEventListener(type: string) {
     this.listeners.delete(type);
@@ -487,5 +490,90 @@ describe('the line for a selected panel holding its dowel (1.8.3.4 test plan)', 
     const rise = h.side.mesh.position.y - before[0];
     expect(rise).toBeGreaterThan(0.25);
     expect(h.loose.mesh.position.y - before[1]).toBeCloseTo(rise, 6);
+  });
+});
+
+// 1.8.3.3: Shift + scroll sets the held part's height, with or without a drag, through the
+// hold — and stops the wheel there, so OrbitControls (listening on the same canvas, after
+// the router's capture listener) never zooms. Without Shift the wheel is as it was.
+describe('Shift + scroll sets the held part\'s height', () => {
+  // A wheel event as the browser hands it, recording whether the router stopped it.
+  const wheel = (init: { deltaX?: number; deltaY?: number; shiftKey: boolean }) => ({
+    deltaX: 0,
+    deltaY: 0,
+    ...init,
+    preventDefault: vi.fn(),
+    stopImmediatePropagation: vi.fn(),
+  });
+  const stopped = (event: ReturnType<typeof wheel>) =>
+    event.preventDefault.mock.calls.length > 0 && event.stopImmediatePropagation.mock.calls.length > 0;
+
+  it('listens in the capture phase, ahead of the camera\'s own wheel listener', () => {
+    const { canvas } = harness();
+    expect(canvas.options.get('wheel')).toMatchObject({ capture: true, passive: false });
+  });
+
+  it('raises a selected, held part with no drag, and stops the event so the camera never zooms', () => {
+    const { canvas, hold, dowel, jumps } = harness();
+    hold.held = dowel;
+    hold.height = 0.3;
+    const event = wheel({ deltaY: -100, shiftKey: true });
+    canvas.fire('wheel', event);
+    expect(jumps).toEqual([0.3 + 100 * GESTURE.desktopLiftRate]);
+    expect(stopped(event)).toBe(true);
+    const down = wheel({ deltaY: 40, shiftKey: true });
+    canvas.fire('wheel', down);
+    expect(hold.height).toBeCloseTo(0.3 + 60 * GESTURE.desktopLiftRate, 12);
+  });
+
+  it('reads the sideways scroll macOS turns a Shift-scroll into', () => {
+    const { canvas, hold, dowel } = harness();
+    hold.held = dowel;
+    hold.height = 0.3;
+    canvas.fire('wheel', wheel({ deltaX: -100, shiftKey: true }));
+    expect(hold.height).toBeCloseTo(0.3 + 100 * GESTURE.desktopLiftRate, 12);
+  });
+
+  it('raises the held part mid-drag, the drag riding up with it, and stops the event', () => {
+    const { router, canvas, hold, dowel, moves, jumps, dragDowel } = harness();
+    dragDowel();
+    hold.held = dowel;
+    hold.height = 0.3;
+    router.update(0);
+    const event = wheel({ deltaY: -100, shiftKey: true });
+    canvas.fire('wheel', event);
+    router.update(0);
+    expect(jumps.length).toBeGreaterThan(0);
+    expect(hold.height).toBeGreaterThan(0.35);
+    expect(moves.at(-1)![1]).toBeCloseTo(hold.height, 9);
+    expect(stopped(event)).toBe(true);
+  });
+
+  it('leaves the wheel to the camera without Shift, and with Shift when nothing is held', () => {
+    const { canvas, hold, dowel, jumps } = harness();
+    hold.held = dowel;
+    hold.height = 0.3;
+    const plain = wheel({ deltaY: -100, shiftKey: false });
+    canvas.fire('wheel', plain);
+    expect(jumps).toEqual([]);
+    expect(hold.height).toBe(0.3);
+    expect(plain.preventDefault).not.toHaveBeenCalled();
+    expect(plain.stopImmediatePropagation).not.toHaveBeenCalled();
+    hold.held = null;
+    const free = wheel({ deltaY: -100, shiftKey: true });
+    canvas.fire('wheel', free);
+    expect(jumps).toEqual([]);
+    expect(free.stopImmediatePropagation).not.toHaveBeenCalled();
+  });
+
+  it('still lifts a drag on a plain wheel, as before', () => {
+    const { router, canvas, dowel, moves, dragDowel } = harness();
+    dragDowel();
+    const before = dowel.mesh.position.y;
+    const event = wheel({ deltaY: -100, shiftKey: false });
+    canvas.fire('wheel', event);
+    router.update(0);
+    expect(moves.at(-1)![1]).toBeGreaterThan(before);
+    expect(event.stopImmediatePropagation).not.toHaveBeenCalled();
   });
 });

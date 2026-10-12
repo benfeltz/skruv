@@ -83,7 +83,8 @@ export function resolveHit<R extends { distance: number }, P extends { distance:
  * `wheel` is the desktop stand-in. The camera never sees the lift finger. The primary
  * pointer only ever drags: its whole travel, both ways, moves the part across its plane.
  * (Shift is the desktop's hold, not a lift: src/main.ts keeps the part up while it is
- * down, and the drag goes on across the floor as any drag.)
+ * down, the drag goes on across the floor as any drag, and src/scene/gestureRouter.ts
+ * turns Shift + scroll into height through the hold.)
  *
  * `cameraEnabled` is false only while a part or ring gesture is live; the router mirrors
  * it onto the camera after every event, so every end path hands the camera back.

@@ -249,7 +249,7 @@ export const GESTURE = {
   detentStep: Math.PI / 2,
   // Lift channel (second finger on a phone): metres per CSS px of travel.
   liftRate: 0.004,
-  // Desktop lift (Shift-held drag, or the wheel): gentler, since trackpad scrolls and mouse
+  // Desktop lift (the wheel mid-drag, or Shift + scroll): gentler, since trackpad scrolls and mouse
   // sweeps run to hundreds of px where a phone's second finger travels tens.
   desktopLiftRate: 0.0025,
   // A lifted part's top stays this far below the walls' tops.

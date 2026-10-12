@@ -19,6 +19,7 @@ import {
   unseatEvent,
 } from '../game/events.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
+import { shiftScroll } from '../game/liftLine.js';
 import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
 import { findFits, heldOffer, isPanelType, preferredPoses, preferredTargets, preferredThrough, rankFits } from '../game/panelFit.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
@@ -239,7 +240,8 @@ const PULL_AXIS_PROBE = 0.05;
  *            line's height, so seats are offered where the part really is and letting go
  *            of the line leaves the drag there; a seat newly on offer eases the line to its
  *            height, as seat assist eases everything else, and back once the offer is
- *            gone; a lift (second finger, wheel) moves the line with it. A part the
+ *            gone; a lift (second finger, wheel) moves the line with it, and Shift + scroll
+ *            moves the line, with or without a drag. A part the
  *            line holds is never a seat for another: it drops when the line lets go.
  *   turnRing — `{ show(dials), hide() }` (src/ui/turnRing.ts): a dial round the head of
  *            each fastener a seated tool is on, for as long as it is on, its arc at the
@@ -1758,9 +1760,24 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     syncCamera();
   }
 
-  // Desktop lift; OrbitControls is disabled mid-drag, so the wheel never also zooms.
+  // Shift + scroll sets the held part's height, with or without a drag — through the hold,
+  // the line's own path: a drag of the held part rides up with it, as any lift does.
+  function liftHeld(lift: number) {
+    if (holdsDrag()) return liftDrag(lift, GESTURE.desktopLiftRate);
+    hold!.jump(hold!.height + lift * GESTURE.desktopLiftRate);
+  }
+
+  // Capture phase, as onPointerDown: this runs before OrbitControls' own wheel listener on
+  // the same element. Shift + scroll with a part held is that part's height, and the event
+  // stops here, so the camera never zooms then — the router's call at its own listener,
+  // never a reach into OrbitControls. Without Shift the wheel lifts a part mid-drag
+  // (OrbitControls is disabled then) and otherwise zooms as ever.
   function onWheel(event: WheelEvent) {
-    apply(state.wheel({ dy: event.deltaY }), event);
+    const lift = shiftScroll(event);
+    if (lift === null || !hold?.held) return apply(state.wheel({ dy: event.deltaY }), event);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    liftHeld(lift);
   }
 
   function onInterrupted() {
@@ -1778,7 +1795,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   domElement.addEventListener('pointerup', onPointerUp);
   domElement.addEventListener('pointercancel', onPointerCancel);
   domElement.addEventListener('lostpointercapture', onPointerCancel);
-  domElement.addEventListener('wheel', onWheel, { passive: true });
+  domElement.addEventListener('wheel', onWheel, { capture: true, passive: false });
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('blur', onInterrupted);
 
@@ -1821,7 +1838,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       domElement.removeEventListener('pointerup', onPointerUp);
       domElement.removeEventListener('pointercancel', onPointerCancel);
       domElement.removeEventListener('lostpointercapture', onPointerCancel);
-      domElement.removeEventListener('wheel', onWheel);
+      domElement.removeEventListener('wheel', onWheel, { capture: true });
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('blur', onInterrupted);
     },
