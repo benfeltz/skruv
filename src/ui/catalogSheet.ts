@@ -29,6 +29,7 @@ export function createCatalogSheet({
     canClose,
     action: {
       rect: CATALOG.page.action,
+      radius: CATALOG.page.tagRadius,
       at: (index) => {
         const item = buildTarget(pages.pages[index]);
         return item && { label: `Build ${item.name}`, run: () => onPick(item.id) };

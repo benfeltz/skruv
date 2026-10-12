@@ -159,7 +159,6 @@ function injectStyle() {
       position: absolute;
       padding: 0;
       border: 0;
-      border-radius: 10px;
       background: transparent;
       cursor: pointer;
       touch-action: manipulation;
@@ -195,8 +194,8 @@ export interface BookletSheetOptions {
   slot?: number;
   /** Whether it may be put down now. While false, every way of closing it does nothing. */
   canClose?: () => boolean;
-  /** A control on a page: `at(page)` names it, or null for none; it sits over `rect` (page pixels). */
-  action?: { rect: readonly [number, number, number, number]; at(page: number): PageAction | null };
+  /** A control on a page: `at(page)` names it, or null for none; it sits over `rect`, its corners rounded by `radius` (page pixels). */
+  action?: { rect: readonly [number, number, number, number]; radius: number; at(page: number): PageAction | null };
 }
 
 /**
@@ -252,7 +251,15 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
     frame.className = 'booklet-frame';
     actionButton.className = 'booklet-action';
     const [x, y, w, h] = action.rect;
-    Object.assign(actionButton.style, { left: `${(100 * x) / pageW}%`, top: `${(100 * y) / pageH}%`, width: `${(100 * w) / pageW}%`, height: `${(100 * h) / pageH}%` });
+    // Its corners as the drawn tag's: the radius as a share of the button's own width and height.
+    const r = action.radius;
+    Object.assign(actionButton.style, {
+      left: `${(100 * x) / pageW}%`,
+      top: `${(100 * y) / pageH}%`,
+      width: `${(100 * w) / pageW}%`,
+      height: `${(100 * h) / pageH}%`,
+      borderRadius: `${(100 * r) / w}% / ${(100 * r) / h}%`,
+    });
     actionButton.addEventListener('click', () => action.at(page)?.run());
     frame.append(viewCanvas, actionButton);
     view.append(frame);

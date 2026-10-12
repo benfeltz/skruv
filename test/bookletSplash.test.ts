@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BOOKLET_UI, GESTURE } from '../src/constants.js';
+import { BOOKLET_UI, CATALOG, GESTURE } from '../src/constants.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
 import { createCatalogSheet } from '../src/ui/catalogSheet.js';
 import type { CatalogPage } from '../src/game/catalogModel.js';
@@ -538,6 +538,12 @@ describe('boot with the catalog up (1.9.1)', () => {
     expect(manual.expanded).toBe(false);
     expect(manual.thumb.inert).toBe(false);
     expect(catalog.thumb.inert).toBe(false);
+  });
+
+  it("rounds BUILD IT's corners as the drawn tag's, in shares of the button", () => {
+    const { buildIt } = mountCatalog();
+    const [, , w, h] = CATALOG.page.action;
+    expect(buildIt.style.borderRadius).toBe(`${(100 * CATALOG.page.tagRadius) / w}% / ${(100 * CATALOG.page.tagRadius) / h}%`);
   });
 });
 
