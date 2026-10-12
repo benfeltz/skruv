@@ -92,7 +92,7 @@ function jointIndices(pairs: [ConnectorName, ConnectorName][] = [], layout: Book
  *   tool     — the tool in hand ('allenWrench', 'screwdriver') or null
  *   tip      — the page tips the carcass upright (a 'special' tipUpright page)
  *   pose     — 'parts' (loose), 'lying' (carcass on its left side), 'faceDown' (on its
- *              front, back up) or 'upright'
+ *              front, back up), 'upright' or 'upsideDown' (a table turned over on its top)
  */
 export function createBuildSteps(
   pages: PageFields[],

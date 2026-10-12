@@ -43,7 +43,10 @@ const QUARTER_TURN = Math.SQRT1_2;
 const LYING = new THREE.Quaternion(0, 0, QUARTER_TURN, QUARTER_TURN);
 const FACE_DOWN = new THREE.Quaternion(QUARTER_TURN, 0, 0, QUARTER_TURN);
 const UPRIGHT = new THREE.Quaternion();
-const ORIENTATION = { lying: LYING, faceDown: FACE_DOWN, upright: UPRIGHT };
+// Upside down: a half turn about x puts the top at the bottom, so a table's top lies on the
+// page's floor and its legs stand up from it.
+const UPSIDE_DOWN = new THREE.Quaternion(1, 0, 0, 0);
+const ORIENTATION = { lying: LYING, faceDown: FACE_DOWN, upright: UPRIGHT, upsideDown: UPSIDE_DOWN };
 // A loose panel is drawn lying on its largest face: the quarter turn that brings its
 // thinnest axis (x, y or z) up.
 const LAY_FLAT: THREE.Quaternion[] = [LYING, UPRIGHT, new THREE.Quaternion(-QUARTER_TURN, 0, 0, QUARTER_TURN)];

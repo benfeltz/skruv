@@ -21,6 +21,8 @@ export const CONNECTOR = Object.freeze({
   WRENCH_TIP: 'wrenchTip',
   CAM_SLOT: 'camSlot',
   SCREWDRIVER_TIP: 'screwdriverTip',
+  STUD_END: 'studEnd',
+  STUD_HOLE: 'studHole',
 });
 
 /** A connector type the format knows (the schema's `connectorType`). */
@@ -35,6 +37,7 @@ export const COMPATIBLE: Readonly<Partial<Record<ConnectorType, ConnectorType>>>
   [CONNECTOR.BACK_FITTING_TIP]: CONNECTOR.BACK_FITTING_HOLE,
   [CONNECTOR.WRENCH_TIP]: CONNECTOR.BOLT_HEAD,
   [CONNECTOR.SCREWDRIVER_TIP]: CONNECTOR.CAM_SLOT,
+  [CONNECTOR.STUD_END]: CONNECTOR.STUD_HOLE,
 });
 
 export const areCompatible = (a: ConnectorType, b: ConnectorType) => COMPATIBLE[a] === b || COMPATIBLE[b] === a;
@@ -51,6 +54,8 @@ export const KIND = Object.freeze({
   BOLT: 'bolt',
   CAM: 'cam',
   TOOL: 'tool',
+  // A double-ended threaded stud: each end screws into a threaded hole (a table leg's, a top's).
+  STUD: 'stud',
 });
 
 /** A fastener machine the format knows (the schema's `fastenerKind`). */
@@ -65,6 +70,7 @@ const KIND_FOR_END: Readonly<Partial<Record<ConnectorType, FastenerKind>>> = Obj
   [CONNECTOR.CAM_LOCK_BODY]: KIND.CAM,
   [CONNECTOR.WRENCH_TIP]: KIND.TOOL,
   [CONNECTOR.SCREWDRIVER_TIP]: KIND.TOOL,
+  [CONNECTOR.STUD_END]: KIND.STUD,
 });
 
 /** The fastener kind for a pair whose fastener end has connector type `endType`, or null. */
@@ -80,7 +86,7 @@ export const kindOf = (endType: ConnectorType) => KIND_FOR_END[endType] ?? null;
  *   mateTolerance — how exactly a derived pair must then sit (the validator's coincidence rule)
  */
 export const CONTRACT = Object.freeze({
-  sinkDepth: Object.freeze<Partial<Record<FastenerKind, number>>>({ dowel: 0.015, pin: 0.008, fitting: 0.012, bolt: 0.011, cam: 0.012 }),
+  sinkDepth: Object.freeze<Partial<Record<FastenerKind, number>>>({ dowel: 0.015, pin: 0.008, fitting: 0.012, bolt: 0.011, cam: 0.012, stud: 0.02 }),
   captureRadius: 0.015,
   mateReach: 0.005,
   mateTolerance: 1e-6,
