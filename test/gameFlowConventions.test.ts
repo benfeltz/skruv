@@ -121,7 +121,11 @@ describe('boot with the manual up; tap off to put it down (1.6.1)', () => {
   const booklet = read('src/ui/booklet.ts');
 
   it('opens on the cover, without moving focus onto a control', () => {
-    expect(booklet).toMatch(/let page = 0;\s*let open = true;/);
+    // A sheet starts open on its cover unless told otherwise (the catalog docks behind the
+    // manual, 1.9.1); the manual is still created with no `open`, so it boots up.
+    expect(booklet).toMatch(/open: startsOpen = true/);
+    expect(booklet).toMatch(/let page = 0;\s*let open = startsOpen;/);
+    expect(world).toMatch(/createBookletSheet\(\{ pages: bookletPages \}\)/);
   });
 
   it('puts the scrim over the room and the sheet over the scrim, mounted by the item world', () => {

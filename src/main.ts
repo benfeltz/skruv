@@ -1,6 +1,8 @@
-import { RENDER, TUNE } from './constants.js';
+import { CATALOG, RENDER, TUNE } from './constants.js';
+import { catalogEntries, createCatalog, pickableSet } from './game/catalogModel.js';
 import { ANY, createBus, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
 import { createHaptics, cueFor, patternFor } from './game/haptics.js';
+import { ITEM_IDS } from './game/item.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
 import { createTunables, LIVE_KNOBS } from './game/tunables.js';
 import { createPhysicsWorld } from './physics/world.js';
@@ -12,6 +14,8 @@ import { createLoop } from './scene/loop.js';
 import { createRoom } from './scene/room.js';
 import { createScene } from './scene/scene.js';
 import { createBookletPages } from './scene/bookletPages.js';
+import { createCatalogPages } from './scene/catalogPages.js';
+import { createCatalogSheet } from './ui/catalogSheet.js';
 import { createResetButton } from './ui/resetButton.js';
 import { createToggleButton } from './ui/toggleButton.js';
 
@@ -45,6 +49,7 @@ tunables.subscribe((key, value) => {
   if (group === 'physics' || group === 'joint') physics.retune();
   if (key === 'render.maxPixelRatio') renderer.setPixelRatio(clampPixelRatio(window.devicePixelRatio, RENDER.maxPixelRatio));
   if (key === 'camera.mobileStartScale') cameraControls.frame(startPose());
+  if (group === 'catalog') catalog.place();
 });
 
 // The camera pivots about the first part along the middle of the screen as a gesture
@@ -68,6 +73,14 @@ events.on(ANY, (event) => {
   const cue = cueFor(event);
   if (cue) haptics.cue(cue);
 });
+
+// The catalog: every item the game carries, buildable or sold out by the build's flag. It
+// outlives item worlds, so it is the room's, mounted before any manual — behind it in the
+// corner stack. BUILD IT puts it down.
+const catalogPages = createCatalogPages(renderer, createCatalog(catalogEntries(), CATALOG.order, pickableSet(CATALOG.pickable, ITEM_IDS)));
+const catalog = createCatalogSheet({ pages: catalogPages, onPick: () => catalog.setOpen(false) });
+document.body.append(catalog.scrim, catalog.thumb, catalog.element);
+catalogPages.prerender();
 
 // The item in the room — its flatpack, display, booklet and everything that works them
 // (src/scene/itemWorld.ts). The game opens with its booklet in hand, on its cover.

@@ -1,4 +1,5 @@
-import { BOOKLET, BOOKLET_UI, COLORS, GESTURE } from '../constants.js';
+import { BOOKLET, BOOKLET_UI, CATALOG, COLORS, GESTURE } from '../constants.js';
+import { fanOffset, STACK_SLOT } from '../game/cornerStack.js';
 
 // The booklet in hand: a bottom sheet over the room. Collapsed, it is a thumbnail of the
 // open page in the corner — the only thing it puts under a finger, so the room stays
@@ -139,22 +140,59 @@ function injectStyle() {
     }
     .booklet-controls button:disabled { opacity: 0.3; cursor: default; }
     .booklet-count { font-variant-numeric: tabular-nums; }
+    /* A page with a control on it (the catalog's BUILD IT): the canvas and, over the part of
+       it the control is drawn on, a clear button — placed in page fractions, so it tracks
+       the canvas at any size. */
+    .booklet-frame { position: relative; display: block; max-width: 100%; line-height: 0; }
+    .booklet-action {
+      position: absolute;
+      padding: 0;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
   `;
   document.head.append(style);
 }
 
+/** A control laid over a page — the catalog's BUILD IT: what it is called, and what it does. */
+export interface PageAction {
+  label: string;
+  run(): void;
+}
+
+/** What `createBookletSheet` takes — see there. */
+export interface BookletSheetOptions {
+  pages: { count: number; canvas(index: number): CanvasImageSource };
+  /** What the sheet is, for its accessible names: 'instructions' by default, 'catalog'. */
+  name?: string;
+  /** Whether it starts open, on its cover (default) — or docked as a thumb. */
+  open?: boolean;
+  /** Its place in the corner stack (STACK_SLOT): the manual in front by default, each further one fanned out behind it (CATALOG.stack). */
+  slot?: number;
+  /** Whether it may be put down now. While false, every way of closing it does nothing. */
+  canClose?: () => boolean;
+  /** A control on a page: `at(page)` names it, or null for none; it sits over `rect` (page pixels). */
+  action?: { rect: readonly [number, number, number, number]; at(page: number): PageAction | null };
+}
+
 /**
- * The booklet sheet for `pages` (`{ count, canvas(index) }`, src/scene/bookletPages.ts).
- * Returns `{ scrim, thumb, element, currentPage, expanded, onChange(fn), dispose() }`: mount
- * all three elements; `onChange(fn)` calls `fn({ page, expanded })` whenever either changes;
- * `dispose()` takes it all back off the page. Starts open on page 0, the cover. State is
- * the module's own and read-only outside it.
+ * The booklet sheet for `pages` (`{ count, canvas(index) }`, src/scene/bookletPages.ts or
+ * src/scene/catalogPages.ts). Returns `{ scrim, thumb, element, currentPage, expanded,
+ * onChange(fn), setOpen(value), place(), dispose() }`: mount all three elements;
+ * `onChange(fn)` calls `fn({ page, expanded })` whenever either changes; `setOpen` opens or
+ * docks it from outside; `place()` re-applies its stack slot after a ?tune change;
+ * `dispose()` takes it all back off the page. Starts open on page 0, the cover, unless told
+ * otherwise. State is the module's own and read-only outside it.
  */
-export function createBookletSheet({ pages }: { pages: { count: number; canvas(index: number): CanvasImageSource } }) {
+export function createBookletSheet({ pages, name = 'instructions', open: startsOpen = true, slot = STACK_SLOT.manual, canClose = () => true, action }: BookletSheetOptions) {
   injectStyle();
   const listeners = new Set<(state: { page: number; expanded: boolean }) => void>();
   let page = 0;
-  let open = true;
+  let open = startsOpen;
   let lingering: ReturnType<typeof setTimeout> | null = null;
 
   // Over the whole room — canvas and buttons alike — and under the sheet, while the
@@ -166,25 +204,37 @@ export function createBookletSheet({ pages }: { pages: { count: number; canvas(i
   const thumb = document.createElement('button');
   thumb.type = 'button';
   thumb.className = 'booklet-thumb';
-  thumb.setAttribute('aria-label', 'Open the instructions');
+  thumb.setAttribute('aria-label', `Open the ${name}`);
   // Full page resolution: hovered, the thumbnail is read at up to a quarter of the screen.
   const thumbCanvas = pageCanvas(pageW, pageH);
   thumb.append(thumbCanvas);
 
   const element = document.createElement('section');
   element.className = 'booklet';
-  element.setAttribute('aria-label', 'Instructions');
+  element.setAttribute('aria-label', name[0].toUpperCase() + name.slice(1));
 
   const handle = document.createElement('button');
   handle.type = 'button';
   handle.className = 'booklet-handle';
-  handle.setAttribute('aria-label', 'Close the instructions');
+  handle.setAttribute('aria-label', `Close the ${name}`);
 
   const view = document.createElement('div');
   view.className = 'booklet-page';
   const viewCanvas = pageCanvas(pageW, pageH);
   viewCanvas.setAttribute('role', 'img');
-  view.append(viewCanvas);
+  // A page control rides on the canvas in a frame of its own; a sheet without one keeps the
+  // canvas straight in the view.
+  const actionButton = action ? button('', '') : null;
+  if (action && actionButton) {
+    const frame = document.createElement('div');
+    frame.className = 'booklet-frame';
+    actionButton.className = 'booklet-action';
+    const [x, y, w, h] = action.rect;
+    Object.assign(actionButton.style, { left: `${(100 * x) / pageW}%`, top: `${(100 * y) / pageH}%`, width: `${(100 * w) / pageW}%`, height: `${(100 * h) / pageH}%` });
+    actionButton.addEventListener('click', () => action.at(page)?.run());
+    frame.append(viewCanvas, actionButton);
+    view.append(frame);
+  } else view.append(viewCanvas);
 
   const controls = document.createElement('div');
   controls.className = 'booklet-controls';
@@ -209,6 +259,11 @@ export function createBookletSheet({ pages }: { pages: { count: number; canvas(i
     next.disabled = page === pages.count - 1;
     element.dataset.open = String(open);
     thumb.hidden = open;
+    if (action && actionButton) {
+      const control = action.at(page);
+      actionButton.hidden = !control;
+      actionButton.setAttribute('aria-label', control?.label ?? '');
+    }
     for (const fn of listeners) fn({ page, expanded: open });
   }
 
@@ -229,7 +284,7 @@ export function createBookletSheet({ pages }: { pages: { count: number; canvas(i
   }
 
   function setOpen(value: boolean, { byRoomTap = false } = {}) {
-    if (open === value) return;
+    if (open === value || (!value && !canClose())) return;
     open = value;
     showScrim(open, byRoomTap ? BOOKLET_UI.scrimLingerMs : 0);
     render();
@@ -288,6 +343,8 @@ export function createBookletSheet({ pages }: { pages: { count: number; canvas(i
   // Swipe on the page: across flips, down closes.
   let swipe: { id: number; x: number; y: number } | null = null;
   view.addEventListener('pointerdown', (event) => {
+    // A press on a page control is that control's: no swipe, no capture that would take its click.
+    if ((event.target as Element).closest('button')) return;
     swipe = { id: event.pointerId, x: event.clientX, y: event.clientY };
     view.setPointerCapture(event.pointerId);
   });
@@ -311,6 +368,17 @@ export function createBookletSheet({ pages }: { pages: { count: number; canvas(i
   }
   window.addEventListener('keydown', onKey);
 
+  // Its place in the corner stack: the front one where the thumb has always sat, each one
+  // behind it fanned up and over by CATALOG.stack, read at use time so ?tune moves it live.
+  // Paint order is mount order: mount the back ones first.
+  function place() {
+    if (slot === STACK_SLOT.manual) return;
+    const { x, y, turn } = fanOffset(slot, CATALOG.stack);
+    thumb.style.transform = `translate(${x}px, ${y}px) rotate(${turn}rad)`;
+  }
+
+  place();
+  showScrim(open);
   render();
 
   return {
@@ -323,6 +391,11 @@ export function createBookletSheet({ pages }: { pages: { count: number; canvas(i
     get expanded() {
       return open;
     },
+    /** Opens it, or docks it — as its own controls do, focus and all; `canClose` still holds. */
+    setOpen(value: boolean) {
+      setOpen(value);
+    },
+    place,
     onChange(fn: (state: { page: number; expanded: boolean }) => void) {
       listeners.add(fn);
       return () => listeners.delete(fn);

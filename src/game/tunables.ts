@@ -11,7 +11,7 @@
 // never a JS object path — and units are the schema's, in the engine's own units; a key
 // once published is renamed only with a profile format bump.
 
-import { AIM, CAMERA, FASTENER, GESTURE, HAPTICS, LIFT_LINE, PANEL, PHYSICS, RENDER, RING, SNAP, TUNE, TURN_RING } from '../constants.js';
+import { AIM, CAMERA, CATALOG, FASTENER, GESTURE, HAPTICS, LIFT_LINE, PANEL, PHYSICS, RENDER, RING, SNAP, TUNE, TURN_RING } from '../constants.js';
 
 /** Bumped whenever a key is renamed or its unit changes, so old profiles stay readable. */
 export const PROFILE_FORMAT = 1;
@@ -180,6 +180,18 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
   'camera.pivotOnParts': {
     object: CAMERA, prop: 'pivotOnParts', min: 0, max: 1, step: 1, unit: '', group: 'camera',
     desc: 'Orbit about the first part in the middle of the screen (1) or the floor behind it, as before (0)',
+  },
+  'catalog.fanX': {
+    object: CATALOG.stack, prop: 'fanX', min: -40, max: 40, step: 1, unit: 'px', group: 'catalog',
+    desc: 'How far right the catalog peeks out from behind the manual in the corner stack',
+  },
+  'catalog.fanY': {
+    object: CATALOG.stack, prop: 'fanY', min: 0, max: 80, step: 1, unit: 'px', group: 'catalog',
+    desc: 'How far up the catalog peeks out from behind the manual — the strip left to tap',
+  },
+  'catalog.fanTurn': {
+    object: CATALOG.stack, prop: 'fanTurn', min: -0.5, max: 0.5, step: 0.01, unit: 'rad', group: 'catalog',
+    desc: 'How far the catalog behind the manual is turned in the corner stack',
   },
 });
 

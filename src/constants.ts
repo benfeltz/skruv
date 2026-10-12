@@ -160,6 +160,15 @@ export const CATALOG = {
     wallRise: 1.5,
     slab: 0.03,
   },
+  // The corner stack (src/ui/booklet.ts): each booklet behind the front one (the catalog
+  // behind the manual) fanned this far right and up (CSS pixels) and turned this much
+  // (radians) per place back — far enough up that the strip left showing is a thumb's
+  // target. ?tune knobs.
+  stack: {
+    fanX: 10,
+    fanY: 44,
+    fanTurn: -0.12,
+  },
   words: {
     brand: 'SKRUV',
     tagline: 'Catalog',
