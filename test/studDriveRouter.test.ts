@@ -106,6 +106,31 @@ describe('the key on a stud', () => {
   });
 });
 
+describe('a hand-seated stud turned by the key (review)', () => {
+  // The top dropped onto the stud (the top the mover), the key then put on its free hex: the
+  // key turns that joint, so the stud is what is drawn turning and sinking — not the top.
+  it('draws the stud turning, and the top where it is', () => {
+    const top = makePart('top-1', 'top', TOP_POSE.position, TOP_POSE.rotation);
+    const stud = makePart('doubleEndedStud-1', 'doubleEndedStud', STUD_AT, FLIPPED);
+    const tipOffset = new THREE.Vector3(...TIP).applyQuaternion(new THREE.Quaternion(...TIP_DOWN));
+    const key = makePart('allenWrench-1', 'allenWrench', [HEAD[0] - tipOffset.x, HEAD[1] - tipOffset.y + 0.02, HEAD[2] - tipOffset.z], TIP_DOWN);
+    const m = mount([top, stud, key]);
+    const joint = m.assembly.seat({ partA: stud.id, connectorA: 0, partB: top.id, connectorB: 0, mover: top.id });
+    // The key on the free hex (seated by the graph: the top's own ring would claim a press there).
+    m.assembly.seat({ partA: key.id, connectorA: 0, partB: stud.id, connectorB: HEX_AT_FREE_END, mover: key.id });
+    m.hold(1);
+    expect(m.assembly.crankTarget('allenWrench-1')!.target!.id).toBe(joint.id);
+    const topAt = top.mesh.position.clone();
+    const studAt = stud.mesh.position.clone();
+    // An eighth of the span.
+    m.assembly.apply(joint.id, { type: 'crank', radians: FASTENER.studRadians / 8 });
+    m.hold(1);
+    expect(top.mesh.position.distanceTo(topAt)).toBeCloseTo(0, 9);
+    expect(top.mesh.quaternion.angleTo(new THREE.Quaternion(...FLIPPED))).toBeCloseTo(0, 9);
+    expect(stud.mesh.position.y).toBeCloseTo(studAt.y - FASTENER.sinkDepth.stud! / 8, 9);
+  });
+});
+
 describe('the end under the key (review)', () => {
   it('takes no leg: the hex the key sits in shares its spot with the stud end, so a leg is not dropped over it', () => {
     const top = makePart('top-1', 'top', TOP_POSE.position, TOP_POSE.rotation);

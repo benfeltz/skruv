@@ -290,6 +290,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const pivot = new THREE.Vector3();
   // The parts whose turn the update loop has drawn this frame (a top on four studs once).
   const turnedNow = new Set<Part>();
+  // The ids of the joints a seated tool is turning this frame (update loop).
+  const toolDriven = new Set<number>();
   // Studs carried in a hand-turned part, with the move the turn made — see the update loop;
   // `carriedStuds` is the pool, `carriedCount` how many are live this frame.
   const carriedStuds: { part: Part | null; delta: THREE.Matrix4 }[] = [];
@@ -1684,13 +1686,21 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     turnedNow.clear();
     carriedCount = 0;
     const joints = assembly.all();
+    // The joints a seated tool is turning this frame: drawn as the tool turns them — the
+    // hardware — however the seat was made (a top dropped on a stud, a key then put on it).
+    toolDriven.clear();
+    for (const tool of joints) {
+      if (tool.kind !== KIND.TOOL) continue;
+      const target = assembly.turnedFrom(tool.host, tool.hostConnector, joints);
+      if (target) toolDriven.add(target.id);
+    }
     for (const joint of joints) {
       if (joint.kind !== KIND.BOLT && joint.kind !== KIND.CAM && joint.kind !== KIND.STUD) continue;
       // What turns on screen is the side that was dragged into the seat: a bolt, cam or stud
       // driven by its tool, or the part circled by hand — a leg set onto its stud, a leg
       // carried onto the top with its stud in it — turning and advancing about the axis of
       // its own hole instead of the hardware's (handSeat).
-      const hand = assembly.handSeat(joint, joints);
+      const hand = toolDriven.has(joint.id) ? null : assembly.handSeat(joint, joints);
       const turned = partById.get(hand ? hand.part : joint.hardware)!;
       // A part set onto several studs is drawn once, by its first: the hole its dial is on.
       if (hand && turnedNow.has(turned)) continue;
