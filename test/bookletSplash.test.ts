@@ -545,5 +545,42 @@ describe('boot with the catalog up (1.9.1)', () => {
     const [, , w, h] = CATALOG.page.action;
     expect(buildIt.style.borderRadius).toBe(`${(100 * CATALOG.page.tagRadius) / w}% / ${(100 * CATALOG.page.tagRadius) / h}%`);
   });
+
+  it('a pick that fails keeps the catalog open, says so, and a later pick still works', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let fail = true;
+    const picks: string[] = [];
+    const catalog = createCatalogSheet({
+      pages: { count: catalogPages.length, pages: catalogPages, canvas: () => ({}) as CanvasImageSource },
+      open: true,
+      canClose: () => picks.length > 0,
+      onPick: (id) => {
+        if (fail) throw new Error('build broke');
+        picks.push(id);
+        catalog.setOpen(false);
+      },
+    }) as unknown as FakeBooklet;
+    mounted.push(catalog);
+    const [, view, controls, notice] = catalog.element.children;
+    const [, buildIt] = view.children[0].children;
+    const next = controls.children[2];
+    expect(notice.hidden).toBe(true);
+    next.fire('click');
+    next.fire('click');
+    expect(() => buildIt.fire('click')).not.toThrow();
+    expect(catalog.expanded).toBe(true);
+    expect(notice.hidden).toBe(false);
+    expect(notice.attributes.role).toBe('alert');
+    expect(notice.textContent).toBe(CATALOG.words.buildFailed);
+    expect(errors).toHaveBeenCalledOnce();
+    // Flipping away clears it; the next try builds.
+    controls.children[0].fire('click');
+    expect(notice.hidden).toBe(true);
+    next.fire('click');
+    fail = false;
+    buildIt.fire('click');
+    expect(picks).toEqual(['blank']);
+    expect(catalog.expanded).toBe(false);
+  });
 });
 

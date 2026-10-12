@@ -184,6 +184,8 @@ export const CATALOG = {
     parts: 'parts',
     build: 'BUILD IT',
     soldOut: 'SOLD OUT',
+    // On the sheet when BUILD IT's item could not be built (src/ui/catalogSheet.ts).
+    buildFailed: "That one couldn't be built. Try again, or pick another.",
   },
 };
 

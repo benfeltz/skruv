@@ -125,6 +125,7 @@ function injectStyle() {
       background: ${css(COLORS.bookletPaper)};
     }
     .booklet-controls {
+      order: 1;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -143,6 +144,9 @@ function injectStyle() {
     }
     .booklet-controls button:disabled { opacity: 0.3; cursor: default; }
     .booklet-count { font-variant-numeric: tabular-nums; }
+    /* A line that says something went wrong (a pick that would not build): over the controls,
+       in the sheet's own text colour, until the page flips or the sheet closes. */
+    .booklet-notice { margin: 0; text-align: center; font-size: 14px; line-height: 1.3; }
     /* A page with a control on it (the catalog's BUILD IT): the canvas and, over the part of
        it the control is drawn on, a clear button placed in page fractions. The frame is sized
        exactly as the page (the pre-splash's own fit) and the canvas fills it, so those
@@ -273,7 +277,18 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
   count.className = 'booklet-count';
   count.setAttribute('aria-live', 'polite');
   controls.append(prev, count, next);
-  element.append(handle, view, controls);
+  // Last in the DOM, so the sheet's children keep their places; shown above the controls (CSS order).
+  const notice = document.createElement('p');
+  notice.className = 'booklet-notice';
+  notice.setAttribute('role', 'alert');
+  notice.hidden = true;
+  element.append(handle, view, controls, notice);
+
+  /** Shows `text` on the sheet, or takes it away (null). */
+  function notify(text: string | null) {
+    notice.textContent = text ?? '';
+    notice.hidden = text === null;
+  }
 
   function render() {
     const source = pages.canvas(page);
@@ -301,6 +316,7 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
     const to = Math.min(pages.count - 1, Math.max(0, page + by));
     if (to === page) return;
     page = to;
+    notify(null);
     render();
   };
 
@@ -318,6 +334,7 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
     // One sheet open at a time: another one open keeps this one docked.
     if (value && [...sheets].some((sheet) => sheet !== self && sheet.isOpen())) return;
     open = value;
+    notify(null);
     showScrim(open, byRoomTap ? BOOKLET_UI.scrimLingerMs : 0);
     render();
     // Into the sheet on a control that can take focus (a disabled one can't, on the last
@@ -431,6 +448,7 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
       setOpen(value);
     },
     place,
+    notify,
     onChange(fn: (state: { page: number; expanded: boolean }) => void) {
       listeners.add(fn);
       return () => listeners.delete(fn);
