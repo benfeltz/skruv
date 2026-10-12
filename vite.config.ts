@@ -4,6 +4,8 @@ import type { Plugin } from 'vite';
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
 import { DEV_WS } from './src/constants.js';
+import { pickableSet } from './src/game/catalogModel.js';
+import { ITEM_IDS } from './src/game/item.js';
 
 // The upgrade's Host must name this machine, as Vite requires of its own HMR socket — else
 // a site whose DNS rebinds to 127.0.0.1 sends a Host (and Origin) of its own and passes the
@@ -87,10 +89,23 @@ function devStream(): Plugin {
   };
 }
 
+// The pickable flag (VITE_PICKABLE, CATALOG.pickable) checked when a build starts: an id the
+// game doesn't carry fails the build here, rather than shipping one that throws on boot
+// behind index.html's stand-in. The same rule the catalog runs (pickableSet).
+function pickableCheck(): Plugin {
+  return {
+    name: 'skruv-pickable-check',
+    apply: 'build',
+    configResolved(config) {
+      pickableSet(config.env.VITE_PICKABLE ?? '', ITEM_IDS);
+    },
+  };
+}
+
 export default defineConfig({
   // Served at the domain root (custom domain skruv.site) — a non-root base 404s every asset.
   base: '/',
-  plugins: [devStream()],
+  plugins: [devStream(), pickableCheck()],
   test: {
     include: ['test/**/*.test.ts'],
   },
