@@ -133,6 +133,17 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
     expect(main).toMatch(/catalog\.setOpen\(false\);\s*\/\/[^\n]*\n\s*world\.booklet\.thumb\.focus\(\{ preventScroll: true \}\);/);
   });
 
+  it('grows and raises a hovered thumb only after the pointer rests thumbHoverDelayMs, and undoes it at once', () => {
+    const delay = '${BOOKLET_UI.thumbHoverDelayMs}ms';
+    const hover = booklet.slice(booklet.indexOf('.booklet-thumb:hover {'), booklet.indexOf('.booklet-scrim {'));
+    expect(hover).toContain(`transition: width 160ms ease-out ${delay}, z-index 0s ${delay};`);
+    // Leaving: the base rule's transition has no delay.
+    const base = booklet.slice(booklet.indexOf('.booklet-thumb {'), booklet.indexOf('.booklet-thumb:hover {'));
+    expect(base).toMatch(/transition: width 160ms ease-out, z-index 0s;/);
+    // Reduced motion: no animation, the same wait.
+    expect(booklet).toContain(`.booklet-thumb:hover { transition: width 0s ${delay}, z-index 0s ${delay}; }`);
+  });
+
   it('raises a hovered thumb over the other in the corner stack, never over the scrim or sheet', () => {
     const hover = booklet.slice(booklet.indexOf('.booklet-thumb:hover {'), booklet.indexOf('.booklet-scrim {'));
     expect(hover).toMatch(/z-index: 1;/);
@@ -189,7 +200,8 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
     // Grown from its corner (it is anchored left/bottom), animated, and drawn at full page
     // resolution so it reads when grown.
     const thumbRule = booklet.slice(booklet.indexOf('    .booklet-thumb {'), booklet.indexOf('@media (hover: hover)'));
-    expect(thumbRule).toMatch(/transition: width 160ms ease-out;/);
+    // Animated; since 1.9.1 the raise (z-index) rides along, both undone at once on leave.
+    expect(thumbRule).toMatch(/transition: width 160ms ease-out, z-index 0s;/);
     expect(booklet).toMatch(/const thumbCanvas = pageCanvas\(pageW, pageH\);/);
     // Nothing transforms the scrim (PR #17 round-4 review).
     const scrimRule = booklet.slice(booklet.indexOf('.booklet-scrim {'), booklet.indexOf('.booklet-thumb canvas'));

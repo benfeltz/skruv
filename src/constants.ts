@@ -128,6 +128,9 @@ export const BOOKLET_UI = {
   // A mouse over the docked thumbnail grows it to fit this share of the screen's width and
   // height (a quarter of the screen), big enough to read the page.
   thumbHoverShare: 0.5,
+  // ...but only once the pointer has rested on it this long (ms): a pointer passing over a
+  // thumb on its way elsewhere — the manual's, past the catalog's — never grows it.
+  thumbHoverDelayMs: 400,
 };
 
 // The catalog (1.9.1): the game's front door, a second booklet of items to build

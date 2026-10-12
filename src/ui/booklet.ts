@@ -35,16 +35,19 @@ function injectStyle() {
       cursor: pointer;
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
-      transition: width 160ms ease-out;
+      transition: width 160ms ease-out, z-index 0s;
     }
-    /* A mouse over the docked thumbnail grows it from its corner to a readable page,
+    /* A mouse resting on the docked thumbnail grows it from its corner to a readable page,
        about a quarter of the screen, raised over the other thumb in the corner stack (the
        catalog's would grow behind the manual's) — still under the scrim (2) and the sheet (3).
-       Hover-capable pointers only: a touch never hovers. */
+       Grow and raise both wait thumbHoverDelayMs, so a pointer passing over on its way
+       elsewhere changes nothing; leaving undoes them at once. Hover-capable pointers only: a
+       touch never hovers. */
     @media (hover: hover) {
       .booklet-thumb:hover {
         width: min(${BOOKLET_UI.thumbHoverShare * 100}vw, ${BOOKLET_UI.thumbHoverShare * 100}vh * ${pageW} / ${pageH});
         z-index: 1;
+        transition: width 160ms ease-out ${BOOKLET_UI.thumbHoverDelayMs}ms, z-index 0s ${BOOKLET_UI.thumbHoverDelayMs}ms;
       }
     }
     .booklet-scrim {
@@ -87,6 +90,8 @@ function injectStyle() {
     }
     @media (prefers-reduced-motion: reduce) {
       .booklet, .booklet[data-open='true'], .booklet-thumb { transition: none; }
+      /* No growing animation, but still the wait: a passing pointer grows nothing. */
+      .booklet-thumb:hover { transition: width 0s ${BOOKLET_UI.thumbHoverDelayMs}ms, z-index 0s ${BOOKLET_UI.thumbHoverDelayMs}ms; }
     }
     .booklet-handle {
       align-self: center;
