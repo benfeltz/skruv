@@ -102,3 +102,31 @@ describe("a stud's hex as a tool target", () => {
     expect(isWorkable(hex, assembly.all(), none)).toBe(false);
   });
 });
+
+describe('a stud screwed into the leg first (review: unturnable joint)', () => {
+  // The stud goes into the leg by the key (the stud the mover), then the leg is carried onto
+  // the top: the joint into the top has the leg as its mover — neither hardware nor host.
+  function bench() {
+    const types = typeById();
+    const assembly = createAssembly((id) => types.get(id)!);
+    const inLeg = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 1, partB: 'leg-1', connectorB: 0, mover: 'doubleEndedStud-1' });
+    assembly.drive(inLeg.id);
+    const inTop = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 0, partB: 'top-1', connectorB: 0, mover: 'leg-1' });
+    return { assembly, inLeg, inTop };
+  }
+
+  it('is turned by hand through the carried leg, which is the mover — not the stud, not the top', () => {
+    const { assembly, inTop, inLeg } = bench();
+    expect(assembly.handTarget('leg-1')).toMatchObject({ id: inTop.id });
+    expect(assembly.handTarget('top-1')).toBeNull();
+    expect(assembly.handTarget('doubleEndedStud-1')).toBeNull();
+    // The key-turned joint into the leg is nobody's hand joint.
+    expect(inLeg.mover).toBe('doubleEndedStud-1');
+  });
+
+  it('can be screwed home through the hand joint', () => {
+    const { assembly, inTop } = bench();
+    expect(assembly.apply(inTop.id, { type: 'crank', radians: FASTENER.studRadians })).toBe(true);
+    expect(assembly.get(inTop.id)!.fastener.state).toBe(STATE.SCREWED);
+  });
+});

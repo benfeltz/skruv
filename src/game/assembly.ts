@@ -382,11 +382,11 @@ export function createAssembly(typeOf: (part: PartId) => string) {
   }
 
   /**
-   * The joint `part` is turned by hand through — a stud it was dragged onto, the part being
-   * the hole side — or null: no tool, the part itself is what the finger circles. The stud
-   * and anything seated by being pushed into a hole have none.
+   * The joint `part` is turned by hand through — a stud it was dragged onto or carried onto
+   * — or null: no tool, the part itself is what the finger circles. The stud and anything
+   * seated by being pushed into a hole have none.
    */
-  const handTarget = (part: PartId) => all().find((j) => isHandTurned(j) && j.host === part) ?? null;
+  const handTarget = (part: PartId) => all().find((j) => isHandTurned(j) && j.mover === part) ?? null;
 
   /** Screwed bolts — the only heads a cam can catch. */
   const screwedBolts = () => all().filter((j) => j.kind === KIND.BOLT && isFastened(j.fastener));

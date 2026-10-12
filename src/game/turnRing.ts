@@ -18,7 +18,7 @@ export interface Engagement {
 }
 
 /** The part whose press this engagement is: the tool, or the hand-turned part itself. */
-export const engagedPart = ({ tool, target }: Engagement) => (tool ? tool.hardware : target.host);
+export const engagedPart = ({ tool, target }: Engagement) => (tool ? tool.hardware : target.mover);
 
 /**
  * Whether a screen point is on the ring's grab band round `centre`: within `band` px either
