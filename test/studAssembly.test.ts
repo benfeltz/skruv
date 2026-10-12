@@ -5,6 +5,7 @@ import { createAssembly, seatHome } from '../src/game/assembly.js';
 import { STATE } from '../src/game/fasteners.js';
 import { ASSEMBLED, setItem } from '../src/game/item.js';
 import { isSeatTarget, isWorkable, seatedHardware } from '../src/game/toolTargets.js';
+import type { TurnedBy } from '../src/game/toolTargets.js';
 import type { AssemblyJoint } from '../src/game/assembly.js';
 
 // The stud machine in the assembly graph (1.9.2), on BLANK's real pack: seating, homing and
@@ -88,18 +89,40 @@ describe('crankTarget on a two-ended stud', () => {
 });
 
 describe("a stud's hex as a tool target", () => {
-  const hex = { type: CONNECTOR.BOLT_HEAD, part: { id: 'doubleEndedStud-1' } };
+  const HEX_AT_TOP_END = 2;
+  const HEX_AT_LEG_END = 3;
+  const hex = (index: number) => ({ type: CONNECTOR.BOLT_HEAD, part: { id: 'doubleEndedStud-1' }, index });
   const none = () => null;
 
-  it('is a seat target only once the stud is seated, workable until it is screwed home', () => {
+  function bench() {
     const types = typeById();
-    const assembly = createAssembly((id) => types.get(id)!);
-    expect(isSeatTarget(hex, seatedHardware(assembly.all()))).toBe(false);
+    return createAssembly((id) => types.get(id)!);
+  }
+  const turned = (assembly: ReturnType<typeof bench>): TurnedBy => (c) => assembly.turnedFrom(c.part.id, c.index);
+
+  it('is a seat target only once the stud is seated, workable until it is screwed home', () => {
+    const assembly = bench();
+    expect(isSeatTarget(hex(HEX_AT_LEG_END), seatedHardware(assembly.all()))).toBe(false);
     const joint = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 0, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
-    expect(isSeatTarget(hex, seatedHardware(assembly.all()))).toBe(true);
-    expect(isWorkable(hex, assembly.all(), none)).toBe(true);
+    expect(isSeatTarget(hex(HEX_AT_LEG_END), seatedHardware(assembly.all()))).toBe(true);
+    expect(isWorkable(hex(HEX_AT_LEG_END), assembly.all(), { captured: none, turnedBy: turned(assembly) })).toBe(true);
     assembly.drive(joint.id);
-    expect(isWorkable(hex, assembly.all(), none)).toBe(false);
+    expect(isWorkable(hex(HEX_AT_LEG_END), assembly.all(), { captured: none, turnedBy: turned(assembly) })).toBe(false);
+  });
+
+  // Review: with both ends seated, a hex reads the joint at the OTHER end — the one a key
+  // there would turn — not whichever stud joint comes first.
+  it('lights each hex by the end its key would turn, with both ends seated', () => {
+    const assembly = bench();
+    const inTop = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 0, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
+    const inLeg = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 1, partB: 'leg-1', connectorB: 0, mover: 'leg-1' });
+    assembly.drive(inTop.id);
+    // Top end home, leg end not: the key at the TOP end's hex would turn the leg end — workable;
+    // at the leg end's hex it would turn the top end, which is home — not.
+    expect(turned(assembly)(hex(HEX_AT_TOP_END))).toMatchObject({ id: inLeg.id });
+    expect(turned(assembly)(hex(HEX_AT_LEG_END))).toMatchObject({ id: inTop.id });
+    expect(isWorkable(hex(HEX_AT_TOP_END), assembly.all(), { captured: none, turnedBy: turned(assembly) })).toBe(true);
+    expect(isWorkable(hex(HEX_AT_LEG_END), assembly.all(), { captured: none, turnedBy: turned(assembly) })).toBe(false);
   });
 });
 

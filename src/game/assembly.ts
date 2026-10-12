@@ -361,24 +361,24 @@ export function createAssembly(typeOf: (part: PartId) => string) {
 
   const canRelease = (part: PartId) => fastenersRelease(jointsOf(part).map((j) => j.fastener));
 
-  // A double-ended stud carries two crank joints, one per end; the tool sits in the hex at
-  // one end, and what it turns is the joint at the other — the end in its hole is no end
-  // the tool is working. A single-ended bolt or cam lock has one candidate, which is not
-  // at the tool's seat (its head is the far side of its thread), so it is returned as is.
-  function farEnd(candidates: AssemblyJoint[], tool: AssemblyJoint) {
-    const seat = hostConnector(tool).position;
-    return candidates.find((j) => distance(hardwareConnector(j).position, seat) > CONTRACT.mateTolerance) ?? null;
+  /**
+   * The crank joint a tool on connector `seat` (a bolt head, a stud's hex) of `part` would
+   * turn, or null. A double-ended stud carries two crank joints, one per end; the tool sits
+   * in the hex at one end, and what it turns is the joint at the other — the end in its hole
+   * is no end the tool is working. A single-ended bolt or cam lock has one candidate, which
+   * is not at the tool's seat (its head is the far side of its thread), so it is the one
+   * returned. Asked of a hex before any tool is on it, it is what a key put there would turn.
+   */
+  function turnedFrom(part: PartId, seat: number) {
+    const at = connectorOf(part, seat).position;
+    return all().find((j) => j.hardware === part && isCrankKind(j.kind) && distance(hardwareConnector(j).position, at) > CONTRACT.mateTolerance) ?? null;
   }
 
   /** For a tool seated on a head or slot: `{ tool, target }` joints, target null if none. */
   function crankTarget(tool: PartId) {
     const engagement = all().find((j) => j.hardware === tool && j.kind === KIND.TOOL);
     if (!engagement) return null;
-    const target = farEnd(
-      all().filter((j) => j.hardware === engagement.host && isCrankKind(j.kind)),
-      engagement,
-    );
-    return { tool: engagement, target };
+    return { tool: engagement, target: turnedFrom(engagement.host, engagement.hostConnector) };
   }
 
   /**
@@ -544,6 +544,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     pullable,
     canRelease,
     crankTarget,
+    turnedFrom,
     handTarget,
     handTargets,
     screwedBolts,

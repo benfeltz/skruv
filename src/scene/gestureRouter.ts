@@ -25,6 +25,7 @@ import { findFits, heldOffer, isPanelType, preferredPoses, preferredTargets, pre
 import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
 import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
+import type { Probe } from '../game/toolTargets.js';
 import { dialEngagements, engagedPart, isHome, isStalled, pickDial, tightensClockwise } from '../game/turnRing.js';
 import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { FitPair, Relatives } from '../game/panelFit.js';
@@ -1117,15 +1118,19 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return ringStrengths(workable, [pointer!.clientX, pointer!.clientY], (position) => screenPoint(position, rect), reach, RING);
   }
 
-  // The bolt a seated cam lock's recess would catch, as a turn of it would. The screwed
-  // heads are found once per sweep, and only if a cam lock asks.
-  function catcher(joints: AssemblyJoint[]) {
+  // The bolt a seated cam lock's recess would catch, as a turn of it would, and the joint a
+  // key put on a hex would turn. The screwed heads are found once per sweep, and only if a
+  // cam lock asks.
+  function catcher(joints: AssemblyJoint[]): Probe {
     let heads: Head[] | null = null;
-    return (cam: PartId) => {
-      const joint = joints.find((j) => j.hardware === cam && j.kind === KIND.CAM);
-      if (!joint) return null;
-      heads ??= screwedHeads();
-      return capture(connectorWorld(joint.host, joint.hostConnector), heads)?.id ?? null;
+    return {
+      captured: (cam: PartId) => {
+        const joint = joints.find((j) => j.hardware === cam && j.kind === KIND.CAM);
+        if (!joint) return null;
+        heads ??= screwedHeads();
+        return capture(connectorWorld(joint.host, joint.hostConnector), heads)?.id ?? null;
+      },
+      turnedBy: (hex) => assembly.turnedFrom(hex.part.id, hex.index),
     };
   }
 
