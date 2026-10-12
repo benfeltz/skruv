@@ -1,8 +1,10 @@
 // The one item in the room (1.9.1): picking an item swaps the room to it, in-scene — the
-// old item's world taken down, the door (src/game/item.ts) pointed at the new pack, the new
-// world built from it, in that order. Pure: what a world is, and how the door turns, are
-// the caller's (src/main.ts passes createItemWorld and setItem). One at a time for now;
-// keeping an assembled item in the room later skips the dispose, nothing more.
+// door (src/game/item.ts) pointed at the new pack, the new world built from it, and only
+// then the old world taken down. A build that throws leaves the room exactly as it was: the
+// door turned back, the old world untouched (createItemWorld takes back its own half-built
+// work). Pure: what a world is, and how the door turns, are the caller's (src/main.ts passes
+// createItemWorld and setItem). One at a time for now; keeping an assembled item in the
+// room later skips the dispose, nothing more.
 
 /**
  * `{ current, pick(id) }`: `current` is the world in the room, null until the first pick;
@@ -15,14 +17,25 @@ export function createItemSlot<World extends { dispose(): void }>({ select, buil
     get current() {
       return current?.world ?? null;
     },
-    /** The room becomes item `id`: unless it already is, dispose the world in it, select `id`, build its world. */
+    /**
+     * The room becomes item `id`, unless it already is: select `id`, build its world, then
+     * dispose the old one. If the build throws, the previous item is selected again, its
+     * world stays, and the error goes on to the caller.
+     */
     pick(id: string) {
       if (current?.id === id) return current.world;
-      current?.world.dispose();
-      current = null;
+      const previous = current;
       select(id);
-      current = { id, world: build() };
-      return current.world;
+      let world: World;
+      try {
+        world = build();
+      } catch (error) {
+        if (previous) select(previous.id);
+        throw error;
+      }
+      previous?.world.dispose();
+      current = { id, world };
+      return world;
     },
   };
 }
