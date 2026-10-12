@@ -580,6 +580,9 @@ export const FASTENER = {
   pullDistance: 40,
   // Wrench crank from a seated cam bolt to a screwed one: two full turns.
   screwRadians: 4 * Math.PI,
+  // Hand or key turn from a seated threaded stud end to a screwed one: two full turns, a
+  // fiddly stud being a turn-and-a-bit slower to seat than a bolt on the phone (?tune it).
+  studRadians: 4 * Math.PI,
   // Screwdriver turn from an open cam lock to a locked one.
   quarterTurn: Math.PI / 2,
   // A cam catches any screwed bolt head this close to its recess, and how deep each

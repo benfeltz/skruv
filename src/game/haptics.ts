@@ -33,9 +33,9 @@ export function cueFor(event: { type: string; kind?: unknown }): Cue | null {
   return null;
 }
 
-/** The cue a turned fastener of `kind` buzzes arriving home: a bolt `home`, a cam `lock`; else null. */
+/** The cue a turned fastener of `kind` buzzes arriving home: a bolt or stud `home`, a cam `lock`; else null. */
 export function homeCue(kind: unknown): Cue | null {
-  if (kind === KIND.BOLT) return CUE.HOME;
+  if (kind === KIND.BOLT || kind === KIND.STUD) return CUE.HOME;
   if (kind === KIND.CAM) return CUE.LOCK;
   return null;
 }

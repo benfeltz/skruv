@@ -178,6 +178,7 @@ function homeEvent(kind: FastenerKind): FastenerEvent | null {
   if (isTapKind(kind)) return { type: 'tap' };
   if (kind === KIND.BOLT) return { type: 'crank', radians: FASTENER.screwRadians };
   if (kind === KIND.CAM) return { type: 'crank', radians: FASTENER.quarterTurn };
+  if (kind === KIND.STUD) return { type: 'crank', radians: FASTENER.studRadians };
   return null;
 }
 
@@ -483,7 +484,8 @@ export function createAssembly(typeOf: (part: PartId) => string) {
           addBridge({
             a: first.host,
             b: other,
-            rigid: first.kind === KIND.CAM,
+            // A cam locks its hosts rigid; so does a screwed stud — a table's legs bear load.
+            rigid: first.kind === KIND.CAM || first.kind === KIND.STUD,
             via: null,
             frame: () => currentFrame(first.host, other, pivot, poseOf),
           });

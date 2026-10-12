@@ -6,6 +6,7 @@
 //   dowel, pin,  seated ⇄ pressed          tap / pull
 //   back fitting
 //   bolt         seated ⇄ screwed          signed crank progress (wrench)
+//   stud         seated ⇄ screwed          signed crank progress (hand or key), either end
 //   cam          seated ⇄ locked           signed quarter turn (screwdriver), lock needs a
 //                                          captured bolt head
 //   tool         always seated             a tool on a head or slot fastens nothing
@@ -50,7 +51,7 @@ interface TurnLimits {
 export const isTapKind = (kind: FastenerKind) => kind === KIND.DOWEL || kind === KIND.PIN || kind === KIND.FITTING;
 
 /** Kinds turned by a tool. */
-export const isCrankKind = (kind: FastenerKind) => kind === KIND.BOLT || kind === KIND.CAM;
+export const isCrankKind = (kind: FastenerKind) => kind === KIND.BOLT || kind === KIND.CAM || kind === KIND.STUD;
 
 export const createFastener = (kind: FastenerKind): Fastener => ({ kind, state: STATE.SEATED, progress: 0 });
 
@@ -99,6 +100,9 @@ export function transition(f: Fastener, event: FastenerEvent, ctx: FastenerConte
     case KIND.BOLT:
       if (event.type !== 'crank') return f;
       return turned(f, event.radians, FASTENER.screwRadians, { canFasten: true, canLoosen: !ctx.held }, STATE.SCREWED);
+    case KIND.STUD:
+      if (event.type !== 'crank') return f;
+      return turned(f, event.radians, FASTENER.studRadians, { canFasten: true, canLoosen: true }, STATE.SCREWED);
     case KIND.CAM:
       if (event.type !== 'crank') return f;
       return turned(f, event.radians, FASTENER.quarterTurn, { canFasten: !!ctx.captured, canLoosen: true }, STATE.LOCKED);
