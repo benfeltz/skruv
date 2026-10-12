@@ -24,6 +24,7 @@ class FakeElement {
   textContent: string;
   captured: number[];
   style: Record<string, string>;
+  inert = false;
   declare id?: string; // set by the sheet on its style element
 
   constructor(tag: string) {
@@ -93,9 +94,14 @@ beforeEach(() => {
   });
   vi.stubGlobal('window', {
     addEventListener: (type: string, fn: Listener) => windowListeners.set(type, [...(windowListeners.get(type) ?? []), fn]),
+    removeEventListener: (type: string, fn: Listener) => windowListeners.set(type, (windowListeners.get(type) ?? []).filter((f) => f !== fn)),
   });
 });
+// Every sheet a test mounts, disposed after it: the booklet module keeps one open at a time
+// across all live sheets.
+const mounted: { dispose(): void }[] = [];
 afterEach(() => {
+  for (const sheet of mounted.splice(0)) sheet.dispose();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
@@ -110,6 +116,7 @@ type Sheet = ReturnType<typeof mount>;
 function mount() {
   // The fake context's drawImage ignores the canvas, so an empty stand-in will do.
   const booklet = createBookletSheet({ pages: { count: COUNT, canvas: () => ({}) as CanvasImageSource } }) as unknown as FakeBooklet;
+  mounted.push(booklet);
   dom.body.append(booklet.scrim, booklet.thumb, booklet.element);
   const changes: { page: number; expanded: boolean }[] = [];
   booklet.onChange((change) => changes.push(change));
@@ -317,9 +324,12 @@ describe('tap the sheet to put it down, swipe to flip (1.6.2)', () => {
     const edge = mount();
     press(view(edge.booklet), { dx: GESTURE.tapMaxDistance, ms: GESTURE.tapMaxMs });
     expect(edge.booklet.expanded).toBe(false);
+    // One sheet open at a time: each is put away before the next is mounted.
+    edge.booklet.dispose();
     const far = mount();
     press(view(far.booklet), { dx: GESTURE.tapMaxDistance + 1 });
     expect(far.booklet.expanded).toBe(true);
+    far.booklet.dispose();
     const slow = mount();
     press(view(slow.booklet), { ms: GESTURE.tapMaxMs + 1 });
     expect(slow.booklet.expanded).toBe(true);
@@ -438,6 +448,7 @@ describe('boot with the catalog up (1.9.1)', () => {
         catalog.setOpen(false);
       },
     }) as unknown as FakeBooklet;
+    mounted.push(catalog);
     dom.body.append(catalog.scrim, catalog.thumb, catalog.element);
     const [handle, view, controls] = catalog.element.children;
     const [, buildIt] = view.children[0].children;
@@ -504,6 +515,29 @@ describe('boot with the catalog up (1.9.1)', () => {
     expect(catalog.thumb.style.transform).toMatch(/^translate\(\d+px, -\d+px\) rotate\(-?[\d.]+rad\)$/);
     const manual = mount();
     expect(manual.booklet.thumb.style.transform).toBeUndefined();
+  });
+
+  it('one sheet open at a time: under an open sheet the other thumb is inert, and opening it does nothing', () => {
+    const { catalog, buildIt, next } = mountCatalog();
+    next.fire('click');
+    next.fire('click');
+    buildIt.fire('click');
+    // The item's manual, mounted after the pick as the item world mounts it: docked.
+    const manual = createBookletSheet({ pages: { count: COUNT, canvas: () => ({}) as CanvasImageSource }, open: false }) as unknown as FakeBooklet;
+    mounted.push(manual);
+    expect(manual.thumb.inert).toBe(false);
+    catalog.thumb.fire('click');
+    expect(catalog.expanded).toBe(true);
+    expect(manual.thumb.inert).toBe(true);
+    // A click reaching the manual's thumb anyway (Enter on it) opens nothing.
+    manual.thumb.fire('click');
+    expect(manual.expanded).toBe(false);
+    // Escape closes the one that is open, and the thumbs come back.
+    dom.windowListeners.get('keydown')!.forEach((fn) => fn({ key: 'Escape' }));
+    expect(catalog.expanded).toBe(false);
+    expect(manual.expanded).toBe(false);
+    expect(manual.thumb.inert).toBe(false);
+    expect(catalog.thumb.inert).toBe(false);
   });
 });
 

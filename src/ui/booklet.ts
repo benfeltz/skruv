@@ -161,6 +161,15 @@ function injectStyle() {
   document.head.append(style);
 }
 
+// Every sheet on the page (the catalog and the current manual): one is open at a time. While
+// any is open, every docked thumb is inert — out of the tab order and deaf to clicks — so the
+// keyboard can't open a second sheet under the first's scrim, and a key never drives two.
+const sheets = new Set<{ isOpen(): boolean; thumb: HTMLButtonElement }>();
+function syncSheets() {
+  const anyOpen = [...sheets].some((sheet) => sheet.isOpen());
+  for (const { thumb } of sheets) thumb.inert = anyOpen;
+}
+
 /** A control laid over a page — the catalog's BUILD IT: what it is called, and what it does. */
 export interface PageAction {
   label: string;
@@ -189,13 +198,15 @@ export interface BookletSheetOptions {
  * `onChange(fn)` calls `fn({ page, expanded })` whenever either changes; `setOpen` opens or
  * docks it from outside; `place()` re-applies its stack slot after a ?tune change;
  * `dispose()` takes it all back off the page. Starts open on page 0, the cover, unless told
- * otherwise. State is the module's own and read-only outside it.
+ * otherwise — or another sheet is open: one sheet is open at a time. State is the module's own and read-only outside it.
  */
 export function createBookletSheet({ pages, name = 'instructions', open: startsOpen = true, slot = STACK_SLOT.manual, canClose = () => true, action }: BookletSheetOptions) {
   injectStyle();
   const listeners = new Set<(state: { page: number; expanded: boolean }) => void>();
   let page = 0;
   let open = startsOpen;
+  // Asked to start open while another sheet is: it starts docked (one open at a time).
+  if ([...sheets].some((sheet) => sheet.isOpen())) open = false;
   let lingering: ReturnType<typeof setTimeout> | null = null;
 
   // Over the whole room — canvas and buttons alike — and under the sheet, while the
@@ -267,6 +278,7 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
       actionButton.hidden = !control;
       actionButton.setAttribute('aria-label', control?.label ?? '');
     }
+    syncSheets();
     for (const fn of listeners) fn({ page, expanded: open });
   }
 
@@ -288,6 +300,8 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
 
   function setOpen(value: boolean, { byRoomTap = false } = {}) {
     if (open === value || (!value && !canClose())) return;
+    // One sheet open at a time: another one open keeps this one docked.
+    if (value && [...sheets].some((sheet) => sheet !== self && sheet.isOpen())) return;
     open = value;
     showScrim(open, byRoomTap ? BOOKLET_UI.scrimLingerMs : 0);
     render();
@@ -380,6 +394,9 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
     thumb.style.transform = `translate(${x}px, ${y}px) rotate(${turn}rad)`;
   }
 
+  const self = { isOpen: () => open, thumb };
+  sheets.add(self);
+
   place();
   showScrim(open);
   render();
@@ -407,6 +424,8 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
     dispose() {
       clearTimeout(lingering ?? undefined);
       window.removeEventListener('keydown', onKey);
+      sheets.delete(self);
+      syncSheets();
       listeners.clear();
       scrim.remove();
       thumb.remove();
