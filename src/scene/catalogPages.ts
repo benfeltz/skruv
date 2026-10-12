@@ -135,7 +135,8 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
     ctx.font = font(layout.actionTextSize, 800);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, x + (w + h / 2) / 2, y + h / 2);
+    // Centred on the tag right of the hole's square, [x + h, x + w].
+    ctx.fillText(text, x + (w + h) / 2, y + h / 2);
     ctx.textAlign = 'start';
     ctx.textBaseline = 'alphabetic';
   }
