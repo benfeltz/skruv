@@ -290,6 +290,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const pivot = new THREE.Vector3();
   // The parts whose turn the update loop has drawn this frame (a top on four studs once).
   const turnedNow = new Set<Part>();
+  // Studs carried in a hand-turned part, with the move the turn made — see the update loop;
+  // `carriedStuds` is the pool, `carriedCount` how many are live this frame.
+  const carriedStuds: { part: Part | null; delta: THREE.Matrix4 }[] = [];
+  let carriedCount = 0;
+  const carriedPose = new THREE.Matrix4();
   const toolPose = new THREE.Matrix4();
   const hardwarePose = new THREE.Matrix4();
   const unitScale = new THREE.Vector3(1, 1, 1);
@@ -633,11 +638,16 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     for (const joint of assembly.all()) {
       // The part to put back: the hardware pushed into its hole — or the hole side set onto
       // its stud by hand (a leg backed out to nothing sits back on its stud, not dropped).
-      const byHand = isHandTurned(joint) && joint.mover === joint.host;
-      const part = partById.get(byHand ? joint.host : joint.hardware)!;
+      const byHand = isHandTurned(joint);
+      const part = partById.get(byHand ? joint.mover : joint.hardware)!;
       if ((!byHand && joint.mover !== part.id) || joint.kind === KIND.TOOL || isFastened(joint.fastener)) continue;
-      if (placed.has(part) || isBonded(part) || drag?.part === part) continue;
-      if (assembly.jointsOf(part.id).some((j) => isFastened(j.fastener))) continue;
+      if (placed.has(part) || drag?.part === part) continue;
+      if (byHand) {
+        // A part carrying its stud is bonded to it, and that is the unit that is loose: it is
+        // held unless something of it is already held or in hand.
+        const unit = assembly.compoundOf(part.id);
+        if ([...unit].some((id) => placed.has(partById.get(id)!) || drag?.part.id === id)) continue;
+      } else if (isBonded(part) || assembly.jointsOf(part.id).some((j) => isFastened(j.fastener))) continue;
       const rest = assembly.restPose(joint.id, poseOf);
       physics.grab(part.body);
       physics.move(part.body, rest.position, rest.rotation);
@@ -1522,7 +1532,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // The head a tool sits on — or, circled by hand, the hole the part sits in — where the
   // crank measures its sweep about.
-  const headOf = ({ tool, target }: Engagement) => (tool ? connectorWorld(tool.host, tool.hostConnector) : connectorWorld(target.host, target.hostConnector)).position;
+  const headOf = ({ tool, target }: Engagement) => {
+    if (tool) return connectorWorld(tool.host, tool.hostConnector).position;
+    const hand = assembly.handSeat(target);
+    return (hand ? connectorWorld(hand.part, hand.connector) : connectorWorld(target.host, target.hostConnector)).position;
+  };
 
   function dialOf(engagement: Engagement, flashing: boolean, rect: DOMRect): Dial {
     const head = headOf(engagement);
@@ -1652,19 +1666,21 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     showPanelRings(goal);
     showDials(delta);
     turnedNow.clear();
+    carriedCount = 0;
     for (const joint of assembly.all()) {
       if (joint.kind !== KIND.BOLT && joint.kind !== KIND.CAM && joint.kind !== KIND.STUD) continue;
       // What turns on screen is the side that was dragged into the seat: a bolt, cam or stud
-      // driven by its tool, or a leg circled by hand onto its stud — the hole side, turning
-      // and advancing about its own hole's axis instead of the hardware's.
-      const byHand = joint.kind === KIND.STUD && joint.mover === joint.host;
-      const turned = partById.get(byHand ? joint.host : joint.hardware)!;
+      // driven by its tool, or the part circled by hand — a leg set onto its stud, a leg
+      // carried onto the top with its stud in it — turning and advancing about the axis of
+      // its own hole instead of the hardware's (handSeat).
+      const hand = assembly.handSeat(joint);
+      const turned = partById.get(hand ? hand.part : joint.hardware)!;
       // A part set onto several studs is drawn once, by its first: the hole its dial is on.
-      if (byHand && turnedNow.has(turned)) continue;
+      if (hand && turnedNow.has(turned)) continue;
       turnedNow.add(turned);
       const { mesh, body } = turned;
       const { progress } = joint.fastener;
-      const seat = byHand ? assembly.hostConnector(joint) : assembly.hardwareConnector(joint);
+      const seat = hand ? assembly.connectorAt(hand.part, hand.connector) : assembly.hardwareConnector(joint);
       const axis = scratch.fromArray(seat.axis);
       const turns = spanOf(joint.kind);
       // A bolt or stud partway in is still held at the mouth; draw it as far in as it has turned.
@@ -1681,6 +1697,23 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       offset.copy(pivot).sub(scratch.copy(pivot).applyQuaternion(twist)).applyQuaternion(mesh.quaternion);
       mesh.position.add(offset);
       mesh.quaternion.multiply(twist);
+      // A part carrying its stud takes the stud along: what the turn did to the part (its
+      // drawn pose over its body's) is done to the stud too, below.
+      if (hand && joint.mover !== joint.host) {
+        const entry = (carriedStuds[carriedCount] ??= { part: null, delta: new THREE.Matrix4() });
+        entry.part = partById.get(joint.hardware)!;
+        entry.delta.compose(mesh.position, mesh.quaternion, unitScale);
+        entry.delta.multiply(toolPose.compose(scratch.set(t.x, t.y, t.z), twist.set(r.x, r.y, r.z, r.w), unitScale).invert());
+        carriedCount++;
+      }
+    }
+    for (let i = 0; i < carriedCount; i++) {
+      const { part, delta } = carriedStuds[i];
+      const { body, mesh } = part!;
+      const r = body.rotation();
+      const t = body.translation();
+      carriedPose.compose(scratch.set(t.x, t.y, t.z), twist.set(r.x, r.y, r.z, r.w), unitScale).premultiply(delta);
+      carriedPose.decompose(mesh.position, mesh.quaternion, scratch);
     }
     followRiders();
     for (const [id, { fastener, grip }] of toolGrips) {

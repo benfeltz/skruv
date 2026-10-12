@@ -388,6 +388,18 @@ export function createAssembly(typeOf: (part: PartId) => string) {
   const handTarget = (part: PartId) => all().find((j) => isHandTurned(j) && j.mover === part) ?? null;
 
   /**
+   * Where a hand-turned joint turns about, on the part the finger circles: `{ part, connector }`
+   * — the hole it was set onto its stud by (it is the host), or, a part carried onto the top
+   * with its stud already in it, the hole that stud is in. Null for a joint nobody circles.
+   */
+  function handSeat(joint: AssemblyJoint) {
+    if (!isHandTurned(joint)) return null;
+    if (joint.mover === joint.host) return { part: joint.host, connector: joint.hostConnector };
+    const carried = all().find((j) => j.hardware === joint.hardware && j.host === joint.mover);
+    return carried ? { part: joint.mover, connector: carried.hostConnector } : null;
+  }
+
+  /**
    * Every stud joint `part` is turned through by hand, in seating order: a top dropped onto
    * four standing studs carries four, and circling it screws them all together.
    */
@@ -448,6 +460,19 @@ export function createAssembly(typeOf: (part: PartId) => string) {
       return {
         position: add(hardware.position, rotateVector(hardware.rotation, back.anchor)),
         rotation: normalize(multiplyQuaternions(hardware.rotation, back.rotation)),
+      };
+    }
+    // A part carrying its stud onto the top: the stud's own rest at the top's mouth, and the
+    // part where it was relative to the stud it carries.
+    if (isHandTurned(joint) && joint.mover !== joint.hardware) {
+      const stud = {
+        position: add(host.position, rotateVector(host.rotation, rel.anchor)),
+        rotation: normalize(multiplyQuaternions(host.rotation, rel.rotation)),
+      };
+      const carried = relativePose(poseOf(joint.hardware), poseOf(joint.mover));
+      return {
+        position: add(stud.position, rotateVector(stud.rotation, carried.anchor)),
+        rotation: normalize(multiplyQuaternions(stud.rotation, carried.rotation)),
       };
     }
     return {
@@ -558,6 +583,8 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     turnedFrom,
     handTarget,
     handTargets,
+    handSeat,
+    connectorAt: connectorOf,
     screwedBolts,
     compoundOf,
     bonds,

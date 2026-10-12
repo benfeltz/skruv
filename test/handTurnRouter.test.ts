@@ -101,6 +101,62 @@ describe('a still press', () => {
   });
 });
 
+// A leg carried onto the top with its stud already in it (review): the joint into the top has
+// the leg as its mover, neither hardware nor host. The top lies underside up; the stud, its
+// lower end at the mouth, hangs from the leg above.
+function carriedBench() {
+  const top = makePart('top-1', 'top', TOP_POSE.position, TOP_POSE.rotation);
+  const stud = makePart('doubleEndedStud-1', 'doubleEndedStud', [MOUTH[0], MOUTH[1] + STUD_HALF, MOUTH[2]], FLIPPED);
+  // The stud's upper end sunk home in the leg's hole: the leg's mouth a sink below that end.
+  const mouthOfLeg = MOUTH[1] + 2 * STUD_HALF - SINK;
+  const leg = makePart('leg-1', 'leg', [MOUTH[0], mouthOfLeg + LEG_HALF, MOUTH[2]], FLIPPED);
+  const m = mount([top, stud, leg]);
+  const inLeg = m.assembly.seat({ partA: stud.id, connectorA: 1, partB: leg.id, connectorB: 0, mover: stud.id });
+  m.assembly.drive(inLeg.id);
+  const inTop = m.assembly.seat({ partA: stud.id, connectorA: 0, partB: top.id, connectorB: 0, mover: leg.id });
+  const progress = () => m.assembly.get(inTop.id)!.fastener.progress;
+  return { ...m, top, stud, leg, inLeg, inTop, progress };
+}
+
+describe('a leg carried onto the top with its stud in it (review)', () => {
+  it('is circled and driven like any hand-turned part, through the leg', () => {
+    const b = carriedBench();
+    expect(b.assembly.handTarget('leg-1')).toMatchObject({ id: b.inTop.id });
+    const at = b.screen(b.leg.mesh.position);
+    b.canvas.fire('pointerdown', at);
+    b.hold(TAP_FRAMES + DRIVE_FRAMES);
+    b.canvas.fire('pointerup', at);
+    expect(b.assembly.get(b.inTop.id)!.fastener).toMatchObject({ state: STATE.SCREWED, progress: 1 });
+  });
+
+  it('draws the leg turning and advancing, with its stud riding in it — not the stud sliding out', () => {
+    const b = carriedBench();
+    // An eighth of the span: a quarter turn, a sink's eighth of the way.
+    b.assembly.apply(b.inTop.id, { type: 'crank', radians: FASTENER.studRadians / 8 });
+    b.hold(1);
+    expect(b.leg.mesh.position.y).toBeCloseTo(b.leg.body.pose.position.y - SINK / 8, 9);
+    expect(b.leg.mesh.quaternion.angleTo(new THREE.Quaternion(...FLIPPED))).toBeGreaterThan(0);
+    // The stud goes with the leg: the same move, still in its hole.
+    expect(b.stud.mesh.position.y).toBeCloseTo(b.stud.body.pose.position.y - SINK / 8, 9);
+    const stud = b.stud.mesh.position;
+    const leg = b.leg.mesh.position;
+    expect(Math.hypot(stud.x - leg.x, stud.z - leg.z)).toBeCloseTo(0, 9);
+  });
+
+  it('is held back at the top\'s mouth, with its stud, once it is circled out to nothing', () => {
+    const b = carriedBench();
+    const at = b.screen(b.leg.mesh.position);
+    b.canvas.fire('pointerdown', at);
+    b.hold(TAP_FRAMES + DRIVE_FRAMES);
+    b.canvas.fire('pointerup', at);
+    b.grabbed.length = 0;
+    const tighten = Math.sign(tightenSign(connectorInWorld(PART_TYPES.leg.connectors[0], { position: b.leg.mesh.position.toArray() as Vec3, rotation: FLIPPED }).axis, new THREE.Vector3(...MOUTH).sub(b.camera.position).toArray()));
+    b.circle(b.screen(b.leg.mesh.position), MOUTH, -tighten * 2000, 0, TURN_RING.radius);
+    expect(b.progress()).toBe(0);
+    expect(b.grabbed).toContain(b.leg.body);
+  });
+});
+
 describe('a leg backed out to nothing (review)', () => {
   // Screwed home it is bonded, not held; backed out to zero the bond goes — and the leg is
   // held back at its stud's mouth, as a bolt backed out is, not left a free body to fall.
