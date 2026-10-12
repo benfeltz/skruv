@@ -134,6 +134,39 @@ export const CATALOG = {
   // empty. Every build ships every pack; the rest show SOLD OUT. (vite.config.ts reads this
   // file in plain Node, where import.meta.env doesn't exist.)
   pickable: import.meta.env?.VITE_PICKABLE ?? '',
+  // Its pages (src/scene/catalogPages.ts), in page-canvas pixels on BOOKLET.pageSize paper.
+  page: {
+    wordmarkSize: 156,
+    taglineSize: 30,
+    nameSize: 96,
+    detailSize: 30,
+    // The BUILD IT tag, or the SOLD OUT stamp in its place: [x, y, w, h], also the hit
+    // target src/ui/booklet.ts lays over the page. Below it, space held for a store link
+    // on a sold-out page — drawn blank for now.
+    action: [180, 770, 360, 104] satisfies [number, number, number, number],
+    actionTextSize: 52,
+    linkSpace: [180, 892, 360, 60] satisfies [number, number, number, number],
+    // The tag's corners and punched hole; the stamp's outline and tilt (radians).
+    tagRadius: 18,
+    tagHole: 12,
+    stampLine: 6,
+    stampTurn: -0.08,
+  },
+  // The cover's wire-drawn room corner (metres): the items stand on its floor this far
+  // apart and this far in from its walls, which rise this many times the tallest item.
+  cover: {
+    gap: 0.5,
+    margin: 0.6,
+    wallRise: 1.5,
+    slab: 0.03,
+  },
+  words: {
+    brand: 'SKRUV',
+    tagline: 'Catalog',
+    parts: 'parts',
+    build: 'BUILD IT',
+    soldOut: 'SOLD OUT',
+  },
 };
 
 export const LIGHTS = {

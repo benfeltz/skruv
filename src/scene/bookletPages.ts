@@ -9,7 +9,7 @@ import { ASSEMBLED, IDENTITY, MANIFEST, MANUAL, PART_TYPES, resolveConnector } f
 import type { InstanceId } from '../game/item.js';
 import type { BuildStep, PartCount } from '../game/bookletModel.js';
 import type { PictogramId, Scheme } from '../game/controlsPage.js';
-import type { Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
+import type { Quat, Size, Vec3 } from '../../tools/validate/lib/geometry.js';
 
 // The booklet's pages, drawn from the same part models the room uses, so a page can never
 // disagree with the geometry. Wordless, as the real thing is: a big step numeral, an
@@ -27,7 +27,7 @@ type Rect = [number, number, number, number];
 type Weight = 'bold' | 'faint';
 
 /** One part in an outline drawing: its type, its pose, and how heavily it is drawn. */
-interface ViewItem {
+export interface ViewItem {
   type: string;
   position: Vec3;
   rotation: Quat;
@@ -80,7 +80,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
   });
   const [pageW, pageH] = BOOKLET.pageSize;
   const cache = new Map<number, HTMLCanvasElement>();
-  const views = createViewRenderer(renderer);
+  const views = createViewRenderer(renderer, (type) => PART_TYPES[type].size);
 
   const partById = new Map(layout.parts.map((p) => [p.id, p]));
   const boldOf = (step: BuildStep) => {
@@ -376,9 +376,13 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
   return { count: pages.length, pages, canvas, prerender, dispose };
 }
 
-// Hidden-line outline renders: every part a white box (faces hide what lies behind) with
-// its edges drawn as fat lines, bold or faint. Geometry is built once per part type.
-function createViewRenderer(renderer: THREE.WebGLRenderer) {
+/**
+ * Hidden-line outline renders: every part a white box (faces hide what lies behind) with
+ * its edges drawn as fat lines, bold or faint, sized by `sizeOf(type)`. Geometry is built
+ * once per part type. `render(items, width, height, orientation)` returns a canvas of the
+ * drawing framed to fit. Shared with the catalog's pages (src/scene/catalogPages.ts).
+ */
+export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type: string) => Size) {
   const fill = new THREE.MeshBasicMaterial({
     color: COLORS.bookletPaper,
     polygonOffset: true,
@@ -392,7 +396,7 @@ function createViewRenderer(renderer: THREE.WebGLRenderer) {
   const geometries = new Map<string, { box: THREE.BoxGeometry; edges: LineSegmentsGeometry }>();
   const geometryOf = (type: string) => {
     if (!geometries.has(type)) {
-      const box = new THREE.BoxGeometry(...PART_TYPES[type].size);
+      const box = new THREE.BoxGeometry(...sizeOf(type));
       geometries.set(type, { box, edges: new LineSegmentsGeometry().fromEdgesGeometry(new THREE.EdgesGeometry(box)) });
     }
     return geometries.get(type)!;
@@ -402,7 +406,7 @@ function createViewRenderer(renderer: THREE.WebGLRenderer) {
   const corner = new THREE.Vector3();
   const clearColor = new THREE.Color();
 
-  function render(items: ViewItem[], width: number, height: number, orientation: THREE.Quaternion) {
+  function render(items: ViewItem[], width: number, height: number, orientation = UPRIGHT) {
     const scene = new THREE.Group();
     const root = new THREE.Group();
     root.quaternion.copy(orientation);
