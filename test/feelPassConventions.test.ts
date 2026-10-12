@@ -266,18 +266,15 @@ describe('seat assist feel (AC4)', () => {
   });
 });
 
-describe('Shift-drag lift (AC5)', () => {
-  it('spends exactly the vertical travel made under Shift on lift, and none after', () => {
+// AC5's Shift-drag lift is gone (1.8.3.3, Ben 2026-10-10): Shift only holds, and Shift +
+// scroll sets the height. The drag itself is a plain drag.
+describe('desktop lift (AC5, as 1.8.3.3 has it)', () => {
+  it('drags on the primary pointer\'s whole travel: no lift from it, Shift or not', () => {
     const g = createGestureState({ tapMaxDistance: 10, tapMaxMs: 300 });
     const hit: GestureHit = { kind: 'part' };
     g.down({ id: 1, x: 0, y: 300, t: 0, hit });
     g.move({ id: 1, x: 20, y: 300, t: 10 });
-    g.modifier(true);
-    let lifted = 0;
-    for (const y of [280, 250, 260, 200]) lifted += (g.move({ id: 1, x: 20, y, t: 20 }) as { dy?: number } | null)?.dy ?? 0;
-    expect(lifted).toBe(100);
-    g.modifier(false);
-    expect(g.move({ id: 1, x: 40, y: 180, t: 30 })).toMatchObject({ type: 'dragMove', x: 40, y: 280 });
+    for (const y of [280, 250, 260, 200]) expect(g.move({ id: 1, x: 20, y, t: 20 })).toMatchObject({ type: 'dragMove', x: 20, y });
     expect(g.owner).toBe(OWNER.DRAG_PART);
     expect(g.cameraEnabled).toBe(false);
   });

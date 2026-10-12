@@ -289,8 +289,8 @@ const liftLine = createLiftLine({
 document.body.append(liftLine.element);
 
 // Shift is the desktop's finger on the line: while it is down, the part the line would lift
-// stays where it is — the pointer free to turn it, drag it (a Shift-drag still lifts) or
-// orbit — and letting go drops it. Window-level, so it counts wherever focus sits.
+// stays where it is — the pointer free to turn it, drag it (across the floor, as any drag)
+// or orbit — and letting go drops it. Window-level, so it counts wherever focus sits.
 let shiftDown = false;
 function onShift(event: KeyboardEvent) {
   if (event.key !== 'Shift') return;

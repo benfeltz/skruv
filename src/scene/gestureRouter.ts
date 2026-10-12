@@ -239,7 +239,7 @@ const PULL_AXIS_PROBE = 0.05;
  *            line's height, so seats are offered where the part really is and letting go
  *            of the line leaves the drag there; a seat newly on offer eases the line to its
  *            height, as seat assist eases everything else, and back once the offer is
- *            gone; a lift (second finger, Shift, wheel) moves the line with it. A part the
+ *            gone; a lift (second finger, wheel) moves the line with it. A part the
  *            line holds is never a seat for another: it drops when the line lets go.
  *   turnRing — `{ show(dials), hide() }` (src/ui/turnRing.ts): a dial round the head of
  *            each fastener a seated tool is on, for as long as it is on, its arc at the
@@ -1395,11 +1395,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     drag = { mode: 'pull', part, start: [event.clientX, event.clientY], joints } as Drag;
   }
 
-  // The pull is judged on the real pointer `event`; once free, the drag carries on from
-  // `pointer` — where the state machine reports it — so a later Shift-lift never jumps.
-  function pullTo(event: ClientPoint, pointer = event) {
+  // The pull is judged on the pointer; once free, the drag carries on from it.
+  function pullTo(pointer: ClientPoint) {
     const { part, start, joints } = drag!;
-    const at = [event.clientX, event.clientY];
+    const at = [pointer.clientX, pointer.clientY];
     const pulled = joints.filter(({ id, axis }) => pullAlong(start, at, axis) >= FASTENER.pullDistance && assembly.apply(id, { type: 'pull' }));
     if (pulled.length === 0) return;
     for (const { id } of pulled) reportFastening(id, true);
@@ -1657,21 +1656,16 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // --- effects from the state machine ---
 
-  // A live drag's move or lift. The primary pointer as the state machine reports it: a
-  // Shift-lift's vertical travel is spent, so letting go of Shift never makes anything jump.
+  // A live drag's move or lift: the primary pointer's move, or a second finger's or the
+  // wheel's lift.
   function moveDrag(effect: Extract<GestureEffect<Press>, { type: 'lift' | 'dragMove' }>, event: MouseEvent) {
-    // A lift that carries x carries y too.
-    const at = effect.x === undefined ? null : { clientX: effect.x, clientY: effect.y! };
     if (drag!.mode === 'crank' || drag!.mode === 'pull') {
-      // Nothing to lift: the primary pointer's move is a crank or a pull either way, judged
-      // on the real pointer — a crank sweeps round the head where the cursor actually is.
-      if (!at) return;
+      // Nothing to lift: the primary pointer's move is a crank or a pull.
+      if (effect.type === 'lift') return;
       if (drag!.mode === 'crank') crankTo(event);
-      else pullTo(event, at);
-    } else if (effect.type === 'lift') {
-      if (at) drag!.pointer = at;
-      liftDrag(effect.dy, liftRate(effect, event));
-    } else if (effect.type === 'dragMove') updateDrag(at!);
+      else pullTo(event);
+    } else if (effect.type === 'lift') liftDrag(effect.dy, liftRate(event));
+    else updateDrag(event);
   }
 
   function apply(effect: GestureEffect<Press> | null, event?: MouseEvent) {
@@ -1720,10 +1714,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     }
   }
 
-  // A second finger keeps its phone rate; Shift-drag and the wheel are the desktop's, tuned
-  // for trackpad deltas.
-  const liftRate = (effect: Extract<GestureEffect<Press>, { type: 'lift' }>, event?: MouseEvent) =>
-    effect.x === undefined && event?.type !== 'wheel' ? GESTURE.liftRate : GESTURE.desktopLiftRate;
+  // A second finger keeps its phone rate; the wheel is the desktop's, tuned for trackpad deltas.
+  const liftRate = (event: MouseEvent) => (event.type === 'wheel' ? GESTURE.desktopLiftRate : GESTURE.liftRate);
 
   // Capture phase, so this runs before OrbitControls' own pointerdown on the same element
   // and a part touch has already disabled the camera when OrbitControls sees it.
@@ -1771,15 +1763,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     apply(state.wheel({ dy: event.deltaY }), event);
   }
 
-  // Shift held = desktop lift. Window-level, so it counts wherever focus sits; a key let go
-  // while the window was blurred is cleared by onInterrupted.
-  function onKey(event: KeyboardEvent) {
-    if (event.key === 'Shift') state.modifier(event.type === 'keydown');
-  }
-
   function onInterrupted() {
     press = null;
-    state.modifier(false);
     apply(state.cancelAll());
     syncCamera();
   }
@@ -1796,8 +1781,6 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   domElement.addEventListener('wheel', onWheel, { passive: true });
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('blur', onInterrupted);
-  window.addEventListener('keydown', onKey);
-  window.addEventListener('keyup', onKey);
 
   return {
     // The drag in progress, read-only: which part, and how it is being moved.
@@ -1841,8 +1824,6 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       domElement.removeEventListener('wheel', onWheel);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('blur', onInterrupted);
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('keyup', onKey);
     },
   } satisfies GestureRouter;
 }

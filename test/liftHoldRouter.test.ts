@@ -39,12 +39,8 @@ class FakeCanvas {
 }
 
 const quiet = { addEventListener() {}, removeEventListener() {} };
-// The window's key listeners, so a spec can hold Shift down.
-const keys = new Map<string, FakeListener>();
-const shift = (down: boolean) => keys.get(down ? 'keydown' : 'keyup')?.({ type: down ? 'keydown' : 'keyup', key: 'Shift' });
 beforeEach(() => {
-  keys.clear();
-  vi.stubGlobal('window', { addEventListener: (type: string, fn: FakeListener) => keys.set(type, fn), removeEventListener() {} });
+  vi.stubGlobal('window', quiet);
   vi.stubGlobal('document', { ...quiet, visibilityState: 'visible' });
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -247,20 +243,19 @@ describe('a drag of the held part rides at the line height (review round 1)', ()
     expect(moves.every(([, y]) => y < 0.1)).toBe(true);
   });
 
-  // Ben's manual pass (2026-10-09): Shift-drag (and a second finger) lifting the held part
-  // moves the line with it — else the line's height pulls it straight back down.
+  // Ben's manual pass (2026-10-09): a lift of the held part moves the line with it — else
+  // the line's height pulls it straight back down. (A Shift-drag no longer lifts: 1.8.3.3.)
   it.each([
-    ['Shift-drag', 'shift'],
+    ['the wheel', 'wheel'],
     ['a second finger', 'finger'],
   ])('a lift of the held part by %s carries the line up with it', (_, by) => {
     const { router, canvas, hold, dowel, moves, jumps, dragDowel } = harness();
-    const at = dragDowel();
+    dragDowel();
     hold.held = dowel;
     hold.height = 0.3;
     router.update(0);
-    if (by === 'shift') {
-      shift(true);
-      canvas.fire('pointermove', { clientX: at.clientX, clientY: at.clientY - 120 });
+    if (by === 'wheel') {
+      canvas.fire('wheel', { deltaY: -120 });
     } else {
       canvas.fire('pointerdown', { pointerId: 2, clientX: 900, clientY: 800 });
       canvas.fire('pointermove', { pointerId: 2, clientX: 900, clientY: 680 });

@@ -1,5 +1,6 @@
 // Automated half of the 1.8.1 manual-pass round (Ben, 2026-10-09): Shift as the desktop's
-// hold beside the line, a lift of the held part carrying the line, and a hold started with
+// hold beside the line (a Shift-drag a plain drag since 1.8.3.3), a lift of the held part
+// carrying the line, and a hold started with
 // a seat already on offer gliding into it. The real seam, router and control over a
 // recording physics stub. How it feels on a trackpad and a phone is Test Plan.md.
 
@@ -59,7 +60,7 @@ function world() {
   return { parts, physics, moves, releases, add, lastY: (id: string) => moves.filter(([m]) => m === id).at(-1)![1][1] };
 }
 
-// The window's key listeners, so a spec can hold Shift down.
+// The window's key listeners, so a spec can hold Shift down as a player does.
 const keys = new Map<string, Listener>();
 const shift = (down: boolean) => keys.get(down ? 'keydown' : 'keyup')?.({ type: down ? 'keydown' : 'keyup', key: 'Shift' });
 const quiet = { addEventListener() {}, removeEventListener() {} };
@@ -159,8 +160,10 @@ describe('AC: Shift and the line keep one part up together; it drops when the la
   });
 });
 
-describe('AC: a Shift-drag lift of the part Shift holds raises it, and it stays up after the drag', () => {
-  it('lifts through the real seam and router, straight up, and keeps the height once the pointer lets go', () => {
+// 1.8.3.3 (Ben, 2026-10-10): Shift only holds. A Shift-drag used to lift (1.8.1); now it
+// pushes, pulls and slides the held part like any drag, at the height Shift holds it.
+describe('AC: a Shift-drag of the part Shift holds is a plain drag, and it stays up after the drag', () => {
+  it('pushes it away across the floor at its held height, and keeps it there once the pointer lets go', () => {
     const w = world();
     const panel = w.add('panel', 'fixedShelf', [0, 0.008, 0]);
     const { hold, fire, screen, frames } = rig(w);
@@ -170,19 +173,18 @@ describe('AC: a Shift-drag lift of the part Shift holds raises it, and it stays 
     shift(true);
     hold.begin(panel, 'key'); // main.ts's keepShiftHold, the next frame
     frames(1);
-    const [x, , z] = w.moves.at(-1)![1];
+    const [, y, z] = w.moves.at(-1)![1];
     for (let dy = 20; dy <= 200; dy += 20) fire('pointermove', { clientX: at.clientX + 30, clientY: at.clientY - dy });
     frames(10);
-    const raised = w.lastY('panel');
-    expect(raised).toBeGreaterThan(0.2);
-    expect(hold.height).toBeCloseTo(raised, 9);
-    const [lx, , lz] = w.moves.at(-1)![1];
-    expect(lx).toBeCloseTo(x, 9);
-    expect(lz).toBeCloseTo(z, 9);
+    // Up the screen is away from the camera: pushed back, never raised.
+    const [, ly, lz] = w.moves.at(-1)![1];
+    expect(lz).toBeLessThan(z - 0.1);
+    expect(ly).toBeCloseTo(y, 9);
+    expect(hold.height).toBeCloseTo(y, 9);
     fire('pointerup', { clientX: at.clientX + 30, clientY: at.clientY - 200 });
     frames(30);
     expect(w.releases).toEqual([]);
-    expect(w.lastY('panel')).toBeCloseTo(raised, 9);
+    expect(w.lastY('panel')).toBeCloseTo(y, 9);
     hold.end('key');
     expect(w.releases).toEqual(['panel']);
   });
