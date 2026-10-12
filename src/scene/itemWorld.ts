@@ -29,7 +29,7 @@ import type { Bus } from '../game/events.js';
 import type { Haptics } from '../game/haptics.js';
 import type { PartId } from '../game/assembly.js';
 import type { Part } from '../game/partMesh.js';
-import type { Body, PhysicsWorld } from '../physics/world.js';
+import type { PhysicsWorld } from '../physics/world.js';
 import type { CameraControls } from './cameraControls.js';
 import type { createBookletPages } from './bookletPages.js';
 import type { Pose, Vec3 } from '../../tools/validate/lib/geometry.js';
@@ -111,13 +111,21 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
       for (const object of added) object.traverse(release);
     });
   };
-  // Out of the physics world, its joints with it.
-  const own = (...bodies: Body[]) => undo.push(() => bodies.forEach((body) => physics.remove(body)));
+  // Every body this world registers goes on `undo` the moment it exists — out of the physics
+  // world, its joints with it — the factories' (box, display shelf) included, so a factory
+  // that throws half-way strands nothing it had already registered.
+  const owning: PhysicsWorld = {
+    ...physics,
+    register(...args) {
+      const body = physics.register(...args);
+      undo.push(() => physics.remove(body));
+      return body;
+    },
+  };
 
   // The game opens on the closed flatpack: every part packed flat inside, settling at once
   // and resting until the lid comes off and a hand disturbs it.
-  const flatpack = createFlatpack(physics);
-  own(flatpack.base.body, flatpack.lid.body);
+  const flatpack = createFlatpack(owning);
   add(flatpack.base.mesh, flatpack.lid.mesh);
 
   // One record per physical part — what gestures pick, drag and snap. The box and its lid
@@ -126,7 +134,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   for (const { id, type, position, rotation } of createPackedWorldLayout()) {
     const part = PART_TYPES[type];
     const mesh = createPartMesh(part);
-    const body = physics.register(mesh, {
+    const body = owning.register(mesh, {
       // map keeps the length; TS widens a mapped tuple to number[].
       halfExtents: part.size.map((d) => d / 2) as Vec3,
       // Every packed part is the pack's, with its mass.
@@ -134,17 +142,13 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
       position,
       rotation,
     });
-    own(body);
     add(mesh);
     parts.push({ id, type, mesh, body });
   }
 
   // The display item against the wall: already built, its parts ordinary parts.
-  const display = createDisplayShelf(physics);
-  for (const part of display.parts) {
-    own(part.body);
-    add(part.mesh);
-  }
+  const display = createDisplayShelf(owning);
+  for (const part of display.parts) add(part.mesh);
   parts.push(...display.parts);
 
   // The camera pivots about the first of these along the middle of the screen as a gesture

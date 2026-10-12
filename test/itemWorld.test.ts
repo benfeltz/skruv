@@ -275,6 +275,34 @@ describe('a release that throws (1.9.1 review)', () => {
   });
 });
 
+describe('a factory that throws part-way (1.9.1 review)', () => {
+  // A physics world whose register throws on call `n`, after n - 1 bodies are in.
+  function failingRegister(deps: ItemWorldDeps, n: number) {
+    let calls = 0;
+    const physics = {
+      ...deps.physics,
+      register: (...args: Parameters<ItemWorldDeps['physics']['register']>) => {
+        if (++calls === n) throw new Error(`register ${n} broke`);
+        return deps.physics.register(...args);
+      },
+    };
+    return { ...deps, physics };
+  }
+
+  it('releases every body registered before the throw — inside the box, and inside the display shelf', async () => {
+    const { deps, census } = await engine();
+    const baseline = census();
+    const whole = createItemWorld(deps);
+    const total = census().physics.registered - baseline.physics.registered;
+    whole.dispose();
+    // 2: the lid, after the box's base, inside createFlatpack. total: the display shelf's last part.
+    for (const n of [2, total]) {
+      expect(() => createItemWorld(failingRegister(deps, n)), `register ${n}`).toThrow(`register ${n} broke`);
+      expect(census(), `register ${n}`).toEqual(baseline);
+    }
+  });
+});
+
 describe('a build that fails part-way (1.9.1 review)', () => {
   it('takes back what it had built before rethrowing — bodies, meshes, nodes, listeners', async () => {
     const { deps, census } = await engine();
