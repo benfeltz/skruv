@@ -67,15 +67,34 @@ export interface ItemWorldDeps {
 export function createItemWorld(deps: ItemWorldDeps) {
   // Everything the world puts in the scene, the physics world, the page or the bus, each
   // with how to take it back — run last in, first out by dispose(), or straight away by a
-  // build that throws half-way, so a failed pick leaves the room as it found it too.
+  // build that throws half-way, so a failed pick leaves the room as it found it too. Every
+  // release runs even if one before it throws: one bad step never strands the rest.
   const undo: (() => void)[] = [];
   const teardown = () => {
-    while (undo.length) undo.pop()!();
+    const errors: unknown[] = [];
+    while (undo.length) {
+      try {
+        undo.pop()!();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    return errors;
   };
   try {
-    return { ...buildItemWorld(deps, undo), dispose: teardown };
+    const world = buildItemWorld(deps, undo);
+    return {
+      ...world,
+      /** Takes the world back out, every release run; any that threw are thrown together after. */
+      dispose() {
+        const errors = teardown();
+        if (errors.length) throw new AggregateError(errors, 'item world teardown: some releases threw');
+      },
+    };
   } catch (error) {
-    teardown();
+    // The build's own error is the one the caller sees; a release that also threw rides along.
+    const errors = teardown();
+    if (errors.length) throw new AggregateError([error, ...errors], `item world build failed: ${String(error)}`, { cause: error });
     throw error;
   }
 }

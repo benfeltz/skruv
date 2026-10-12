@@ -228,6 +228,53 @@ describe('the item world comes and goes without a trace', () => {
   });
 });
 
+describe('a release that throws (1.9.1 review)', () => {
+  // A physics world whose remove throws once — for the first body asked — then works.
+  function flakyRemove(deps: ItemWorldDeps) {
+    let thrown = false;
+    const physics = {
+      ...deps.physics,
+      remove: (body: Parameters<ItemWorldDeps['physics']['remove']>[0]) => {
+        if (!thrown) {
+          thrown = true;
+          throw new Error('remove broke');
+        }
+        deps.physics.remove(body);
+      },
+    };
+    return { ...deps, physics };
+  }
+
+  it('dispose still runs every other release, then throws what failed', async () => {
+    const { deps, census } = await engine();
+    const baseline = census();
+    const world = createItemWorld(flakyRemove(deps));
+    expect(() => world.dispose()).toThrow(AggregateError);
+    const after = census();
+    // Exactly the one body whose release threw is left; everything else came back out.
+    expect(after.physics.registered).toBe(baseline.physics.registered + 1);
+    expect({ ...after, physics: baseline.physics }).toEqual(baseline);
+  });
+
+  it("a build that fails keeps its own error first, even when a release throws too", async () => {
+    const { deps, census } = await engine();
+    const baseline = census();
+    const failing = { ...flakyRemove(deps), pages: () => { throw new Error('pages broke'); } };
+    let caught: unknown;
+    try {
+      createItemWorld(failing);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(AggregateError);
+    const { errors } = caught as AggregateError;
+    expect((errors[0] as Error).message).toBe('pages broke');
+    expect((errors[1] as Error).message).toBe('remove broke');
+    expect(census().canvasListeners).toBe(baseline.canvasListeners);
+    expect(census().scene).toBe(baseline.scene);
+  });
+});
+
 describe('a build that fails part-way (1.9.1 review)', () => {
   it('takes back what it had built before rethrowing — bodies, meshes, nodes, listeners', async () => {
     const { deps, census } = await engine();
