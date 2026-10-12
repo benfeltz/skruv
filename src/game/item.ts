@@ -10,6 +10,8 @@
 
 import { deriveJoints } from '../../tools/validate/lib/joints.js';
 import { loadPack } from '../../tools/validate/lib/pack.js';
+import { isFastenerEnd, kindOf } from '../../tools/validate/lib/vocabulary.js';
+import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { FlatpackFile, PartType } from '../../tools/validate/lib/pack.js';
 
 // The pack format's types, for the rest of the game: they reach it only through here.
@@ -70,6 +72,14 @@ function itemOf(file: FlatpackFile) {
      *            hardwareConnector, host, hostConnector, kind, mover, through, captured }`
      */
     assembled: Object.freeze({ parts: pack.assembled, joints: deriveJoints(pack) }),
+    /**
+     * Every fastener kind this item uses, tools included: read off the fastener ends of the
+     * part types it ships, never written down. The game's own pages depend on it — the
+     * controls page leaves out rows for gestures the item never asks for.
+     */
+    kinds: new Set<FastenerKind>(
+      Object.values(pack.partTypes).flatMap((part) => part.connectors.filter((c) => isFastenerEnd(c.type)).map((c) => kindOf(c.type)!)),
+    ) as ReadonlySet<FastenerKind>,
     /** The booklet as the pack writes it: `{ pages }`, cover to back (src/game/bookletModel.ts). */
     manual: pack.manual,
     /** `resolve('dowel-1/dowelEnd-2') → { part: 'dowel-1', connector: 1 }`. */
@@ -107,6 +117,8 @@ export let SPARES: Item['spares'];
 export let IDENTITY: Item['identity'];
 /** The current item, built: `{ parts, joints }` — `Item['assembled']`. */
 export let ASSEMBLED: Item['assembled'];
+/** The current item's fastener kinds — `Item['kinds']`. */
+export let KINDS: Item['kinds'];
 /** The current item's booklet — `Item['manual']`. */
 export let MANUAL: Item['manual'];
 /** `resolveConnector('dowel-1/dowelEnd-2') → { part: 'dowel-1', connector: 1 }`, for the current item. */
@@ -116,7 +128,7 @@ export let resolveConnector: Item['resolve'];
 export function setItem(id: string) {
   const item = itemById(id);
   ITEM_ID = id;
-  ({ packing: PACKING, partTypes: PART_TYPES, manifest: MANIFEST, spares: SPARES, identity: IDENTITY, assembled: ASSEMBLED, manual: MANUAL, resolve: resolveConnector } = item);
+  ({ packing: PACKING, partTypes: PART_TYPES, manifest: MANIFEST, spares: SPARES, identity: IDENTITY, assembled: ASSEMBLED, kinds: KINDS, manual: MANUAL, resolve: resolveConnector } = item);
 }
 
 // JOHNNY until something picks another.

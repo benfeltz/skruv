@@ -47,6 +47,7 @@ describe('src/game/item.ts — the current item', () => {
     spares: door.SPARES,
     identity: door.IDENTITY,
     assembled: door.ASSEMBLED,
+    kinds: door.KINDS,
     manual: door.MANUAL,
     resolve: door.resolveConnector,
   });
@@ -75,5 +76,17 @@ describe('src/game/item.ts — the current item', () => {
     expect(() => itemById('nope')).toThrow(/no item "nope"/);
     expect(door.ITEM_ID).toBe('johnny');
     for (const [key, value] of Object.entries(served())) expect(value, key).toBe(before[key as keyof typeof before]);
+  });
+});
+
+describe('src/game/item.ts — the fastener kinds (1.9.2)', () => {
+  it("lists JOHNNY's kinds and follows setItem to BLANK's", () => {
+    const johnny = ['bolt', 'cam', 'dowel', 'fitting', 'pin', 'tool'];
+    expect([...itemById('johnny').kinds].sort()).toEqual(johnny);
+    expect([...door.KINDS].sort()).toEqual(johnny);
+    setItem('blank');
+    expect([...door.KINDS].sort()).toEqual(['stud', 'tool']);
+    setItem('johnny');
+    expect([...door.KINDS].sort()).toEqual(johnny);
   });
 });

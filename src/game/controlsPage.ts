@@ -13,8 +13,12 @@
 //            Shift + scroll sets its height (desktop: src/main.ts, the router's wheel)
 //   tools    on a fastener, circle the tool (or its turn ring) to turn it, or hold it still
 //            to drive it home
+//   legs     a part set onto its stud is circled itself, no tool (items with studs only)
 //   booklet  swipe to flip (touch); the arrows or arrow keys (desktop) — src/ui/booklet.ts
 //   repack   a first tap arms the button, a second repacks (src/ui/resetButton.ts)
+
+import { KIND } from '../../tools/validate/lib/vocabulary.js';
+import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 
 /** The device a controls page is for. */
 export type Scheme = 'touch' | 'desktop';
@@ -33,6 +37,7 @@ export type PictogramId =
   | 'seat'
   | 'pushHome'
   | 'turnTool'
+  | 'turnPart'
   | 'pullApart'
   | 'flip'
   | 'repack';
@@ -41,6 +46,8 @@ export type PictogramId =
 export interface ControlRow {
   pictogram: PictogramId;
   label: string;
+  /** Shown only for an item whose fasteners include this kind (see `rowsFor`); absent: always. */
+  needs?: FastenerKind;
 }
 
 // The gestures both schemes share, after the camera's and the height's: a press is a tap
@@ -48,13 +55,14 @@ export interface ControlRow {
 const SHARED_ROWS = (press: 'tap' | 'click', flip: string): ControlRow[] => [
   { pictogram: 'seat', label: 'Drop to seat' },
   { pictogram: 'pushHome', label: 'Push home' },
-  { pictogram: 'turnTool', label: 'Circle or hold' },
+  { pictogram: 'turnTool', label: 'Circle or hold', needs: KIND.TOOL },
+  { pictogram: 'turnPart', label: 'Circle to screw', needs: KIND.STUD },
   { pictogram: 'pullApart', label: 'Pull apart' },
   { pictogram: 'flip', label: flip },
   { pictogram: 'repack', label: `Repack: ${press} twice` },
 ];
 
-/** Each scheme's rows, top to bottom. */
+/** Each scheme's rows, top to bottom, for an item that uses every fastener there is — see `rowsFor`. */
 export const CONTROLS: Readonly<Record<Scheme, readonly ControlRow[]>> = Object.freeze({
   touch: Object.freeze<ControlRow[]>([
     { pictogram: 'orbit', label: 'Turn view' },
@@ -75,3 +83,10 @@ export const CONTROLS: Readonly<Record<Scheme, readonly ControlRow[]>> = Object.
     ...SHARED_ROWS('click', 'Flip pages'),
   ]),
 });
+
+/**
+ * The rows `scheme` shows for an item whose fasteners are `kinds`: every row, but one that
+ * needs a kind the item lacks (leg screwing on an item with no studs) is left out. Order kept.
+ */
+export const rowsFor = (scheme: Scheme, kinds: ReadonlySet<FastenerKind>): ControlRow[] =>
+  CONTROLS[scheme].filter((row) => row.needs === undefined || kinds.has(row.needs));

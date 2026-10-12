@@ -5,11 +5,12 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import { BOOKLET, COLORS } from '../constants.js';
 import { createBooklet, gamePagesFor } from '../game/bookletModel.js';
 import { createPageCache, FAINT, font, INK, newPage, PAPER } from './pagePaper.js';
-import { CONTROLS } from '../game/controlsPage.js';
+import { rowsFor } from '../game/controlsPage.js';
 import { ITEM_ID, itemById } from '../game/item.js';
 import type { InstanceId } from '../game/item.js';
 import type { BuildStep, PartCount } from '../game/bookletModel.js';
 import type { PictogramId, Scheme } from '../game/controlsPage.js';
+import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { Sheet } from './pagePaper.js';
 import type { Quat, Size, Vec3 } from '../../tools/validate/lib/geometry.js';
 
@@ -74,7 +75,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     manifest: item.manifest,
     partTypes: item.partTypes,
     resolve: item.resolve,
-    gamePages: gamePagesFor(scheme),
+    gamePages: gamePagesFor(scheme, item.kinds),
   });
   const [pageW, pageH] = BOOKLET.pageSize;
   const views = createViewRenderer(renderer, (type) => item.partTypes[type].size);
@@ -241,14 +242,14 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
 
   // The controls page: a title, then each row's pictogram with its label beside it, in
   // columns down the page.
-  function controls({ ctx }: Sheet, { scheme }: { scheme: Scheme }) {
+  function controls({ ctx }: Sheet, { scheme, kinds }: { scheme: Scheme; kinds: readonly FastenerKind[] }) {
     const m = BOOKLET.margin;
     const { titleSize, titleGap, columns, pictogram, pictogramLine, labelGap, labelSize, labelLeading } = BOOKLET.controls;
     ctx.fillStyle = INK;
     ctx.textBaseline = 'alphabetic';
     ctx.font = font(titleSize, 800);
     ctx.fillText('Controls', m, m + titleSize);
-    const rows = CONTROLS[scheme];
+    const rows = rowsFor(scheme, new Set(kinds));
     const top = m + titleSize + titleGap;
     // Down the first column, then the next.
     const perColumn = Math.ceil(rows.length / columns);
@@ -868,6 +869,16 @@ const PICTOGRAMS: Readonly<Record<PictogramId, (ctx: Ctx, scheme: Scheme) => voi
     ctx.stroke();
     arrow(ctx, 44 + 36 * Math.cos(Math.PI * 1.6), 62 + 12 * Math.sin(Math.PI * 1.6), 44 + 36 * Math.cos(Math.PI * 1.75), 62 + 12 * Math.sin(Math.PI * 1.75));
     press(ctx, scheme, 80, 34);
+  },
+  turnPart: (ctx, scheme) => {
+    // A table top, a leg set onto it, and the circle round the leg that turns it by hand.
+    slab(ctx, 8, 14, 84, 14);
+    slab(ctx, 42, 28, 16, 56);
+    ctx.beginPath();
+    ctx.ellipse(50, 58, 34, 11, 0, Math.PI * 0.05, Math.PI * 1.75);
+    ctx.stroke();
+    arrow(ctx, 50 + 34 * Math.cos(Math.PI * 1.6), 58 + 11 * Math.sin(Math.PI * 1.6), 50 + 34 * Math.cos(Math.PI * 1.75), 58 + 11 * Math.sin(Math.PI * 1.75));
+    press(ctx, scheme, 84, 58);
   },
   pullApart: (ctx, scheme) => {
     slab(ctx, 8, 66, 84, 20);

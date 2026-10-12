@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAssembly } from '../src/game/assembly.js';
 import { createBooklet, gamePagesFor } from '../src/game/bookletModel.js';
-import { ASSEMBLED, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../src/game/item.js';
+import { ASSEMBLED, KINDS, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../src/game/item.js';
 import { acrossOf, shapeOf } from '../src/game/partShapes.js';
 import { createGestureRouter } from '../src/scene/gestureRouter.js';
 import { createLiftHold, liftRangeOf } from '../src/scene/liftHold.js';
@@ -174,8 +174,8 @@ describe('AC: Shift + scroll sets the height, with or without a drag, without zo
 
 describe('AC: the booklet\'s second-to-last page shows the controls for the device in use', () => {
   it.each(['touch', 'desktop'] as const)('%s', (scheme) => {
-    const pages = createBooklet(MANUAL.pages, { layout: ASSEMBLED, manifest: MANIFEST, partTypes: PART_TYPES, resolve: resolveConnector, gamePages: gamePagesFor(scheme) });
-    expect(pages.at(-2)).toEqual({ kind: 'controls', scheme });
+    const pages = createBooklet(MANUAL.pages, { layout: ASSEMBLED, manifest: MANIFEST, partTypes: PART_TYPES, resolve: resolveConnector, gamePages: gamePagesFor(scheme, KINDS) });
+    expect(pages.at(-2)).toEqual({ kind: 'controls', scheme, kinds: [...KINDS] });
     expect(pages.at(-1)!.kind).toBe('backCover');
   });
 });

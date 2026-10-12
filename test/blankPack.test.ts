@@ -5,6 +5,8 @@ import { deriveJoints } from '../tools/validate/lib/joints.js';
 import { loadPack } from '../tools/validate/lib/pack.js';
 import { CONNECTOR, KIND } from '../tools/validate/lib/vocabulary.js';
 import { COLORS } from '../src/constants.js';
+import { createBooklet, gamePagesFor } from '../src/game/bookletModel.js';
+import { itemById } from '../src/game/item.js';
 import type { FlatpackFile } from '../tools/validate/lib/pack.js';
 
 // BLANK's own facts, on the shipped pack (1.9.2): a box top, four box legs, four
@@ -57,5 +59,32 @@ describe('the BLANK pack', () => {
   it('draws its two build steps upside down, then tips the table upright', () => {
     const poses = FILE.manual.pages.flatMap((p) => (p.kind === 'step' || p.kind === 'special' ? [p.pose] : []));
     expect(poses).toEqual(['upsideDown', 'upsideDown', 'upright']);
+  });
+});
+
+describe("BLANK's booklet", () => {
+  const item = itemById('blank');
+  const pages = createBooklet(item.manual.pages, {
+    layout: item.assembled,
+    manifest: item.manifest,
+    partTypes: item.partTypes,
+    resolve: item.resolve,
+    gamePages: gamePagesFor('touch', item.kinds),
+  });
+
+  it('runs cover to back with the controls page second to last, listing the item\'s kinds', () => {
+    expect(pages[0].kind).toBe('cover');
+    expect(pages.at(-1)!.kind).toBe('backCover');
+    expect(pages.at(-2)).toMatchObject({ kind: 'controls', scheme: 'touch', kinds: expect.arrayContaining([KIND.STUD, KIND.TOOL]) });
+  });
+
+  it('gives step 1 the key and four studs into the top, step 2 four legs by hand', () => {
+    const steps = pages.flatMap((p) => (p.kind === 'step' ? [p] : []));
+    expect(steps.map((s) => [s.number, s.pose, s.tool, s.joints.length, s.parts.length])).toEqual([
+      [1, 'upsideDown', 'allenWrench', 4, 1],
+      [2, 'upsideDown', null, 4, 4],
+      // The tip-upright page: no fastening, the table turned over.
+      [3, 'upright', null, 0, 0],
+    ]);
   });
 });
