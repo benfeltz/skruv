@@ -1461,8 +1461,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     reconcile();
   }
 
-  // The turn that takes a bolt or cam seat from out to home.
-  const spanOf = (joint: AssemblyJoint) => (joint.kind === KIND.BOLT ? FASTENER.screwRadians : FASTENER.quarterTurn);
+  // The turn that takes a bolt, stud or cam seat from out to home.
+  const spanOf = (joint: AssemblyJoint) => {
+    if (joint.kind === KIND.BOLT) return FASTENER.screwRadians;
+    return joint.kind === KIND.STUD ? FASTENER.studRadians : FASTENER.quarterTurn;
+  };
 
   // --- hold-to-drive: a still press on a seated tool drives its fastener home ---
 
@@ -1609,13 +1612,17 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     showPanelRings(goal);
     showDials(delta);
     for (const joint of assembly.all()) {
-      if (joint.kind !== KIND.BOLT && joint.kind !== KIND.CAM) continue;
-      const { mesh, body } = partById.get(joint.hardware)!;
+      if (joint.kind !== KIND.BOLT && joint.kind !== KIND.CAM && joint.kind !== KIND.STUD) continue;
+      // What turns on screen is the side that was dragged into the seat: a bolt, cam or stud
+      // driven by its tool, or a leg circled by hand onto its stud — the hole side, turning
+      // and advancing about its own hole's axis instead of the hardware's.
+      const byHand = joint.kind === KIND.STUD && joint.mover === joint.host;
+      const { mesh, body } = partById.get(byHand ? joint.host : joint.hardware)!;
       const { progress } = joint.fastener;
-      const axis = scratch.fromArray(assembly.hardwareConnector(joint).axis);
+      const axis = scratch.fromArray(byHand ? assembly.hostConnector(joint).axis : assembly.hardwareConnector(joint).axis);
       const turns = spanOf(joint);
-      // A bolt partway in is still held at the mouth; draw it as far in as it has turned.
-      const sink = joint.kind === KIND.BOLT && !isFastened(joint.fastener) ? FASTENER.sinkDepth.bolt! * progress : 0;
+      // A bolt or stud partway in is still held at the mouth; draw it as far in as it has turned.
+      const sink = (joint.kind === KIND.BOLT || joint.kind === KIND.STUD) && !isFastened(joint.fastener) ? FASTENER.sinkDepth[joint.kind]! * progress : 0;
       const r = body.rotation();
       const t = body.translation();
       mesh.quaternion.set(r.x, r.y, r.z, r.w);

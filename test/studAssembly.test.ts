@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { KIND } from '../tools/validate/lib/vocabulary.js';
+import { CONNECTOR, KIND } from '../tools/validate/lib/vocabulary.js';
 import { FASTENER } from '../src/constants.js';
 import { createAssembly, seatHome } from '../src/game/assembly.js';
 import { STATE } from '../src/game/fasteners.js';
 import { ASSEMBLED, setItem } from '../src/game/item.js';
+import { isSeatTarget, isWorkable, seatedHardware } from '../src/game/toolTargets.js';
 import type { AssemblyJoint } from '../src/game/assembly.js';
 
 // The stud machine in the assembly graph (1.9.2), on BLANK's real pack: seating, homing and
@@ -50,5 +51,54 @@ describe('a stud joint', () => {
     // Every leg ends up in the top's compound.
     const compound = assembly.compoundOf('top-1');
     for (const p of ASSEMBLED.parts) expect(compound.has(p.id), p.id).toBe(true);
+  });
+});
+
+describe('crankTarget on a two-ended stud', () => {
+  // Stud 1 into the top by its first end, then a leg onto its second; the key on either hex.
+  const STUD_IN_TOP = 0;
+  const STUD_IN_LEG = 1;
+  const HEX_AT_TOP_END = 2;
+  const HEX_AT_LEG_END = 3;
+  function bench() {
+    const types = typeById();
+    const assembly = createAssembly((id) => types.get(id) ?? id.replace(/-\d+$/, ''));
+    const inTop = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: STUD_IN_TOP, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
+    const inLeg = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: STUD_IN_LEG, partB: 'leg-1', connectorB: 0, mover: 'leg-1' });
+    return { assembly, inTop, inLeg };
+  }
+
+  it("turns the end the key is not in: the key on the leg end's hex drives the end in the top, and the other way round", () => {
+    const { assembly, inTop, inLeg } = bench();
+    assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'doubleEndedStud-1', connectorB: HEX_AT_LEG_END, mover: 'allenWrench-1' });
+    expect(assembly.crankTarget('allenWrench-1')!.target!.id).toBe(inTop.id);
+    const other = bench();
+    other.assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'doubleEndedStud-1', connectorB: HEX_AT_TOP_END, mover: 'allenWrench-1' });
+    expect(other.assembly.crankTarget('allenWrench-1')!.target!.id).toBe(other.inLeg.id);
+    expect(inLeg.kind).toBe(KIND.STUD);
+  });
+
+  it('has nothing to turn with the key in the only seated end', () => {
+    const types = typeById();
+    const assembly = createAssembly((id) => types.get(id) ?? id.replace(/-\d+$/, ''));
+    assembly.seat({ partA: 'doubleEndedStud-1', connectorA: STUD_IN_TOP, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
+    assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'doubleEndedStud-1', connectorB: HEX_AT_TOP_END, mover: 'allenWrench-1' });
+    expect(assembly.crankTarget('allenWrench-1')).toMatchObject({ target: null });
+  });
+});
+
+describe("a stud's hex as a tool target", () => {
+  const hex = { type: CONNECTOR.BOLT_HEAD, part: { id: 'doubleEndedStud-1' } };
+  const none = () => null;
+
+  it('is a seat target only once the stud is seated, workable until it is screwed home', () => {
+    const types = typeById();
+    const assembly = createAssembly((id) => types.get(id)!);
+    expect(isSeatTarget(hex, seatedHardware(assembly.all()))).toBe(false);
+    const joint = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 0, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
+    expect(isSeatTarget(hex, seatedHardware(assembly.all()))).toBe(true);
+    expect(isWorkable(hex, assembly.all(), none)).toBe(true);
+    assembly.drive(joint.id);
+    expect(isWorkable(hex, assembly.all(), none)).toBe(false);
   });
 });

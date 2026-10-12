@@ -16,7 +16,7 @@
 
 import { FASTENER } from '../constants.js';
 import { PART_TYPES } from './item.js';
-import { COMPATIBLE, KIND, kindOf } from '../../tools/validate/lib/vocabulary.js';
+import { COMPATIBLE, CONTRACT, KIND, kindOf } from '../../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, multiplyQuaternions, rotateVector, rotationBetween } from '../../tools/validate/lib/geometry.js';
 import {
   canRelease as fastenersRelease,
@@ -360,11 +360,23 @@ export function createAssembly(typeOf: (part: PartId) => string) {
 
   const canRelease = (part: PartId) => fastenersRelease(jointsOf(part).map((j) => j.fastener));
 
+  // A double-ended stud carries two crank joints, one per end; the tool sits in the hex at
+  // one end, and what it turns is the joint at the other — the end in its hole is no end
+  // the tool is working. A single-ended bolt or cam lock has one candidate, which is not
+  // at the tool's seat (its head is the far side of its thread), so it is returned as is.
+  function farEnd(candidates: AssemblyJoint[], tool: AssemblyJoint) {
+    const seat = hostConnector(tool).position;
+    return candidates.find((j) => distance(hardwareConnector(j).position, seat) > CONTRACT.mateTolerance) ?? null;
+  }
+
   /** For a tool seated on a head or slot: `{ tool, target }` joints, target null if none. */
   function crankTarget(tool: PartId) {
     const engagement = all().find((j) => j.hardware === tool && j.kind === KIND.TOOL);
     if (!engagement) return null;
-    const target = all().find((j) => j.hardware === engagement.host && isCrankKind(j.kind)) ?? null;
+    const target = farEnd(
+      all().filter((j) => j.hardware === engagement.host && isCrankKind(j.kind)),
+      engagement,
+    );
     return { tool: engagement, target };
   }
 
@@ -467,14 +479,15 @@ export function createAssembly(typeOf: (part: PartId) => string) {
       const hosts = hostsOf(hardware);
       for (const other of hosts.slice(1)) {
         const second = fastened.find((j) => j.host === other);
-        if (isTapKind(first.kind) && second && isTapKind(second.kind)) {
-          // Through a dowel: each end sits its sink deep, so the hosts close up flush.
+        if (second && ((isTapKind(first.kind) && isTapKind(second.kind)) || (first.kind === KIND.STUD && second.kind === KIND.STUD))) {
+          // Through a dowel or a stud: each end sits its sink deep, so the hosts close up flush.
           const inFirst = seatedPose(first, poseOf, sinkOf(first));
           const inSecond = seatedPose(second, poseOf, sinkOf(second));
           addBridge({
             a: first.host,
             b: other,
-            rigid: false,
+            // Dowels leave the carcass angular play; screwed studs bear the table's weight.
+            rigid: first.kind === KIND.STUD,
             via: `${first.id}+${second.id}`,
             frame: () => jointFrame(compose(inFirst, invert(inSecond)), hostConnector(second).position),
           });
@@ -484,8 +497,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
           addBridge({
             a: first.host,
             b: other,
-            // A cam locks its hosts rigid; so does a screwed stud — a table's legs bear load.
-            rigid: first.kind === KIND.CAM || first.kind === KIND.STUD,
+            rigid: first.kind === KIND.CAM,
             via: null,
             frame: () => currentFrame(first.host, other, pivot, poseOf),
           });

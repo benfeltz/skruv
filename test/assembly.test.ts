@@ -191,6 +191,22 @@ describe('cam lock', () => {
     expect(assembly.crankTarget('allenWrench-1').target.id).toBe(bolt.id);
     expect(assembly.crankTarget('screwdriver-1')).toBeNull();
   });
+
+  // Regression pin (1.9.2): JOHNNY's single-candidate answers, written before crankTarget
+  // learned to pick the far end of a two-ended stud — each tool still turns its one fastener.
+  it('pins a screwdriver on a cam slot to the cam, and a wrench on a head to its bolt, with a bolt and a cam on the panel', () => {
+    const { assembly, bolt, cam } = locked();
+    const tool = assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'camLockBolt-1', connectorB: END_HIGH, mover: 'allenWrench-1' });
+    const driver = assembly.seat({ partA: 'screwdriver-1', connectorA: 0, partB: 'camLock-1', connectorB: 1, mover: 'screwdriver-1' });
+    expect(assembly.crankTarget('allenWrench-1')).toMatchObject({ tool: { id: tool.id }, target: { id: bolt.id, kind: KIND.BOLT } });
+    expect(assembly.crankTarget('screwdriver-1')).toMatchObject({ tool: { id: driver.id }, target: { id: cam.id, kind: KIND.CAM } });
+  });
+
+  it('seats a tool on a head with nothing to turn: a tool, and no target', () => {
+    const assembly = createAssembly(typeOf) as TestAssembly;
+    assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'camLockBolt-1', connectorB: END_HIGH, mover: 'allenWrench-1' });
+    expect(assembly.crankTarget('allenWrench-1')).toMatchObject({ target: null });
+  });
 });
 
 describe('bonds', () => {

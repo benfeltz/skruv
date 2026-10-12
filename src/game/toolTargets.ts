@@ -17,7 +17,7 @@
 import { CONNECTOR, KIND } from '../../tools/validate/lib/vocabulary.js';
 import { isCrankKind, isFastened, STATE } from './fasteners.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
-import type { ConnectorType } from '../../tools/validate/lib/vocabulary.js';
+import type { ConnectorType, FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { AssemblyJoint, PartId } from './assembly.js';
 import type { ScreenPoint } from './dragMath.js';
 
@@ -60,11 +60,11 @@ export function isWorkable(connector: TargetConnector, joints: Iterable<Assembly
   return seat.fastener.state !== STATE.LOCKED && captured(seat.hardware) !== null;
 }
 
-// The bolt or cam seat joint a target connector's part sits in, or null (loose, or not a target).
+// The crank seat joint a target connector's part sits in, or null (loose, or not a target):
+// a bolt's or a stud's, whichever the hex belongs to — a stud's hex lights with the stud's progress.
 function seatOf({ type, part }: TargetConnector, joints: Iterable<AssemblyJoint>) {
-  const kind = type === CONNECTOR.BOLT_HEAD ? KIND.BOLT : type === CONNECTOR.CAM_SLOT ? KIND.CAM : null;
-  if (!kind) return null;
-  for (const j of joints) if (j.hardware === part.id && j.kind === kind) return j;
+  const kinds: readonly FastenerKind[] = type === CONNECTOR.BOLT_HEAD ? [KIND.BOLT, KIND.STUD] : type === CONNECTOR.CAM_SLOT ? [KIND.CAM] : [];
+  for (const j of joints) if (j.hardware === part.id && kinds.includes(j.kind)) return j;
   return null;
 }
 
