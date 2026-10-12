@@ -6,7 +6,7 @@ import { BOOKLET, COLORS } from '../constants.js';
 import { createBooklet, gamePagesFor } from '../game/bookletModel.js';
 import { createPageCache, FAINT, font, INK, newPage, PAPER } from './pagePaper.js';
 import { CONTROLS } from '../game/controlsPage.js';
-import { ASSEMBLED, IDENTITY, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../game/item.js';
+import { ITEM_ID, itemById } from '../game/item.js';
 import type { InstanceId } from '../game/item.js';
 import type { BuildStep, PartCount } from '../game/bookletModel.js';
 import type { PictogramId, Scheme } from '../game/controlsPage.js';
@@ -62,16 +62,19 @@ const TO_SRGB = Uint8ClampedArray.from({ length: 256 }, (_, i) => {
  * controls page shows `scheme`'s controls — the device in hand, as the caller reads it.
  */
 export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { scheme: Scheme }) {
-  const layout = ASSEMBLED;
-  const pages = createBooklet(MANUAL.pages, {
+  // The item this booklet is for, taken once: a page drawn later in idle time draws the same
+  // item, whatever the door serves by then.
+  const item = itemById(ITEM_ID);
+  const layout = item.assembled;
+  const pages = createBooklet(item.manual.pages, {
     layout,
-    manifest: MANIFEST,
-    partTypes: PART_TYPES,
-    resolve: resolveConnector,
+    manifest: item.manifest,
+    partTypes: item.partTypes,
+    resolve: item.resolve,
     gamePages: gamePagesFor(scheme),
   });
   const [pageW, pageH] = BOOKLET.pageSize;
-  const views = createViewRenderer(renderer, (type) => PART_TYPES[type].size);
+  const views = createViewRenderer(renderer, (type) => item.partTypes[type].size);
 
   const partById = new Map(layout.parts.map((p) => [p.id, p]));
   const boldOf = (step: BuildStep) => {
@@ -95,9 +98,9 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     ctx.fillStyle = INK;
     ctx.textBaseline = 'alphabetic';
     ctx.font = font(124, 800);
-    ctx.fillText(IDENTITY.product, m, m + 110);
+    ctx.fillText(item.identity.product, m, m + 110);
     ctx.font = font(30, 600);
-    ctx.fillText(IDENTITY.maker, m + 4, m + 158);
+    ctx.fillText(item.identity.maker, m + 4, m + 158);
     const all = new Set(layout.parts.map((p) => p.id));
     views.draw(ctx, itemsFor(all, all), [m, 240, pageW - 2 * m, pageH - 240 - m]);
   }
@@ -106,9 +109,9 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     const m = BOOKLET.margin;
     ctx.fillStyle = INK;
     ctx.font = font(34, 800);
-    ctx.fillText(IDENTITY.maker, m, pageH - m - 40);
+    ctx.fillText(item.identity.maker, m, pageH - m - 40);
     ctx.font = font(20, 500);
-    ctx.fillText(IDENTITY.documentCode, m, pageH - m);
+    ctx.fillText(item.identity.documentCode, m, pageH - m);
   }
 
   // Two panels side by side: what goes wrong (crossed) and what goes right (ticked).
@@ -287,7 +290,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     let offset = 0;
     for (const id of panels) {
       const panel = partById.get(id)!;
-      const size = PART_TYPES[panel.type].size;
+      const size = item.partTypes[panel.type].size;
       const flat = LAY_FLAT[size.indexOf(Math.min(...size))];
       inverse.compose(p.set(...panel.position), q.set(...panel.rotation), s.set(1, 1, 1)).invert();
       const hardware = page.joints.map((i) => layout.joints[i]).filter((j) => j.host === id).map((j) => partById.get(j.hardware)!);
