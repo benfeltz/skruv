@@ -4,12 +4,14 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { BOOKLET, COLORS } from '../constants.js';
 import { createBooklet, gamePagesFor } from '../game/bookletModel.js';
+import { createPageCache, FAINT, font, INK, newPage, PAPER } from './pagePaper.js';
 import { CONTROLS } from '../game/controlsPage.js';
-import { ASSEMBLED, IDENTITY, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../game/item.js';
+import { ITEM_ID, itemById } from '../game/item.js';
 import type { InstanceId } from '../game/item.js';
 import type { BuildStep, PartCount } from '../game/bookletModel.js';
 import type { PictogramId, Scheme } from '../game/controlsPage.js';
-import type { Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
+import type { Sheet } from './pagePaper.js';
+import type { Quat, Size, Vec3 } from '../../tools/validate/lib/geometry.js';
 
 // The booklet's pages, drawn from the same part models the room uses, so a page can never
 // disagree with the geometry. Wordless, as the real thing is: a big step numeral, an
@@ -27,23 +29,14 @@ type Rect = [number, number, number, number];
 type Weight = 'bold' | 'faint';
 
 /** One part in an outline drawing: its type, its pose, and how heavily it is drawn. */
-interface ViewItem {
+export interface ViewItem {
   type: string;
   position: Vec3;
   rotation: Quat;
   weight: Weight;
 }
 
-/** A page being drawn: its canvas and that canvas's context. */
-interface Sheet {
-  canvas: HTMLCanvasElement;
-  ctx: Ctx;
-}
 
-const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
-const INK = css(COLORS.bookletInk);
-const FAINT = css(COLORS.bookletFaint);
-const PAPER = css(COLORS.bookletPaper);
 const QUARTER_TURN = Math.SQRT1_2;
 // How the carcass lies on a page. On its left side: a quarter turn about z lays -x down.
 // Face down: a quarter turn about x lays the front (+z) down, back up.
@@ -54,7 +47,6 @@ const ORIENTATION = { lying: LYING, faceDown: FACE_DOWN, upright: UPRIGHT };
 // A loose panel is drawn lying on its largest face: the quarter turn that brings its
 // thinnest axis (x, y or z) up.
 const LAY_FLAT: THREE.Quaternion[] = [LYING, UPRIGHT, new THREE.Quaternion(-QUARTER_TURN, 0, 0, QUARTER_TURN)];
-const font = (size: number, weight = 700) => `${weight} ${size}px ${BOOKLET.font}`;
 
 // Render targets come back linear; the page canvas wants sRGB bytes.
 const TO_SRGB = Uint8ClampedArray.from({ length: 256 }, (_, i) => {
@@ -70,17 +62,19 @@ const TO_SRGB = Uint8ClampedArray.from({ length: 256 }, (_, i) => {
  * controls page shows `scheme`'s controls — the device in hand, as the caller reads it.
  */
 export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { scheme: Scheme }) {
-  const layout = ASSEMBLED;
-  const pages = createBooklet(MANUAL.pages, {
+  // The item this booklet is for, taken once: a page drawn later in idle time draws the same
+  // item, whatever the door serves by then.
+  const item = itemById(ITEM_ID);
+  const layout = item.assembled;
+  const pages = createBooklet(item.manual.pages, {
     layout,
-    manifest: MANIFEST,
-    partTypes: PART_TYPES,
-    resolve: resolveConnector,
+    manifest: item.manifest,
+    partTypes: item.partTypes,
+    resolve: item.resolve,
     gamePages: gamePagesFor(scheme),
   });
   const [pageW, pageH] = BOOKLET.pageSize;
-  const cache = new Map<number, HTMLCanvasElement>();
-  const views = createViewRenderer(renderer);
+  const views = createViewRenderer(renderer, (type) => item.partTypes[type].size);
 
   const partById = new Map(layout.parts.map((p) => [p.id, p]));
   const boldOf = (step: BuildStep) => {
@@ -92,24 +86,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     return ids;
   };
 
-  function newPage(): Sheet {
-    const canvas = document.createElement('canvas');
-    canvas.width = pageW;
-    canvas.height = pageH;
-    // A canvas always gives a 2D context the first time it is asked.
-    const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = PAPER;
-    ctx.fillRect(0, 0, pageW, pageH);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    return { canvas, ctx };
-  }
-
   // An outline drawing of `items` into the rectangle [x, y, w, h] of the page.
-  function drawView(ctx: Ctx, items: ViewItem[], [x, y, w, h]: Rect, orientation = UPRIGHT) {
-    ctx.drawImage(views.render(items, Math.round(w), Math.round(h), orientation), x, y, w, h);
-  }
-
   const itemsFor = (ids: Set<InstanceId>, bold: Set<InstanceId>): ViewItem[] =>
     // Every id drawn is a part of the layout.
     [...ids].map((id) => ({ ...partById.get(id)!, weight: bold.has(id) ? 'bold' : 'faint' }));
@@ -121,20 +98,20 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     ctx.fillStyle = INK;
     ctx.textBaseline = 'alphabetic';
     ctx.font = font(124, 800);
-    ctx.fillText(IDENTITY.product, m, m + 110);
+    ctx.fillText(item.identity.product, m, m + 110);
     ctx.font = font(30, 600);
-    ctx.fillText(IDENTITY.maker, m + 4, m + 158);
+    ctx.fillText(item.identity.maker, m + 4, m + 158);
     const all = new Set(layout.parts.map((p) => p.id));
-    drawView(ctx, itemsFor(all, all), [m, 240, pageW - 2 * m, pageH - 240 - m]);
+    views.draw(ctx, itemsFor(all, all), [m, 240, pageW - 2 * m, pageH - 240 - m]);
   }
 
   function backCover({ ctx }: Sheet) {
     const m = BOOKLET.margin;
     ctx.fillStyle = INK;
     ctx.font = font(34, 800);
-    ctx.fillText(IDENTITY.maker, m, pageH - m - 40);
+    ctx.fillText(item.identity.maker, m, pageH - m - 40);
     ctx.font = font(20, 500);
-    ctx.fillText(IDENTITY.documentCode, m, pageH - m);
+    ctx.fillText(item.identity.documentCode, m, pageH - m);
   }
 
   // Two panels side by side: what goes wrong (crossed) and what goes right (ticked).
@@ -209,7 +186,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     items.forEach(({ type, count, partNumber }, i) => {
       const x = m + (i % cols) * cellW;
       const y = m + Math.floor(i / cols) * cellH;
-      drawView(ctx, [single(type)], [x + 8, y + 4, cellW - 16, cellH - 58]);
+      views.draw(ctx, [single(type)], [x + 8, y + 4, cellW - 16, cellH - 58]);
       ctx.fillStyle = INK;
       ctx.textAlign = 'center';
       ctx.font = font(30, 800);
@@ -232,7 +209,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     let bx = m + 190 + r;
     for (const { type, count, partNumber } of page.hardware) {
       bubble(ctx, bx, m + r, r);
-      drawView(ctx, [single(type)], [bx - r * 0.62, m + r * 0.28, r * 1.24, r * 0.95]);
+      views.draw(ctx, [single(type)], [bx - r * 0.62, m + r * 0.28, r * 1.24, r * 0.95]);
       ctx.fillStyle = INK;
       ctx.textAlign = 'center';
       ctx.font = font(28, 800);
@@ -244,12 +221,12 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     }
     if (page.tool) {
       bubble(ctx, bx, m + r, r);
-      drawView(ctx, [single(page.tool)], [bx - r * 0.7, m + r * 0.3, r * 1.4, r * 1.4]);
+      views.draw(ctx, [single(page.tool)], [bx - r * 0.7, m + r * 0.3, r * 1.4, r * 1.4]);
     }
 
     const frame: Rect = [m, m + 2 * r + 80, pageW - 2 * m, pageH - (2 * m + 2 * r + 80)];
-    if (page.pose === 'parts') drawView(ctx, looseParts(page), frame);
-    else drawView(ctx, itemsFor(new Set(page.shown), page.tip ? new Set() : boldOf(page)), frame, ORIENTATION[page.pose]);
+    if (page.pose === 'parts') views.draw(ctx, looseParts(page), frame);
+    else views.draw(ctx, itemsFor(new Set(page.shown), page.tip ? new Set() : boldOf(page)), frame, ORIENTATION[page.pose]);
     if (page.turns.length) turnArrow(ctx, frame[0] + frame[2] - 80, frame[1] + 70, 46);
     if (page.tip) {
       // Two people tip it up together: an arc over the drawing, a figure at each side.
@@ -313,7 +290,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     let offset = 0;
     for (const id of panels) {
       const panel = partById.get(id)!;
-      const size = PART_TYPES[panel.type].size;
+      const size = item.partTypes[panel.type].size;
       const flat = LAY_FLAT[size.indexOf(Math.min(...size))];
       inverse.compose(p.set(...panel.position), q.set(...panel.rotation), s.set(1, 1, 1)).invert();
       const hardware = page.joints.map((i) => layout.joints[i]).filter((j) => j.host === id).map((j) => partById.get(j.hardware)!);
@@ -347,29 +324,16 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     return sheet.canvas;
   }
 
-  function canvas(index: number) {
-    if (!cache.has(index)) cache.set(index, draw(index));
-    return cache.get(index)!;
-  }
-
-  function prerender() {
-    const idle: (fn: () => void) => unknown = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 1));
-    const next = (i: number) => {
-      if (i >= pages.length) return;
-      idle(() => {
-        canvas(i);
-        next(i + 1);
-      });
-    };
-    next(0);
-  }
-
-  return { count: pages.length, pages, canvas, prerender };
+  return { count: pages.length, pages, ...createPageCache(pages.length, draw, views.dispose) };
 }
 
-// Hidden-line outline renders: every part a white box (faces hide what lies behind) with
-// its edges drawn as fat lines, bold or faint. Geometry is built once per part type.
-function createViewRenderer(renderer: THREE.WebGLRenderer) {
+/**
+ * Hidden-line outline renders: every part a white box (faces hide what lies behind) with
+ * its edges drawn as fat lines, bold or faint, sized by `sizeOf(type)`. Geometry is built
+ * once per part type. `render(items, width, height, orientation)` returns a canvas of the
+ * drawing framed to fit, `draw(ctx, items, rect, orientation)` puts one on a page; `dispose()` frees the geometry and materials. Shared with the catalog's pages (src/scene/catalogPages.ts).
+ */
+export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type: string) => Size) {
   const fill = new THREE.MeshBasicMaterial({
     color: COLORS.bookletPaper,
     polygonOffset: true,
@@ -383,8 +347,10 @@ function createViewRenderer(renderer: THREE.WebGLRenderer) {
   const geometries = new Map<string, { box: THREE.BoxGeometry; edges: LineSegmentsGeometry }>();
   const geometryOf = (type: string) => {
     if (!geometries.has(type)) {
-      const box = new THREE.BoxGeometry(...PART_TYPES[type].size);
-      geometries.set(type, { box, edges: new LineSegmentsGeometry().fromEdgesGeometry(new THREE.EdgesGeometry(box)) });
+      const box = new THREE.BoxGeometry(...sizeOf(type));
+      const outline = new THREE.EdgesGeometry(box);
+      geometries.set(type, { box, edges: new LineSegmentsGeometry().fromEdgesGeometry(outline) });
+      outline.dispose();
     }
     return geometries.get(type)!;
   };
@@ -393,7 +359,7 @@ function createViewRenderer(renderer: THREE.WebGLRenderer) {
   const corner = new THREE.Vector3();
   const clearColor = new THREE.Color();
 
-  function render(items: ViewItem[], width: number, height: number, orientation: THREE.Quaternion) {
+  function render(items: ViewItem[], width: number, height: number, orientation = UPRIGHT) {
     const scene = new THREE.Group();
     const root = new THREE.Group();
     root.quaternion.copy(orientation);
@@ -470,7 +436,23 @@ function createViewRenderer(renderer: THREE.WebGLRenderer) {
     return out;
   }
 
-  return { render };
+  /** Draws `items` into the rectangle [x, y, w, h] of a page's `ctx`, framed to fit. */
+  function draw(ctx: Ctx, items: ViewItem[], [x, y, w, h]: Rect, orientation = UPRIGHT) {
+    ctx.drawImage(render(items, Math.round(w), Math.round(h), orientation), x, y, w, h);
+  }
+
+  /** Frees every geometry and material it built — the pages it drew are plain canvases and stay. */
+  function dispose() {
+    for (const { box, edges } of geometries.values()) {
+      box.dispose();
+      edges.dispose();
+    }
+    geometries.clear();
+    fill.dispose();
+    for (const material of Object.values(lines)) material.dispose();
+  }
+
+  return { render, draw, dispose };
 }
 
 // --- pictograms, canvas 2D ---

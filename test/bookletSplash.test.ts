@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BOOKLET_UI, GESTURE } from '../src/constants.js';
+import { BOOKLET_UI, CATALOG, GESTURE } from '../src/constants.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
+import { createCatalogSheet } from '../src/ui/catalogSheet.js';
+import { BuildFailed } from '../src/game/itemSlot.js';
+import type { CatalogPage } from '../src/game/catalogModel.js';
 
 // The real booklet sheet (src/ui/booklet.ts), driven headlessly on a minimal fake DOM:
 // it boots open on the cover, and whenever it is open a tap on the room puts it down and
@@ -21,6 +24,8 @@ class FakeElement {
   disabled: boolean;
   textContent: string;
   captured: number[];
+  style: Record<string, string>;
+  inert = false;
   declare id?: string; // set by the sheet on its style element
 
   constructor(tag: string) {
@@ -34,6 +39,7 @@ class FakeElement {
     this.disabled = false;
     this.textContent = '';
     this.captured = [];
+    this.style = {};
   }
   setAttribute(name: string, value: string) {
     this.attributes[name] = value;
@@ -59,8 +65,10 @@ class FakeElement {
   focus() {
     dom.focused = this;
   }
+  // What was last drawn on it, when it is a canvas.
+  drawn: unknown = undefined;
   getContext() {
-    return { drawImage() {} };
+    return { drawImage: (source: unknown) => (this.drawn = source) };
   }
   closest(tag: string) {
     for (let node: FakeElement | null = this; node; node = node.parent) if (node.tag === tag) return node;
@@ -89,9 +97,14 @@ beforeEach(() => {
   });
   vi.stubGlobal('window', {
     addEventListener: (type: string, fn: Listener) => windowListeners.set(type, [...(windowListeners.get(type) ?? []), fn]),
+    removeEventListener: (type: string, fn: Listener) => windowListeners.set(type, (windowListeners.get(type) ?? []).filter((f) => f !== fn)),
   });
 });
+// Every sheet a test mounts, disposed after it: the booklet module keeps one open at a time
+// across all live sheets.
+const mounted: { dispose(): void }[] = [];
 afterEach(() => {
+  for (const sheet of mounted.splice(0)) sheet.dispose();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
@@ -106,6 +119,7 @@ type Sheet = ReturnType<typeof mount>;
 function mount() {
   // The fake context's drawImage ignores the canvas, so an empty stand-in will do.
   const booklet = createBookletSheet({ pages: { count: COUNT, canvas: () => ({}) as CanvasImageSource } }) as unknown as FakeBooklet;
+  mounted.push(booklet);
   dom.body.append(booklet.scrim, booklet.thumb, booklet.element);
   const changes: { page: number; expanded: boolean }[] = [];
   booklet.onChange((change) => changes.push(change));
@@ -133,6 +147,26 @@ describe('boot: the booklet in hand on its cover (1.6.1)', () => {
     expect(count.textContent).toBe(`1 / ${COUNT}`);
     expect(scrimUp()).toBe(true);
     expect(dom.focused).toBe(null);
+  });
+});
+
+describe('a sheet whose first render throws (1.9.1 review)', () => {
+  it('takes itself back out: no key listener left, and the next sheet still opens', () => {
+    const before = dom.windowListeners.get('keydown')?.length ?? 0;
+    expect(() =>
+      createBookletSheet({
+        pages: {
+          count: COUNT,
+          canvas: () => {
+            throw new Error('context lost');
+          },
+        },
+      }),
+    ).toThrow('context lost');
+    expect(dom.windowListeners.get('keydown')?.length ?? 0).toBe(before);
+    // A stale open entry would keep this one docked (one sheet open at a time).
+    const { booklet } = mount();
+    expect(booklet.expanded).toBe(true);
   });
 });
 
@@ -313,9 +347,12 @@ describe('tap the sheet to put it down, swipe to flip (1.6.2)', () => {
     const edge = mount();
     press(view(edge.booklet), { dx: GESTURE.tapMaxDistance, ms: GESTURE.tapMaxMs });
     expect(edge.booklet.expanded).toBe(false);
+    // One sheet open at a time: each is put away before the next is mounted.
+    edge.booklet.dispose();
     const far = mount();
     press(view(far.booklet), { dx: GESTURE.tapMaxDistance + 1 });
     expect(far.booklet.expanded).toBe(true);
+    far.booklet.dispose();
     const slow = mount();
     press(view(slow.booklet), { ms: GESTURE.tapMaxMs + 1 });
     expect(slow.booklet.expanded).toBe(true);
@@ -410,3 +447,219 @@ describe('tap to put down, from the 1.6.2 test plan', () => {
     expect(changes).toEqual([{ page: 0, expanded: false }]);
   });
 });
+
+// 1.9.1: the catalog is the splash — the same sheet, mounted as src/main.ts mounts it: open
+// on its cover at boot, nothing putting it down until a pick has built a room, BUILD IT laid
+// over a buildable item's tag only.
+describe('boot with the catalog up (1.9.1)', () => {
+  const catalogPages: CatalogPage[] = [
+    { kind: 'cover' },
+    { kind: 'item', id: 'johnny', name: 'JOHNNY', partCount: 60, pickable: false },
+    { kind: 'item', id: 'blank', name: 'BLANK', partCount: 9, pickable: true },
+  ];
+
+  function mountCatalog() {
+    let room = false;
+    const picks: string[] = [];
+    const catalog = createCatalogSheet({
+      pages: { count: catalogPages.length, pages: catalogPages, canvas: () => ({}) as CanvasImageSource },
+      open: true,
+      canClose: () => room,
+      onPick: (id) => {
+        picks.push(id);
+        room = true;
+        catalog.setOpen(false);
+      },
+    }) as unknown as FakeBooklet;
+    mounted.push(catalog);
+    dom.body.append(catalog.scrim, catalog.thumb, catalog.element);
+    const [handle, view, controls] = catalog.element.children;
+    const [, buildIt] = view.children[0].children;
+    const next = controls.children[2];
+    const key = (k: string) => dom.windowListeners.get('keydown')!.forEach((fn) => fn({ key: k }));
+    return { catalog, handle, view, buildIt, next, key, picks };
+  }
+
+  it('boots open on its cover, with no BUILD IT on the cover', () => {
+    const { catalog, buildIt } = mountCatalog();
+    expect(catalog.expanded).toBe(true);
+    expect(catalog.currentPage).toBe(0);
+    expect(buildIt.hidden).toBe(true);
+  });
+
+  it('before any pick, nothing puts it down: the room, the sheet, the handle, Escape, a swipe', () => {
+    const { catalog, handle, view, key } = mountCatalog();
+    tapRoom(catalog.scrim);
+    press(view);
+    handle.fire('click');
+    key('Escape');
+    press(view, { dy: BOOKLET_UI.swipeDistance });
+    expect(catalog.expanded).toBe(true);
+  });
+
+  it('a sold-out page has no BUILD IT, and tapping its stamp builds nothing', () => {
+    const { catalog, buildIt, next, view, picks } = mountCatalog();
+    next.fire('click');
+    expect(catalog.currentPage).toBe(1);
+    expect(buildIt.hidden).toBe(true);
+    press(view);
+    expect(picks).toEqual([]);
+    expect(catalog.expanded).toBe(true);
+  });
+
+  it('BUILD IT on a buildable page picks it and goes straight into the room, the catalog docked', () => {
+    const { catalog, buildIt, next, picks } = mountCatalog();
+    next.fire('click');
+    next.fire('click');
+    expect(buildIt.hidden).toBe(false);
+    expect(buildIt.attributes['aria-label']).toBe('Build BLANK');
+    // A press on the tag is the tag's: no sheet tap, no swipe.
+    press(buildIt);
+    expect(catalog.expanded).toBe(true);
+    buildIt.fire('click');
+    expect(picks).toEqual(['blank']);
+    expect(catalog.expanded).toBe(false);
+    expect(catalog.thumb.hidden).toBe(false);
+  });
+
+  it('after a pick it is a booklet like any other: reopened from the stack, a tap off puts it down', () => {
+    const { catalog, buildIt, next } = mountCatalog();
+    next.fire('click');
+    next.fire('click');
+    buildIt.fire('click');
+    catalog.thumb.fire('click');
+    expect(catalog.expanded).toBe(true);
+    tapRoom(catalog.scrim);
+    expect(catalog.expanded).toBe(false);
+  });
+
+  it('sits in the corner behind the manual, turned; the manual is fanned up and right toward the room', () => {
+    const { catalog } = mountCatalog();
+    expect(catalog.thumb.style.transform).toMatch(/^translate\(-?0px, -?0px\) rotate\(-?[\d.]+rad\)$/);
+    const manual = mount();
+    expect(manual.booklet.thumb.style.transform).toMatch(/^translate\([1-9]\d*px, -[1-9]\d*px\) rotate\(-?0rad\)$/);
+  });
+
+  it('one sheet open at a time: under an open sheet the other thumb is inert, and opening it does nothing', () => {
+    const { catalog, buildIt, next } = mountCatalog();
+    next.fire('click');
+    next.fire('click');
+    buildIt.fire('click');
+    // The item's manual, mounted after the pick as the item world mounts it: docked.
+    const manual = createBookletSheet({ pages: { count: COUNT, canvas: () => ({}) as CanvasImageSource }, open: false }) as unknown as FakeBooklet;
+    mounted.push(manual);
+    expect(manual.thumb.inert).toBe(false);
+    catalog.thumb.fire('click');
+    expect(catalog.expanded).toBe(true);
+    expect(manual.thumb.inert).toBe(true);
+    // A click reaching the manual's thumb anyway (Enter on it) opens nothing.
+    manual.thumb.fire('click');
+    expect(manual.expanded).toBe(false);
+    // Escape closes the one that is open, and the thumbs come back.
+    dom.windowListeners.get('keydown')!.forEach((fn) => fn({ key: 'Escape' }));
+    expect(catalog.expanded).toBe(false);
+    expect(manual.expanded).toBe(false);
+    expect(manual.thumb.inert).toBe(false);
+    expect(catalog.thumb.inert).toBe(false);
+  });
+
+  it("rounds BUILD IT's corners as the drawn tag's, in shares of the button", () => {
+    const { buildIt } = mountCatalog();
+    const [, , w, h] = CATALOG.page.action;
+    expect(buildIt.style.borderRadius).toBe(`${(100 * CATALOG.page.tagRadius) / w}% / ${(100 * CATALOG.page.tagRadius) / h}%`);
+  });
+
+  it('a pick that fails keeps the catalog open, says so, and a later pick still works', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let fail = true;
+    const picks: string[] = [];
+    const catalog = createCatalogSheet({
+      pages: { count: catalogPages.length, pages: catalogPages, canvas: () => ({}) as CanvasImageSource },
+      open: true,
+      canClose: () => picks.length > 0,
+      onPick: (id) => {
+        if (fail) throw new BuildFailed(id, new Error('build broke'));
+        picks.push(id);
+        catalog.setOpen(false);
+      },
+    }) as unknown as FakeBooklet;
+    mounted.push(catalog);
+    const [, view, controls] = catalog.element.children;
+    const notice = view.children[1];
+    const [, buildIt] = view.children[0].children;
+    const next = controls.children[2];
+    expect(notice.hidden).toBe(true);
+    next.fire('click');
+    next.fire('click');
+    expect(() => buildIt.fire('click')).not.toThrow();
+    expect(catalog.expanded).toBe(true);
+    expect(notice.hidden).toBe(false);
+    expect(notice.attributes.role).toBe('alert');
+    // Laid over the page, never a row of its own: the sheet's rows are as before.
+    expect(catalog.element.children).toHaveLength(3);
+    expect(notice.textContent).toBe(CATALOG.words.buildFailed);
+    expect(errors).toHaveBeenCalledOnce();
+    // Flipping away clears it; the next try builds.
+    controls.children[0].fire('click');
+    expect(notice.hidden).toBe(true);
+    next.fire('click');
+    fail = false;
+    buildIt.fire('click');
+    expect(picks).toEqual(['blank']);
+    expect(catalog.expanded).toBe(false);
+  });
+
+  it('an error that is not a failed build is logged, never put to the player as one', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const catalog = createCatalogSheet({
+      pages: { count: catalogPages.length, pages: catalogPages, canvas: () => ({}) as CanvasImageSource },
+      open: true,
+      onPick: () => {
+        // Built fine; something after it (putting the catalog down, focus) threw.
+        throw new Error('focus broke');
+      },
+    }) as unknown as FakeBooklet;
+    mounted.push(catalog);
+    const [, view, controls] = catalog.element.children;
+    const notice = view.children[1];
+    const [, buildIt] = view.children[0].children;
+    controls.children[2].fire('click');
+    controls.children[2].fire('click');
+    buildIt.fire('click');
+    expect(notice.hidden).toBe(true);
+    expect(errors).toHaveBeenCalledOnce();
+  });
+
+  it("docked, it shows its cover whatever page it was put down on; the manual's thumb shows its own page", () => {
+    // Pages that name themselves, so a thumb's drawing says which page it is.
+    const page = (index: number) => ({ index }) as unknown as CanvasImageSource;
+    const picks: string[] = [];
+    const catalog = createCatalogSheet({
+      pages: { count: catalogPages.length, pages: catalogPages, canvas: page },
+      open: true,
+      canClose: () => picks.length > 0,
+      onPick: (id) => {
+        picks.push(id);
+        catalog.setOpen(false);
+      },
+    }) as unknown as FakeBooklet;
+    mounted.push(catalog);
+    const [, view, controls] = catalog.element.children;
+    const [, buildIt] = view.children[0].children;
+    controls.children[2].fire('click');
+    controls.children[2].fire('click');
+    buildIt.fire('click');
+    const catalogThumb = catalog.thumb.children[0];
+    expect(catalog.currentPage).toBe(2);
+    expect(catalogThumb.drawn).toEqual({ index: 0 });
+
+    const manual = createBookletSheet({ pages: { count: COUNT, canvas: page }, open: false }) as unknown as FakeBooklet;
+    mounted.push(manual);
+    manual.thumb.fire('click');
+    manual.element.children[2].children[2].fire('click');
+    manual.element.children[0].fire('click');
+    expect(manual.currentPage).toBe(1);
+    expect(manual.thumb.children[0].drawn).toEqual({ index: 1 });
+  });
+});
+

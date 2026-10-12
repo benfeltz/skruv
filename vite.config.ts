@@ -1,9 +1,11 @@
 /// <reference types="vitest/config" />
+import { existsSync, readdirSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import type { Plugin } from 'vite';
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
 import { DEV_WS } from './src/constants.js';
+import { pickableSet } from './src/game/pickable.js';
 
 // The upgrade's Host must name this machine, as Vite requires of its own HMR socket — else
 // a site whose DNS rebinds to 127.0.0.1 sends a Host (and Origin) of its own and passes the
@@ -87,10 +89,31 @@ function devStream(): Plugin {
   };
 }
 
+// The pickable flag (VITE_PICKABLE, CATALOG.pickable) checked as the config resolves, for a
+// build and the dev server alike: an id the game doesn't carry stops either here, with the
+// reason, rather than a page that throws on boot behind index.html's stand-in. The same
+// rule the catalog runs (pickableSet), against the items/ folders that hold a pack — the
+// registry in src/game/item.ts carries exactly those (test/catalogModel.test.ts pins it), and
+// reading folders keeps the packs and the game out of the config's watched imports.
+function packIds(root: string) {
+  return readdirSync(new URL(`./${root}/`, import.meta.url), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(new URL(`./${root}/${entry.name}/flatpack.json`, import.meta.url)))
+    .map((entry) => entry.name);
+}
+
+function pickableCheck(): Plugin {
+  return {
+    name: 'skruv-pickable-check',
+    configResolved(config) {
+      pickableSet(config.env.VITE_PICKABLE ?? '', packIds('items'));
+    },
+  };
+}
+
 export default defineConfig({
   // Served at the domain root (custom domain skruv.site) — a non-root base 404s every asset.
   base: '/',
-  plugins: [devStream()],
+  plugins: [devStream(), pickableCheck()],
   test: {
     include: ['test/**/*.test.ts'],
   },

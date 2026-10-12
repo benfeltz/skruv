@@ -115,12 +115,85 @@ export const BOOKLET_UI = {
   // The open sheet never grows wider than this, nor taller than this share of the screen.
   maxWidth: 520,
   maxHeight: 0.92,
+  // The sheet's own height round the page (handle, controls, gaps, padding; CSS pixels):
+  // the page fits in maxHeight less this. index.html's pre-splash mirrors it.
+  chromeHeight: 120,
+  // A notice on the sheet (a pick that would not build): laid over the head of the page, so
+  // it never adds to chromeHeight — its type size and line height, and its inset, padding
+  // and corner radius (CSS pixels).
+  notice: { size: 14, lineHeight: 1.3, inset: 8, padding: 8, radius: 8 },
   // After a tap on the room puts the booklet down, the scrim stays this long to catch the
   // click a touch synthesises after the lift.
   scrimLingerMs: 400,
   // A mouse over the docked thumbnail grows it to fit this share of the screen's width and
   // height (a quarter of the screen), big enough to read the page.
   thumbHoverShare: 0.5,
+  // ...but only once the pointer has rested on it this long (ms): a pointer passing over a
+  // thumb on its way elsewhere — the manual's, past the catalog's — never grows it.
+  thumbHoverDelayMs: 400,
+};
+
+// The catalog (1.9.1): the game's front door, a second booklet of items to build
+// (src/game/catalogModel.ts lays it out). Its items' names and part counts are their packs'.
+export const CATALOG = {
+  // Which items this build lets you build: a comma list of ids from the build-time flag
+  // VITE_PICKABLE (`VITE_PICKABLE=johnny npm run build`), or every item when it is unset or
+  // empty. Every build ships every pack; the rest show SOLD OUT. (vite.config.ts reads this
+  // file in plain Node, where import.meta.env doesn't exist.)
+  pickable: import.meta.env?.VITE_PICKABLE ?? '',
+  // Its pages (src/scene/catalogPages.ts), in page-canvas pixels on BOOKLET.pageSize paper.
+  page: {
+    wordmarkSize: 156,
+    taglineSize: 30,
+    nameSize: 96,
+    detailSize: 30,
+    // The headings' setting, as fractions of a type size: a title's baseline sits this far
+    // down its size; the line under it (tagline, part count) this many of its own sizes below
+    // that baseline; the drawing starts this many of them below the title's full size. The
+    // line under is indented this far (page pixels) to sit optically flush under the title.
+    baseline: 0.8,
+    subtitleDrop: 1.6,
+    drawingDrop: 2.4,
+    taglineIndent: 6,
+    detailIndent: 4,
+    // The BUILD IT tag, or the SOLD OUT stamp in its place: [x, y, w, h], also the hit
+    // target src/ui/booklet.ts lays over the page. Below it, down to the page margin, nothing
+    // is drawn: the space held for a store link on a sold-out page, once there is a store.
+    action: [180, 770, 360, 104] satisfies [number, number, number, number],
+    actionTextSize: 52,
+    // The tag's corners and punched hole; the stamp's outline and tilt (radians).
+    tagRadius: 18,
+    tagHole: 12,
+    stampLine: 6,
+    stampTurn: -0.08,
+  },
+  // The cover's wire-drawn room corner (metres): the items stand on its floor this far
+  // apart and this far in from its walls, which rise this many times the tallest item.
+  cover: {
+    gap: 0.5,
+    margin: 0.6,
+    wallRise: 1.5,
+    slab: 0.03,
+  },
+  // The corner stack (src/game/cornerStack.ts): the front booklet (the manual) fanned this far
+  // right and up (CSS pixels) from the one behind it (the catalog), which stays in the corner
+  // turned this much (radians) — far enough that the strip of catalog left showing, below and
+  // left of the manual, is a thumb's target, and out of the path from the room to the
+  // manual. ?tune knobs.
+  stack: {
+    fanX: 10,
+    fanY: 44,
+    fanTurn: -0.12,
+  },
+  words: {
+    brand: 'SKRUV',
+    tagline: 'Catalog',
+    parts: 'parts',
+    build: 'BUILD IT',
+    soldOut: 'SOLD OUT',
+    // On the sheet when BUILD IT's item could not be built (src/ui/catalogSheet.ts).
+    buildFailed: "That one couldn't be built. Try again, or pick another.",
+  },
 };
 
 export const LIGHTS = {

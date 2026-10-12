@@ -86,11 +86,13 @@ describe('physics boundary', () => {
     expect(world).toMatch(/function release\(body: Body\)/);
   });
 
-  it('adds join/unjoin (1.4), retune (1.6) and exposes exactly that API', () => {
+  it('adds join/unjoin (1.4), retune (1.6), remove and census (1.9.1) and exposes exactly that API', () => {
     expect(world).toMatch(/function join\(bodyA: Body, bodyB: Body, \{ anchorA, anchorB, rotation \}: JointFrame, mode: BondMode\)/);
     expect(world).toMatch(/function unjoin\(joint: PhysicsJoint\)/);
     expect(world).toMatch(/function retune\(\)/);
-    expect(world).toMatch(/return \{ register, step, grab, move, release, place, join, unjoin, retune \};/);
+    expect(world).toMatch(/function remove\(body: Body\)/);
+    expect(world).toMatch(/function census\(\)/);
+    expect(world).toMatch(/return \{ register, step, grab, move, release, place, join, unjoin, retune, remove, census \};/);
   });
 
   // 1.7.1: the box is a part — one dynamic multi-collider body — so the 1.5 static slabs went.
@@ -100,7 +102,7 @@ describe('physics boundary', () => {
   });
 
   it('lets the box drag but never takes it into the gizmo, the highlight or the repack', () => {
-    const main = read('src/main.ts');
+    const main = read('src/scene/itemWorld.ts');
     expect(main).toMatch(/const parts = \[flatpack\.base, flatpack\.lid\];/);
     expect(main).toMatch(/part !== flatpack\.base && part !== flatpack\.lid\);/);
     expect(main).toMatch(/if \(!part \|\| part === flatpack\.base\) \{/);

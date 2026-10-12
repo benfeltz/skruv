@@ -105,6 +105,7 @@ describe('hit proxies (1.4.1)', () => {
   it('are never registered with physics', () => {
     expect(proxy).not.toMatch(/physics\./);
     expect(read('src/main.ts')).not.toMatch(/register\([^)]*proxy/i);
+    expect(read('src/scene/itemWorld.ts')).not.toMatch(/register\([^)]*proxy/i);
   });
 
   it('leave the pick decision to the pure preference rule', () => {
@@ -123,7 +124,7 @@ describe('seat assist and flash (1.4.1)', () => {
   });
 
   it('plays no audio anywhere (dropped for 0.0.1)', () => {
-    for (const path of ['src/main.ts', 'src/scene/gestureRouter.ts', 'src/scene/sprue.ts', 'src/game/partMesh.ts']) {
+    for (const path of ['src/main.ts', 'src/scene/itemWorld.ts', 'src/scene/gestureRouter.ts', 'src/scene/sprue.ts', 'src/game/partMesh.ts']) {
       expect(read(path)).not.toMatch(/\bAudio(Context|Listener)?\b|PositionalAudio|\.play\(/);
     }
   });
