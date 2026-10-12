@@ -4,6 +4,7 @@ import { BOOKLET, BOOKLET_UI, CATALOG, COLORS } from '../src/constants.js';
 import { catalogEntries, createCatalog } from '../src/game/catalogModel.js';
 import { pickableSet } from '../src/game/pickable.js';
 import { ITEM_IDS } from '../src/game/item.js';
+import { splashCount, stampCount } from '../src/game/splash.js';
 
 // 1.6.1, re-pinned for 1.9.1 (the catalog is the splash): index.html's pre-splash is plain
 // CSS, so it can't import the constants the real catalog sheet is built from — these checks
@@ -49,6 +50,19 @@ describe('pre-splash: the catalog cover (1.6.1, 1.9.1)', () => {
   it("counts the catalog's real pages", () => {
     const count = createCatalog(catalogEntries(), pickableSet(CATALOG.pickable, ITEM_IDS)).length;
     expect(html).toContain(`<span class="pre-splash-count">1 / ${count}</span>`);
+    expect(splashCount(ITEM_IDS.length)).toBe(`1 / ${count}`);
+  });
+
+  // The count is derived at build time from the items/ folders, the literal above only the
+  // fallback; the stamp changes nothing but the counter's text.
+  it('has the count stamped over it at build and serve time from the item folders', () => {
+    const config = read('vite.config.ts');
+    expect(config).toMatch(/transformIndexHtml: \(html\) => stampCount\(html, packIds\('items'\)\.length\)/);
+    expect(config).toMatch(/plugins: \[[^\]]*splashCount\(\)/);
+    const stamped = stampCount(html, 4);
+    expect(stamped).toContain('<span class="pre-splash-count">1 / 5</span>');
+    expect(stamped.replace('1 / 5', '').length).toBe(html.replace(/1 \/ \d+/, '').length);
+    expect(stampCount('<p>no counter</p>', 4)).toBe('<p>no counter</p>');
   });
 
   // main mounts the catalog sheet at boot and removes the stand-in after.
