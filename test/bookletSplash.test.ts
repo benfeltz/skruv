@@ -65,8 +65,10 @@ class FakeElement {
   focus() {
     dom.focused = this;
   }
+  // What was last drawn on it, when it is a canvas.
+  drawn: unknown = undefined;
   getContext() {
-    return { drawImage() {} };
+    return { drawImage: (source: unknown) => (this.drawn = source) };
   }
   closest(tag: string) {
     for (let node: FakeElement | null = this; node; node = node.parent) if (node.tag === tag) return node;
@@ -626,6 +628,38 @@ describe('boot with the catalog up (1.9.1)', () => {
     buildIt.fire('click');
     expect(notice.hidden).toBe(true);
     expect(errors).toHaveBeenCalledOnce();
+  });
+
+  it("docked, it shows its cover whatever page it was put down on; the manual's thumb shows its own page", () => {
+    // Pages that name themselves, so a thumb's drawing says which page it is.
+    const page = (index: number) => ({ index }) as unknown as CanvasImageSource;
+    const picks: string[] = [];
+    const catalog = createCatalogSheet({
+      pages: { count: catalogPages.length, pages: catalogPages, canvas: page },
+      open: true,
+      canClose: () => picks.length > 0,
+      onPick: (id) => {
+        picks.push(id);
+        catalog.setOpen(false);
+      },
+    }) as unknown as FakeBooklet;
+    mounted.push(catalog);
+    const [, view, controls] = catalog.element.children;
+    const [, buildIt] = view.children[0].children;
+    controls.children[2].fire('click');
+    controls.children[2].fire('click');
+    buildIt.fire('click');
+    const catalogThumb = catalog.thumb.children[0];
+    expect(catalog.currentPage).toBe(2);
+    expect(catalogThumb.drawn).toEqual({ index: 0 });
+
+    const manual = createBookletSheet({ pages: { count: COUNT, canvas: page }, open: false }) as unknown as FakeBooklet;
+    mounted.push(manual);
+    manual.thumb.fire('click');
+    manual.element.children[2].children[2].fire('click');
+    manual.element.children[0].fire('click');
+    expect(manual.currentPage).toBe(1);
+    expect(manual.thumb.children[0].drawn).toEqual({ index: 1 });
   });
 });
 

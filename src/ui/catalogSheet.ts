@@ -32,6 +32,8 @@ export function createCatalogSheet({
     name: 'catalog',
     open,
     slot: STACK_SLOT.catalog,
+    // Docked, it shows its cover — SKRUV — whatever page it was put down on (Ben, 1.9.1).
+    thumbShows: 'cover',
     canClose,
     action: {
       rect: CATALOG.page.action,

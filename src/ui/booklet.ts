@@ -217,6 +217,8 @@ export interface BookletSheetOptions {
   slot?: number;
   /** Whether it may be put down now. While false, every way of closing it does nothing. */
   canClose?: () => boolean;
+  /** What its docked thumb shows: the open page (default, the manual), or always its cover (the catalog, a brand object in the corner). */
+  thumbShows?: 'page' | 'cover';
   /** A control on a page: `at(page)` names it, or null for none; it sits over `rect`, its corners rounded by `radius` (page pixels). */
   action?: { rect: readonly [number, number, number, number]; radius: number; at(page: number): PageAction | null };
 }
@@ -230,7 +232,7 @@ export interface BookletSheetOptions {
  * `dispose()` takes it all back off the page. Starts open on page 0, the cover, unless told
  * otherwise — or another sheet is open: one sheet is open at a time. State is the module's own and read-only outside it.
  */
-export function createBookletSheet({ pages, name = 'instructions', open: startsOpen = true, slot = STACK_SLOT.manual, canClose = () => true, action }: BookletSheetOptions) {
+export function createBookletSheet({ pages, name = 'instructions', open: startsOpen = true, slot = STACK_SLOT.manual, canClose = () => true, action, thumbShows = 'page' }: BookletSheetOptions) {
   injectStyle();
   const listeners = new Set<(state: { page: number; expanded: boolean }) => void>();
   let page = 0;
@@ -317,12 +319,10 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
   }
 
   function render() {
-    const source = pages.canvas(page);
-    for (const target of open ? [viewCanvas, thumbCanvas] : [thumbCanvas]) {
-      // A canvas always gives a 2D context the first time it is asked.
-      const ctx = target.getContext('2d')!;
-      ctx.drawImage(source, 0, 0, target.width, target.height);
-    }
+    // A canvas always gives a 2D context the first time it is asked.
+    const draw = (target: HTMLCanvasElement, index: number) => target.getContext('2d')!.drawImage(pages.canvas(index), 0, 0, target.width, target.height);
+    if (open) draw(viewCanvas, page);
+    draw(thumbCanvas, thumbShows === 'cover' ? 0 : page);
     count.textContent = `${page + 1} / ${pages.count}`;
     viewCanvas.setAttribute('aria-label', `Page ${page + 1} of ${pages.count}`);
     prev.disabled = page === 0;
