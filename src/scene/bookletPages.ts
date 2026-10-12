@@ -4,15 +4,19 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { BOOKLET, COLORS } from '../constants.js';
 import { createBooklet } from '../game/bookletModel.js';
+import { CONTROLS } from '../game/controlsPage.js';
 import { ASSEMBLED, IDENTITY, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../game/item.js';
 import type { InstanceId } from '../game/item.js';
 import type { BuildStep, PartCount } from '../game/bookletModel.js';
+import type { PictogramId, Scheme } from '../game/controlsPage.js';
 import type { Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
 
 // The booklet's pages, drawn from the same part models the room uses, so a page can never
 // disagree with the geometry. Wordless, as the real thing is: a big step numeral, an
 // outline drawing (this page's parts bold, what is already built pale), hardware count
-// bubbles with their part numbers, and pictogram warning pages with faceless figures.
+// bubbles with their part numbers, and pictogram warning pages with faceless figures. The
+// game's own controls page, before the back cover, is the one with words: a pictogram and
+// a short label per row.
 // WHAT each page shows is src/game/bookletModel.ts's; this module only draws. Branding is
 // JOHNNY by SKRUV — black on white, no borrowed marks.
 
@@ -62,11 +66,18 @@ const TO_SRGB = Uint8ClampedArray.from({ length: 256 }, (_, i) => {
  * `{ count, canvas(index), prerender() }`. `canvas(index)` draws page `index` the first
  * time it is asked for and caches it; `prerender()` draws the rest one per idle slice, so
  * the first frame never waits on the booklet. Renders through `renderer` (the room's own
- * WebGL context) into an offscreen target and restores its state after every page.
+ * WebGL context) into an offscreen target and restores its state after every page. The
+ * controls page shows `scheme`'s controls — the device in hand, as the caller reads it.
  */
-export function createBookletPages(renderer: THREE.WebGLRenderer) {
+export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { scheme: Scheme }) {
   const layout = ASSEMBLED;
-  const pages = createBooklet(MANUAL.pages, { layout, manifest: MANIFEST, partTypes: PART_TYPES, resolve: resolveConnector });
+  const pages = createBooklet(MANUAL.pages, {
+    layout,
+    manifest: MANIFEST,
+    partTypes: PART_TYPES,
+    resolve: resolveConnector,
+    gamePages: [{ kind: 'controls', scheme }],
+  });
   const [pageW, pageH] = BOOKLET.pageSize;
   const cache = new Map<number, HTMLCanvasElement>();
   const views = createViewRenderer(renderer);
@@ -248,6 +259,44 @@ export function createBookletPages(renderer: THREE.WebGLRenderer) {
     }
   }
 
+  // The controls page: a title, then each row's pictogram with its label beside it, in
+  // columns down the page.
+  function controls({ ctx }: Sheet, { scheme }: { scheme: Scheme }) {
+    const m = BOOKLET.margin;
+    const { titleSize, titleGap, columns, pictogram, pictogramLine, labelGap, labelSize, labelLeading } = BOOKLET.controls;
+    ctx.fillStyle = INK;
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = font(titleSize, 800);
+    ctx.fillText('Controls', m, m + titleSize);
+    const rows = CONTROLS[scheme];
+    const top = m + titleSize + titleGap;
+    // Down the first column, then the next.
+    const perColumn = Math.ceil(rows.length / columns);
+    const cellW = (pageW - 2 * m) / columns;
+    const cellH = (pageH - m - top) / perColumn;
+    const labelW = cellW - pictogram - labelGap;
+    rows.forEach(({ pictogram: id, label }, i) => {
+      const x = m + Math.floor(i / perColumn) * cellW;
+      const y = top + (i % perColumn) * cellH;
+      const py = y + (cellH - pictogram) / 2;
+      ctx.save();
+      ctx.translate(x, py);
+      ctx.scale(pictogram / PICTOGRAM_GRID, pictogram / PICTOGRAM_GRID);
+      ctx.lineWidth = pictogramLine;
+      ctx.strokeStyle = INK;
+      ctx.fillStyle = PAPER;
+      PICTOGRAMS[id](ctx, scheme);
+      ctx.restore();
+      ctx.fillStyle = INK;
+      ctx.font = font(labelSize, 700);
+      ctx.textBaseline = 'middle';
+      const lines = wrap(ctx, label, labelW);
+      const lineH = labelSize * labelLeading;
+      lines.forEach((line, n) => ctx.fillText(line, x + pictogram + labelGap, y + cellH / 2 + (n - (lines.length - 1) / 2) * lineH));
+      ctx.textBaseline = 'alphabetic';
+    });
+  }
+
   // A loose-parts page: each panel the page works on laid flat with its own hardware in it,
   // the panels fanned out one behind another.
   function looseParts(page: BuildStep) {
@@ -293,6 +342,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer) {
     // A doDont page's subject is one of these (the schema's key; the pack names it).
     else if (page.kind === 'doDont') doDont[page.subject as keyof typeof doDont](sheet.ctx);
     else if (page.kind === 'inventory') inventory(sheet, page);
+    else if (page.kind === 'controls') controls(sheet, page);
     else step(sheet, page);
     return sheet.canvas;
   }
@@ -611,3 +661,258 @@ function tipArrow(ctx: Ctx, x: number, y: number, r: number) {
   ctx.lineTo(ex - 4, ey + 22);
   ctx.stroke();
 }
+
+// --- controls-page pictograms: drawn on a PICTOGRAM_GRID-unit square, ink on paper ---
+
+const PICTOGRAM_GRID = 100;
+
+// `text` broken into lines no wider than `width` in the context's font, at its spaces.
+function wrap(ctx: Ctx, text: string, width: number) {
+  const lines: string[] = [];
+  for (const word of text.split(' ')) {
+    const last = lines.at(-1);
+    if (last !== undefined && ctx.measureText(`${last} ${word}`).width <= width) lines[lines.length - 1] = `${last} ${word}`;
+    else lines.push(word);
+  }
+  return lines;
+}
+
+function arrow(ctx: Ctx, x0: number, y0: number, x1: number, y1: number) {
+  const angle = Math.atan2(y1 - y0, x1 - x0);
+  const head = 10;
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.moveTo(x1 - head * Math.cos(angle - 0.5), y1 - head * Math.sin(angle - 0.5));
+  ctx.lineTo(x1, y1);
+  ctx.lineTo(x1 - head * Math.cos(angle + 0.5), y1 - head * Math.sin(angle + 0.5));
+  ctx.stroke();
+}
+
+// Round (cx, cy) from angle `from` to `to`, its head at `to`.
+function arcArrow(ctx: Ctx, cx: number, cy: number, r: number, from: number, to: number) {
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, from, to);
+  ctx.stroke();
+  const ex = cx + r * Math.cos(to);
+  const ey = cy + r * Math.sin(to);
+  // Along the tangent, a short step back from the end: the head's tail.
+  const back = 0.3;
+  arrow(ctx, cx + r * Math.cos(to - back), cy + r * Math.sin(to - back), ex, ey);
+}
+
+// A fingertip on the glass: a dot in a ring.
+function touchPoint(ctx: Ctx, x: number, y: number) {
+  ctx.beginPath();
+  ctx.arc(x, y, 11, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.arc(x, y, 5, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.fillStyle = PAPER;
+}
+
+// A mouse pointer, its tip at (x, y).
+function cursor(ctx: Ctx, x: number, y: number) {
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  for (const [dx, dy] of [[0, 28], [7, 21], [12, 32], [18, 29], [13, 19], [22, 19]]) ctx.lineTo(x + dx, y + dy);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+// A press where the scheme presses: a fingertip, or the pointer.
+const press = (ctx: Ctx, scheme: Scheme, x: number, y: number) => (scheme === 'touch' ? touchPoint(ctx, x, y) : cursor(ctx, x, y));
+
+// A mouse seen from above, centred on (x, y), its pressed part (a button or the wheel) inked.
+function mouse(ctx: Ctx, x: number, y: number, lit: 'left' | 'right' | 'wheel') {
+  roundRect(ctx, x - 16, y - 24, 32, 48, 15);
+  ctx.fill();
+  ctx.save();
+  ctx.clip();
+  ctx.fillStyle = INK;
+  if (lit === 'left') ctx.fillRect(x - 16, y - 24, 16, 18);
+  if (lit === 'right') ctx.fillRect(x, y - 24, 16, 18);
+  ctx.restore();
+  roundRect(ctx, x - 16, y - 24, 32, 48, 15);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x - 16, y - 6);
+  ctx.lineTo(x + 16, y - 6);
+  ctx.moveTo(x, y - 24);
+  ctx.lineTo(x, y - 6);
+  ctx.stroke();
+  if (lit === 'wheel') {
+    ctx.fillStyle = INK;
+    roundRect(ctx, x - 4, y - 20, 8, 12, 4);
+    ctx.fill();
+    ctx.fillStyle = PAPER;
+  }
+}
+
+// The Shift key.
+function shiftKey(ctx: Ctx, x: number, y: number) {
+  roundRect(ctx, x - 20, y - 14, 40, 28, 6);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = INK;
+  ctx.font = font(20, 800);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('⇧', x, y + 1);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = PAPER;
+}
+
+// A panel edge-on, and a dowel standing in or over it.
+function slab(ctx: Ctx, x: number, y: number, w: number, h: number) {
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeRect(x, y, w, h);
+}
+
+function floor(ctx: Ctx, x0: number, x1: number, y: number) {
+  ctx.beginPath();
+  ctx.moveTo(x0, y);
+  ctx.lineTo(x1, y);
+  ctx.stroke();
+}
+
+function dashed(ctx: Ctx, draw: () => void) {
+  ctx.save();
+  ctx.setLineDash([5, 5]);
+  draw();
+  ctx.restore();
+}
+
+const PICTOGRAMS: Readonly<Record<PictogramId, (ctx: Ctx, scheme: Scheme) => void>> = Object.freeze({
+  orbit: (ctx, scheme) => {
+    if (scheme === 'touch') touchPoint(ctx, 50, 55);
+    else mouse(ctx, 50, 55, 'left');
+    arcArrow(ctx, 50, 55, 36, Math.PI * 0.15, Math.PI * 1.55);
+  },
+  zoomPan: (ctx) => {
+    touchPoint(ctx, 38, 62);
+    touchPoint(ctx, 62, 38);
+    arrow(ctx, 28, 72, 10, 90);
+    arrow(ctx, 72, 28, 90, 10);
+  },
+  pan: (ctx) => {
+    mouse(ctx, 24, 55, 'right');
+    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) arrow(ctx, 72, 55, 72 + 22 * dx, 55 + 22 * dy);
+  },
+  zoom: (ctx) => {
+    mouse(ctx, 34, 55, 'wheel');
+    arrow(ctx, 74, 48, 74, 18);
+    arrow(ctx, 74, 62, 74, 92);
+  },
+  select: (ctx, scheme) => {
+    ctx.beginPath();
+    ctx.ellipse(50, 64, 44, 18, 0, 0, 2 * Math.PI);
+    ctx.stroke();
+    slab(ctx, 20, 56, 60, 16);
+    arcArrow(ctx, 50, 64, 44, Math.PI * 1.15, Math.PI * 1.5);
+    press(ctx, scheme, 50, 62);
+  },
+  move: (ctx, scheme) => {
+    slab(ctx, 8, 56, 46, 16);
+    arrow(ctx, 62, 64, 94, 64);
+    press(ctx, scheme, 30, 62);
+  },
+  lift: (ctx) => {
+    floor(ctx, 4, 66, 90);
+    slab(ctx, 10, 34, 50, 14);
+    arrow(ctx, 35, 84, 35, 56);
+    // The lift line at the screen's edge, its knob under a finger.
+    ctx.beginPath();
+    ctx.moveTo(84, 8);
+    ctx.lineTo(84, 92);
+    ctx.stroke();
+    touchPoint(ctx, 84, 40);
+  },
+  hold: (ctx) => {
+    shiftKey(ctx, 26, 20);
+    floor(ctx, 6, 94, 90);
+    slab(ctx, 34, 46, 56, 14);
+    dashed(ctx, () => {
+      ctx.beginPath();
+      ctx.moveTo(62, 62);
+      ctx.lineTo(62, 88);
+      ctx.stroke();
+    });
+  },
+  height: (ctx) => {
+    shiftKey(ctx, 24, 20);
+    mouse(ctx, 24, 66, 'wheel');
+    slab(ctx, 52, 44, 42, 12);
+    arrow(ctx, 73, 38, 73, 10);
+    arrow(ctx, 73, 62, 73, 92);
+  },
+  seat: (ctx) => {
+    // Carried over the hole, its ghost already in it: let go.
+    slab(ctx, 8, 68, 84, 20);
+    dashed(ctx, () => ctx.strokeRect(45, 54, 10, 26));
+    slab(ctx, 45, 6, 10, 32);
+    arrow(ctx, 76, 14, 76, 52);
+  },
+  pushHome: (ctx, scheme) => {
+    slab(ctx, 8, 62, 84, 20);
+    slab(ctx, 45, 40, 10, 34);
+    arrow(ctx, 80, 18, 80, 52);
+    press(ctx, scheme, 50, 34);
+  },
+  turnTool: (ctx, scheme) => {
+    slab(ctx, 8, 74, 84, 16);
+    // An Allen key in a bolt head, and the circle that turns it.
+    ctx.beginPath();
+    ctx.ellipse(44, 74, 12, 5, 0, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.stroke();
+    ctx.lineWidth *= 1.8;
+    ctx.beginPath();
+    ctx.moveTo(44, 72);
+    ctx.lineTo(44, 34);
+    ctx.lineTo(80, 34);
+    ctx.stroke();
+    ctx.lineWidth /= 1.8;
+    // The circle round the bolt, seen at a slant.
+    ctx.beginPath();
+    ctx.ellipse(44, 62, 36, 12, 0, Math.PI * 0.05, Math.PI * 1.75);
+    ctx.stroke();
+    arrow(ctx, 44 + 36 * Math.cos(Math.PI * 1.6), 62 + 12 * Math.sin(Math.PI * 1.6), 44 + 36 * Math.cos(Math.PI * 1.75), 62 + 12 * Math.sin(Math.PI * 1.75));
+    press(ctx, scheme, 80, 34);
+  },
+  pullApart: (ctx, scheme) => {
+    slab(ctx, 8, 66, 84, 20);
+    ctx.fillStyle = INK;
+    ctx.fillRect(45, 66, 10, 14);
+    ctx.fillStyle = PAPER;
+    slab(ctx, 45, 16, 10, 34);
+    arrow(ctx, 80, 54, 80, 14);
+    press(ctx, scheme, 50, 20);
+  },
+  flip: (ctx, scheme) => {
+    roundRect(ctx, 26, 8, 48, 64, 4);
+    ctx.fill();
+    ctx.stroke();
+    for (const y of [26, 38, 50]) floor(ctx, 34, 66, y);
+    arrow(ctx, 80, 88, 22, 88);
+    press(ctx, scheme, 80, 86);
+  },
+  repack: (ctx) => {
+    slab(ctx, 18, 50, 64, 40);
+    ctx.beginPath();
+    ctx.moveTo(18, 50);
+    ctx.lineTo(8, 38);
+    ctx.moveTo(82, 50);
+    ctx.lineTo(92, 38);
+    ctx.stroke();
+    arrow(ctx, 50, 6, 50, 42);
+    ctx.fillStyle = INK;
+    ctx.font = font(22, 800);
+    ctx.fillText('×2', 62, 26);
+    ctx.fillStyle = PAPER;
+  },
+});

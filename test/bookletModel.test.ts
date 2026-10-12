@@ -189,6 +189,32 @@ describe('createBooklet', () => {
   });
 });
 
+// 1.8.3.3: the game adds its own pages — the controls first — just before the back cover.
+describe('createBooklet with the game\'s own pages', () => {
+  const booklet = createBooklet(MANUAL.pages, model);
+
+  it.each(['touch', 'desktop'] as const)('puts the %s controls second to last, one page more', (scheme) => {
+    const withControls = createBooklet(MANUAL.pages, { ...model, gamePages: [{ kind: 'controls', scheme }] });
+    expect(withControls).toHaveLength(booklet.length + 1);
+    expect(withControls.at(-2)).toEqual({ kind: 'controls', scheme });
+    expect(withControls.at(-1)).toEqual({ kind: 'backCover' });
+  });
+
+  it('leaves the build pages as they were, so the per-page highlight still finds each step', () => {
+    const withControls = createBooklet(MANUAL.pages, { ...model, gamePages: [{ kind: 'controls', scheme: 'touch' }] });
+    const stepsOf = (pages: typeof booklet) => pages.flatMap((p, index) => (p.kind === 'step' ? [{ index, number: p.number, types: p.types }] : []));
+    expect(stepsOf(withControls)).toEqual(stepsOf(booklet));
+    expect(withControls.slice(0, -2)).toEqual(booklet.slice(0, -1));
+  });
+
+  it('keeps several game pages in order, and appends them to a manual with no back cover', () => {
+    const gamePages = [{ kind: 'controls', scheme: 'touch' }, { kind: 'controls', scheme: 'desktop' }] as const;
+    expect(createBooklet(MANUAL.pages, { ...model, gamePages }).slice(-3)).toEqual([...gamePages, { kind: 'backCover' }]);
+    const noBack = MANUAL.pages.filter((page) => page.kind !== 'back');
+    expect(createBooklet(noBack, { ...model, gamePages }).slice(-2)).toEqual([...gamePages]);
+  });
+});
+
 describe('no validation anywhere (Ben, 2026-10-04)', () => {
   const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 

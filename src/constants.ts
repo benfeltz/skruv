@@ -90,6 +90,19 @@ export const BOOKLET = {
   numeralSize: 150,
   bubbleRadius: 64,
   font: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+  // The controls page (src/game/controlsPage.ts): a title, then rows in columns — each a
+  // square pictogram, drawn on a 100-unit grid at `pictogramLine`, and its label beside it,
+  // wrapped onto as many lines as it needs.
+  controls: {
+    titleSize: 44,
+    titleGap: 28,
+    columns: 2,
+    pictogram: 96,
+    pictogramLine: 4,
+    labelGap: 16,
+    labelSize: 27,
+    labelLeading: 1.2,
+  },
 };
 
 // The booklet in hand (src/ui/booklet.ts): CSS pixels.
