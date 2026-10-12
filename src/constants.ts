@@ -150,11 +150,10 @@ export const CATALOG = {
     taglineIndent: 6,
     detailIndent: 4,
     // The BUILD IT tag, or the SOLD OUT stamp in its place: [x, y, w, h], also the hit
-    // target src/ui/booklet.ts lays over the page. Below it, space held for a store link
-    // on a sold-out page — drawn blank for now.
+    // target src/ui/booklet.ts lays over the page. Below it, down to the page margin, nothing
+    // is drawn: the space held for a store link on a sold-out page, once there is a store.
     action: [180, 770, 360, 104] satisfies [number, number, number, number],
     actionTextSize: 52,
-    linkSpace: [180, 892, 360, 60] satisfies [number, number, number, number],
     // The tag's corners and punched hole; the stamp's outline and tilt (radians).
     tagRadius: 18,
     tagHole: 12,
