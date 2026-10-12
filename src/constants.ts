@@ -140,6 +140,15 @@ export const CATALOG = {
     taglineSize: 30,
     nameSize: 96,
     detailSize: 30,
+    // The headings' setting, as fractions of a type size: a title's baseline sits this far
+    // down its size; the line under it (tagline, part count) this many of its own sizes below
+    // that baseline; the drawing starts this many of them below the title's full size. The
+    // line under is indented this far (page pixels) to sit optically flush under the title.
+    baseline: 0.8,
+    subtitleDrop: 1.6,
+    drawingDrop: 2.4,
+    taglineIndent: 6,
+    detailIndent: 4,
     // The BUILD IT tag, or the SOLD OUT stamp in its place: [x, y, w, h], also the hit
     // target src/ui/booklet.ts lays over the page. Below it, space held for a store link
     // on a sold-out page — drawn blank for now.

@@ -93,9 +93,9 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
   function cover(ctx: Ctx) {
     ctx.fillStyle = INK;
     ctx.font = font(layout.wordmarkSize, 800);
-    ctx.fillText(words.brand, m, m + layout.wordmarkSize * 0.8);
+    ctx.fillText(words.brand, m, m + layout.wordmarkSize * layout.baseline);
     ctx.font = font(layout.taglineSize, 600);
-    ctx.fillText(words.tagline, m + 6, m + layout.wordmarkSize * 0.8 + layout.taglineSize * 1.6);
+    ctx.fillText(words.tagline, m + layout.taglineIndent, m + layout.wordmarkSize * layout.baseline + layout.taglineSize * layout.subtitleDrop);
 
     const { gap, margin, wallRise, slab } = CATALOG.cover;
     const viewItems: ViewItem[] = [];
@@ -122,7 +122,7 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
       sizes.set(typeOf('room', name), size);
       viewItems.push({ type: typeOf('room', name), position: at, rotation: [0, 0, 0, 1], weight: 'faint' });
     }
-    const top = m + layout.wordmarkSize + layout.taglineSize * 2.4;
+    const top = m + layout.wordmarkSize + layout.taglineSize * layout.drawingDrop;
     drawView(ctx, viewItems, [m, top, pageW - 2 * m, pageH - top - m]);
   }
 
@@ -130,10 +130,10 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
   function item(ctx: Ctx, page: Extract<CatalogPage, { kind: 'item' }>) {
     ctx.fillStyle = INK;
     ctx.font = font(layout.nameSize, 800);
-    ctx.fillText(page.name, m, m + layout.nameSize * 0.8);
+    ctx.fillText(page.name, m, m + layout.nameSize * layout.baseline);
     ctx.font = font(layout.detailSize, 600);
-    ctx.fillText(`${page.partCount} ${words.parts}`, m + 4, m + layout.nameSize * 0.8 + layout.detailSize * 1.6);
-    const top = m + layout.nameSize + layout.detailSize * 2.4;
+    ctx.fillText(`${page.partCount} ${words.parts}`, m + layout.detailIndent, m + layout.nameSize * layout.baseline + layout.detailSize * layout.subtitleDrop);
+    const top = m + layout.nameSize + layout.detailSize * layout.drawingDrop;
     const [, actionY] = layout.action;
     drawView(ctx, built(page.id, [0, 0, 0], 'bold'), [m, top, pageW - 2 * m, actionY - top - m]);
     if (page.pickable) tag(ctx, words.build);

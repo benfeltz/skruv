@@ -34,13 +34,13 @@ describe('pre-splash: the catalog cover (1.6.1, 1.9.1)', () => {
   // As src/scene/catalogPages.ts draws the cover: SKRUV, then the tagline under it.
   it("prints the catalog cover's wordmark in the page's own coordinates and font", () => {
     const m = BOOKLET.margin;
-    const { wordmarkSize, taglineSize } = CATALOG.page;
-    const baseline = m + wordmarkSize * 0.8;
+    const { wordmarkSize, taglineSize, baseline: share, subtitleDrop, taglineIndent } = CATALOG.page;
+    const baseline = m + wordmarkSize * share;
     expect(html).toContain(`viewBox="0 0 ${pageW} ${pageH}"`);
     expect(html).toContain(`font-family='${BOOKLET.font}'`);
     expect(html).toContain(`<text x="${m}" y="${baseline}" font-size="${wordmarkSize}" font-weight="800">${CATALOG.words.brand}</text>`);
     expect(html).toContain(
-      `<text x="${m + 6}" y="${baseline + taglineSize * 1.6}" font-size="${taglineSize}" font-weight="600">${CATALOG.words.tagline}</text>`,
+      `<text x="${m + taglineIndent}" y="${baseline + taglineSize * subtitleDrop}" font-size="${taglineSize}" font-weight="600">${CATALOG.words.tagline}</text>`,
     );
   });
 
