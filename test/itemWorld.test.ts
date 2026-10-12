@@ -321,7 +321,7 @@ describe('the swap: picking from the catalog (1.9.1)', () => {
   it('a pick builds one world with its manual docked; picking it again keeps that world', async () => {
     const { deps, census } = await engine();
     const baseline = census();
-    const items = createItemSlot({ door: { knows: (id) => ITEM_IDS.includes(id), selected: () => ITEM_ID, select: setItem }, build: () => createItemWorld(deps) });
+    const items = createItemSlot({ door: { knows: (id) => ITEM_IDS.includes(id), selected: () => ITEM_ID, select: setItem }, report: (error) => { throw error; }, build: () => createItemWorld(deps) });
 
     const world = items.pick('johnny');
     expect(ITEM_ID).toBe('johnny');

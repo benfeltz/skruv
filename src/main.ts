@@ -88,6 +88,8 @@ events.on(ANY, (event) => {
 const items = createItemSlot({
   // The door is item.ts itself: ITEM_ID is a live binding, read at each pick.
   door: { knows: (id) => ITEM_IDS.includes(id), selected: () => ITEM_ID, select: setItem },
+  // An old world's teardown that throws is its bug, not the pick's: logged, and the swap goes on.
+  report: (error) => console.error(error),
   build: () =>
     createItemWorld({
       scene,

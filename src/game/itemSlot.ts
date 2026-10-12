@@ -14,10 +14,23 @@
 //   2. The door turns to the new item.
 //   3. The new world is built through it.
 // An id the door doesn't know is refused before step 1, so an impossible pick costs the room
-// nothing. If step 3 throws, the door turns back to the item it named before, and the room stays
-// explicitly empty: no world, and the caller sees the error (main keeps the catalog in hand,
-// since there is no room to put it down into). createItemWorld takes back its own
-// half-built work. If step 1 throws, the room is already empty and the door never turned.
+// nothing. A release that throws in step 1 is the old world's bug, not the pick's: it goes to
+// `report` and the swap goes on — the world is gone either way, and the player gets the item
+// they asked for. If step 3 throws, the door turns back to the item it named before, the room
+// stays explicitly empty, and the caller gets a BuildFailed (main keeps the catalog in hand,
+// since there is no room to put it down into; the catalog says the item couldn't be built).
+// createItemWorld takes back its own half-built work.
+
+/** A pick whose new world could not be built: the room is empty, the door named as before. `cause` is the build's error. */
+export class BuildFailed extends Error {
+  constructor(
+    readonly id: string,
+    cause: unknown,
+  ) {
+    super(`pick: building "${id}" failed`, { cause });
+    this.name = 'BuildFailed';
+  }
+}
 
 /** The item door the slot builds through: whether it knows an item, which it names now, and how to turn it. */
 export interface ItemDoor {
@@ -31,7 +44,16 @@ export interface ItemDoor {
  * after a failed one; `pick` swaps it as above. Picking the item already in the room keeps
  * that world as it is — a look through the catalog never costs a half-built item its progress.
  */
-export function createItemSlot<World extends { dispose(): void }>({ door, build }: { door: ItemDoor; build: () => World }) {
+export function createItemSlot<World extends { dispose(): void }>({
+  door,
+  build,
+  report,
+}: {
+  door: ItemDoor;
+  build: () => World;
+  /** Where an old world's failed teardown goes (main: the console); the swap goes on. */
+  report: (error: unknown) => void;
+}) {
   let current: World | null = null;
   return {
     get current() {
@@ -43,13 +65,17 @@ export function createItemSlot<World extends { dispose(): void }>({ door, build 
       const before = door.selected();
       const old = current;
       current = null;
-      old?.dispose();
+      try {
+        old?.dispose();
+      } catch (error) {
+        report(error);
+      }
       door.select(id);
       try {
         current = build();
       } catch (error) {
         door.select(before);
-        throw error;
+        throw new BuildFailed(id, error);
       }
       return current;
     },

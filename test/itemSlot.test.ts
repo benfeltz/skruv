@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createItemSlot } from '../src/game/itemSlot.js';
+import { BuildFailed, createItemSlot } from '../src/game/itemSlot.js';
 
 // The swap as one transaction (1.9.1), specced against its invariant: the door names the
 // current item, and the world in the room — if any — was built through the door for that
@@ -9,6 +9,7 @@ import { createItemSlot } from '../src/game/itemSlot.js';
 function room({ failBuild = new Set<string>(), failDispose = new Set<string>(), boot = 'johnny' } = {}) {
   let named = boot;
   const log: string[] = [];
+  const reported: unknown[] = [];
   const door = {
     knows: (id: string) => id !== 'nope',
     selected: () => named,
@@ -20,6 +21,7 @@ function room({ failBuild = new Set<string>(), failDispose = new Set<string>(), 
   };
   const items = createItemSlot({
     door,
+    report: (error) => reported.push(error),
     build: () => {
       const item = named;
       if (failBuild.has(item)) throw new Error(`build ${item} broke`);
@@ -36,7 +38,7 @@ function room({ failBuild = new Set<string>(), failDispose = new Set<string>(), 
   });
   // The invariant: a world in the room is the door's item's.
   const holds = () => items.current === null || items.current.item === door.selected();
-  return { items, door, log, holds };
+  return { items, door, log, holds, reported };
 }
 
 describe('createItemSlot', () => {
@@ -73,16 +75,24 @@ describe('createItemSlot', () => {
   it('a swap whose build throws turns the door back and leaves the room explicitly empty', () => {
     const { items, door, log, holds } = room({ failBuild: new Set(['blank']) });
     items.pick('johnny');
-    expect(() => items.pick('blank')).toThrow('build blank broke');
+    expect(() => items.pick('blank')).toThrow(BuildFailed);
     expect(items.current).toBeNull();
     expect(door.selected()).toBe('johnny');
     expect(log).toEqual(['select johnny', 'build johnny', 'dispose johnny (door: johnny)', 'select blank', 'select johnny']);
     expect(holds()).toBe(true);
   });
 
-  it('a first pick whose build throws turns the door back to the boot item', () => {
+  it('a first pick whose build throws turns the door back to the boot item, as a BuildFailed carrying the cause', () => {
     const { items, door, holds } = room({ failBuild: new Set(['blank']) });
-    expect(() => items.pick('blank')).toThrow('build blank broke');
+    let caught: unknown;
+    try {
+      items.pick('blank');
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(BuildFailed);
+    expect((caught as BuildFailed).id).toBe('blank');
+    expect(((caught as BuildFailed).cause as Error).message).toBe('build blank broke');
     expect(items.current).toBeNull();
     expect(door.selected()).toBe('johnny');
     expect(holds()).toBe(true);
@@ -102,13 +112,14 @@ describe('createItemSlot', () => {
     expect(holds()).toBe(true);
   });
 
-  it('a dispose that throws leaves an empty room with the door unturned, and builds nothing', () => {
-    const { items, door, log, holds } = room({ failDispose: new Set(['johnny']) });
+  it("a dispose that throws is reported, not fatal: the swap goes on and the new item is built", () => {
+    const { items, door, log, holds, reported } = room({ failDispose: new Set(['johnny']) });
     items.pick('johnny');
-    expect(() => items.pick('blank')).toThrow('dispose johnny broke');
-    expect(items.current).toBeNull();
-    expect(door.selected()).toBe('johnny');
-    expect(log.at(-1)).toBe('dispose johnny (door: johnny)');
+    const world = items.pick('blank');
+    expect(items.current).toBe(world);
+    expect(door.selected()).toBe('blank');
+    expect(log).toEqual(['select johnny', 'build johnny', 'dispose johnny (door: johnny)', 'select blank', 'build blank']);
+    expect((reported as Error[]).map((error) => error.message)).toEqual(['dispose johnny broke']);
     expect(holds()).toBe(true);
   });
 

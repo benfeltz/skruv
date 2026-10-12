@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOOKLET_UI, CATALOG, GESTURE } from '../src/constants.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
 import { createCatalogSheet } from '../src/ui/catalogSheet.js';
+import { BuildFailed } from '../src/game/itemSlot.js';
 import type { CatalogPage } from '../src/game/catalogModel.js';
 
 // The real booklet sheet (src/ui/booklet.ts), driven headlessly on a minimal fake DOM:
@@ -555,7 +556,7 @@ describe('boot with the catalog up (1.9.1)', () => {
       open: true,
       canClose: () => picks.length > 0,
       onPick: (id) => {
-        if (fail) throw new Error('build broke');
+        if (fail) throw new BuildFailed(id, new Error('build broke'));
         picks.push(id);
         catalog.setOpen(false);
       },
@@ -581,6 +582,26 @@ describe('boot with the catalog up (1.9.1)', () => {
     buildIt.fire('click');
     expect(picks).toEqual(['blank']);
     expect(catalog.expanded).toBe(false);
+  });
+
+  it('an error that is not a failed build is logged, never put to the player as one', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const catalog = createCatalogSheet({
+      pages: { count: catalogPages.length, pages: catalogPages, canvas: () => ({}) as CanvasImageSource },
+      open: true,
+      onPick: () => {
+        // Built fine; something after it (putting the catalog down, focus) threw.
+        throw new Error('focus broke');
+      },
+    }) as unknown as FakeBooklet;
+    mounted.push(catalog);
+    const [, view, controls, notice] = catalog.element.children;
+    const [, buildIt] = view.children[0].children;
+    controls.children[2].fire('click');
+    controls.children[2].fire('click');
+    buildIt.fire('click');
+    expect(notice.hidden).toBe(true);
+    expect(errors).toHaveBeenCalledOnce();
   });
 });
 
