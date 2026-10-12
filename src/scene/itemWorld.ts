@@ -413,7 +413,8 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
 // Frees what an object holds on the GPU. Shared materials are safe to free: three re-uploads
 // a disposed one the next time something draws with it.
 function release(object: THREE.Object3D) {
-  if (!(object instanceof THREE.Mesh || object instanceof THREE.LineSegments)) return;
+  // Line covers LineSegments and the drop guide's plain Line; Mesh covers the fat LineSegments2.
+  if (!(object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Points)) return;
   object.geometry.dispose();
   for (const material of [object.material].flat()) material.dispose();
 }

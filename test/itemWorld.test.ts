@@ -187,6 +187,25 @@ describe('the item world comes and goes without a trace', () => {
     }
   });
 
+  it("frees every geometry and material it put in the scene — meshes, lines and the drop guide's plain Line alike", async () => {
+    const { deps } = await engine();
+    const before = new Set(deps.scene.children);
+    const world = createItemWorld(deps);
+    const held = new Set<{ dispose(): void }>();
+    for (const root of deps.scene.children.filter((child) => !before.has(child)))
+      root.traverse((object) => {
+        if (!('geometry' in object) || !(object.geometry instanceof THREE.BufferGeometry)) return;
+        held.add(object.geometry);
+        if ('material' in object) for (const material of [object.material].flat() as THREE.Material[]) held.add(material);
+      });
+    expect(held.size).toBeGreaterThan(0);
+    const freed = new Set<unknown>();
+    for (const resource of held) vi.spyOn(resource, 'dispose').mockImplementation(() => freed.add(resource));
+    world.dispose();
+    expect([...held].filter((resource) => !freed.has(resource))).toEqual([]);
+    vi.restoreAllMocks();
+  });
+
   it('steps the physics world cleanly once a world is gone', async () => {
     const { deps, physics } = await engine();
     const world = createItemWorld(deps);
