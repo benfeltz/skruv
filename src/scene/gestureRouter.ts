@@ -1439,28 +1439,33 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   function crankTo(event: ClientPoint) {
-    const { target } = drag!.engagement;
-    const head = headOf(drag!.engagement);
+    const { engagement } = drag!;
+    const { target } = engagement;
+    const head = headOf(engagement);
     const delta = drag!.crank.move(screenPoint(head), [event.clientX, event.clientY]);
     if (!delta) return;
     const into = connectorWorld(target.hardware, target.hardwareConnector).axis;
     const view = scratch.fromArray(head).sub(camera.position).toArray();
-    turnFastener(target, tightenSign(into, view) * delta);
+    const radians = tightenSign(into, view) * delta;
+    // A part set onto several studs turns them all; a tool turns its one.
+    const joints = engagement.tool ? [target] : assembly.handTargets(target.mover);
+    joints.forEach((joint, i) => turnFastener(joint, radians, i === 0));
   }
 
   // A bolt or cam seat turned by `radians` (positive tightens) — cranked or driven — and
   // whatever that changed reported and reconciled; the ratchet clicks it crossed come first,
   // so the last click lands before the fastener reports home — by a FASTEN event, or, for one
   // only backed off partway, by onRehome.
-  function turnFastener(target: AssemblyJoint, radians: number) {
+  function turnFastener(target: AssemblyJoint, radians: number, ratchet = true) {
     const before = assembly.get(target.id)!.fastener;
     if (!assembly.apply(target.id, { type: 'crank', radians }, crankContext(target))) return;
     const after = assembly.get(target.id)!.fastener;
     const span = spanOf(target);
     const clicks = ratchetTicks(before.progress * span, after.progress * span, FASTENER.ratchetRadians);
-    if (clicks > 0) onRatchet?.(clicks);
+    // Joints turned together click and buzz once, on the first.
+    if (ratchet && clicks > 0) onRatchet?.(clicks);
     reportFastening(target.id, isFastened(before));
-    if (isFastened(before) && !isHome(before) && isHome(after)) onRehome?.(target.kind);
+    if (ratchet && isFastened(before) && !isHome(before) && isHome(after)) onRehome?.(target.kind);
     reconcile();
   }
 
@@ -1483,16 +1488,22 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     press.ms += delta * 1000;
     if (press.ms <= GESTURE.tapMaxMs) return;
     press.held = true;
-    const target = turnTarget(press.tool);
+    const joints = turnJoints(press.tool);
+    const [target] = joints;
     // Fully turned: home, or a cam turned onto nothing. A screwed bolt backed off partway still drives.
     if (!target || target.fastener.progress >= 1) return;
-    turnFastener(target, driveRadians(spanOf(target), FASTENER.driveSeconds, delta));
+    joints.forEach((joint, i) => turnFastener(joint, driveRadians(spanOf(joint), FASTENER.driveSeconds, delta), i === 0));
   }
 
   // --- turn ring: a dial round each fastener a seated tool is on ---
 
-  // What a press on `part` turns: the fastener its seated tool is on, or the stud it was set onto.
-  const turnTarget = (part: Part) => assembly.crankTarget(part.id)?.target ?? assembly.handTarget(part.id);
+  // What a press on `part` turns: the fastener its seated tool is on, or the stud (or studs,
+  // for a part set onto several at once) it was set onto, all driven together.
+  const turnJoints = (part: Part) => {
+    const target = assembly.crankTarget(part.id)?.target;
+    return target ? [target] : assembly.handTargets(part.id);
+  };
+  const turnTarget = (part: Part) => turnJoints(part)[0] ?? null;
 
   // Every dial's engagement: each seated tool with its far end, then the hand-turned parts.
   const engagements = () => dialEngagements(assembly.all(), (tool) => assembly.crankTarget(tool.hardware)?.target ?? null);
@@ -1574,8 +1585,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (engagement) return unseat(engagement.tool);
     // A part set onto its stud and not yet turned lifts off on a tap; once turned it only
     // comes off by backing out.
-    const hand = assembly.handTarget(part.id);
-    if (hand) return hand.fastener.progress === 0 ? unseat(hand) : undefined;
+    const hand = assembly.handTargets(part.id);
+    if (hand.length > 0) {
+      if (hand.every((joint) => joint.fastener.progress === 0)) hand.forEach(unseat);
+      return;
+    }
     const pressed = [...assembly.tap(part.id, behindFitting), ...pressCarried(part)];
     for (const id of pressed) reportFastening(id, false);
     if (pressed.length > 0) return reconcile();

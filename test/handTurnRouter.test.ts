@@ -132,6 +132,59 @@ describe('the leg turns on screen', () => {
   });
 });
 
+// Four legs standing on the floor, a stud driven into each, and the top dropped onto them
+// (review: a part set onto several studs carries several hand joints).
+function tableBench({ top: topAt = 0.445 } = {}) {
+  const spots: [number, number][] = [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]];
+  const legs = spots.map(([x, z], i) => makePart(`leg-${i + 1}`, 'leg', [x, 0.2, z]));
+  // Each stud sunk home in its leg's top face: centred on the leg's mouth, a sink down.
+  const studs = spots.map(([x, z], i) => makePart(`doubleEndedStud-${i + 1}`, 'doubleEndedStud', [x, 0.4, z]));
+  const top = makePart('top-1', 'top', [0, topAt, 0]);
+  const m = mount([...legs, ...studs, top], [0, 1.4, 0.9]);
+  for (let i = 0; i < 4; i++) {
+    const inLeg = m.assembly.seat({ partA: `doubleEndedStud-${i + 1}`, connectorA: 1, partB: `leg-${i + 1}`, connectorB: 0, mover: `doubleEndedStud-${i + 1}` });
+    m.assembly.drive(inLeg.id);
+  }
+  const onTop = [0, 1, 2, 3].map((i) => m.assembly.seat({ partA: `doubleEndedStud-${i + 1}`, connectorA: 0, partB: 'top-1', connectorB: i, mover: 'top-1' }));
+  const progresses = () => onTop.map((j) => m.assembly.get(j.id)!.fastener.progress);
+  const hole = connectorInWorld(PART_TYPES.top.connectors[0], { position: [0, topAt, 0], rotation: [0, 0, 0, 1] }).position;
+  return { ...m, top, onTop, progresses, hole };
+}
+
+describe('a top set onto four studs', () => {
+  it('turns every stud together from one circle, with one dial and one set of ratchet clicks', () => {
+    const b = tableBench();
+    expect(b.assembly.handTargets('top-1')).toHaveLength(4);
+    b.hold(1);
+    expect(b.dials.at(-1)).toHaveLength(1);
+    // Counter-clockwise tightens: the studs point up into the top, seen from above.
+    b.circle(b.screen(b.top.mesh.position), b.hole, -120, 0, TURN_RING.radius);
+    const [first, ...rest] = b.progresses();
+    expect(first).toBeGreaterThan(0);
+    for (const p of rest) expect(p).toBeCloseTo(first, 9);
+    // Clicks are the one joint's, not four times over.
+    const single = b.ratchet.reduce((sum, n) => sum + n, 0);
+    expect(single).toBe(Math.floor((first * FASTENER.studRadians) / FASTENER.ratchetRadians + 1e-9));
+  });
+
+  it('drives them all home on a still press, then lets none back out', () => {
+    const b = tableBench();
+    const at = b.screen(b.top.mesh.position);
+    b.canvas.fire('pointerdown', at);
+    b.hold(TAP_FRAMES + DRIVE_FRAMES);
+    expect(b.progresses()).toEqual([1, 1, 1, 1]);
+    expect(b.fastens()).toHaveLength(4);
+    b.canvas.fire('pointerup', at);
+  });
+
+  it('lifts the top off all four on a tap at zero', () => {
+    const b = tableBench();
+    b.tap(b.screen(b.top.mesh.position));
+    expect(b.assembly.handTargets('top-1')).toEqual([]);
+    expect(b.assembly.all().filter((j) => j.host === 'top-1')).toEqual([]);
+  });
+});
+
 describe('JOHNNY has no hand-turned part', () => {
   it('never gives a part a hand target: bolts are turned by their wrench, panel dragged on or not', () => {
     setItem('johnny');

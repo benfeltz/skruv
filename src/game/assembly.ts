@@ -388,6 +388,12 @@ export function createAssembly(typeOf: (part: PartId) => string) {
    */
   const handTarget = (part: PartId) => all().find((j) => isHandTurned(j) && j.mover === part) ?? null;
 
+  /**
+   * Every stud joint `part` is turned through by hand, in seating order: a top dropped onto
+   * four standing studs carries four, and circling it screws them all together.
+   */
+  const handTargets = (part: PartId) => all().filter((j) => isHandTurned(j) && j.mover === part);
+
   /** Screwed bolts — the only heads a cam can catch. */
   const screwedBolts = () => all().filter((j) => j.kind === KIND.BOLT && isFastened(j.fastener));
 
@@ -539,6 +545,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     canRelease,
     crankTarget,
     handTarget,
+    handTargets,
     screwedBolts,
     compoundOf,
     bonds,

@@ -111,6 +111,14 @@ describe('dialEngagements: a part turned by hand (1.9.2)', () => {
     expect(assembly.get(inLeg.id)!.host).toBe('leg');
   });
 
+  it('gives a top set onto several studs one dial, on its first joint', () => {
+    const types: Record<string, string> = { top: 'top', 'stud-1': 'doubleEndedStud', 'stud-2': 'doubleEndedStud' };
+    const assembly = createAssembly((id) => types[id]);
+    const first = assembly.seat({ partA: 'stud-1', connectorA: 0, partB: 'top', connectorB: 0, mover: 'top' });
+    assembly.seat({ partA: 'stud-2', connectorA: 0, partB: 'top', connectorB: 1, mover: 'top' });
+    expect(dialEngagements(assembly.all(), () => null)).toEqual([{ tool: null, target: first }]);
+  });
+
   it('drops the dial once the leg is home', () => {
     const { assembly, inLeg } = bench();
     assembly.drive(inLeg.id);

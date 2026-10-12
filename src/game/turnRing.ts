@@ -45,7 +45,8 @@ export const tightensClockwise = (intoHole: number[], viewDirection: number[]) =
  * The seated tools that get a dial: each tool joint whose host has a bolt, stud or cam seat,
  * as `crankTarget` pairs them — for as long as the tool is seated, home or not, so a tool put
  * on a fastener already partly or fully in shows where it stands. Then every hand-turned
- * part not yet home (a leg on its stud), each with a dial of its own, tool null: home, it
+ * part not yet home (a leg on its stud), one dial each, tool null — a part set onto several
+ * studs at once (a top on four) turns them together and shows one, on its first: home, it
  * has nothing left to show.
  */
 export function dialEngagements(
@@ -59,7 +60,13 @@ export function dialEngagements(
     return target ? [{ tool, target }] : [];
   });
   const driven = new Set(tooled.map(({ target }) => target));
-  const byHand = joints.filter((j) => isHandTurned(j) && !driven.has(j) && !isHome(j.fastener)).map((target) => ({ tool: null, target }));
+  const byHand: Engagement[] = [];
+  const turned = new Set<string>();
+  for (const target of joints) {
+    if (!isHandTurned(target) || driven.has(target) || isHome(target.fastener) || turned.has(target.mover)) continue;
+    turned.add(target.mover);
+    byHand.push({ tool: null, target });
+  }
   return [...tooled, ...byHand];
 }
 
