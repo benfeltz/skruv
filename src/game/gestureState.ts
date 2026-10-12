@@ -36,7 +36,7 @@ export type GestureEffect<H extends GestureHit = GestureHit> =
   | { type: 'dragEnd'; owner: Owner | null; hit: H | null; x: number; y: number }
   | { type: 'dragCancel'; owner: Owner | null; hit: H | null }
   | { type: 'tap'; hit: H | null; x: number; y: number }
-  | { type: 'lift'; owner: Owner | null; hit: H | null; dy: number; x?: number; y?: number };
+  | { type: 'lift'; owner: Owner | null; hit: H | null; dy: number };
 
 // The pointer that started the gesture.
 interface Primary<H> {
@@ -46,8 +46,6 @@ interface Primary<H> {
   startY: number;
   startT: number;
   dragging: boolean;
-  lastY: number;
-  spentY: number;
   canTap: boolean;
 }
 
@@ -79,19 +77,14 @@ export function resolveHit<R extends { distance: number }, P extends { distance:
  *   { type: 'dragCancel', owner, hit }        pointercancel / interrupted mid-drag
  *   { type: 'tap', hit, x, y }                hit is null for an empty-space tap
  *   { type: 'lift', owner, hit, dy }          raise (+) / lower (−) the dragged part, CSS px
- *   { type: 'lift', owner, hit, dy, x, y }    the same from the primary pointer under the
- *                                             modifier; x, y is where it drags to now
  *
  * A second finger during a part gesture is the lift channel: its vertical travel (up is
  * positive) raises the held part, and lifting it ends the lift while the drag carries on.
- * `wheel` is the desktop stand-in. The camera never sees the lift finger.
- *
- * `modifier(held)` is the desktop's other lift: the router feeds it whether Shift is down
- * (this module never reads keys). While held during a part drag, the primary pointer's
- * vertical travel lifts instead of moving the part across the floor, and its horizontal
- * travel still drags. The travel spent on lifting stays spent: dragMove/lift effects
- * report y less that travel, so letting go of Shift resumes the plane drag mid-gesture
- * without the part jumping.
+ * `wheel` is the desktop stand-in. The camera never sees the lift finger. The primary
+ * pointer only ever drags: its whole travel, both ways, moves the part across its plane.
+ * (Shift is the desktop's hold, not a lift: src/main.ts keeps the part up while it is
+ * down, the drag goes on across the floor as any drag, and src/scene/gestureRouter.ts
+ * turns Shift + scroll into height through the hold.)
  *
  * `cameraEnabled` is false only while a part or ring gesture is live; the router mirrors
  * it onto the camera after every event, so every end path hands the camera back.
@@ -102,8 +95,6 @@ export function createGestureState<H extends GestureHit = GestureHit>(thresholds
   let owner: Owner | null = null;
   let primary: Primary<H> | null = null; // { id, hit, startX, startY, startT, dragging }
   let lift: { id: number; y: number } | null = null; // { id, y } — the second finger of a part gesture
-  // Keyboard state, not pointer state: it outlives every gesture until the router clears it.
-  let modifierHeld = false;
   const cameraPointers = new Set<number>();
   let cameraMulti = false;
 
@@ -130,9 +121,6 @@ export function createGestureState<H extends GestureHit = GestureHit>(thresholds
         startY: y,
         startT: t,
         dragging: false,
-        lastY: y,
-        // Vertical travel spent lifting under the modifier (CSS px).
-        spentY: 0,
         // A right/middle click is never a tap — it must not deselect.
         canTap: button === 0,
       };
@@ -168,17 +156,9 @@ export function createGestureState<H extends GestureHit = GestureHit>(thresholds
     if (!primary.dragging) {
       if (!movedTooFar(primary, x, y)) return null;
       primary.dragging = true;
-      primary.lastY = y;
       return { type: 'dragStart', owner, hit: primary.hit, x, y };
     }
-    const dy = y - primary.lastY;
-    primary.lastY = y;
-    if (modifierHeld && owner === OWNER.DRAG_PART && dy !== 0) {
-      primary.spentY += dy;
-      // Dragging, and dy is non-zero: there is a lift.
-      return { ...liftEffect(-dy)!, x, y: y - primary.spentY };
-    }
-    return { type: 'dragMove', owner, hit: primary.hit, x, y: y - primary.spentY };
+    return { type: 'dragMove', owner, hit: primary.hit, x, y };
   }
 
   function up(event: PointerRecord<H>): GestureEffect<H> | null {
@@ -194,7 +174,7 @@ export function createGestureState<H extends GestureHit = GestureHit>(thresholds
       return null;
     }
     if (!primary || id !== primary.id) return null;
-    const ended = { owner, hit: primary.hit, x, y: y - primary.spentY };
+    const ended = { owner, hit: primary.hit, x, y };
     const tapped = !primary.dragging && isTap(primary, event);
     const wasDragging = primary.dragging;
     reset();
@@ -223,11 +203,6 @@ export function createGestureState<H extends GestureHit = GestureHit>(thresholds
     return owner === OWNER.DRAG_PART ? liftEffect(-dy) : null;
   }
 
-  /** Desktop lift modifier (Shift): whether it is held, fed by the router. */
-  function modifier(held: boolean) {
-    modifierHeld = held;
-  }
-
   /** Abandon whatever is live (page hidden, focus lost). */
   function cancelAll(): GestureEffect<H> | null {
     const effect: GestureEffect<H> | null =
@@ -245,7 +220,6 @@ export function createGestureState<H extends GestureHit = GestureHit>(thresholds
     cancel,
     cancelAll,
     wheel,
-    modifier,
     get owner() {
       return owner;
     },

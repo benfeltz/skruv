@@ -129,7 +129,8 @@ scene.add(gizmo.object);
 // The booklet: pages drawn from the same models, flipped freely — reference, never a gate.
 // The game opens with it in hand, on its cover; while it is open, a tap outside the sheet
 // puts it down and does nothing else.
-const bookletPages = createBookletPages(renderer);
+// Its controls page shows the device in hand: a coarse pointer is a touch screen.
+const bookletPages = createBookletPages(renderer, { scheme: matchMedia('(pointer: coarse)').matches ? 'touch' : 'desktop' });
 const booklet = createBookletSheet({ pages: bookletPages });
 document.body.append(booklet.scrim, booklet.thumb, booklet.element);
 // The real sheet now covers index.html's stand-in; it goes in the frame that first paints it.
@@ -289,8 +290,9 @@ const liftLine = createLiftLine({
 document.body.append(liftLine.element);
 
 // Shift is the desktop's finger on the line: while it is down, the part the line would lift
-// stays where it is — the pointer free to turn it, drag it (a Shift-drag still lifts) or
-// orbit — and letting go drops it. Window-level, so it counts wherever focus sits.
+// stays where it is — the pointer free to turn it, drag it (across the floor, as any drag)
+// or orbit, and Shift + scroll sets its height (src/scene/gestureRouter.ts) — and letting
+// go drops it. Window-level, so it counts wherever focus sits.
 let shiftDown = false;
 function onShift(event: KeyboardEvent) {
   if (event.key !== 'Shift') return;

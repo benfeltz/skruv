@@ -28,6 +28,9 @@ export const COLORS = {
   partWrench: 0x2f3136,
   partScrewdriver: 0xd9a21b,
   partFitting: 0x5d5853,
+  // Second tones on a shaped piece (src/game/partShapes.ts): bare metal (the screwdriver's
+  // blade and shaft) reuses partMetal; a recess, like the slot across a cam lock, is dark.
+  partRecess: 0x2b2826,
   cardboard: 0xb48a5a,
   // Rotate gizmo rings, one per world axis, x/y/z in the usual red/green/blue.
   gizmoX: 0xe5534b,
@@ -87,6 +90,19 @@ export const BOOKLET = {
   numeralSize: 150,
   bubbleRadius: 64,
   font: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+  // The controls page (src/game/controlsPage.ts): a title, then rows in columns — each a
+  // square pictogram, drawn on a 100-unit grid at `pictogramLine`, and its label beside it,
+  // wrapped onto as many lines as it needs.
+  controls: {
+    titleSize: 44,
+    titleGap: 28,
+    columns: 2,
+    pictogram: 96,
+    pictogramLine: 4,
+    labelGap: 16,
+    labelSize: 27,
+    labelLeading: 1.2,
+  },
 };
 
 // The booklet in hand (src/ui/booklet.ts): CSS pixels.
@@ -246,7 +262,7 @@ export const GESTURE = {
   detentStep: Math.PI / 2,
   // Lift channel (second finger on a phone): metres per CSS px of travel.
   liftRate: 0.004,
-  // Desktop lift (Shift-held drag, or the wheel): gentler, since trackpad scrolls and mouse
+  // Desktop lift (the wheel mid-drag, or Shift + scroll): gentler, since trackpad scrolls and mouse
   // sweeps run to hundreds of px where a phone's second finger travels tens.
   desktopLiftRate: 0.0025,
   // A lifted part's top stays this far below the walls' tops.
@@ -448,6 +464,40 @@ export const DECAL = {
   // Laid this far proud of the face, so it never z-fights the panel.
   surfaceOffset: 0.0004,
   segments: 24,
+};
+
+// Hardware and tool shapes (src/game/partShapes.ts): visual only, each drawn inside its
+// pack box. Radii are fractions of the box's half-width across the piece's axis; lengths
+// are fractions of its length along it, measured from the end that goes in first.
+export const MODELS = {
+  // Round faces: low, because these are a few millimetres on screen.
+  segments: 12,
+  // The Allen key's hexagonal rod.
+  hexSides: 6,
+  // The key's rod, as a fraction of half the box's thickness: under 1 keeps the short
+  // leg's axis close to the tip connector on the box's edge.
+  wrenchRod: 0.75,
+  // Screwdriver: the handle's share of the length, the shaft's radius, and the flat blade
+  // at the tip (its length; its thickness as a fraction of the shaft's diameter).
+  screwdriverHandle: 0.45,
+  screwdriverShaft: 0.2,
+  screwdriverBlade: 0.05,
+  screwdriverBladeThickness: 0.35,
+  // Cam bolt: the thread's radius, and the head's share of the length.
+  boltShaft: 0.55,
+  boltHead: 0.14,
+  // Cam lock: the slot's depth (share of the height), and its width and length across the
+  // top face (shares of the disc's diameter).
+  camSlotDepth: 0.1,
+  camSlotWidth: 0.16,
+  camSlotLength: 0.8,
+  // Shelf pin: the rod's radius, and its collar (where it starts, how thick).
+  pinRod: 0.6,
+  pinCollarAt: 0.5,
+  pinCollar: 0.12,
+  // Back fitting: the plug's radius, and the head's share of the length.
+  fittingShaft: 0.5,
+  fittingHead: 0.25,
 };
 
 // Fasteners (src/game/fasteners.ts, src/game/assembly.ts) and the joints that follow them

@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, BOOKLET_UI, COLORS } from '../src/constants.js';
-import { IDENTITY, MANUAL } from '../src/game/item.js';
+import { createBooklet, gamePagesFor } from '../src/game/bookletModel.js';
+import { ASSEMBLED, IDENTITY, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../src/game/item.js';
 
 // 1.6.1: index.html's pre-splash is plain CSS, so it can't import the constants the real
 // booklet sheet is built from — these checks keep the two from drifting, or the handoff
@@ -36,8 +37,17 @@ describe('pre-splash (1.6.1)', () => {
     expect(html).toMatch(new RegExp(`>${IDENTITY.maker}</text>`));
   });
 
-  it("counts the booklet's real pages", () => {
-    expect(html).toContain(`<span class="pre-splash-count">1 / ${MANUAL.pages.length}</span>`);
+  // The booklet as the sheet counts it: the pack's pages and the game's own (the controls
+  // page, 1.8.3.3), the same for either scheme.
+  it.each(['touch', 'desktop'] as const)("counts the booklet's real pages (%s)", (scheme) => {
+    const count = createBooklet(MANUAL.pages, {
+      layout: ASSEMBLED,
+      manifest: MANIFEST,
+      partTypes: PART_TYPES,
+      resolve: resolveConnector,
+      gamePages: gamePagesFor(scheme),
+    }).length;
+    expect(html).toContain(`<span class="pre-splash-count">1 / ${count}</span>`);
   });
 
   it("is removed in the frame that first paints the real sheet, once that sheet is mounted", () => {

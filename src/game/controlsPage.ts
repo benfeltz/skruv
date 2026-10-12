@@ -1,0 +1,77 @@
+// The booklet's controls page: what the hands do, as rows of a pictogram and a short label,
+// one scheme per kind of device. Pure data — src/scene/bookletPages.ts draws it, and the
+// wiring (src/main.ts) picks the scheme from the pointer: `(pointer: coarse)` is touch.
+//
+// Read off the gestures the code has (1.8.3.3):
+//   camera   one finger on empty space orbits, two pinch and pan (src/scene/cameraControls.ts);
+//            on a desktop a left drag orbits, a right drag pans, scroll zooms
+//   parts    a tap selects a part and puts turn rings round it; a drag moves it; carried
+//            hardware let go over a hole it takes seats there; a tap pushes home what is
+//            seated in the tapped part; a drag out of a seat pulls it free
+//            (src/scene/gestureRouter.ts)
+//   height   the lift line, or a second finger mid-drag (touch); Shift holds the part up and
+//            Shift + scroll sets its height (desktop: src/main.ts, the router's wheel)
+//   tools    on a fastener, circle the tool (or its turn ring) to turn it, or hold it still
+//            to drive it home
+//   booklet  swipe to flip (touch); the arrows or arrow keys (desktop) — src/ui/booklet.ts
+//   repack   a first tap arms the button, a second repacks (src/ui/resetButton.ts)
+
+/** The device a controls page is for. */
+export type Scheme = 'touch' | 'desktop';
+
+/** A pictogram on the controls page; how each is drawn is src/scene/bookletPages.ts's. */
+export type PictogramId =
+  | 'orbit'
+  | 'zoomPan'
+  | 'pan'
+  | 'zoom'
+  | 'select'
+  | 'move'
+  | 'lift'
+  | 'hold'
+  | 'height'
+  | 'seat'
+  | 'pushHome'
+  | 'turnTool'
+  | 'pullApart'
+  | 'flip'
+  | 'repack';
+
+/** One row: what to do, drawn, and what it does, in a few words. */
+export interface ControlRow {
+  pictogram: PictogramId;
+  label: string;
+}
+
+// The gestures both schemes share, after the camera's and the height's: a press is a tap
+// or a click, and the booklet is swiped or flipped.
+const SHARED_ROWS = (press: 'tap' | 'click', flip: string): ControlRow[] => [
+  { pictogram: 'seat', label: 'Drop to seat' },
+  { pictogram: 'pushHome', label: 'Push home' },
+  { pictogram: 'turnTool', label: 'Circle or hold' },
+  { pictogram: 'pullApart', label: 'Pull apart' },
+  { pictogram: 'flip', label: flip },
+  { pictogram: 'repack', label: `Repack: ${press} twice` },
+];
+
+/** Each scheme's rows, top to bottom. */
+export const CONTROLS: Readonly<Record<Scheme, readonly ControlRow[]>> = Object.freeze({
+  touch: Object.freeze<ControlRow[]>([
+    { pictogram: 'orbit', label: 'Turn view' },
+    { pictogram: 'zoomPan', label: 'Zoom and pan' },
+    { pictogram: 'select', label: 'Tap to turn' },
+    { pictogram: 'move', label: 'Drag to move' },
+    { pictogram: 'lift', label: 'Lift' },
+    ...SHARED_ROWS('tap', 'Swipe pages'),
+  ]),
+  desktop: Object.freeze<ControlRow[]>([
+    { pictogram: 'orbit', label: 'Turn view' },
+    { pictogram: 'pan', label: 'Pan' },
+    { pictogram: 'zoom', label: 'Zoom' },
+    { pictogram: 'select', label: 'Click to turn' },
+    { pictogram: 'move', label: 'Drag to move' },
+    { pictogram: 'hold', label: 'Hold up' },
+    { pictogram: 'height', label: 'Set height' },
+    ...SHARED_ROWS('click', 'Flip pages'),
+  ]),
+});

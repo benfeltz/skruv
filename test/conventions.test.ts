@@ -129,14 +129,14 @@ describe('seat assist and flash (1.4.1)', () => {
   });
 });
 
-describe('Shift-lift never skews a crank or a pull (1.4.1 review)', () => {
+describe('a lift never cranks or pulls (1.4.1 review; 1.8.3.3)', () => {
   const router = read('src/scene/gestureRouter.ts');
   const moveDrag = router.slice(router.indexOf('function moveDrag('), router.indexOf('function apply('));
 
-  it('cranks and pulls on the real pointer, not the lift-adjusted one', () => {
+  it('cranks and pulls on the real pointer, and a lift does neither', () => {
     expect(moveDrag).toMatch(/crankTo\(event\)/);
-    expect(moveDrag).toMatch(/pullTo\(event, at\)/);
-    expect(moveDrag).not.toMatch(/crankTo\(at\)|pullTo\(at\)/);
+    expect(moveDrag).toMatch(/pullTo\(event\)/);
+    expect(moveDrag).toMatch(/if \(effect\.type === 'lift'\) return;/);
   });
 });
 
