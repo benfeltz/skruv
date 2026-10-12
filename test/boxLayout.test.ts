@@ -216,3 +216,12 @@ describe('the layout follows the box wherever it is dragged (1.7.1)', () => {
     expect(respawnSpots(types, inCorner)).toEqual(respawnSpots(types));
   });
 });
+
+describe('packedBox, built once per item (1.9.1 review)', () => {
+  it('serves the same frozen box until the door serves another pack', () => {
+    const box = packedBox();
+    expect(packedBox()).toBe(box);
+    expect(Object.isFrozen(box)).toBe(true);
+    expect(box.inner).toBe(PACKING.boxInner);
+  });
+});

@@ -40,19 +40,28 @@ export interface PackedPart extends Pose {
 /** The box as packed and placed — `packedBox()`'s shape. */
 export type PackedBox = ReturnType<typeof packedBox>;
 
+function boxOf(packing: typeof PACKING) {
+  return Object.freeze({
+    ...BOX,
+    inner: packing.boxInner,
+    wall: packing.wall,
+    floor: packing.floor,
+    lidThickness: packing.lid.thickness,
+  });
+}
+
+// Built once per item: rebuilt only when the door serves another pack (BOX is not a live knob).
+let packed: { packing: typeof PACKING; box: ReturnType<typeof boxOf> } | null = null;
+
 /**
  * The current item's box as packed and placed: the pack's inside, walls and lid (`inner`,
  * `wall`, `floor`, `lidThickness`), stood where the room puts it (`position`, `yaw`). Read
- * at call time, so it follows an item swap (src/game/item.ts).
+ * at call time, so it follows an item swap (src/game/item.ts); the same frozen object until
+ * then, so the sweep, repack and respawn don't build one per call.
  */
 export function packedBox() {
-  return {
-    ...BOX,
-    inner: PACKING.boxInner,
-    wall: PACKING.wall,
-    floor: PACKING.floor,
-    lidThickness: PACKING.lid.thickness,
-  };
+  if (packed?.packing !== PACKING) packed = { packing: PACKING, box: boxOf(PACKING) };
+  return packed.box;
 }
 
 const QUARTER_TURN = Math.SQRT1_2;
