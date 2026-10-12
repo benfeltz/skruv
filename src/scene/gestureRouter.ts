@@ -349,10 +349,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // A press on a turn ring's band: nearer than anything under it, but never over a seated
   // tool — its own or a neighbour's (JOHNNY's cam ring all but covers the bolt's): a press on
-  // a tool is that tool's, so a tap there still takes it off and a hold drives its fastener.
-  // Where bands overlap, the fastener still to go home takes it (pickDial).
+  // a tool is that tool's, so a tap there still takes it off and a hold drives its fastener —
+  // and likewise a part turned by hand (a leg on its stud): a press on it is its own circle,
+  // whichever neighbour's ring it lies in. Where bands overlap, the fastener still to go home takes it (pickDial).
   function dialUnder({ clientX, clientY }: ClientPoint, picked: Part | null): PartPress | null {
-    if (picked && assembly.crankTarget(picked.id)) return null;
+    if (picked && turnTarget(picked)) return null;
     const rect = domElement.getBoundingClientRect();
     const dials = engagements().map((engagement) => {
       const head = headOf(engagement);

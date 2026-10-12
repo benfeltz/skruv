@@ -185,6 +185,38 @@ describe('a top set onto four studs', () => {
   });
 });
 
+describe("a press on a leg lying in a neighbour's ring (review)", () => {
+  // Two legs set onto their studs in the top's first two holes, the camera far enough off
+  // that one leg's centre falls inside the other's grab band.
+  function pair(cameraAt: Vec3) {
+    const top = makePart('top-1', 'top', TOP_POSE.position, TOP_POSE.rotation);
+    const spots = [0, 1].map((i) => connectorInWorld(PART_TYPES.top.connectors[i], TOP_POSE).position);
+    const studs = spots.map((at, i) => makePart(`doubleEndedStud-${i + 1}`, 'doubleEndedStud', [at[0], at[1] + STUD_HALF - SINK, at[2]], FLIPPED));
+    const legs = spots.map((at, i) => makePart(`leg-${i + 1}`, 'leg', [at[0], at[1] + 2 * STUD_HALF - SINK + LEG_HALF, at[2]], FLIPPED));
+    const m = mount([top, ...studs, ...legs], cameraAt);
+    for (let i = 0; i < 2; i++) {
+      const inTop = m.assembly.seat({ partA: `doubleEndedStud-${i + 1}`, connectorA: 0, partB: 'top-1', connectorB: i, mover: `doubleEndedStud-${i + 1}` });
+      m.assembly.drive(inTop.id);
+      m.assembly.seat({ partA: `doubleEndedStud-${i + 1}`, connectorA: 1, partB: `leg-${i + 1}`, connectorB: 0, mover: `leg-${i + 1}` });
+    }
+    return { ...m, legs, studs, spots };
+  }
+
+  it("is that leg's own circle, not the neighbour dial's", () => {
+    const b = pair([0, 7, 5]);
+    // Precondition: leg 2's middle really is in leg 1's ring band — the case the finding names.
+    const head = b.screen([b.spots[0][0], b.spots[0][1] + 2 * STUD_HALF - SINK, b.spots[0][2]]);
+    const press = b.screen(b.legs[1].mesh.position);
+    const gap = Math.hypot(press.clientX - head.clientX, press.clientY - head.clientY);
+    expect(Math.abs(gap - TURN_RING.radius)).toBeLessThanOrEqual(TURN_RING.band);
+    b.canvas.fire('pointerdown', press);
+    b.canvas.fire('pointermove', { clientX: press.clientX + 30, clientY: press.clientY + 30 });
+    expect(b.router.dragging).toMatchObject({ mode: 'crank' });
+    expect(b.router.dragging!.part.id).toBe('leg-2');
+    b.canvas.fire('pointerup', press);
+  });
+});
+
 describe('JOHNNY has no hand-turned part', () => {
   it('never gives a part a hand target: bolts are turned by their wrench, panel dragged on or not', () => {
     setItem('johnny');
