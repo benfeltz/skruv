@@ -190,6 +190,24 @@ describe('a leg carried onto the top with its stud in it (review)', () => {
   });
 });
 
+describe('a carried leg lifted off by a tap (review)', () => {
+  // Held at the top's mouth while it was circled; lifted off, the leg and its stud are the
+  // simulation's again — not left kinematic in mid-air.
+  it('hands the leg and its stud back to the simulation', () => {
+    const b = carriedBench();
+    // A little turn and back to nothing: the router has taken the leg up and holds it.
+    const from = b.screen(b.leg.mesh.position);
+    b.circle(from, MOUTH, 40, 0, TURN_RING.radius);
+    b.circle(b.screen(b.leg.mesh.position), MOUTH, -90, 0, TURN_RING.radius);
+    expect(b.progress()).toBe(0);
+    expect(b.grabbed).toContain(b.leg.body);
+    b.released.length = 0;
+    b.tap(b.screen(b.leg.mesh.position));
+    expect(b.assembly.get(b.inTop.id)).toBeNull();
+    expect(b.released).toContain(b.leg.body);
+  });
+});
+
 describe('a leg backed out to nothing (review)', () => {
   // Screwed home it is bonded, not held; backed out to zero the bond goes — and the leg is
   // held back at its stud's mouth, as a bolt backed out is, not left a free body to fall.

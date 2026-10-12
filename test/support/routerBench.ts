@@ -73,6 +73,8 @@ export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8]) {
 
   // Every body the router held kinematic, in order — what a part re-held at its seat shows up as.
   const grabbed: Body[] = [];
+  // And every body it handed back to the simulation.
+  const released: Body[] = [];
   const physics: GestureRouterOptions['physics'] = {
     grab: (body: Body) => {
       grabbed.push(body);
@@ -86,7 +88,9 @@ export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8]) {
       mesh.quaternion.copy(pose.quaternion);
       mesh.updateMatrixWorld(true);
     },
-    release: () => {},
+    release: (body: Body) => {
+      released.push(body);
+    },
     join: () => ({}) as PhysicsJoint,
     unjoin: () => {},
   };
@@ -142,5 +146,5 @@ export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8]) {
     }
     canvas.fire('pointerup', at(degrees));
   }
-  return { router, canvas, assembly, log, dials, taps, ratchet, rehomes, screen, hold, tap, fastens, clicks, circle, camera, grabbed };
+  return { router, canvas, assembly, log, dials, taps, ratchet, rehomes, screen, hold, tap, fastens, clicks, circle, camera, grabbed, released };
 }

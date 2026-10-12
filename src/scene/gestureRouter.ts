@@ -690,6 +690,17 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       physics.release(part.body);
       letGoUnder(part);
     }
+    // A part carried onto the seat with its stud already in it was held for this seat though
+    // it is neither end of the joint: it goes back with its stud unless a seat of its own is
+    // still waiting.
+    if (isHandTurned(joint) && joint.mover !== joint.host) {
+      const carried = partById.get(joint.mover)!;
+      if (placed.has(carried) && assembly.jointsOf(carried.id).every((j) => isFastened(j.fastener))) {
+        placed.delete(carried);
+        physics.release(carried.body);
+        letGoUnder(carried);
+      }
+    }
   }
 
   // The assembly held still under a seated panel goes back to the simulation with it.
