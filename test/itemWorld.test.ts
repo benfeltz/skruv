@@ -209,6 +209,20 @@ describe('the item world comes and goes without a trace', () => {
   });
 });
 
+describe('a build that fails part-way (1.9.1 review)', () => {
+  it('takes back what it had built before rethrowing — bodies, meshes, nodes, listeners', async () => {
+    const { deps, census } = await engine();
+    const baseline = census();
+    // pages() runs after the box, the packed parts, the display and the gizmo are in.
+    const failing = { ...deps, pages: () => { throw new Error('pages broke'); } };
+    expect(() => createItemWorld(failing)).toThrow('pages broke');
+    expect(census()).toEqual(baseline);
+    // And the room still takes a world afterwards.
+    createItemWorld(deps).dispose();
+    expect(census()).toEqual(baseline);
+  });
+});
+
 describe('the swap: picking from the catalog (1.9.1)', () => {
   it('a pick builds one world with its manual docked; picking it again keeps that world', async () => {
     const { deps, census } = await engine();

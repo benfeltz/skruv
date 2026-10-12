@@ -29,7 +29,7 @@ import type { Bus } from '../game/events.js';
 import type { Haptics } from '../game/haptics.js';
 import type { PartId } from '../game/assembly.js';
 import type { Part } from '../game/partMesh.js';
-import type { PhysicsWorld } from '../physics/world.js';
+import type { Body, PhysicsWorld } from '../physics/world.js';
 import type { CameraControls } from './cameraControls.js';
 import type { createBookletPages } from './bookletPages.js';
 import type { Pose, Vec3 } from '../../tools/validate/lib/geometry.js';
@@ -61,20 +61,44 @@ export interface ItemWorldDeps {
  * `repack`, the camera's pivot `pickDistance`. `dispose()` takes it all back out — meshes off
  * the scene, bodies out of the physics world, DOM nodes off the page, every listener it
  * bound unbound — so the room is as it was before it came; an item swap is `dispose()` then
- * another `createItemWorld`.
+ * another `createItemWorld`. A build that throws takes back what it had built before
+ * rethrowing.
  */
-export function createItemWorld({ scene, camera, domElement, physics, cameraControls, events, haptics, isFree, pages }: ItemWorldDeps) {
-  // Everything put in the scene, the page or the bus, so dispose() takes back exactly that.
-  const objects: THREE.Object3D[] = [];
+export function createItemWorld(deps: ItemWorldDeps) {
+  // Everything the world puts in the scene, the physics world, the page or the bus, each
+  // with how to take it back — run last in, first out by dispose(), or straight away by a
+  // build that throws half-way, so a failed pick leaves the room as it found it too.
+  const undo: (() => void)[] = [];
+  const teardown = () => {
+    while (undo.length) undo.pop()!();
+  };
+  try {
+    return { ...buildItemWorld(deps, undo), dispose: teardown };
+  } catch (error) {
+    teardown();
+    throw error;
+  }
+}
+
+export type ItemWorld = ReturnType<typeof createItemWorld>;
+
+// The build: every acquisition pushes its own release onto `undo` as it happens.
+function buildItemWorld({ scene, camera, domElement, physics, cameraControls, events, haptics, isFree, pages }: ItemWorldDeps, undo: (() => void)[]) {
   const add = (...added: THREE.Object3D[]) => {
     scene.add(...added);
-    objects.push(...added);
+    // Off the scene, their GPU resources freed.
+    undo.push(() => {
+      scene.remove(...added);
+      for (const object of added) object.traverse(release);
+    });
   };
-  const unsubscribe: (() => void)[] = [];
+  // Out of the physics world, its joints with it.
+  const own = (...bodies: Body[]) => undo.push(() => bodies.forEach((body) => physics.remove(body)));
 
   // The game opens on the closed flatpack: every part packed flat inside, settling at once
   // and resting until the lid comes off and a hand disturbs it.
   const flatpack = createFlatpack(physics);
+  own(flatpack.base.body, flatpack.lid.body);
   add(flatpack.base.mesh, flatpack.lid.mesh);
 
   // One record per physical part — what gestures pick, drag and snap. The box and its lid
@@ -91,13 +115,17 @@ export function createItemWorld({ scene, camera, domElement, physics, cameraCont
       position,
       rotation,
     });
+    own(body);
     add(mesh);
     parts.push({ id, type, mesh, body });
   }
 
   // The display item against the wall: already built, its parts ordinary parts.
   const display = createDisplayShelf(physics);
-  for (const part of display.parts) add(part.mesh);
+  for (const part of display.parts) {
+    own(part.body);
+    add(part.mesh);
+  }
   parts.push(...display.parts);
 
   // The camera pivots about the first of these along the middle of the screen as a gesture
@@ -112,6 +140,7 @@ export function createItemWorld({ scene, camera, domElement, physics, cameraCont
   // Manipulation goes through these seams: a fastened compound moves as one, and while a
   // finger is on the elevation line its part is held in mid-air at the line's height.
   const hold = createLiftHold(createCompoundPhysics(physics, parts, assembly));
+  undo.push(() => hold.end());
   const manipulation = hold;
 
   const gizmo = createGizmo({
@@ -127,8 +156,10 @@ export function createItemWorld({ scene, camera, domElement, physics, cameraCont
   // room, so nothing opens on a pick (Ben, 1.9.1). Opened, a tap outside the sheet puts it
   // down and does nothing else.
   const bookletPages = pages();
+  undo.push(() => bookletPages.dispose());
   const booklet = createBookletSheet({ pages: bookletPages, open: false });
   document.body.append(booklet.scrim, booklet.thumb, booklet.element);
+  undo.push(() => booklet.dispose());
 
   // While the booklet is open, the open page's parts glow — the player's own set only, never
   // the display shelf or the box and its lid.
@@ -171,6 +202,7 @@ export function createItemWorld({ scene, camera, domElement, physics, cameraCont
 
   // On a seated tool: the dial showing which way and how far to turn it.
   const turnRing = createTurnRing(document.body);
+  undo.push(() => turnRing.element.remove());
 
   const router = createGestureRouter({
     domElement,
@@ -200,6 +232,8 @@ export function createItemWorld({ scene, camera, domElement, physics, cameraCont
       if (cue) haptics.cue(cue);
     },
   });
+  // It lets go of any gesture and unbinds from the room's canvas.
+  undo.push(() => router.dispose());
   // The line keeps whatever a panel carries (its dowels, its assembly) off the floor too: the router knows what it carries.
   hold.measure(router.verticalReachOf);
   // The display shelf's physics joints, made by the same reconcile every tap and turn runs.
@@ -267,6 +301,7 @@ export function createItemWorld({ scene, camera, domElement, physics, cameraCont
     onRelease: () => hold.end('line'),
   });
   document.body.append(liftLine.element);
+  undo.push(() => liftLine.element.remove());
 
   // Shift is the desktop's finger on the line: while it is down, the part the line would lift
   // stays where it is — the pointer free to turn it, drag it (across the floor, as any drag)
@@ -280,6 +315,10 @@ export function createItemWorld({ scene, camera, domElement, physics, cameraCont
   }
   window.addEventListener('keydown', onShift);
   window.addEventListener('keyup', onShift);
+  undo.push(() => {
+    window.removeEventListener('keydown', onShift);
+    window.removeEventListener('keyup', onShift);
+  });
 
   // Per frame, so a part picked up or selected with Shift already down is held from then on.
   function keepShiftHold() {
@@ -299,14 +338,14 @@ export function createItemWorld({ scene, camera, domElement, physics, cameraCont
     shiftDown = false;
     hold.end();
   }
-  unsubscribe.push(
+  undo.push(
     events.on(EVENT.SEAT, ({ hardware, host }) => {
       if (hold.held && (hardware === hold.held.id || host === hold.held.id)) hold.end();
     }),
   );
   // A panel carried in on its dowels seats through them: it is neither side of the joint, but its
   // mover — or another panel of the assembly it carries is.
-  unsubscribe.push(
+  undo.push(
     events.on(EVENT.SEAT, ({ joint }) => {
       const mover = typeof joint === 'number' ? assembly.get(joint)?.mover : undefined;
       if (hold.held && mover && assembly.compoundOf(hold.held.id).has(mover)) hold.end();
@@ -317,6 +356,10 @@ export function createItemWorld({ scene, camera, domElement, physics, cameraCont
   }
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('blur', dropHold);
+  undo.push(() => {
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('blur', dropHold);
+  });
 
   // Recovery: a loose player part that has left the room (through a slab, off a wall) is set
   // down again beside the box. Bonded parts go back only with a repack. The box itself goes
@@ -364,31 +407,8 @@ export function createItemWorld({ scene, camera, domElement, physics, cameraCont
       sprue.update();
       highlight.update(delta);
     },
-    dispose() {
-      // Input first, so nothing reaches a half-dismantled world: the router lets go of any
-      // gesture and unbinds, the hold drops, every listener this world bound comes off.
-      router.dispose();
-      hold.end();
-      for (const off of unsubscribe) off();
-      window.removeEventListener('keydown', onShift);
-      window.removeEventListener('keyup', onShift);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      window.removeEventListener('blur', dropHold);
-      // The page: the booklet and its idle drawing, the line, the dial.
-      booklet.dispose();
-      bookletPages.dispose();
-      liftLine.element.remove();
-      turnRing.element.remove();
-      // The room: every body out of the physics world (its joints go with it), every mesh
-      // and overlay off the scene, their GPU resources freed.
-      for (const { body } of parts) physics.remove(body);
-      scene.remove(...objects);
-      for (const object of objects) object.traverse(release);
-    },
   };
 }
-
-export type ItemWorld = ReturnType<typeof createItemWorld>;
 
 // Frees what an object holds on the GPU. Shared materials are safe to free: three re-uploads
 // a disposed one the next time something draws with it.
