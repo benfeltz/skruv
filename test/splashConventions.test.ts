@@ -20,7 +20,7 @@ describe('pre-splash: the catalog cover (1.6.1, 1.9.1)', () => {
     expect(html).toMatch(new RegExp(`width: min\\(100vw, ${BOOKLET_UI.maxWidth}px\\);`));
     expect(html).toMatch(new RegExp(`max-height: ${BOOKLET_UI.maxHeight * 100}dvh;`));
     expect(html).toMatch(
-      new RegExp(`width: min\\(100%, ${pageW}px, calc\\(\\(${BOOKLET_UI.maxHeight * 100}dvh - 120px\\) \\* ${pageW} / ${pageH}\\)\\);`),
+      new RegExp(`width: min\\(100%, ${pageW}px, calc\\(\\(${BOOKLET_UI.maxHeight * 100}dvh - ${BOOKLET_UI.chromeHeight}px\\) \\* ${pageW} / ${pageH}\\)\\);`),
     );
     expect(html).toMatch(new RegExp(`aspect-ratio: ${pageW} / ${pageH};`));
   });
@@ -64,7 +64,7 @@ describe('pre-splash: the catalog cover (1.6.1, 1.9.1)', () => {
   it("sizes the catalog's page frame by the page's own fit, so BUILD IT lands on the drawn tag", () => {
     const booklet = read('src/ui/booklet.ts');
     const frame = booklet.slice(booklet.indexOf('.booklet-frame {'), booklet.indexOf('.booklet-frame canvas'));
-    expect(frame).toContain('width: min(100%, ${pageW}px, calc((${BOOKLET_UI.maxHeight * 100}dvh - 120px) * ${pageW} / ${pageH}));');
+    expect(frame).toContain('width: min(100%, ${pageW}px, calc((${BOOKLET_UI.maxHeight * 100}dvh - ${BOOKLET_UI.chromeHeight}px) * ${pageW} / ${pageH}));');
     expect(frame).toContain('aspect-ratio: ${pageW} / ${pageH};');
     expect(booklet).toMatch(/\.booklet-frame canvas \{ width: 100%; height: 100%; max-height: none; \}/);
   });

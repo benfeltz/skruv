@@ -115,6 +115,9 @@ export const BOOKLET_UI = {
   // The open sheet never grows wider than this, nor taller than this share of the screen.
   maxWidth: 520,
   maxHeight: 0.92,
+  // The sheet's own height round the page (handle, controls, gaps, padding; CSS pixels):
+  // the page fits in maxHeight less this. index.html's pre-splash mirrors it.
+  chromeHeight: 120,
   // After a tap on the room puts the booklet down, the scrim stays this long to catch the
   // click a touch synthesises after the lift.
   scrimLingerMs: 400,

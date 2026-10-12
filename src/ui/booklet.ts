@@ -119,7 +119,7 @@ function injectStyle() {
     .booklet-page canvas {
       display: block;
       max-width: 100%;
-      max-height: calc(${BOOKLET_UI.maxHeight * 100}dvh - 120px);
+      max-height: calc(${BOOKLET_UI.maxHeight * 100}dvh - ${BOOKLET_UI.chromeHeight}px);
       aspect-ratio: ${pageW} / ${pageH};
       border-radius: 6px;
       background: ${css(COLORS.bookletPaper)};
@@ -154,7 +154,7 @@ function injectStyle() {
     .booklet-frame {
       position: relative;
       display: block;
-      width: min(100%, ${pageW}px, calc((${BOOKLET_UI.maxHeight * 100}dvh - 120px) * ${pageW} / ${pageH}));
+      width: min(100%, ${pageW}px, calc((${BOOKLET_UI.maxHeight * 100}dvh - ${BOOKLET_UI.chromeHeight}px) * ${pageW} / ${pageH}));
       aspect-ratio: ${pageW} / ${pageH};
       line-height: 0;
     }
