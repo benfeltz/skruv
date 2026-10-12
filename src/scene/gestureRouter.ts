@@ -488,12 +488,20 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // line takes any of it, or the drag ends. It is the assembly of the panel the fit's seats are
   // in: a dowel end's, the panel that dowel sits in, pushed home or not. Only an assembly
   // nothing else holds: none of it held at a seat, on the line, riding in a panel or carried.
+  // An assembly already held under a seated panel is held already: it is shared, never
+  // grabbed twice, and let go only once nothing stands on it (letGo).
   function holdStill(offer: Offer | null) {
     const target = offer?.pairs ? panelOf(offer.pairs[0].end.part) : null;
     if (still && target && assembly.compoundOf(still.id).has(target.id) && !heldUp().has(still)) return;
-    if (still) physics.release(still.body);
-    still = target && isFree(target) ? target : null;
-    if (still) physics.grab(still.body);
+    if (still) letGo(still);
+    const under = target && [...stillUnder.values()].find((part) => assembly.compoundOf(part.id).has(target.id));
+    still = under || (target && isFree(target) ? target : null);
+    if (still && !under) physics.grab(still.body);
+  }
+
+  // Hands an assembly held still back to the simulation — unless a seated panel still stands on it.
+  function letGo(part: Part) {
+    if (![...stillUnder.values()].includes(part)) physics.release(part.body);
   }
 
   // The panel a seat is in: the part itself, or for a dowel's end, the panel the dowel sits in.
@@ -659,7 +667,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const under = stillUnder.get(seated);
     if (!under) return;
     stillUnder.delete(seated);
-    physics.release(under.body);
+    if (under !== still) letGo(under);
   }
 
   // Taking up `part` — a drag, or the line — first hands back any assembly held still under a

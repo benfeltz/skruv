@@ -1003,6 +1003,44 @@ describe('the target of a fit on offer (1.8.3.4 phone finding 1)', () => {
     expect(h.held(h.side)).toBe(false);
   });
 
+  // Review round 3: two panels seated on one assembly, neither pushed home yet.
+  describe('two panels on one assembly', () => {
+    // The side panel with dowels pushed home in its bottom holes (0, 1) and its top ones (7, 8):
+    // the bottom panel carried onto the first pair, the top panel onto the second.
+    const shift = sideHole(7).position[0] - sideHole(0).position[0];
+    const TOP_SEAT: Pose = { ...SEAT, position: [SEAT.position[0] + shift, SEAT.position[1], SEAT.position[2]] };
+    const near = (seat: Pose) => lowered(skewed(seat, 20 * DEG, [seat.position[0], TOPS[0][1], TOPS[0][2]], [0.02, 0.03, 0]));
+    const twoPanels = () => {
+      const h = harness({ dowels: [0, 1, 7, 8], home: [0, 1, 2, 3], panelAt: near(SEAT), extra: [{ id: 'topBottomPanel-2', type: 'topBottomPanel', pose: near(TOP_SEAT) }] });
+      return { ...h, second: h.parts.find((p) => p.id === 'topBottomPanel-2')! };
+    };
+
+    it('stays held while the second panel is offered and taken away again', () => {
+      const h = twoPanels();
+      h.canvas.fire('pointerup', h.drag(h.panel));
+      expect(h.held(h.panel)).toBe(true);
+      expect(h.held(h.side)).toBe(true);
+      const at = h.drag(h.second);
+      expect(h.offered()).not.toBeNull();
+      h.canvas.fire('pointermove', { clientX: at.clientX + 400, clientY: at.clientY - 300 });
+      expect(h.offered()).toBeNull();
+      expect(h.held(h.side)).toBe(true);
+      h.canvas.fire('pointercancel', at);
+      expect(h.held(h.side)).toBe(true);
+    });
+
+    it('stays held until the last panel on it is pushed home', () => {
+      const h = twoPanels();
+      h.canvas.fire('pointerup', h.drag(h.panel));
+      h.canvas.fire('pointerup', h.drag(h.second));
+      expect(h.held(h.side)).toBe(true);
+      h.tap(h.second);
+      expect(h.held(h.side)).toBe(true);
+      h.tap(h.panel);
+      expect(h.held(h.side)).toBe(false);
+    });
+  });
+
   it('seats nothing when what the fit seats on has moved off since it was offered', () => {
     const h = stack();
     const at = h.grabTop();
