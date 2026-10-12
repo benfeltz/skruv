@@ -433,11 +433,23 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     return { anchor: sub(target, rotateVector(rotation, h.position)), rotation };
   }
 
-  /** World pose of a joint's hardware sitting at the hole's mouth, its host where it is now. */
+  /**
+   * World pose of the part a joint puts back at the hole's mouth: its hardware, its host
+   * where it is now — or, for a part set onto its stud by hand (the host the mover), that
+   * host, the hardware where it is now.
+   */
   function restPose(id: number, poseOf: PoseOf): Pose {
     const joint = joints.get(id)!;
     const host = poseOf(joint.host);
     const rel = seatedPose(joint, poseOf, 0);
+    if (isHandTurned(joint) && joint.mover === joint.host) {
+      const hardware = poseOf(joint.hardware);
+      const back = invert(rel);
+      return {
+        position: add(hardware.position, rotateVector(hardware.rotation, back.anchor)),
+        rotation: normalize(multiplyQuaternions(hardware.rotation, back.rotation)),
+      };
+    }
     return {
       position: add(host.position, rotateVector(host.rotation, rel.anchor)),
       rotation: normalize(multiplyQuaternions(host.rotation, rel.rotation)),

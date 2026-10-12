@@ -8,7 +8,7 @@ import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
 import { driveRadians, ratchetTicks } from '../game/driveMath.js';
 import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rebaseDragOffset, rotatedHalfExtents } from '../game/dragMath.js';
-import { isFastened, isTapKind, spanOf } from '../game/fasteners.js';
+import { isFastened, isHandTurned, isTapKind, spanOf } from '../game/fasteners.js';
 import {
   fastenEvent,
   grabEvent,
@@ -627,11 +627,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   // Hardware let go by its joints without being pulled free — a bolt backed all the way
-  // out, a cam turned open — sits back at its hole's mouth, held as when first seated.
+  // out, a cam turned open, a leg circled off its stud — sits back at its hole's mouth, held
+  // as when first seated.
   function holdLooseHardware() {
     for (const joint of assembly.all()) {
-      const part = partById.get(joint.hardware)!;
-      if (joint.mover !== part.id || joint.kind === KIND.TOOL || isFastened(joint.fastener)) continue;
+      // The part to put back: the hardware pushed into its hole — or the hole side set onto
+      // its stud by hand (a leg backed out to nothing sits back on its stud, not dropped).
+      const byHand = isHandTurned(joint) && joint.mover === joint.host;
+      const part = partById.get(byHand ? joint.host : joint.hardware)!;
+      if ((!byHand && joint.mover !== part.id) || joint.kind === KIND.TOOL || isFastened(joint.fastener)) continue;
       if (placed.has(part) || isBonded(part) || drag?.part === part) continue;
       if (assembly.jointsOf(part.id).some((j) => isFastened(j.fastener))) continue;
       const rest = assembly.restPose(joint.id, poseOf);
@@ -1239,6 +1243,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const { mode, part } = drag!;
     if (mode === 'crank' || mode === 'pull') {
       stopDrag();
+      // A part circled all the way out was the drag's own while it turned, so it was not
+      // held at its seat then (holdLooseHardware); it is now the drag is over.
+      if (mode === 'crank') reconcile();
       return false;
     }
     // The seat on offer — or, for hardware let go over a lit ring, that ring's; a panel's fit
@@ -1302,8 +1309,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   function cancelDrag() {
-    if (drag!.mode === 'move' || drag!.mode === 'compound') physics.release(drag!.part.body);
+    const { mode } = drag!;
+    if (mode === 'move' || mode === 'compound') physics.release(drag!.part.body);
     stopDrag();
+    if (mode === 'crank') reconcile();
   }
 
   function stopDrag() {

@@ -153,3 +153,22 @@ describe('a stud screwed into the leg first (review: unturnable joint)', () => {
     expect(assembly.get(inTop.id)!.fastener.state).toBe(STATE.SCREWED);
   });
 });
+
+describe('restPose of a part set onto its stud by hand (review)', () => {
+  it("puts the leg, not the stud, back at the stud's end: the leg's hole mouth where the screwed stud's end is", () => {
+    const types = typeById();
+    const assembly = createAssembly((id) => types.get(id)!);
+    const joints = seatHome(assembly, ASSEMBLED.joints.map(pairOf));
+    const legJoint = joints.find((j) => j.host === 'leg-1')!;
+    const poseOf = (id: string) => ASSEMBLED.parts.find((p) => p.id === id)!;
+    const rest = assembly.restPose(legJoint.id, poseOf);
+    const home = poseOf('leg-1');
+    // As built the leg touches the top; at the stud's mouth it stands one sink further off.
+    expect(rest.position[0]).toBeCloseTo(home.position[0], 9);
+    expect(rest.position[1]).toBeCloseTo(home.position[1] - FASTENER.sinkDepth.stud!, 9);
+    expect(rest.position[2]).toBeCloseTo(home.position[2], 9);
+    // And the stud's own joint still rests the stud, at the top's mouth: untouched by the hand rule.
+    const studJoint = joints.find((j) => j.host === 'top-1' && j.hardware === 'doubleEndedStud-1')!;
+    expect(assembly.restPose(studJoint.id, poseOf).position[1]).toBeCloseTo(poseOf('doubleEndedStud-1').position[1] - FASTENER.sinkDepth.stud!, 9);
+  });
+});

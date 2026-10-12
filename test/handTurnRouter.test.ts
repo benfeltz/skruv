@@ -101,6 +101,28 @@ describe('a still press', () => {
   });
 });
 
+describe('a leg backed out to nothing (review)', () => {
+  // Screwed home it is bonded, not held; backed out to zero the bond goes — and the leg is
+  // held back at its stud's mouth, as a bolt backed out is, not left a free body to fall.
+  it('is held again at the mouth of its stud, and can be turned in once more', () => {
+    const b = bench();
+    const at = b.screen(b.leg.mesh.position);
+    b.canvas.fire('pointerdown', at);
+    b.hold(TAP_FRAMES + DRIVE_FRAMES);
+    b.canvas.fire('pointerup', at);
+    expect(b.assembly.get(b.inLeg.id)!.fastener.state).toBe(STATE.SCREWED);
+    b.grabbed.length = 0;
+    // The other way round, all the way out.
+    b.circle(b.screen(b.leg.mesh.position), FREE_END, -b.tighten * 2000, 0, TURN_RING.radius);
+    expect(b.progress()).toBe(0);
+    expect(b.assembly.get(b.inLeg.id)!.fastener.state).toBe(STATE.SEATED);
+    expect(b.grabbed).toContain(b.leg.body);
+    // Back at the mouth where it was first set, still seated and still its own to turn.
+    for (let i = 0; i < 3; i++) expect(b.leg.mesh.position.getComponent(i)).toBeCloseTo(LEG_AT[i], 6);
+    expect(b.seated()).toBe(true);
+  });
+});
+
 describe('a tap on a leg', () => {
   it('lifts it off the stud while it is not turned', () => {
     const b = bench();

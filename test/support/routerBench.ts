@@ -71,8 +71,12 @@ export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8]) {
   const typeById = new Map(parts.map(({ id, type }) => [id, type]));
   const assembly = createAssembly((id) => typeById.get(id)!);
 
+  // Every body the router held kinematic, in order — what a part re-held at its seat shows up as.
+  const grabbed: Body[] = [];
   const physics: GestureRouterOptions['physics'] = {
-    grab: () => {},
+    grab: (body: Body) => {
+      grabbed.push(body);
+    },
     move: (body: Body, position: Vec3, rotation?: Quat) => {
       const { mesh } = parts.find((part) => part.body === body)!;
       const { pose } = body as unknown as { pose: { position: THREE.Vector3; quaternion: THREE.Quaternion } };
@@ -138,5 +142,5 @@ export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8]) {
     }
     canvas.fire('pointerup', at(degrees));
   }
-  return { router, canvas, assembly, log, dials, taps, ratchet, rehomes, screen, hold, tap, fastens, clicks, circle, camera };
+  return { router, canvas, assembly, log, dials, taps, ratchet, rehomes, screen, hold, tap, fastens, clicks, circle, camera, grabbed };
 }
