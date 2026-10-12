@@ -144,9 +144,17 @@ function injectStyle() {
     .booklet-controls button:disabled { opacity: 0.3; cursor: default; }
     .booklet-count { font-variant-numeric: tabular-nums; }
     /* A page with a control on it (the catalog's BUILD IT): the canvas and, over the part of
-       it the control is drawn on, a clear button — placed in page fractions, so it tracks
-       the canvas at any size. */
-    .booklet-frame { position: relative; display: block; max-width: 100%; line-height: 0; }
+       it the control is drawn on, a clear button placed in page fractions. The frame is sized
+       exactly as the page (the pre-splash's own fit) and the canvas fills it, so those
+       fractions land on the drawn page at any size. */
+    .booklet-frame {
+      position: relative;
+      display: block;
+      width: min(100%, ${pageW}px, calc((${BOOKLET_UI.maxHeight * 100}dvh - 120px) * ${pageW} / ${pageH}));
+      aspect-ratio: ${pageW} / ${pageH};
+      line-height: 0;
+    }
+    .booklet-frame canvas { width: 100%; height: 100%; max-height: none; }
     .booklet-action {
       position: absolute;
       padding: 0;

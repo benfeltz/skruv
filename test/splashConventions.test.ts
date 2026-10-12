@@ -58,6 +58,16 @@ describe('pre-splash: the catalog cover (1.6.1, 1.9.1)', () => {
     expect(remove).toBeGreaterThan(mount);
   });
 
+  // BUILD IT's hit target is placed in page fractions of the frame round the catalog's
+  // canvas, so the frame must be exactly the page: the same fit as the pre-splash page.
+  it("sizes the catalog's page frame by the page's own fit, so BUILD IT lands on the drawn tag", () => {
+    const booklet = read('src/ui/booklet.ts');
+    const frame = booklet.slice(booklet.indexOf('.booklet-frame {'), booklet.indexOf('.booklet-frame canvas'));
+    expect(frame).toContain('width: min(100%, ${pageW}px, calc((${BOOKLET_UI.maxHeight * 100}dvh - 120px) * ${pageW} / ${pageH}));');
+    expect(frame).toContain('aspect-ratio: ${pageW} / ${pageH};');
+    expect(booklet).toMatch(/\.booklet-frame canvas \{ width: 100%; height: 100%; max-height: none; \}/);
+  });
+
   it('takes no input — the scrim and the real sheet own every touch', () => {
     expect(html).toMatch(/\.pre-splash \{[^}]*pointer-events: none;/);
   });
