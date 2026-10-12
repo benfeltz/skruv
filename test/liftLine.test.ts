@@ -16,6 +16,19 @@ describe('liftRange', () => {
   });
 });
 
+// 1.8.3.4 review round 1: an assembly held by its bottom panel reaches far above it.
+describe('liftRange off-centre', () => {
+  it("shifts clampLift's bounds for the reach's centre back to the part's own", () => {
+    const [min, max] = liftRange(0.4, 0.39);
+    expect(min).toBeCloseTo(0.4 - 0.39, 12);
+    expect(max).toBeCloseTo(ROOM.height - GESTURE.ceilingMargin - 0.4 - 0.39, 12);
+  });
+
+  it('is the centred range with no offset', () => {
+    expect(liftRange(0.2, 0)).toEqual(liftRange(0.2));
+  });
+});
+
 describe('fractionOf / heightAt', () => {
   const range = liftRange(0.2);
 

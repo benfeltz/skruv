@@ -219,8 +219,8 @@ const router = createGestureRouter({
     if (cue) haptics.cue(cue);
   },
 });
-// The line keeps a panel's carried dowels off the floor too: the router knows what it carries.
-hold.measure(router.halfHeightOf);
+// The line keeps whatever a panel carries (its dowels, its assembly) off the floor too: the router knows what it carries.
+hold.measure(router.verticalReachOf);
 // The display shelf's physics joints, made by the same reconcile every tap and turn runs.
 router.sync();
 
@@ -252,16 +252,17 @@ document.body.append(createResetButton({ onReset: repack }).element);
 
 // The elevation line's part: the one being moved (never cranked or pulled, nor a compound,
 // whose range is not one part's), else the selected one — never the box, nor a part
-// sitting in a seat.
+// sitting in a seat unless it is a panel the router carries with all it holds (its
+// assembly, its dowels), standing on nothing else.
 function liftablePart() {
   if (hold.held) return hold.held;
   const dragging = router.dragging;
   const part = dragging ? (dragging.mode === 'move' ? dragging.part : null) : gizmo.selected;
   if (!part || part === flatpack.base) return null;
-  return dragging || assembly.jointsOf(part.id).length === 0 ? part : null;
+  return dragging || assembly.jointsOf(part.id).length === 0 || router.carries(part) ? part : null;
 }
 
-const rangeOf = (part: Part) => liftRangeOf(part, part.mesh.quaternion.toArray(), router.halfHeightOf);
+const rangeOf = (part: Part) => liftRangeOf(part, part.mesh.quaternion.toArray(), router.verticalReachOf);
 const heightOf = (part: Part) => (hold.held === part ? hold.height : part.mesh.position.y);
 
 // A finger on the line holds the part: a press on the line eases it toward the finger, one
@@ -320,9 +321,11 @@ function dropHold() {
 events.on(EVENT.SEAT, ({ hardware, host }) => {
   if (hold.held && (hardware === hold.held.id || host === hold.held.id)) hold.end();
 });
-// A panel carried in on its dowels seats through them: it is neither side of the joint, but its mover.
+// A panel carried in on its dowels seats through them: it is neither side of the joint, but its
+// mover — or another panel of the assembly it carries is.
 events.on(EVENT.SEAT, ({ joint }) => {
-  if (hold.held && typeof joint === 'number' && assembly.get(joint)?.mover === hold.held.id) hold.end();
+  const mover = typeof joint === 'number' ? assembly.get(joint)?.mover : undefined;
+  if (hold.held && mover && assembly.compoundOf(hold.held.id).has(mover)) hold.end();
 });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') dropHold();

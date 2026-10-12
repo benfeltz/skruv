@@ -20,7 +20,7 @@ import {
 } from '../game/events.js';
 import { createGestureState, OWNER, resolveHit } from '../game/gestureState.js';
 import { isSmallPart, preferHit, rayBoxReach } from '../game/pickMath.js';
-import { findFits, isPanelType, preferredPoses, preferredTargets, rankFits } from '../game/panelFit.js';
+import { findFits, heldOffer, isPanelType, preferredPoses, preferredTargets, preferredThrough, rankFits } from '../game/panelFit.js';
 import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
 import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
@@ -38,6 +38,7 @@ import type { PhysicsJoint, PhysicsWorld } from '../physics/world.js';
 import type { RingHit } from './gizmo.js';
 import type { HandleHit } from './sprue.js';
 import type { TargetRing } from './targetRings.js';
+import type { VerticalReach } from './liftHold.js';
 import type { Engagement } from '../game/turnRing.js';
 import type { Dial } from '../ui/turnRing.js';
 import type { Pose, Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
@@ -70,9 +71,10 @@ type RouterSnap = Snap<WorldConnector, WorldConnector>;
 
 /**
  * A seat on offer: the pose it holds the dragged part at and its snap. A panel's whole fit
- * also carries every pair it seats, its snap the first, and whether it is where the panel goes.
+ * also carries every pair it seats, its snap the first, which pairs those are (`key`), whether
+ * it is where the panel goes, and where the finger had the panel when it was first offered.
  */
-type Offer = Pose & { snap: RouterSnap; pairs?: FitPair<WorldConnector, WorldConnector>[]; preferred?: boolean };
+type Offer = Pose & { snap: RouterSnap; pairs?: FitPair<WorldConnector, WorldConnector>[]; key?: string; preferred?: boolean; taken?: Pose };
 
 /** One fastener end of a carried part — a tool's tip, a dowel's either end — and the seats that take it. */
 interface CarriedEnd {
@@ -121,9 +123,10 @@ interface Drag {
 }
 
 /**
- * A panel picked up with the hardware seated only in it (dowels put in a shelf before it
- * goes on a side panel): where the panel was when picked up, and that hardware — each with
- * where it was then, so it rides along rigidly.
+ * A panel picked up with everything that goes with it: the rest of its assembly (panels and
+ * hardware fastened to it, near or far) and the hardware seated only in them (dowels put in a
+ * shelf before it goes on a side panel). Where the panel was when picked up, and every other
+ * part it carries, each with where it was then, so it rides along rigidly.
  */
 interface Carry {
   start: Pose;
@@ -143,7 +146,8 @@ interface Rings {
 /** What `createGestureRouter` returns — see there. */
 export interface GestureRouter {
   readonly dragging: { part: Part; mode: Drag['mode'] } | null;
-  halfHeightOf(part: Part, rotation: Quat): number;
+  verticalReachOf(part: Part, rotation: Quat): VerticalReach;
+  carries(part: Part): boolean;
   update(delta?: number): void;
   sync(): void;
   unseatAll(ids: PartId[]): void;
@@ -291,9 +295,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const bonds = new Map<string, { joint: PhysicsJoint; signature: string; a: PartId; b: PartId }>();
   // tool id → its pose relative to the fastener it turns, so it turns along.
   const toolGrips = new Map<PartId, { fastener: Part; grip: THREE.Matrix4 }>();
-  // Hardware seated but not yet pushed home in a panel that was carried → that panel, and
-  // where each was then: it is held where it sits in the panel (it rides along) until it is
-  // pushed home and its joints hold it, or it leaves the panel.
+  // Hardware seated but not yet pushed home in a panel that was carried → that panel (the
+  // grabbed one, or another of its assembly), and where each was then: it is held where it
+  // sits in the panel (it rides along) until it is pushed home and its joints hold it, or it
+  // leaves the panel.
   const riders = new Map<PartId, { host: Part; hostStart: Pose; start: Pose }>();
   // decal mesh → ms of glow left, after a fastener seated in its hole.
   const flashes = new Map<Decal, number>();
@@ -309,6 +314,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // A press on a seated tool (or its turn ring) not yet a drag: how long it has been held
   // still (ms), and whether it has been held past a tap and so drives (hold-to-drive).
   let press: { id: number; tool: Part; ms: number; held: boolean } | null = null;
+  // The part the elevation line held at the last frame, so a new hold is seen once (carryHeld).
+  let lifted: Part | null = null;
+  // The part whose assembly is held still under a panel's fit on offer (holdStill), if any.
+  let still: Part | null = null;
+  // A panel held where it seated → the assembly it seated onto, held still with it until the
+  // panel is let go: both sides of a seat stay put until a fastener holds them (letGoUnder).
+  const stillUnder = new Map<Part, Part>();
 
   function aim({ clientX, clientY }: ClientPoint) {
     const rect = domElement.getBoundingClientRect();
@@ -430,13 +442,17 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const seated = seatedHardware(assembly.all());
     if (isPanel(part.type)) {
       const from: Pose = { position: target, rotation: drag!.rotation };
-      return fitCandidate(carriedConnectors(from, isTaken), seatsFor(part), from);
+      // The fit on offer holds against one as good while the finger keeps the panel near where
+      // it was offered.
+      const held = drag!.snapped;
+      return heldOffer(held?.key ? { ...held, key: held.key } : null, fitCandidate(carriedConnectors(from, isTaken), seatsFor(part), from), from, PANEL);
     }
     const dragged = free(worldConnectors(part, scratch.clone().fromArray(target), rotation)).filter((c) => isSeatTarget(c, seated));
     if (dragged.length === 0) return null;
     // A part the elevation line holds up is no seat: it drops when the line lets go.
+    const up = heldUp();
     const others = parts.flatMap((other) =>
-      other === part || other === hold?.held
+      other === part || up.has(other)
         ? []
         : free(worldConnectors(other, other.mesh.position, other.mesh.quaternion)).filter((c) => isSeatTarget(c, seated)),
     );
@@ -447,36 +463,110 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // A panel's offer: the best whole fit of what it seats by (`carried` — its holes, and the
   // ends of hardware it carries) on the free connectors near them (`seats`) that keeps it in
   // the room — where it goes first, but any fit seats. Its snap is the first pair's.
-  function fitCandidate(carried: WorldConnector[], seats: WorldConnector[], from: Pose): Offer | null {
+  // `accept`: only fits it takes, by which pairs they seat and whether they are where it goes.
+  function fitCandidate(carried: WorldConnector[], seats: WorldConnector[], from: Pose, accept?: (key: string, preferred: boolean) => boolean): (Offer & { key: string }) | null {
     for (const fit of rankFits(findFits(carried, from, seats, PANEL), preferredFor(drag!.part), PANEL)) {
+      if (accept && !accept(keyOf(fit.pairs), fit.preferred)) continue;
       const [{ hole, end }] = fit.pairs;
       const distance = Math.hypot(...end.position.map((v, i) => v - hole.position[i]));
       const seat = seatPose({ from: hole, to: end, distance, angle: fit.angle, transform: fit.transform }, from);
-      if (seat) return { ...seat, pairs: fit.pairs, preferred: fit.preferred };
+      if (seat) return { ...seat, pairs: fit.pairs, key: keyOf(fit.pairs), preferred: fit.preferred };
     }
     return null;
+  }
+
+  // Which pairs a fit seats, the same for the same pairs in any order.
+  const keyOf = (pairs: FitPair<WorldConnector, WorldConnector>[]) =>
+    pairs
+      .map(({ hole, end }) => `${hole.part.id}#${hole.index}>${end.part.id}#${end.index}`)
+      .sort()
+      .join(',');
+
+  // While a panel's fit is on offer, the assembly it would seat on is held still where it
+  // lies — a carcass rocking on its joints, or nudged by the panel easing in, would move the
+  // seats out from under the fit — and handed back to the simulation when the offer goes, the
+  // line takes any of it, or the drag ends. It is the assembly of the panel the fit's seats are
+  // in: a dowel end's, the panel that dowel sits in, pushed home or not. Only an assembly
+  // nothing else holds: none of it held at a seat, on the line, riding in a panel or carried.
+  // An assembly already held under a seated panel is held already: it is shared, never
+  // grabbed twice, and let go only once nothing stands on it (letGo).
+  function holdStill(offer: Offer | null) {
+    const target = offer?.pairs ? panelOf(offer.pairs[0].end.part) : null;
+    if (still && target && assembly.compoundOf(still.id).has(target.id) && !heldUp().has(still)) return;
+    if (still) letGo(still);
+    const under = target && [...stillUnder.values()].find((part) => assembly.compoundOf(part.id).has(target.id));
+    still = under || (target && isFree(target) ? target : null);
+    if (still && !under) physics.grab(still.body);
+  }
+
+  // Hands an assembly held still back to the simulation — unless a seated panel still stands on it.
+  function letGo(part: Part) {
+    if (![...stillUnder.values()].includes(part)) physics.release(part.body);
+  }
+
+  // The panel a seat is in: the part itself, or for a dowel's end, the panel the dowel sits in.
+  function panelOf(part: Part): Part {
+    if (isPanel(part.type)) return part;
+    const joint = assembly.jointsOf(part.id).find((j) => j.hardware === part.id && isPanel(partById.get(j.host)!.type));
+    return joint ? partById.get(joint.host)! : part;
+  }
+
+  function isFree(part: Part) {
+    const up = heldUp();
+    const carried = new Set([drag!.part, ...(drag!.carry?.riders ?? []).map((rider) => rider.part)]);
+    return [...assembly.compoundOf(part.id)].every((id) => {
+      const member = partById.get(id)!;
+      return !placed.has(member) && !up.has(member) && !carried.has(member) && !riders.has(id);
+    });
+  }
+
+  // A panel's fit on offer as it stands at release: held, it may have been found a while ago,
+  // and what it seats on nudged or taken away since. Searched again from where the panel is
+  // held — the same pairs if they are still there, else as many of them as still line up (never
+  // a fit the ghost did not show: no pair it did not offer, and green only if it was), else none.
+  function settled(offer: Offer & { key: string }) {
+    const from = drag!.held ?? offer;
+    const isTaken = occupied();
+    const carried = carriedConnectors(from, isTaken);
+    const seats = seatsFor(drag!.part);
+    const offered = new Set(offer.key.split(','));
+    return (
+      fitCandidate(carried, seats, from, (key) => key === offer.key) ??
+      fitCandidate(carried, seats, from, (key, preferred) => key.split(',').every((pair) => offered.has(pair)) && (preferred || !offer.preferred))
+    );
   }
 
   // A part's connectors as world records at `pose`, its part and index riding along.
   const connectorsAt = (part: Part, pose: Pose): WorldConnector[] =>
     PART_TYPES[part.type].connectors.map((c, index) => ({ type: c.type, ...connectorInWorld(c, pose), part, index }));
 
-  // What the carried panel seats by with it at `pose`: its free holes, and the free fastener
-  // ends of the hardware it carries (a dowel's other end), riding along rigidly.
+  // What the carried panel seats by with it at `pose`: its free holes and those of every
+  // other panel it carries, and the free fastener ends of the hardware it carries (a dowel's
+  // other end) — all riding along rigidly.
   function carriedConnectors(pose: Pose, isTaken = occupied()) {
     const { part, carry } = drag!;
     const own = connectorsAt(part, pose).filter((c) => !isTaken(c));
     const riding = (carry?.riders ?? []).flatMap(({ part: rider, start }) =>
-      connectorsAt(rider, carryPose(carry!.start, pose, start)).filter((c) => isFastenerEnd(c.type) && !isTaken(c)),
+      connectorsAt(rider, carryPose(carry!.start, pose, start)).filter((c) => (isPanel(rider.type) || isFastenerEnd(c.type)) && !isTaken(c)),
     );
     return [...own, ...riding];
   }
 
-  // Where `panel` goes on each part in the room it meets in the finished item, as they lie now.
+  // Where `panel` goes on each part in the room it meets in the finished item, as they lie
+  // now — and, carried, where it goes when any panel it carries goes on one: that member's
+  // place, with `panel` at the offset it had from it when picked up.
   function preferredFor(panel: Part) {
-    return parts.flatMap((host) =>
-      host === panel ? [] : preferredPoses(relatives, host.type, { position: host.mesh.position.toArray(), rotation: host.mesh.quaternion.toArray() }, panel.type),
-    );
+    const carry = drag?.part === panel ? drag.carry : null;
+    const members = (carry?.riders ?? []).filter(({ part }) => isPanel(part.type));
+    const carried = new Set([panel, ...(carry?.riders ?? []).map(({ part }) => part)]);
+    return parts.flatMap((host) => {
+      if (carried.has(host)) return [];
+      const at: Pose = { position: host.mesh.position.toArray(), rotation: host.mesh.quaternion.toArray() };
+      return [
+        ...preferredPoses(relatives, host.type, at, panel.type),
+        ...members.flatMap(({ part, start }) => preferredPoses(relatives, host.type, at, part.type).map((pose) => preferredThrough(pose, start, carry!.start))),
+      ];
+    });
   }
 
   // Where `snap` seats the dragged part from `pose`. The alignment can swing a long part's
@@ -492,8 +582,16 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   const isBonded = (part: Part) => [...bonds.values()].some(({ a, b }) => a === part.id || b === part.id);
 
-  // A panel carried into seats by its hardware, not one of them yet pushed home.
-  const awaitsSeat = (part: Part) => assembly.all().some((j) => j.mover === part.id && j.hardware !== part.id && j.host !== part.id && !isFastened(j.fastener));
+  // A panel carried into seats by its hardware, not one of them yet pushed home — or by any
+  // panel of a joined assembly, which is bonded inside itself from the start, so its bonds say
+  // nothing about the seats. Seats inside the assembly are its own, never awaited.
+  function awaitsSeat(part: Part) {
+    const members = assembly.compoundOf(part.id);
+    const joined = members.size > 1;
+    return assembly
+      .all()
+      .some((j) => members.has(j.mover) && !isFastened(j.fastener) && !(members.has(j.hardware) && members.has(j.host)) && (joined || (j.hardware !== j.mover && j.host !== j.mover)));
+  }
 
   function reconcile() {
     const wanted = new Map(assembly.bonds(poseOf).map((bond) => [bond.key, bond]));
@@ -516,6 +614,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       if (!isBonded(part)) continue;
       placed.delete(part);
       physics.release(part.body);
+      letGoUnder(part);
     }
     holdLooseHardware();
   }
@@ -559,7 +658,23 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       if (!placed.has(part) || assembly.jointsOf(id).length > 0) continue;
       placed.delete(part);
       physics.release(part.body);
+      letGoUnder(part);
     }
+  }
+
+  // The assembly held still under a seated panel goes back to the simulation with it.
+  function letGoUnder(seated: Part) {
+    const under = stillUnder.get(seated);
+    if (!under) return;
+    stillUnder.delete(seated);
+    if (under !== still) letGo(under);
+  }
+
+  // Taking up `part` — a drag, or the line — first hands back any assembly held still under a
+  // seat that it is in, or that is under it: from then on it is the player's, and a stale seat
+  // let go mid-drag (pruneStale) can never drop the assembly out of a compound drag.
+  function letGoOf(part: Part) {
+    for (const [seated, under] of stillUnder) if (seated === part || assembly.compoundOf(under.id).has(part.id)) letGoUnder(seated);
   }
 
   // A fastener that changed state across a tap, pull or turn reports going home or coming
@@ -581,10 +696,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   function beginDrag(part: Part, point: Vec3, event: ClientPoint) {
     pruneStale();
+    letGoOf(part);
     const engagement = assembly.crankTarget(part.id);
+    // A panel pushed home onto another pulls back off it, as before; a cam locked across the
+    // seam stops the pull (pullable), and the panel carries its assembly instead.
+    const pulls = assembly.pullable(part.id).length > 0;
+    const carried = pulls ? null : carryOf(part);
     // Its target is set: checked just here.
-    const carried = carryOf(part);
     if (engagement?.target) beginCrank(part, engagement as Drag['engagement'], event);
+    else if (pulls) beginPull(part, event);
     else if (carried) beginCarry(part, carried, point, event);
     else if (assembly.canRelease(part.id)) {
       // Nothing holds it: it leaves whatever it was seated on.
@@ -592,79 +712,143 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       for (const joint of assembly.jointsOf(part.id)) unseat(joint);
       reconcile();
       beginMove(part, point, event, 'move');
-    } else if (assembly.pullable(part.id).length > 0) beginPull(part, event);
+    }
     // Bonded into a compound: it all comes along through the joints. A part only partway
     // fastened and bonded to nothing (a half-turned bolt) stays put.
     else if (isBonded(part)) beginMove(part, point, event, 'compound');
   }
 
-  // The hardware a panel would carry: every piece seated in it and in nothing else — bar
-  // seats it was carried onto by this panel and not yet pushed home, which it leaves; no
-  // tool on it — or null when it is not a panel, carries nothing, or is held by more than
-  // that: anything else fastened to it, or a compound with another part in it.
+  // What a panel would carry: every other part of its assembly — the panels and hardware
+  // fastened to it, near or far (compoundOf) — and the hardware seated only in them (seatedIn).
+  // Null when it is not a panel, carries nothing, or a tool is on any of it. Anything fastened
+  // to the assembly is in it, so a carry never tears a fastening; what it only sits on, it
+  // leaves (takeUp). A piece of hardware is never carried by: grabbed, it drags its compound.
   function carryOf(part: Part): Part[] | null {
     if (!isPanel(part.type)) return null;
-    const joints = assembly.jointsOf(part.id);
-    const ridesOn = (j: AssemblyJoint) => j.host === part.id || (j.mover === part.id && !isFastened(j.fastener));
-    const own = new Set(
-      joints
-        .filter((j) => j.host === part.id && j.kind !== KIND.TOOL && assembly.jointsOf(j.hardware).every(ridesOn))
-        .map((j) => j.hardware),
-    );
-    if (own.size === 0) return null;
-    if (joints.some((j) => !own.has(j.hardware) && isFastened(j.fastener))) return null;
-    if ([...assembly.compoundOf(part.id)].some((id) => id !== part.id && !own.has(id))) return null;
-    return [...own].map((id) => partById.get(id)!);
+    const members = assembly.compoundOf(part.id);
+    if ([...members].some((id) => assembly.jointsOf(id).some((j) => j.kind === KIND.TOOL))) return null;
+    const carried = [...members, ...seatedIn(members)].filter((id) => id !== part.id);
+    return carried.length > 0 ? carried.map((id) => partById.get(id)!) : null;
   }
 
-  // A panel carrying its own hardware: it leaves whatever else it sat on, and its hardware
-  // comes along — that pushed home through its joints, as any compound (the physics seam
-  // carries it), that only seated held where it sits in the panel (riders). It is a free
-  // part's drag from then on: it lifts, aims, and looks for a whole fit for all of it.
-  function beginCarry(part: Part, carried: Part[], point: Vec3, event: ClientPoint) {
-    placed.delete(part);
-    for (const joint of assembly.jointsOf(part.id)) if (!carried.some((c) => c.id === joint.hardware)) unseat(joint);
-    for (const rider of carried) for (const joint of assembly.jointsOf(rider.id)) if (joint.host !== part.id) unseat(joint);
-    reconcile();
-    const start = poseOf(part.id);
-    const carry: Carry = { start, riders: carried.map((rider) => ({ part: rider, start: poseOf(rider.id) })) };
-    for (const rider of carry.riders) {
-      if (isBonded(rider.part)) continue;
-      riders.set(rider.part.id, { host: part, hostStart: start, start: rider.start });
-      if (placed.has(rider.part)) continue;
-      physics.grab(rider.part.body);
-      placed.add(rider.part);
+  // The hardware seated only in `members`: each piece outside them seated in one of them, and
+  // in nothing else — bar seats one of them was carried onto and not yet pushed home, which it
+  // leaves. Hardware with a tool on it stays where it is.
+  function seatedIn(members: ReadonlySet<PartId>): PartId[] {
+    const ridesOn = (j: AssemblyJoint) => members.has(j.host) || (members.has(j.mover) && !isFastened(j.fastener));
+    const out = new Set<PartId>();
+    for (const id of members) {
+      for (const j of assembly.jointsOf(id)) {
+        if (j.host === id && j.kind !== KIND.TOOL && !members.has(j.hardware) && assembly.jointsOf(j.hardware).every(ridesOn)) out.add(j.hardware);
+      }
     }
+    return [...out];
+  }
+
+  // A panel carrying its assembly: it leaves whatever else it sat on, and the rest comes along
+  // — that fastened to it through its joints, as any compound (the physics seam carries it),
+  // that only seated held where it sits (riders). It is a free part's drag from then on: it
+  // lifts, aims, and looks for a whole fit for all of it.
+  function beginCarry(part: Part, carried: Part[], point: Vec3, event: ClientPoint) {
+    const carry: Carry = { start: poseOf(part.id), riders: carried.map((rider) => ({ part: rider, start: poseOf(rider.id) })) };
+    takeUp(part, carry);
     beginMove(part, point, event, 'move', carry);
     clampCarried(drag!.rotation);
   }
 
-  // The carried panel's reach with it turned to `rotation`, kept on the drag, as the lift
-  // and the wall clamp read it.
-  function clampCarried(rotation: Quat) {
-    const half = reachOf(drag!.part, rotation);
-    drag!.half = [half[0], half[2]];
-    drag!.halfHeight = half[1];
-    return half[1];
+  // Takes `carry` up off whatever it sits on outside itself: every seat between a part it
+  // carries and one it leaves goes. Its assembly is no longer held where it seated — the
+  // physics seam moves it as one now — and the hardware only seated in it is held where it
+  // sits in its panel, riding along (riders) until pushed home or taken out.
+  function takeUp(part: Part, carry: Carry) {
+    const ids = new Set([part.id, ...carry.riders.map((r) => r.part.id)]);
+    for (const id of ids) for (const joint of assembly.jointsOf(id)) if (!ids.has(joint.hardware) || !ids.has(joint.host)) unseat(joint);
+    placed.delete(part);
+    reconcile();
+    const members = assembly.compoundOf(part.id);
+    for (const { part: rider, start } of carry.riders) {
+      if (members.has(rider.id)) {
+        placed.delete(rider);
+        continue;
+      }
+      const host = partById.get(assembly.jointsOf(rider.id).find((j) => members.has(j.host))!.host)!;
+      riders.set(rider.id, { host, hostStart: poseOf(host.id), start });
+      if (placed.has(rider)) continue;
+      physics.grab(rider.body);
+      placed.add(rider);
+    }
   }
 
-  // How far `part` reaches about its centre with it turned to `rotation`: its own box,
-  // widened to take in the hardware it carries — as the drag carries it, else as it sits in
-  // it now — so no clamp, the elevation line's included, lets a dowel through the floor or
-  // a wall.
-  function reachOf(part: Part, rotation: Quat): Vec3 {
-    const half = rotatedHalfExtents(PART_TYPES[part.type].size.map((d) => d / 2), rotation);
+  // Whether the elevation line can take `part` up as it stands, selected: a panel this would
+  // carry, its assembly sitting in no seat outside itself — so nothing is torn off it, and
+  // none of it is held at a seat.
+  function carries(part: Part) {
+    const carried = carryOf(part);
+    if (!carried || placed.has(part)) return false;
+    const ids = new Set([part, ...carried].map((p) => p.id));
+    return [...ids].every((id) => assembly.jointsOf(id).every((j) => ids.has(j.hardware) && ids.has(j.host)));
+  }
+
+  // What the elevation line holds up: its part and all that part carries — its assembly, its
+  // seated hardware. None of it is a seat: it all drops when the line lets go.
+  function heldUp(): Set<Part> {
+    const held = hold?.held;
+    return new Set(held ? [held, ...(carryOf(held) ?? [])] : []);
+  }
+
+  // A panel the line took up outside a drag carries what a drag of it would: its assembly
+  // through the physics seam, as the hold grabs it, and the hardware only seated in it held
+  // where it sits in its panel (riders) — none left hovering, none dropping out. The hold may
+  // have raised the assembly before this frame sees it, so that hardware is placed by its seat
+  // in its panel as the panel is now, never where it was left.
+  function carryHeld() {
+    const held = hold?.held ?? null;
+    if (held === lifted) return;
+    lifted = held;
+    if (held) letGoOf(held);
+    if (!held || drag?.part === held) return;
+    const carried = carryOf(held);
+    if (!carried) return;
+    const members = assembly.compoundOf(held.id);
+    const startOf = (rider: Part) =>
+      members.has(rider.id) ? poseOf(rider.id) : assembly.restPose(assembly.jointsOf(rider.id).find((j) => members.has(j.host))!.id, poseOf);
+    takeUp(held, { start: poseOf(held.id), riders: carried.map((rider) => ({ part: rider, start: startOf(rider) })) });
+  }
+
+  // The carried panel's reach with it turned to `rotation`, kept on the drag, as the lift
+  // and the wall clamp read it: the box's half-extents, and its centre's offset from the
+  // panel's, as a compound's footprint keeps them.
+  function clampCarried(rotation: Quat) {
+    const { centre, half } = reachOf(drag!.part, rotation);
+    drag!.centre = centre;
+    drag!.half = [half[0], half[2]];
+    drag!.halfHeight = half[1];
+  }
+
+  // The box `part` fills with it turned to `rotation` — its centre's offset from the part's,
+  // and its half-extents: its own box, widened to take in everything it carries (its
+  // assembly's other panels and hardware, as the drag carries them, else as they sit now) on
+  // whichever side it lies, so no clamp, the elevation line's included, lets a dowel or a
+  // joined panel through the floor or a wall, nor lifts a panel by what stands on it.
+  function reachOf(part: Part, rotation: Quat): { centre: Vec3; half: Vec3 } {
+    const own = rotatedHalfExtents(PART_TYPES[part.type].size.map((d) => d / 2), rotation);
+    const min = own.map((v) => -v);
+    const max = [...own];
     const carry = drag?.part === part && drag.carry ? drag.carry : carriedNow(part);
     const at: Pose = { position: [0, 0, 0], rotation };
     for (const { part: rider, start } of carry?.riders ?? []) {
       const pose = carryPose(carry!.start, at, start);
       const reach = rotatedHalfExtents(PART_TYPES[rider.type].size.map((d) => d / 2), pose.rotation);
-      for (let i = 0; i < 3; i++) half[i] = Math.max(half[i], Math.abs(pose.position[i]) + reach[i]);
+      for (let i = 0; i < 3; i++) {
+        min[i] = Math.min(min[i], pose.position[i] - reach[i]);
+        max[i] = Math.max(max[i], pose.position[i] + reach[i]);
+      }
     }
-    return half;
+    // map keeps the length; TS widens a mapped tuple to number[].
+    return { centre: min.map((v, i) => (v + max[i]) / 2) as Vec3, half: min.map((v, i) => (max[i] - v) / 2) as Vec3 };
   }
 
-  // The hardware `part` would carry, as it sits in it now.
+  // What `part` would carry, as it all sits now.
   function carriedNow(part: Part): Carry | null {
     const riders = carryOf(part);
     return riders && { start: poseOf(part.id), riders: riders.map((rider) => ({ part: rider, start: poseOf(rider.id) })) };
@@ -779,6 +963,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function refreshOffer(target: Vec3) {
     // A compound carries its joints along; only a free part looks for a seat.
     drag!.snapped = drag!.mode === 'move' ? snapCandidate(target) : null;
+    holdStill(drag!.snapped);
     reportOffer();
     if (drag!.snapped) ghost?.show(drag!.part.mesh, drag!.snapped, drag!.snapped.preferred);
     else ghost?.hide();
@@ -822,14 +1007,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   // Where a carried part could seat: free connectors on seated hardware or any hole, never
-  // on the part the elevation line holds, nor on hardware a panel carries — as snapCandidate
+  // on what the elevation line holds up, nor on what a panel carries — as snapCandidate
   // offers them.
   function seatsFor(carried: Part) {
     const isTaken = occupied();
     const seated = seatedHardware(assembly.all());
     const riding = new Set(drag?.carry?.riders.map((r) => r.part));
+    const up = heldUp();
     return parts.flatMap((other) =>
-      other === carried || other === hold?.held || riding.has(other)
+      other === carried || up.has(other) || riding.has(other)
         ? []
         : worldConnectors(other, other.mesh.position, other.mesh.quaternion).filter((c) => !isTaken(c) && isSeatTarget(c, seated)),
     );
@@ -991,9 +1177,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // events, so the offer the turn brings is looked for here too.
   function aimPanel(goal: PanelGoal | null, delta: number) {
     if (!goal || drag!.snapped?.preferred) return;
-    const { part, held, centre } = drag!;
+    const { part, held } = drag!;
     const rotation = aimStep(drag!.rotation, goal.pose.rotation, aimWeight(goal.distance, PANEL.zone), PANEL.rate, delta);
-    const hy = clampCarried(rotation);
+    clampCarried(rotation);
     drag!.rotation = rotation;
     // A fit on offer that is not where it goes — one a turning panel passed on its way in (a
     // side panel's plinth holes lie beside its bottom panel's): seat assist has the pose, but
@@ -1004,7 +1190,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     // Turned clear of the floor: the lift re-places it from the finger and looks for an offer.
     // An offer found there leaves it where it was held, so it goes to the lifted height
     // itself — never a frame through the floor — and seat assist eases it in from there.
-    if (clampLift(drag!.height + centre[1], hy, ROOM, GESTURE.ceilingMargin) - centre[1] !== drag!.height) {
+    const { centre, halfHeight } = drag!;
+    if (clampLift(drag!.height + centre[1], halfHeight, ROOM, GESTURE.ceilingMargin) - centre[1] !== drag!.height) {
       liftDrag(0, 0);
       if (!drag!.snapped) return;
       const [x, , z] = held!.position;
@@ -1040,8 +1227,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       stopDrag();
       return false;
     }
-    // The seat on offer — or, for hardware let go over a lit ring, that ring's.
-    const snapped = drag!.snapped ?? ringDrop();
+    // The seat on offer — or, for hardware let go over a lit ring, that ring's; a panel's fit
+    // as it stands now.
+    const offered = drag!.snapped ?? ringDrop();
+    const snapped = offered?.key ? settled({ ...offered, key: offered.key }) : offered;
     // Whatever was seated on a part that just moved away drops — judged before the new seat
     // is made: a kinematic move lands on the next physics step, so until then the part reads
     // where it was, and a seat from a far ring drop would look stale.
@@ -1064,22 +1253,38 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return !!snapped;
   }
 
-  // A panel let go on a whole fit seats every pair of it at once — its holes, and the ends of
-  // the hardware it carries — the panel the mover of each, and is held there as any seated
-  // part is until a fastener engages.
+  // A panel let go on a whole fit seats every pair of it at once — the holes of every panel it
+  // carries, and the ends of the hardware it carries — and is held there as any seated part
+  // is until a fastener engages; its assembly and hardware go there with it. Each pair's mover
+  // is the carried panel its connector is on, or that its hardware sits in: the grabbed one's
+  // own, or another of the assembly's.
   function seatFit(part: Part, snapped: Pose, pairs: FitPair<WorldConnector, WorldConnector>[]) {
     // The seats first, as the single-pair path has it: their SEAT events end the elevation
     // line's hold, so the move below lands at the seat, never at the line's height.
     for (const { hole, end } of pairs) {
-      const joint = assembly.seat({ partA: hole.part.id, connectorA: hole.index, partB: end.part.id, connectorB: end.index, mover: part.id });
+      const joint = assembly.seat({ partA: hole.part.id, connectorA: hole.index, partB: end.part.id, connectorB: end.index, mover: moverOf(hole) });
       events?.emit(seatEvent(joint));
       flash(hole, end);
     }
+    // One move: the physics seam takes the assembly with it.
     physics.move(part.body, snapped.position, snapped.rotation);
     placed.add(part);
+    // What it seated onto stays held still with it until a fastener holds them (letGoUnder).
+    if (still) stillUnder.set(part, still);
+    still = null;
     // Held where it seats: its hardware goes there with it.
     drag!.held = { position: snapped.position, rotation: snapped.rotation };
     followRiders();
+    // Physics follows the graph once, for every pair at once.
+    reconcile();
+  }
+
+  // The carried panel `connector` is on — or, for a piece of hardware's end, the carried panel
+  // that hardware sits in.
+  function moverOf({ part }: WorldConnector): PartId {
+    if (isPanel(part.type)) return part.id;
+    const carried = new Set([drag!.part, ...drag!.carry!.riders.map((rider) => rider.part)].map((p) => p.id));
+    return assembly.jointsOf(part.id).find((j) => j.hardware === part.id && carried.has(j.host))!.host;
   }
 
   function cancelDrag() {
@@ -1088,6 +1293,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   function stopDrag() {
+    holdStill(null);
     ghost?.hide();
     dropGuide?.hide();
     targetRings?.hide();
@@ -1144,7 +1350,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       return glow(decalOf(a) ?? decalOf(b), drag.snapped.preferred ? COLORS.whereItGoes : COLORS.decalFlash);
     }
     const under = hit && drag.mode === 'move' ? partByMesh.get(hit.object)! : null;
-    const host = under === hold?.held ? null : under;
+    const host = under && heldUp().has(under) ? null : under;
     glow(host ? decalOf(socketUnder(to, freeSocketsFor(part, host), DROP.holeReach)) : null);
   }
 
@@ -1198,10 +1404,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (pulled.length === 0) return;
     for (const { id } of pulled) reportFastening(id, true);
     drag!.joints = joints.filter((j) => !pulled.includes(j));
-    const carried = carryOf(part);
+    // Still pushed home somewhere: the pull goes on, as beginDrag has it.
+    const carried = assembly.pullable(part.id).length > 0 ? null : carryOf(part);
     if (!carried && !assembly.canRelease(part.id)) return reconcile();
     // Pulled free: it leaves its seats and carries on as a normal drag from here — a panel
-    // with the hardware it carries.
+    // with everything it carries.
     if (!carried) for (const joint of assembly.jointsOf(part.id)) unseat(joint);
     reconcile();
     aim(pointer);
@@ -1358,14 +1565,18 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (!placed.has(part)) onTap?.(part);
   }
 
-  // A panel carried in on its hardware sits in seats it touches only through that hardware
-  // (a shelf's dowels in a side panel): a tap on it pushes those home too.
-  const pressCarried = (part: Part) =>
-    assembly
+  // A panel carried in on its hardware, or with its assembly, sits in seats it touches only
+  // through them (a shelf's dowels in a side panel; a carcass's in the second side panel): a
+  // tap on it pushes those home too. Seats inside the assembly are its own.
+  function pressCarried(part: Part) {
+    if (!isPanel(part.type)) return [];
+    const members = assembly.compoundOf(part.id);
+    return assembly
       .all()
-      .filter((j) => j.mover === part.id && j.hardware !== part.id && j.host !== part.id && isTapKind(j.kind))
+      .filter((j) => members.has(j.mover) && j.hardware !== part.id && j.host !== part.id && isTapKind(j.kind) && !(members.has(j.hardware) && members.has(j.host)))
       .filter((j) => assembly.apply(j.id, { type: 'tap' }, behindFitting(j)))
       .map((j) => j.id);
+  }
 
   // A back fitting pressed home lands in whichever panel lies behind its hole.
   function behindFitting(joint: AssemblyJoint): ApplyContext {
@@ -1382,6 +1593,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // --- per frame: fastener progress drawn on top of the simulated poses ---
 
   function update(delta = 0) {
+    carryHeld();
     followHold();
     driveHeld(delta);
     // Swept once, for the aim and the rings.
@@ -1428,10 +1640,19 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
         riders.delete(id);
         continue;
       }
-      const at = drag?.part === host && drag.held ? drag.held : poseOf(host.id);
-      const pose = carryPose(hostStart, at, start);
+      const pose = carryPose(hostStart, poseNow(host), start);
       physics.move(part.body, pose.position, pose.rotation);
     }
+  }
+
+  // Where `part` is now: where the drag holds it, or carries it along, else the simulation's pose.
+  function poseNow(part: Part): Pose {
+    if (drag?.held) {
+      if (drag.part === part) return drag.held;
+      const carried = drag.carry?.riders.find((rider) => rider.part === part);
+      if (carried) return carryPose(drag.carry!.start, drag.held, carried.start);
+    }
+    return poseOf(part.id);
   }
 
   // --- effects from the state machine ---
@@ -1583,9 +1804,16 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     get dragging() {
       return drag && { part: drag.part, mode: drag.mode };
     },
-    // How far a part reaches above and below its centre turned to `rotation`: a panel's
-    // own box, widened by the hardware it carries — the elevation line's floor clearance.
-    halfHeightOf: (part, rotation) => reachOf(part, rotation)[1],
+    // How far a part reaches up and down turned to `rotation`: a panel's own box, widened by
+    // everything it carries on whichever side it lies — the elevation line's floor and
+    // ceiling clearance.
+    verticalReachOf: (part, rotation) => {
+      const { centre, half } = reachOf(part, rotation);
+      return { half: half[1], centre: centre[1] };
+    },
+    // Whether the elevation line may take up `part`, selected and sitting in a seat: a panel
+    // carrying its assembly, or its hardware, that sits on nothing else.
+    carries,
     update,
     // Brings the physics joints in line with the graph after a change made outside a
     // gesture — the display shelf seated pre-fastened — through the same reconcile a tap

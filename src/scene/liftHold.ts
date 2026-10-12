@@ -10,7 +10,7 @@ import type { Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
 /** What `createLiftHold` adds to the physics it wraps — see there. */
 export interface LiftHold {
   begin(part: Part, by: Keeper): void;
-  measure(halfHeightOf: HalfHeightOf): void;
+  measure(reachOf: ReachOf): void;
   target(height: number): void;
   jump(height: number): void;
   end(by?: Keeper): void;
@@ -23,19 +23,27 @@ export interface LiftHold {
 /** What keeps a held part up: a finger on the line, or Shift held down (the desktop's hold). */
 export type Keeper = 'line' | 'key';
 
-/** How far a part reaches above and below its centre, turned by `rotation` (metres). */
-export type HalfHeightOf = (part: Part, rotation: Quat) => number;
+/** How far a part reaches up and down (metres): `half` either side of a point `centre` above its own centre. */
+export interface VerticalReach {
+  half: number;
+  centre: number;
+}
+
+/** How far a part reaches up and down, turned by `rotation`. */
+export type ReachOf = (part: Part, rotation: Quat) => VerticalReach;
 
 /** A part's own box's reach, turned by `rotation`. */
-export const ownHalfHeight: HalfHeightOf = (part, rotation) => rotatedHalfExtents(PART_TYPES[part.type].size.map((d) => d / 2), rotation)[1];
+export const ownReach: ReachOf = (part, rotation) => ({ half: rotatedHalfExtents(PART_TYPES[part.type].size.map((d) => d / 2), rotation)[1], centre: 0 });
 
 /**
  * A part's lift range turned by `rotation`: a part stood on end needs more floor clearance.
- * `halfHeightOf` measures its reach — its own box unless told otherwise (a panel carrying
- * dowels reaches further, src/scene/gestureRouter.ts `halfHeightOf`).
+ * `reachOf` measures its reach — its own box unless told otherwise (a panel carrying dowels,
+ * or its assembly, reaches further, and an assembly held by its bottom panel mostly above it:
+ * src/scene/gestureRouter.ts `verticalReachOf`).
  */
-export function liftRangeOf(part: Part, rotation: Quat, halfHeightOf: HalfHeightOf = ownHalfHeight): LiftRange {
-  return liftRange(halfHeightOf(part, rotation));
+export function liftRangeOf(part: Part, rotation: Quat, reachOf: ReachOf = ownReach): LiftRange {
+  const { half, centre } = reachOf(part, rotation);
+  return liftRange(half, centre);
 }
 
 const clampTo = (y: number, [min, max]: LiftRange) => Math.min(max, Math.max(min, y));
@@ -47,8 +55,8 @@ const clampTo = (y: number, [min, max]: LiftRange) => Math.min(max, Math.max(min
  * as keeping it up, `target(height)` eases it there in `update(delta)`, `jump(height)` puts
  * it there at once, and `end(by)` lets `by` go: once no keeper is left, the body goes back
  * to the simulation at rest — so it drops, as releasing a lift always has. `end()` drops it
- * whoever keeps it (a seat, a repack, the app put away). `measure(halfHeightOf)` sets how
- * a held part's reach is measured for its floor clearance — its own box until then.
+ * whoever keeps it (a seat, a repack, the app put away). `measure(reachOf)` sets how a held
+ * part's reach is measured for its floor and ceiling clearance — its own box until then.
  *
  * While holding body B:
  *   move(B)    only y is replaced by the hold's height — x, z and rotation pass through, so
@@ -71,7 +79,7 @@ export function createLiftHold(physics: PhysicsWorld): PhysicsWorld & LiftHold {
   const keepers = new Set<Keeper>();
 
   // How far a held part reaches: its own box, until `measure` says otherwise.
-  let reach: HalfHeightOf = ownHalfHeight;
+  let reach: ReachOf = ownReach;
 
   const holding = (body: Body) => hold?.part.body === body;
   const rangeNow = () => liftRangeOf(hold!.part, hold!.rotation, reach);
@@ -124,10 +132,10 @@ export function createLiftHold(physics: PhysicsWorld): PhysicsWorld & LiftHold {
     hold = { part, x, z, rotation: [r.x, r.y, r.z, r.w], height: y, goal: y };
   }
 
-  // Where a held part's reach is measured from now on — the router's, which takes in the
-  // hardware a carried panel brings along.
-  function measure(halfHeightOf: HalfHeightOf) {
-    reach = halfHeightOf;
+  // Where a held part's reach is measured from now on — the router's, which takes in all a
+  // carried panel brings along: its hardware, its assembly.
+  function measure(reachOf: ReachOf) {
+    reach = reachOf;
   }
 
   function target(height: number) {

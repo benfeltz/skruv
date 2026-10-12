@@ -3,7 +3,7 @@ import { CONNECTOR } from '../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, multiplyQuaternions, rotateVector } from '../tools/validate/lib/geometry.js';
 import { PANEL } from '../src/constants.js';
 import { ASSEMBLED, PART_TYPES } from '../src/game/item.js';
-import { findFits, isPanelType, preferredPoses, preferredRelatives, preferredTargets, rankFits } from '../src/game/panelFit.js';
+import { findFits, heldOffer, isPanelType, preferredPoses, preferredRelatives, preferredTargets, preferredThrough, rankFits } from '../src/game/panelFit.js';
 import type { WorldConnector } from '../src/game/snapMath.js';
 import type { Pose, Quat, Vec3 } from '../tools/validate/lib/geometry.js';
 
@@ -161,5 +161,107 @@ describe('where it goes, and ranking (1.8.3.1 Step 2)', () => {
     // Nowhere near: nothing.
     const away = { ...at, position: [at.position[0] + 0.5, at.position[1], at.position[2]] as Vec3 };
     expect(preferredTargets(world('topBottomPanel', away), ENDS, PANEL)).toEqual([]);
+  });
+});
+
+describe('where it goes through a panel it carries (1.8.3.4 Step 3)', () => {
+  const byRole = (id: string): Pose => ASSEMBLED.parts.find((part) => part.id === id)!;
+  const gap = (a: Vec3, b: Vec3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const turn = (a: Quat, b: Quat) => 2 * Math.acos(Math.min(1, Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3])));
+  // A rigid move: a quarter turn about a tilted axis, then a shift.
+  const SPIN: Quat = (() => {
+    const axis: Vec3 = [0.3, 0.8, -0.5];
+    const n = Math.hypot(...axis);
+    const s = Math.sin(Math.PI / 4);
+    return [(axis[0] / n) * s, (axis[1] / n) * s, (axis[2] / n) * s, Math.cos(Math.PI / 4)];
+  })();
+  const moved = ({ position, rotation }: Pose): Pose => ({
+    position: rotateVector(SPIN, position).map((v, i) => v + [0.7, 0.2, -1.1][i]) as Vec3,
+    rotation: multiplyQuaternions(SPIN, rotation),
+  });
+
+  it("maps a member at its assembled place to the grabbed panel's assembled place", () => {
+    // The fixed shelf and the bottom panel picked up together, as they sit in the finished
+    // JOHNNY but anywhere in the room: the shelf where it goes puts the bottom panel where it goes.
+    const shelf = byRole('fixedShelf-1');
+    const bottom = byRole('topBottomPanel-1');
+    const pose = preferredThrough(shelf, moved(shelf), moved(bottom));
+    expect(gap(pose.position, bottom.position)).toBeLessThan(1e-9);
+    expect(turn(pose.rotation, bottom.rotation)).toBeLessThan(1e-6);
+  });
+
+  it('is the identity for the grabbed panel itself', () => {
+    const bottom = moved(byRole('topBottomPanel-1'));
+    const pose = preferredThrough(bottom, bottom, bottom);
+    expect(gap(pose.position, bottom.position)).toBeLessThan(1e-9);
+    expect(turn(pose.rotation, bottom.rotation)).toBeLessThan(1e-6);
+  });
+});
+
+// 1.8.3.4 phone finding 1: a fit on offer holds, so a trembling finger, the line easing or a
+// nudged carcass never flips it frame to frame.
+describe('heldOffer: the fit on offer holds (1.8.3.4 phone finding 1)', () => {
+  const WINDOW = { holdReach: PANEL.holdReach, holdTurn: PANEL.holdTurn, offerMargin: PANEL.offerMargin };
+  const turned = (angle: number): Quat => [0, Math.sin(angle / 2), 0, Math.cos(angle / 2)];
+  const finger = (x: number, rotation: Quat = [0, 0, 0, 1]): Pose => ({ position: [x, 0, 0], rotation });
+  // An offer seating the panel at x, as `key`; taken with the finger at `taken`, if on offer already.
+  const offer = (key: string, x: number, { preferred = false, pairs = 2, taken = null as Pose | null } = {}) => ({
+    key,
+    position: [x, 0.3, 0] as Vec3,
+    rotation: [0, 0, 0, 1] as Quat,
+    preferred,
+    pairs: Array.from({ length: pairs }, () => ({ hole: { type: CONNECTOR.DOWEL_HOLE, position: [0, 0, 0] as Vec3, axis: [0, 1, 0] as Vec3 }, end: { type: CONNECTOR.DOWEL_END, position: [0, 0, 0] as Vec3, axis: [0, -1, 0] as Vec3 } })),
+    ...(taken ? { taken } : {}),
+  });
+
+  it('takes the first offer, noting where the finger had the panel; none while none is found', () => {
+    const next = offer('a', 0.05);
+    expect(heldOffer(null, next, finger(0), WINDOW)).toEqual({ ...next, taken: finger(0) });
+    expect(heldOffer(null, null, finger(0), WINDOW)).toBeNull();
+  });
+
+  it('keeps the offer through a gap in the search while the finger stays near where it was taken', () => {
+    const current = offer('a', 0.6, { taken: finger(0) });
+    // The fit's own swing puts it far from the finger: that never lets it go.
+    expect(heldOffer(current, null, finger(PANEL.holdReach - 0.01), WINDOW)).toBe(current);
+  });
+
+  it('lets it go once the finger has moved, or turned, the panel out of the window since', () => {
+    const current = offer('a', 0, { taken: finger(0) });
+    expect(heldOffer(current, null, finger(PANEL.holdReach + 0.01), WINDOW)).toBeNull();
+    const next = offer('b', 0.01);
+    const turn = finger(0, turned(PANEL.holdTurn + 0.05));
+    expect(heldOffer(current, next, turn, WINDOW)).toEqual({ ...next, taken: turn });
+  });
+
+  it('keeps the same fit found again as it was offered — seat assist never chases its seats', () => {
+    const current = offer('a', 0.03, { taken: finger(0) });
+    expect(heldOffer(current, offer('a', 0.05), finger(0.01), WINDOW)).toBe(current);
+  });
+
+  it('takes the same fit found again once it has come to be where it goes', () => {
+    const current = offer('a', 0.03, { taken: finger(0) });
+    const now = offer('a', 0.04, { preferred: true });
+    expect(heldOffer(current, now, finger(0.01), WINDOW)).toEqual({ ...now, taken: finger(0) });
+  });
+
+  it('holds against another fit as good — the same place by other pairs — unless clearly nearer', () => {
+    const current = offer('a', 0.03, { taken: finger(0) });
+    expect(heldOffer(current, offer('b', 0.03), finger(0.02), WINDOW)).toBe(current);
+    expect(heldOffer(current, offer('b', 0.03 - PANEL.offerMargin / 2), finger(0), WINDOW)).toBe(current);
+    const slid = offer('b', 0.1);
+    const far = offer('a', 0.5, { taken: finger(0) });
+    expect(heldOffer(far, slid, finger(0.05), WINDOW)).toEqual({ ...slid, taken: finger(0.05) });
+  });
+
+  it('gives way to where it goes, and to more pairs, but never the other way', () => {
+    const wrong = offer('a', 0.01, { taken: finger(0) });
+    const right = offer('b', 0.1, { preferred: true });
+    expect(heldOffer(wrong, right, finger(0), WINDOW)).toEqual({ ...right, taken: finger(0) });
+    expect(heldOffer({ ...right, taken: finger(0) }, offer('a', 0.01), finger(0), WINDOW)).toEqual({ ...right, taken: finger(0) });
+    const fewer = offer('a', 0.01, { taken: finger(0) });
+    const more = offer('c', 0.1, { pairs: 3 });
+    expect(heldOffer(fewer, more, finger(0), WINDOW)).toEqual({ ...more, taken: finger(0) });
+    expect(heldOffer({ ...more, taken: finger(0) }, offer('a', 0.01), finger(0), WINDOW)).toEqual({ ...more, taken: finger(0) });
   });
 });

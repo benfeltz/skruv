@@ -365,6 +365,16 @@ export const PANEL = {
   // fit on offer turns toward where it goes, at `rate` (1/s) at full strength.
   zone: 0.4,
   rate: 6,
+  // A fit on offer holds (hysteresis) until the finger has moved the panel more than
+  // holdReach metres, or turned it more than holdTurn radians, since the offer was taken, or a
+  // better fit comes in reach — where it goes, or more pairs; another fit as good takes over
+  // only once the panel is offerMargin metres nearer it. The same fit found again stays as
+  // first offered (what it seats on is held still under it). So a trembling finger, the line
+  // easing, or a carcass the panel nudges never flips the offer frame to frame (1.8.3.4 phone
+  // finding 1).
+  holdReach: 0.08,
+  holdTurn: (20 * Math.PI) / 180,
+  offerMargin: 0.02,
 };
 
 // Self-aim (src/game/toolAim.ts, driven by src/scene/gestureRouter.ts): dragged hardware —
