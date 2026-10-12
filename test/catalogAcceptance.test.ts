@@ -54,8 +54,10 @@ class FakeElement {
   }
   setPointerCapture() {}
   focus() {}
+  // What was last drawn on it, when it is a canvas.
+  drawn: unknown = undefined;
   getContext() {
-    return { drawImage() {} };
+    return { drawImage: (source: unknown) => (this.drawn = source) };
   }
   closest(tag: string): FakeElement | null {
     return this.tag === tag ? this : (this.parent?.closest(tag) ?? null);
@@ -94,7 +96,7 @@ const entries: CatalogEntry[] = [
 ];
 const ids = entries.map(({ id }) => id);
 
-type Sheet = { scrim: FakeElement; thumb: FakeElement; element: FakeElement; expanded: boolean; currentPage: number; dispose(): void; setOpen(v: boolean): void };
+type Sheet = { scrim: FakeElement; thumb: FakeElement; element: FakeElement; expanded: boolean; currentPage: number; dispose(): void; setOpen(v: boolean): void; place(): void };
 
 /** The boot as src/main.ts wires it: a slot, a catalog open on its cover that can't close until a pick. */
 function boot({ flag, failBuild = new Set<string>() }: { flag: string; failBuild?: Set<string> }) {
@@ -109,7 +111,7 @@ function boot({ flag, failBuild = new Set<string>() }: { flag: string; failBuild
     build: () => {
       if (failBuild.has(named)) throw new Error(`build ${named} broke`);
       // The item world's manual, mounted docked as itemWorld.ts mounts it.
-      const manual = createBookletSheet({ pages: { count: 3, canvas: () => ({}) as CanvasImageSource }, open: false }) as unknown as Sheet;
+      const manual = createBookletSheet({ pages: { count: 3, canvas: (index) => ({ manualPage: index }) as unknown as CanvasImageSource }, open: false }) as unknown as Sheet;
       body.append(manual.scrim, manual.thumb, manual.element);
       manuals.push(manual);
       live.push(manual);
@@ -117,7 +119,8 @@ function boot({ flag, failBuild = new Set<string>() }: { flag: string; failBuild
     },
   });
   const catalog = createCatalogSheet({
-    pages: { count: pages.length, pages, canvas: () => ({}) as CanvasImageSource },
+    // Pages that name themselves, so a thumb's drawing says which page it is.
+    pages: { count: pages.length, pages, canvas: (index) => ({ catalogPage: index }) as unknown as CanvasImageSource },
     open: true,
     canClose: () => items.current !== null,
     onPick: (id) => {
@@ -263,3 +266,56 @@ describe('a pick whose build fails (review rounds 3–6)', () => {
     expect(catalog.expanded).toBe(false);
   });
 });
+
+describe("Ben's test round (4:23 and 4:28 PM): the corner stack after a pick", () => {
+  const translate = (thumb: FakeElement) => {
+    const [, x, y] = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(thumb.style.transform)!;
+    return [Number(x) + 0, Number(y) + 0];
+  };
+
+  it('the docked catalog shows its cover, whatever page it is put down on; the manual shows its own page', () => {
+    const { catalog, buildIt, turnTo, manuals } = boot({ flag: '' });
+    turnTo(1);
+    buildIt.fire('click');
+    expect(catalog.thumb.children[0].drawn).toEqual({ catalogPage: 0 });
+    // Reopened, browsed to the last page, put down with a tap on the room.
+    catalog.thumb.fire('click');
+    turnTo(2);
+    catalog.scrim.fire('pointerdown');
+    catalog.scrim.fire('pointerup');
+    expect(catalog.expanded).toBe(false);
+    expect(catalog.currentPage).toBe(2);
+    expect(catalog.thumb.children[0].drawn).toEqual({ catalogPage: 0 });
+    // The manual, opened, flipped to page 2 and put down, shows page 2.
+    const [manual] = manuals;
+    manual.thumb.fire('click');
+    manual.element.children[2].children[2].fire('click');
+    manual.element.children[0].fire('click');
+    expect(manual.thumb.children[0].drawn).toEqual({ manualPage: 1 });
+  });
+
+  it('the manual sits fanned up and right toward the room by CATALOG.stack, the catalog in the corner', () => {
+    const { catalog, buildIt, turnTo, manuals } = boot({ flag: '' });
+    turnTo(1);
+    buildIt.fire('click');
+    expect(translate(manuals[0].thumb)).toEqual([CATALOG.stack.fanX, -CATALOG.stack.fanY]);
+    expect(translate(catalog.thumb)).toEqual([0, 0]);
+  });
+
+  it('a ?tune change to the fan moves the manual live, the catalog staying put', () => {
+    const { catalog, buildIt, turnTo, manuals } = boot({ flag: '' });
+    turnTo(1);
+    buildIt.fire('click');
+    const { fanX, fanY } = CATALOG.stack;
+    try {
+      Object.assign(CATALOG.stack, { fanX: 20, fanY: 60 });
+      manuals[0].place();
+      catalog.place();
+      expect(translate(manuals[0].thumb)).toEqual([20, -60]);
+      expect(translate(catalog.thumb)).toEqual([0, 0]);
+    } finally {
+      Object.assign(CATALOG.stack, { fanX, fanY });
+    }
+  });
+});
+
