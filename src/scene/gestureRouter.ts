@@ -26,7 +26,7 @@ import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
 import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
 import type { Probe } from '../game/toolTargets.js';
-import { dialEngagements, engagedPart, isHome, isStalled, pickDial, tightensClockwise } from '../game/turnRing.js';
+import { dialEngagements, engagedPart, isDrawn, isHome, isStalled, pickDial, tightensClockwise } from '../game/turnRing.js';
 import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { FitPair, Relatives } from '../game/panelFit.js';
 import type { Snap } from '../game/snapMath.js';
@@ -364,10 +364,12 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function dialUnder({ clientX, clientY }: ClientPoint, picked: Part | null): PartPress | null {
     if (picked && turnTarget(picked)) return null;
     const rect = domElement.getBoundingClientRect();
-    const dials = engagements().map((engagement) => {
-      const head = headOf(engagement);
-      return { engagement, head, centre: screenPoint(head, rect), home: isHome(engagement.target.fastener) };
-    });
+    const dials = engagements()
+      .filter((engagement) => isDrawn(engagement, dialFlashes.has(engagedPart(engagement))))
+      .map((engagement) => {
+        const head = headOf(engagement);
+        return { engagement, head, centre: screenPoint(head, rect), home: isHome(engagement.target.fastener) };
+      });
     const hit = pickDial([clientX, clientY], dials);
     if (!hit) return null;
     return { kind: 'part', part: partById.get(engagedPart(hit.engagement))!, point: hit.head, distance: 0, dial: hit.engagement };
@@ -1566,14 +1568,16 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (!turnRing) return;
     const rect = domElement.getBoundingClientRect();
     const seen = new Map<PartId, boolean>();
-    const dials = engagements().map((engagement) => {
+    const dials: Dial[] = [];
+    for (const engagement of engagements()) {
       const id = engagedPart(engagement);
       const home = isHome(engagement.target.fastener);
       if (home && dialed.get(id) === false) dialFlashes.set(id, TURN_RING.flashMs);
       else if (!home) dialFlashes.delete(id);
       seen.set(id, home);
-      return dialOf(engagement, dialFlashes.has(id), rect);
-    });
+      // A hand-turned part's dial is drawn until its home flash is over, then no more.
+      if (isDrawn(engagement, dialFlashes.has(id))) dials.push(dialOf(engagement, dialFlashes.has(id), rect));
+    }
     for (const [id, left] of dialFlashes) {
       const remaining = left - delta * 1000;
       if (!seen.has(id) || remaining <= 0) dialFlashes.delete(id);

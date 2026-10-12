@@ -96,6 +96,27 @@ describe('circling a leg', () => {
   });
 });
 
+describe("a leg's dial and its home flash (review)", () => {
+  it('flashes as the leg arrives home, then draws no more — and takes no press after', () => {
+    const b = bench();
+    b.hold(1);
+    expect(b.dials.at(-1)).toMatchObject([{ progress: 0, flashing: false }]);
+    b.assembly.drive(b.inLeg.id);
+    b.hold(1);
+    expect(b.dials.at(-1)).toMatchObject([{ progress: 1, flashing: true }]);
+    b.hold(Math.ceil(TURN_RING.flashMs / 1000 / FRAME) + 2);
+    expect(b.dials.at(-1)).toBeNull();
+  });
+
+  it('shows no dial for a leg that was home from the start', () => {
+    const b = bench();
+    b.assembly.drive(b.inLeg.id);
+    b.dials.length = 0;
+    b.hold(3);
+    expect(b.dials.every((d) => d === null)).toBe(true);
+  });
+});
+
 describe('a still press', () => {
   it('drives the leg home in driveSeconds, tightening only', () => {
     const b = bench();

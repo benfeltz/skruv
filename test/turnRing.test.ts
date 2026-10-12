@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
-import { TURN_RING } from '../src/constants.js';
+import { FASTENER, TURN_RING } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
-import { arcLength, dialEngagements, dialHit, isHome, isStalled, pickDial, tightensClockwise } from '../src/game/turnRing.js';
+import { arcLength, dialEngagements, dialHit, isDrawn, isHome, isStalled, pickDial, tightensClockwise } from '../src/game/turnRing.js';
 import { createFastener, STATE } from '../src/game/fasteners.js';
 import { setItem } from '../src/game/item.js';
 
@@ -122,10 +122,26 @@ describe('dialEngagements: a part turned by hand (1.9.2)', () => {
     expect(dialEngagements(assembly.all(), () => null)).toEqual([{ tool: null, target: first }]);
   });
 
-  it('drops the dial once the leg is home', () => {
+  it('keeps the hand engagement once the leg is home — it is the renderer that stops drawing it', () => {
     const { assembly, inLeg } = bench();
     assembly.drive(inLeg.id);
-    expect(dialEngagements(assembly.all(), turnedBy(assembly))).toEqual([]);
+    const [engagement] = dialEngagements(assembly.all(), turnedBy(assembly));
+    expect(engagement).toMatchObject({ tool: null, target: { id: inLeg.id } });
+    // Drawn while its flash plays, gone after; a tool's dial is drawn home or not.
+    expect(isDrawn(engagement, true)).toBe(true);
+    expect(isDrawn(engagement, false)).toBe(false);
+    expect(isDrawn({ ...engagement, target: assembly.get(inLeg.id)! }, false)).toBe(false);
+  });
+
+  it('draws a hand engagement until it is home, and a tool engagement always', () => {
+    const { assembly, inLeg } = bench();
+    const [hand] = dialEngagements(assembly.all(), turnedBy(assembly));
+    expect(isDrawn(hand, false)).toBe(true);
+    assembly.apply(inLeg.id, { type: 'crank', radians: FASTENER.studRadians / 2 });
+    expect(isDrawn({ tool: null, target: assembly.get(inLeg.id)! }, false)).toBe(true);
+    const tooled = { tool: assembly.get(inLeg.id)!, target: assembly.get(inLeg.id)! };
+    assembly.drive(inLeg.id);
+    expect(isDrawn({ ...tooled, target: assembly.get(inLeg.id)! }, false)).toBe(true);
   });
 
   it('gives a part both a tool and a hand joint one dial: the key\'s, not a second for the hand', () => {
