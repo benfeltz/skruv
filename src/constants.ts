@@ -450,6 +450,40 @@ export const DECAL = {
   segments: 24,
 };
 
+// Hardware and tool shapes (src/game/partShapes.ts): visual only, each drawn inside its
+// pack box. Radii are fractions of the box's half-width across the piece's axis; lengths
+// are fractions of its length along it, measured from the end that goes in first.
+export const MODELS = {
+  // Round faces: low, because these are a few millimetres on screen.
+  segments: 12,
+  // The Allen key's hexagonal rod.
+  hexSides: 6,
+  // The key's rod, as a fraction of half the box's thickness: under 1 keeps the short
+  // leg's axis close to the tip connector on the box's edge.
+  wrenchRod: 0.75,
+  // Screwdriver: the handle's share of the length, the shaft's radius, and the flat blade
+  // at the tip (its length; its thickness as a fraction of the shaft's diameter).
+  screwdriverHandle: 0.45,
+  screwdriverShaft: 0.2,
+  screwdriverBlade: 0.05,
+  screwdriverBladeThickness: 0.35,
+  // Cam bolt: the thread's radius, and the head's share of the length.
+  boltShaft: 0.55,
+  boltHead: 0.14,
+  // Cam lock: the slot's depth (share of the height), and its width and length across the
+  // top face (shares of the disc's diameter).
+  camSlotDepth: 0.1,
+  camSlotWidth: 0.16,
+  camSlotLength: 0.8,
+  // Shelf pin: the rod's radius, and its collar (where it starts, how thick).
+  pinRod: 0.6,
+  pinCollarAt: 0.5,
+  pinCollar: 0.12,
+  // Back fitting: the plug's radius, and the head's share of the length.
+  fittingShaft: 0.5,
+  fittingHead: 0.25,
+};
+
 // Fasteners (src/game/fasteners.ts, src/game/assembly.ts) and the joints that follow them
 // (src/physics/world.ts). Distances in metres unless marked CSS px; angles in radians.
 export const FASTENER = {
