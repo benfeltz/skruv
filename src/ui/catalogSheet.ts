@@ -30,9 +30,8 @@ export function createCatalogSheet({
     action: {
       rect: CATALOG.page.action,
       at: (index) => {
-        const page = pages.pages[index];
-        const id = buildTarget(page);
-        return id === null || page.kind !== 'item' ? null : { label: `Build ${page.name}`, run: () => onPick(id) };
+        const item = buildTarget(pages.pages[index]);
+        return item && { label: `Build ${item.name}`, run: () => onPick(item.id) };
       },
     },
   });

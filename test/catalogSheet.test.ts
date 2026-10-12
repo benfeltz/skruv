@@ -16,7 +16,8 @@ describe('buildTarget', () => {
   const pages = createCatalog(entries, ['johnny', 'blank'], new Set(['blank']));
 
   it('picks the item on a buildable page only', () => {
-    expect(pages.map(buildTarget)).toEqual([null, null, 'blank']);
+    expect(pages.map(buildTarget)).toEqual([null, null, pages[2]]);
+    expect(buildTarget(pages[2])).toMatchObject({ id: 'blank', name: 'BLANK' });
   });
 
   it('leaves a sold-out page inert', () => {

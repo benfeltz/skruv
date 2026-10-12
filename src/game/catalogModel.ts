@@ -49,7 +49,10 @@ export function createCatalog(entries: readonly CatalogEntry[], order: readonly 
   return [{ kind: 'cover' }, ...ordered.map((id) => ({ kind: 'item' as const, ...byId.get(id)!, pickable: pickable.has(id) }))];
 }
 
-/** What BUILD IT on `page` builds: the item's id on a buildable item's page, null anywhere else — the cover has no tag and a sold-out page's stamp is inert. */
-export function buildTarget(page: CatalogPage): string | null {
-  return page.kind === 'item' && page.pickable ? page.id : null;
+/** An item page as the catalog shows it. */
+export type ItemPage = Extract<CatalogPage, { kind: 'item' }>;
+
+/** What BUILD IT on `page` builds: the item page itself when it is buildable, null anywhere else — the cover has no tag and a sold-out page's stamp is inert. */
+export function buildTarget(page: CatalogPage): ItemPage | null {
+  return page.kind === 'item' && page.pickable ? page : null;
 }
