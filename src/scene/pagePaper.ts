@@ -35,18 +35,21 @@ export function newPage(): Sheet {
  * `{ canvas(index), prerender(), dispose() }` over `count` pages drawn by `draw(index)`.
  * `canvas` draws a page the first time it is asked for and caches it; `prerender` draws the
  * rest one per idle slice, so the first frame never waits on the booklet; `dispose` stops
- * any idle drawing still to come and calls `release` (the drawings' GPU resources).
+ * any idle drawing still to come and calls `release` (the drawings' GPU resources); asking
+ * for a page after that is a bug upstream and throws.
  */
 export function createPageCache(count: number, draw: (index: number) => HTMLCanvasElement, release: () => void) {
   const cache = new Map<number, HTMLCanvasElement>();
+  // Set by dispose(): a booklet put away for good draws nothing more, idle or asked.
+  let disposed = false;
 
   function canvas(index: number) {
+    // Drawing after dispose would rebuild the released renderer's GPU resources, freed by nothing.
+    if (disposed) throw new Error('page cache: canvas() after dispose');
     if (!cache.has(index)) cache.set(index, draw(index));
     return cache.get(index)!;
   }
 
-  // Set by dispose(): a booklet put away for good stops drawing in idle time.
-  let disposed = false;
 
   function prerender() {
     const idle: (fn: () => void) => unknown = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 1));

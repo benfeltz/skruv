@@ -48,4 +48,13 @@ describe('createPageCache', () => {
     expect(drawn).toEqual([0]);
     expect(release).toHaveBeenCalledOnce();
   });
+
+  it('draws nothing after dispose: a stray ask throws instead of rebuilding released resources', () => {
+    const { pages, drawn } = cache();
+    pages.canvas(0);
+    pages.dispose();
+    expect(() => pages.canvas(1)).toThrow('after dispose');
+    expect(() => pages.canvas(0)).toThrow('after dispose');
+    expect(drawn).toEqual([0]);
+  });
 });
