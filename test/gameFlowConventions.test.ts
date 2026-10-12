@@ -132,9 +132,14 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
     expect(main).toMatch(/catalog\.setOpen\(false\);\s*\/\/[^\n]*\n\s*world\.booklet\.thumb\.focus\(\{ preventScroll: true \}\);/);
   });
 
+  it('raises a hovered thumb over the other in the corner stack, never over the scrim or sheet', () => {
+    const hover = booklet.slice(booklet.indexOf('.booklet-thumb:hover {'), booklet.indexOf('.booklet-scrim {'));
+    expect(hover).toMatch(/z-index: 1;/);
+  });
+
   it('puts the scrim over the room and the sheet over the scrim, mounted by the item world', () => {
-    expect(booklet).toMatch(/\.booklet-scrim \{[^}]*position: fixed;[^}]*inset: 0;[^}]*z-index: 1;/);
-    expect(booklet.slice(booklet.indexOf('    .booklet {'), booklet.indexOf(".booklet[data-open='true'] {"))).toMatch(/z-index: 2;/);
+    expect(booklet).toMatch(/\.booklet-scrim \{[^}]*position: fixed;[^}]*inset: 0;[^}]*z-index: 2;/);
+    expect(booklet.slice(booklet.indexOf('    .booklet {'), booklet.indexOf(".booklet[data-open='true'] {"))).toMatch(/z-index: 3;/);
     expect(world).toMatch(/document\.body\.append\(booklet\.scrim, booklet\.thumb, booklet\.element\)/);
   });
 

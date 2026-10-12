@@ -38,16 +38,19 @@ function injectStyle() {
       transition: width 160ms ease-out;
     }
     /* A mouse over the docked thumbnail grows it from its corner to a readable page,
-       about a quarter of the screen. Hover-capable pointers only: a touch never hovers. */
+       about a quarter of the screen, raised over the other thumb in the corner stack (the
+       catalog's would grow behind the manual's) — still under the scrim (2) and the sheet (3).
+       Hover-capable pointers only: a touch never hovers. */
     @media (hover: hover) {
       .booklet-thumb:hover {
         width: min(${BOOKLET_UI.thumbHoverShare * 100}vw, ${BOOKLET_UI.thumbHoverShare * 100}vh * ${pageW} / ${pageH});
+        z-index: 1;
       }
     }
     .booklet-scrim {
       position: fixed;
       inset: 0;
-      z-index: 1;
+      z-index: 2;
       touch-action: none;
       -webkit-tap-highlight-color: transparent;
     }
@@ -75,7 +78,7 @@ function injectStyle() {
       box-shadow: 0 -8px 30px #0008;
       transition: transform 220ms ease-out, visibility 0s linear 220ms;
       visibility: hidden;
-      z-index: 2;
+      z-index: 3;
     }
     .booklet[data-open='true'] {
       transform: translate(-50%, 0);
