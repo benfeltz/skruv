@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CAMERA, PHYSICS } from '../src/constants.js';
 import { createBus } from '../src/game/events.js';
 import { createHaptics } from '../src/game/haptics.js';
-import { ITEM_ID, MANIFEST, setItem } from '../src/game/item.js';
+import { ITEM_ID, ITEM_IDS, MANIFEST, setItem } from '../src/game/item.js';
 import { createItemSlot } from '../src/game/itemSlot.js';
 import { createPhysicsWorld } from '../src/physics/world.js';
 import { createCameraControls } from '../src/scene/cameraControls.js';
@@ -321,7 +321,7 @@ describe('the swap: picking from the catalog (1.9.1)', () => {
   it('a pick builds one world with its manual docked; picking it again keeps that world', async () => {
     const { deps, census } = await engine();
     const baseline = census();
-    const items = createItemSlot({ door: { selected: () => ITEM_ID, select: setItem }, build: () => createItemWorld(deps) });
+    const items = createItemSlot({ door: { knows: (id) => ITEM_IDS.includes(id), selected: () => ITEM_ID, select: setItem }, build: () => createItemWorld(deps) });
 
     const world = items.pick('johnny');
     expect(ITEM_ID).toBe('johnny');

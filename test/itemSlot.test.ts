@@ -10,6 +10,7 @@ function room({ failBuild = new Set<string>(), failDispose = new Set<string>(), 
   let named = boot;
   const log: string[] = [];
   const door = {
+    knows: (id: string) => id !== 'nope',
     selected: () => named,
     select: (id: string) => {
       if (id === 'nope') throw new Error(`no item "${id}"`);
@@ -111,12 +112,13 @@ describe('createItemSlot', () => {
     expect(holds()).toBe(true);
   });
 
-  it('an id the door refuses leaves an empty room with the door unturned', () => {
-    const { items, door, holds } = room();
-    items.pick('johnny');
-    expect(() => items.pick('nope')).toThrow('no item');
-    expect(items.current).toBeNull();
+  it('an id the door does not know is refused before anything is torn down: the room and its progress stay', () => {
+    const { items, door, log, holds } = room();
+    const world = items.pick('johnny');
+    expect(() => items.pick('nope')).toThrow('no item "nope"');
+    expect(items.current).toBe(world);
     expect(door.selected()).toBe('johnny');
+    expect(log).toEqual(['select johnny', 'build johnny']);
     expect(holds()).toBe(true);
   });
 });

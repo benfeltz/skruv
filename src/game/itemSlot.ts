@@ -13,13 +13,15 @@
 //      the pack it was built from. From here on the room is empty.
 //   2. The door turns to the new item.
 //   3. The new world is built through it.
-// If step 3 throws, the door turns back to the item it named before, and the room stays
+// An id the door doesn't know is refused before step 1, so an impossible pick costs the room
+// nothing. If step 3 throws, the door turns back to the item it named before, and the room stays
 // explicitly empty: no world, and the caller sees the error (main keeps the catalog in hand,
 // since there is no room to put it down into). createItemWorld takes back its own
 // half-built work. If step 1 throws, the room is already empty and the door never turned.
 
-/** The item door the slot builds through: which item it names now, and how to turn it. */
+/** The item door the slot builds through: whether it knows an item, which it names now, and how to turn it. */
 export interface ItemDoor {
+  knows(id: string): boolean;
   selected(): string;
   select(id: string): void;
 }
@@ -37,6 +39,7 @@ export function createItemSlot<World extends { dispose(): void }>({ door, build 
     },
     pick(id: string) {
       if (current && door.selected() === id) return current;
+      if (!door.knows(id)) throw new Error(`pick: no item "${id}"`);
       const before = door.selected();
       const old = current;
       current = null;

@@ -87,7 +87,7 @@ events.on(ANY, (event) => {
 // progress and all.
 const items = createItemSlot({
   // The door is item.ts itself: ITEM_ID is a live binding, read at each pick.
-  door: { selected: () => ITEM_ID, select: setItem },
+  door: { knows: (id) => ITEM_IDS.includes(id), selected: () => ITEM_ID, select: setItem },
   build: () =>
     createItemWorld({
       scene,
