@@ -1681,13 +1681,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     showDials(delta);
     turnedNow.clear();
     carriedCount = 0;
-    for (const joint of assembly.all()) {
+    const joints = assembly.all();
+    for (const joint of joints) {
       if (joint.kind !== KIND.BOLT && joint.kind !== KIND.CAM && joint.kind !== KIND.STUD) continue;
       // What turns on screen is the side that was dragged into the seat: a bolt, cam or stud
       // driven by its tool, or the part circled by hand — a leg set onto its stud, a leg
       // carried onto the top with its stud in it — turning and advancing about the axis of
       // its own hole instead of the hardware's (handSeat).
-      const hand = assembly.handSeat(joint);
+      const hand = assembly.handSeat(joint, joints);
       const turned = partById.get(hand ? hand.part : joint.hardware)!;
       // A part set onto several studs is drawn once, by its first: the hole its dial is on.
       if (hand && turnedNow.has(turned)) continue;

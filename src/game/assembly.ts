@@ -372,10 +372,14 @@ export function createAssembly(typeOf: (part: PartId) => string) {
    */
   function turnedFrom(part: PartId, seat: number, among: Iterable<AssemblyJoint> = joints.values()) {
     const at = connectorOf(part, seat).position;
-    const own = [...among].filter((j) => j.hardware === part && isCrankKind(j.kind));
-    // A hex at an end that is itself in a hole is buried: no key reaches it.
-    if (own.some((j) => distance(hardwareConnector(j).position, at) <= CONTRACT.mateTolerance)) return null;
-    return own[0] ?? null;
+    let turned: AssemblyJoint | null = null;
+    for (const j of among) {
+      if (j.hardware !== part || !isCrankKind(j.kind)) continue;
+      // A hex at an end that is itself in a hole is buried: no key reaches it.
+      if (distance(hardwareConnector(j).position, at) <= CONTRACT.mateTolerance) return null;
+      turned ??= j;
+    }
+    return turned;
   }
 
   /**
@@ -395,29 +399,28 @@ export function createAssembly(typeOf: (part: PartId) => string) {
   }
 
   /**
-   * The joint `part` is turned by hand through — a stud it was dragged onto or carried onto
-   * — or null: no tool, the part itself is what the finger circles. The stud and anything
+   * Every stud joint `part` is turned through by hand, in seating order: a leg set onto its
+   * stud has one, a top dropped onto four standing studs four — circling it screws them all
+   * together. The part itself is what the finger circles, no tool; the stud and anything
    * seated by being pushed into a hole have none.
    */
-  const handTarget = (part: PartId) => all().find((j) => isHandTurned(j) && j.mover === part) ?? null;
+  const handTargets = (part: PartId) => all().filter((j) => isHandTurned(j) && j.mover === part);
+
+  /** The first of `handTargets`, or null: whether a press on `part` is a turn at all. */
+  const handTarget = (part: PartId) => handTargets(part)[0] ?? null;
 
   /**
    * Where a hand-turned joint turns about, on the part the finger circles: `{ part, connector }`
    * — the hole it was set onto its stud by (it is the host), or, a part carried onto the top
    * with its stud already in it, the hole that stud is in. Null for a joint nobody circles.
+   * `among` is a joint snapshot (`all()`) for a caller that asks per joint per frame.
    */
-  function handSeat(joint: AssemblyJoint) {
+  function handSeat(joint: AssemblyJoint, among: Iterable<AssemblyJoint> = joints.values()) {
     if (!isHandTurned(joint)) return null;
     if (joint.mover === joint.host) return { part: joint.host, connector: joint.hostConnector };
-    const carried = all().find((j) => j.hardware === joint.hardware && j.host === joint.mover);
-    return carried ? { part: joint.mover, connector: carried.hostConnector } : null;
+    for (const j of among) if (j.hardware === joint.hardware && j.host === joint.mover) return { part: joint.mover, connector: j.hostConnector };
+    return null;
   }
-
-  /**
-   * Every stud joint `part` is turned through by hand, in seating order: a top dropped onto
-   * four standing studs carries four, and circling it screws them all together.
-   */
-  const handTargets = (part: PartId) => all().filter((j) => isHandTurned(j) && j.mover === part);
 
   /** Screwed bolts — the only heads a cam can catch. */
   const screwedBolts = () => all().filter((j) => j.kind === KIND.BOLT && isFastened(j.fastener));
@@ -478,7 +481,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     }
     // A part carrying its stud onto the top: the stud's own rest at the top's mouth, and the
     // part where it was relative to the stud it carries.
-    if (isHandTurned(joint) && joint.mover !== joint.hardware) {
+    if (isHandTurned(joint)) {
       const stud = {
         position: add(host.position, rotateVector(host.rotation, rel.anchor)),
         rotation: normalize(multiplyQuaternions(host.rotation, rel.rotation)),
