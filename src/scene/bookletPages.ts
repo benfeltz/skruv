@@ -368,9 +368,10 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     next(0);
   }
 
-  /** Stops any idle drawing still to come — the item's booklet is going away. */
+  /** Stops any idle drawing still to come and frees the drawings' GPU resources — the item's booklet is going away. */
   function dispose() {
     disposed = true;
+    views.dispose();
   }
 
   return { count: pages.length, pages, canvas, prerender, dispose };
@@ -380,7 +381,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
  * Hidden-line outline renders: every part a white box (faces hide what lies behind) with
  * its edges drawn as fat lines, bold or faint, sized by `sizeOf(type)`. Geometry is built
  * once per part type. `render(items, width, height, orientation)` returns a canvas of the
- * drawing framed to fit. Shared with the catalog's pages (src/scene/catalogPages.ts).
+ * drawing framed to fit; `dispose()` frees the geometry and materials. Shared with the catalog's pages (src/scene/catalogPages.ts).
  */
 export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type: string) => Size) {
   const fill = new THREE.MeshBasicMaterial({
@@ -397,7 +398,9 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
   const geometryOf = (type: string) => {
     if (!geometries.has(type)) {
       const box = new THREE.BoxGeometry(...sizeOf(type));
-      geometries.set(type, { box, edges: new LineSegmentsGeometry().fromEdgesGeometry(new THREE.EdgesGeometry(box)) });
+      const outline = new THREE.EdgesGeometry(box);
+      geometries.set(type, { box, edges: new LineSegmentsGeometry().fromEdgesGeometry(outline) });
+      outline.dispose();
     }
     return geometries.get(type)!;
   };
@@ -483,7 +486,18 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
     return out;
   }
 
-  return { render };
+  /** Frees every geometry and material it built — the pages it drew are plain canvases and stay. */
+  function dispose() {
+    for (const { box, edges } of geometries.values()) {
+      box.dispose();
+      edges.dispose();
+    }
+    geometries.clear();
+    fill.dispose();
+    for (const material of Object.values(lines)) material.dispose();
+  }
+
+  return { render, dispose };
 }
 
 // --- pictograms, canvas 2D ---

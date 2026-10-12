@@ -207,9 +207,10 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
     next(0);
   }
 
-  /** Stops any idle drawing still to come. */
+  /** Stops any idle drawing still to come and frees the drawings' GPU resources. */
   function dispose() {
     disposed = true;
+    views.dispose();
   }
 
   return { count: pages.length, pages, canvas, prerender, dispose };
