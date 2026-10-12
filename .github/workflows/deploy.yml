@@ -28,6 +28,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npx tsx tools/validate/index.ts items/johnny
+      - run: npx tsx tools/validate/index.ts items/blank
       - run: npx vitest run
       - run: npm run build
       - uses: actions/configure-pages@v5
