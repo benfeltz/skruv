@@ -81,3 +81,21 @@ describe('socketUnder (drop line over a hole)', () => {
     expect(socketUnder([0.007, 0.008, 0], [a, c], 0.012)).toBe(c);
   });
 });
+
+describe('the threaded insert (1.9.2)', () => {
+  it('marks a stud hole as a hole decal of its own named radius, facing along its axis', () => {
+    const connectors = [{ type: CONNECTOR.STUD_HOLE, position: [0.2, -0.025, 0.2] as [number, number, number], axis: [0, -1, 0] as [number, number, number] }];
+    const [decal] = decalPlacements(connectors);
+    expect(decal).toMatchObject({ index: 0, kind: 'hole', radius: DECAL.radius.studHole });
+    expect(decal.position[1]).toBeCloseTo(-0.025 - DECAL.surfaceOffset, 9);
+    rotateVector(decal.rotation, [0, 0, 1]).forEach((v, i) => expect(v).toBeCloseTo(connectors[0].axis[i], 9));
+  });
+
+  it('marks nothing on the stud itself: its ends and hex sockets ride on hardware', () => {
+    const connectors = [
+      { type: CONNECTOR.STUD_END, position: [0, 0.02, 0] as [number, number, number], axis: [0, 1, 0] as [number, number, number] },
+      { type: CONNECTOR.BOLT_HEAD, position: [0, 0.02, 0] as [number, number, number], axis: [0, 1, 0] as [number, number, number] },
+    ];
+    expect(decalPlacements(connectors)).toEqual([]);
+  });
+});
