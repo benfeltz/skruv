@@ -134,10 +134,10 @@ describe('a leg carried onto the top with its stud in it (review)', () => {
     // An eighth of the span: a quarter turn, a sink's eighth of the way.
     b.assembly.apply(b.inTop.id, { type: 'crank', radians: FASTENER.studRadians / 8 });
     b.hold(1);
-    expect(b.leg.mesh.position.y).toBeCloseTo(b.leg.body.pose.position.y - SINK / 8, 9);
+    expect(b.leg.mesh.position.y).toBeCloseTo(b.leg.body.translation().y - SINK / 8, 9);
     expect(b.leg.mesh.quaternion.angleTo(new THREE.Quaternion(...FLIPPED))).toBeGreaterThan(0);
     // The stud goes with the leg: the same move, still in its hole.
-    expect(b.stud.mesh.position.y).toBeCloseTo(b.stud.body.pose.position.y - SINK / 8, 9);
+    expect(b.stud.mesh.position.y).toBeCloseTo(b.stud.body.translation().y - SINK / 8, 9);
     const stud = b.stud.mesh.position;
     const leg = b.leg.mesh.position;
     expect(Math.hypot(stud.x - leg.x, stud.z - leg.z)).toBeCloseTo(0, 9);
