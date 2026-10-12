@@ -320,6 +320,18 @@ describe('a top set onto four studs', () => {
     expect(Math.hypot(b.top.mesh.position.x, b.top.mesh.position.z)).toBeGreaterThan(0);
   });
 
+  // Review: only the first joint was asked whether it was home.
+  it('drives the studs still short of home when the first is already there', () => {
+    const b = tableBench();
+    b.assembly.apply(b.onTop[0].id, { type: 'crank', radians: FASTENER.studRadians });
+    expect(b.progresses()).toEqual([1, 0, 0, 0]);
+    const at = b.screen(b.top.mesh.position);
+    b.canvas.fire('pointerdown', at);
+    b.hold(TAP_FRAMES + DRIVE_FRAMES);
+    expect(b.progresses()).toEqual([1, 1, 1, 1]);
+    b.canvas.fire('pointerup', at);
+  });
+
   it('lifts the top off all four on a tap at zero', () => {
     const b = tableBench();
     b.tap(b.screen(b.top.mesh.position));

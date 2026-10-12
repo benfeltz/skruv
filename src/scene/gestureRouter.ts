@@ -1513,11 +1513,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     press.ms += delta * 1000;
     if (press.ms <= GESTURE.tapMaxMs) return;
     press.held = true;
-    const joints = turnJoints(press.tool);
-    const [target] = joints;
-    // Fully turned: home, or a cam turned onto nothing. A screwed bolt backed off partway still drives.
-    if (!target || target.fastener.progress >= 1) return;
-    joints.forEach((joint, i) => turnFastener(joint, driveRadians(spanOf(joint.kind), FASTENER.driveSeconds, delta), i === 0));
+    // Fully turned: home, or a cam turned onto nothing. A screwed bolt backed off partway
+    // still drives — and of several studs turned together, those still short of home do.
+    const live = turnJoints(press.tool).filter((joint) => joint.fastener.progress < 1);
+    live.forEach((joint, i) => turnFastener(joint, driveRadians(spanOf(joint.kind), FASTENER.driveSeconds, delta), i === 0));
   }
 
   // --- turn ring: a dial round each fastener a seated tool is on ---
