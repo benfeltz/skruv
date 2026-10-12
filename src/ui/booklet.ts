@@ -218,7 +218,7 @@ export interface BookletSheetOptions {
   name?: string;
   /** Whether it starts open, on its cover (default) — or docked as a thumb. */
   open?: boolean;
-  /** Its place in the corner stack (STACK_SLOT): the manual in front by default, each further one fanned out behind it (CATALOG.stack). */
+  /** Its place in the corner stack (STACK_SLOT): the manual in front by default, fanned toward the room; the catalog behind, in the corner (src/game/cornerStack.ts). */
   slot?: number;
   /** Whether it may be put down now. While false, every way of closing it does nothing. */
   canClose?: () => boolean;
@@ -444,11 +444,10 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
   }
   window.addEventListener('keydown', onKey);
 
-  // Its place in the corner stack: the front one where the thumb has always sat, each one
-  // behind it fanned up and over by CATALOG.stack, read at use time so ?tune moves it live.
-  // Paint order is mount order: mount the back ones first.
+  // Its place in the corner stack (src/game/cornerStack.ts): the front one fanned up and
+  // right toward the room, the ones behind it in the corner, turned — read at use time so
+  // ?tune moves it live. Paint order is mount order: mount the back ones first.
   function place() {
-    if (slot === STACK_SLOT.manual) return;
     const { x, y, turn } = fanOffset(slot, CATALOG.stack);
     thumb.style.transform = `translate(${x}px, ${y}px) rotate(${turn}rad)`;
   }

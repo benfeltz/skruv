@@ -533,11 +533,11 @@ describe('boot with the catalog up (1.9.1)', () => {
     expect(catalog.expanded).toBe(false);
   });
 
-  it('sits behind the manual in the corner stack, fanned up', () => {
+  it('sits in the corner behind the manual, turned; the manual is fanned up and right toward the room', () => {
     const { catalog } = mountCatalog();
-    expect(catalog.thumb.style.transform).toMatch(/^translate\(\d+px, -\d+px\) rotate\(-?[\d.]+rad\)$/);
+    expect(catalog.thumb.style.transform).toMatch(/^translate\(-?0px, -?0px\) rotate\(-?[\d.]+rad\)$/);
     const manual = mount();
-    expect(manual.booklet.thumb.style.transform).toBeUndefined();
+    expect(manual.booklet.thumb.style.transform).toMatch(/^translate\([1-9]\d*px, -[1-9]\d*px\) rotate\(-?0rad\)$/);
   });
 
   it('one sheet open at a time: under an open sheet the other thumb is inert, and opening it does nothing', () => {

@@ -163,10 +163,11 @@ describe('AC2: BUILD IT goes straight into the room, both booklets docked (Ben, 
     expect(catalog.expanded).toBe(false);
     expect(manuals).toHaveLength(1);
     expect(manuals[0].expanded).toBe(false);
-    // Catalog behind (fanned), manual in front (where the thumb has always sat).
+    // Catalog behind, in the corner (turned); manual in front, fanned up and right toward the
+    // room so the path to it never crosses the catalog (Ben's 1.9.1 test).
     expect(STACK_SLOT.catalog).toBeGreaterThan(STACK_SLOT.manual);
-    expect(catalog.thumb.style.transform).toMatch(/^translate\(/);
-    expect(manuals[0].thumb.style.transform).toBeUndefined();
+    expect(catalog.thumb.style.transform).toMatch(/^translate\(-?0px, -?0px\) rotate\(/);
+    expect(manuals[0].thumb.style.transform).toMatch(/^translate\([1-9]\d*px, -[1-9]\d*px\)/);
   });
 });
 

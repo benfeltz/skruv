@@ -182,16 +182,16 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
     desc: 'Orbit about the first part in the middle of the screen (1) or the floor behind it, as before (0)',
   },
   'catalog.fanX': {
-    object: CATALOG.stack, prop: 'fanX', min: -40, max: 40, step: 1, unit: 'px', group: 'catalog',
-    desc: 'How far right the catalog peeks out from behind the manual in the corner stack',
+    object: CATALOG.stack, prop: 'fanX', min: 0, max: 40, step: 1, unit: 'px', group: 'catalog',
+    desc: 'How far right the manual sits off the catalog in the corner stack — the catalog strip left of it',
   },
   'catalog.fanY': {
     object: CATALOG.stack, prop: 'fanY', min: 0, max: 80, step: 1, unit: 'px', group: 'catalog',
-    desc: 'How far up the catalog peeks out from behind the manual — the strip left to tap',
+    desc: 'How far up the manual sits off the catalog — the catalog strip below it, the one to tap',
   },
   'catalog.fanTurn': {
     object: CATALOG.stack, prop: 'fanTurn', min: -0.5, max: 0.5, step: 0.01, unit: 'rad', group: 'catalog',
-    desc: 'How far the catalog behind the manual is turned in the corner stack',
+    desc: 'How far the catalog, in the corner behind the manual, is turned',
   },
 });
 

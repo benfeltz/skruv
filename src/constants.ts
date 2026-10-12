@@ -175,10 +175,11 @@ export const CATALOG = {
     wallRise: 1.5,
     slab: 0.03,
   },
-  // The corner stack (src/ui/booklet.ts): each booklet behind the front one (the catalog
-  // behind the manual) fanned this far right and up (CSS pixels) and turned this much
-  // (radians) per place back — far enough up that the strip left showing is a thumb's
-  // target. ?tune knobs.
+  // The corner stack (src/game/cornerStack.ts): the front booklet (the manual) fanned this far
+  // right and up (CSS pixels) from the one behind it (the catalog), which stays in the corner
+  // turned this much (radians) — far enough that the strip of catalog left showing, below and
+  // left of the manual, is a thumb's target, and out of the path from the room to the
+  // manual. ?tune knobs.
   stack: {
     fanX: 10,
     fanY: 44,
