@@ -128,6 +128,8 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
     expect(booklet).toMatch(/let page = 0;\s*let open = startsOpen;/);
     expect(main).toMatch(/createCatalogSheet\(\{\s*pages: catalogPages,\s*open: true,/);
     expect(world).toMatch(/createBookletSheet\(\{ pages: bookletPages, open: false \}\)/);
+    // After BUILD IT, focus lands on the manual in front, never the catalog thumb behind it.
+    expect(main).toMatch(/catalog\.setOpen\(false\);\s*\/\/[^\n]*\n\s*world\.booklet\.thumb\.focus\(\{ preventScroll: true \}\);/);
   });
 
   it('puts the scrim over the room and the sheet over the scrim, mounted by the item world', () => {

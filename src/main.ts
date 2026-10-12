@@ -111,8 +111,10 @@ const catalog = createCatalogSheet({
   open: true,
   canClose: () => items.current !== null,
   onPick: (id) => {
-    items.pick(id);
+    const world = items.pick(id);
     catalog.setOpen(false);
+    // Focus goes to the front of the stack, the item's manual — not the catalog thumb behind it.
+    world.booklet.thumb.focus({ preventScroll: true });
   },
 });
 document.body.append(catalog.scrim, catalog.thumb, catalog.element);
