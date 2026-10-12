@@ -128,17 +128,18 @@ describe('dialEngagements: a part turned by hand (1.9.2)', () => {
     expect(dialEngagements(assembly.all(), turnedBy(assembly))).toEqual([]);
   });
 
-  it('gives the key the far end and the leg nothing twice over: one dial per fastener', () => {
-    const { assembly, inLeg } = bench();
-    // The key in the hex at the top end turns the leg-end joint, which the hand turns too.
-    assembly.seat({ partA: 'key', connectorA: 0, partB: 'stud', connectorB: 2, mover: 'key' });
-    const target = assembly.crankTarget('key')!.target!;
-    expect(target.id).toBe(inLeg.id);
+  it('gives a part both a tool and a hand joint one dial: the key\'s, not a second for the hand', () => {
+    // A top set onto a stud (the top the mover, so hand-turned), the key on the stud's free
+    // hex: the key turns that very joint.
+    const types: Record<string, string> = { top: 'top', stud: 'doubleEndedStud', key: 'allenWrench' };
+    const assembly = createAssembly((id) => types[id]);
+    const joint = assembly.seat({ partA: 'stud', connectorA: 0, partB: 'top', connectorB: 0, mover: 'top' });
+    assembly.seat({ partA: 'key', connectorA: 0, partB: 'stud', connectorB: 3, mover: 'key' });
+    expect(assembly.crankTarget('key')!.target!.id).toBe(joint.id);
     const dials = dialEngagements(assembly.all(), turnedBy(assembly));
     expect(dials).toHaveLength(1);
     expect(dials[0].tool).not.toBeNull();
-    // The dial is on the far end — the joint the graph says the key turns — not the end it sits in.
-    expect(dials[0].target.id).toBe(inLeg.id);
+    expect(dials[0].target.id).toBe(joint.id);
   });
 });
 

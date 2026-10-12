@@ -56,7 +56,6 @@ describe('a stud joint', () => {
 });
 
 describe('crankTarget on a two-ended stud', () => {
-  // Stud 1 into the top by its first end, then a leg onto its second; the key on either hex.
   const STUD_IN_TOP = 0;
   const STUD_IN_LEG = 1;
   const HEX_AT_TOP_END = 2;
@@ -65,24 +64,25 @@ describe('crankTarget on a two-ended stud', () => {
     const types = typeById();
     const assembly = createAssembly((id) => types.get(id) ?? id.replace(/-\d+$/, ''));
     const inTop = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: STUD_IN_TOP, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
-    const inLeg = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: STUD_IN_LEG, partB: 'leg-1', connectorB: 0, mover: 'leg-1' });
-    return { assembly, inTop, inLeg };
+    return { assembly, inTop };
   }
 
-  it("turns the end the key is not in: the key on the leg end's hex drives the end in the top, and the other way round", () => {
-    const { assembly, inTop, inLeg } = bench();
+  it("turns the end the key is not in: the key on the free end's hex drives the end in the top", () => {
+    const { assembly, inTop } = bench();
     assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'doubleEndedStud-1', connectorB: HEX_AT_LEG_END, mover: 'allenWrench-1' });
     expect(assembly.crankTarget('allenWrench-1')!.target!.id).toBe(inTop.id);
-    const other = bench();
-    other.assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'doubleEndedStud-1', connectorB: HEX_AT_TOP_END, mover: 'allenWrench-1' });
-    expect(other.assembly.crankTarget('allenWrench-1')!.target!.id).toBe(other.inLeg.id);
-    expect(inLeg.kind).toBe(KIND.STUD);
   });
 
-  it('has nothing to turn with the key in the only seated end', () => {
+  it('turns the other end when only that one is seated — whichever end is the free one', () => {
     const types = typeById();
     const assembly = createAssembly((id) => types.get(id) ?? id.replace(/-\d+$/, ''));
-    assembly.seat({ partA: 'doubleEndedStud-1', connectorA: STUD_IN_TOP, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
+    const inLeg = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: STUD_IN_LEG, partB: 'leg-1', connectorB: 0, mover: 'doubleEndedStud-1' });
+    assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'doubleEndedStud-1', connectorB: HEX_AT_TOP_END, mover: 'allenWrench-1' });
+    expect(assembly.crankTarget('allenWrench-1')!.target!.id).toBe(inLeg.id);
+  });
+
+  it('has nothing to turn with the key in the hex of the only seated end — it is buried', () => {
+    const { assembly } = bench();
     assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'doubleEndedStud-1', connectorB: HEX_AT_TOP_END, mover: 'allenWrench-1' });
     expect(assembly.crankTarget('allenWrench-1')).toMatchObject({ target: null });
   });
@@ -110,19 +110,34 @@ describe("a stud's hex as a tool target", () => {
     expect(isWorkable(hex(HEX_AT_LEG_END), assembly.all(), { captured: none, turnedBy: turned(assembly) })).toBe(false);
   });
 
-  // Review: with both ends seated, a hex reads the joint at the OTHER end — the one a key
-  // there would turn — not whichever stud joint comes first.
-  it('lights each hex by the end its key would turn, with both ends seated', () => {
+  // Review: a hex at an end that is itself seated is buried — in the top, in the leg — and
+  // no key reaches it, whatever the other end is doing.
+  it('lights the free end hex by the seated end it would turn, and leaves a buried hex dark', () => {
     const assembly = bench();
     const inTop = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 0, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
-    const inLeg = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 1, partB: 'leg-1', connectorB: 0, mover: 'leg-1' });
-    assembly.drive(inTop.id);
-    // Top end home, leg end not: the key at the TOP end's hex would turn the leg end — workable;
-    // at the leg end's hex it would turn the top end, which is home — not.
-    expect(turned(assembly)(hex(HEX_AT_TOP_END))).toMatchObject({ id: inLeg.id });
     expect(turned(assembly)(hex(HEX_AT_LEG_END))).toMatchObject({ id: inTop.id });
-    expect(isWorkable(hex(HEX_AT_TOP_END), assembly.all(), { captured: none, turnedBy: turned(assembly) })).toBe(true);
-    expect(isWorkable(hex(HEX_AT_LEG_END), assembly.all(), { captured: none, turnedBy: turned(assembly) })).toBe(false);
+    expect(turned(assembly)(hex(HEX_AT_TOP_END))).toBeNull();
+    expect(isWorkable(hex(HEX_AT_TOP_END), assembly.all(), { captured: none, turnedBy: turned(assembly) })).toBe(false);
+  });
+
+  it('lights neither hex once both ends are seated, though the leg end is still to turn', () => {
+    const assembly = bench();
+    const inTop = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 0, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
+    assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 1, partB: 'leg-1', connectorB: 0, mover: 'leg-1' });
+    assembly.drive(inTop.id);
+    for (const index of [HEX_AT_TOP_END, HEX_AT_LEG_END]) {
+      expect(turned(assembly)(hex(index))).toBeNull();
+      expect(isWorkable(hex(index), assembly.all(), { captured: none, turnedBy: turned(assembly) })).toBe(false);
+    }
+  });
+
+  it('names the hex that shares an end with the end — the connectors a seated end buries', () => {
+    const assembly = bench();
+    // studEnd-1 (0) with boltHead-1 (2); studEnd-2 (1) with boltHead-2 (3).
+    expect(assembly.coincident('doubleEndedStud-1', 0)).toEqual([HEX_AT_TOP_END]);
+    expect(assembly.coincident('doubleEndedStud-1', 1)).toEqual([HEX_AT_LEG_END]);
+    // JOHNNY's bolt has none: its head is the far end of its thread.
+    expect(assembly.coincident('top-1', 0)).toEqual([]);
   });
 });
 

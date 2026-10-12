@@ -18,6 +18,8 @@ const FLIPPED: Quat = [1, 0, 0, 0];
 const TOP_POSE = { position: [0, 0.025, 0] as Vec3, rotation: FLIPPED };
 const STUD_HOLE = 0;
 const STUD_END_IN_HOLE = 0;
+// boltHead-2: the hex at the stud's free end (boltHead-1, at the end in the hole, is index 2).
+const HEX_AT_FREE_END = 3;
 // The top lies underside up; the first hole's mouth faces up, and the stud stands in it by its first end.
 const MOUTH = connectorInWorld(PART_TYPES.top.connectors[STUD_HOLE], TOP_POSE).position;
 const STUD_HALF = PART_TYPES.doubleEndedStud.size[1] / 2;
@@ -103,3 +105,26 @@ describe('the key on a stud', () => {
     expect(b.stud.mesh.position.y).toBeCloseTo(before - FASTENER.sinkDepth.stud! / 2, 9);
   });
 });
+
+describe('the buried hex (review)', () => {
+  it('takes no key: let go over the hex at the end sunk in the top, it seats nowhere', () => {
+    const b = bench({ engaged: false });
+    // The key's tip down at the mouth, where the first end — and its hex — sit in the hole.
+    const tipOffset = new THREE.Vector3(...TIP).applyQuaternion(new THREE.Quaternion(...TIP_DOWN));
+    b.key.mesh.position.set(MOUTH[0] - tipOffset.x, MOUTH[1] - tipOffset.y + 0.02, MOUTH[2] - tipOffset.z);
+    b.key.mesh.quaternion.set(...TIP_DOWN);
+    b.key.mesh.updateMatrixWorld(true);
+    const body = b.key.body as unknown as { pose: { position: THREE.Vector3; quaternion: THREE.Quaternion } };
+    body.pose.position.copy(b.key.mesh.position);
+    body.pose.quaternion.copy(b.key.mesh.quaternion);
+    const at = b.screen(b.key.mesh.position);
+    b.canvas.fire('pointerdown', at);
+    b.canvas.fire('pointermove', { clientX: at.clientX, clientY: at.clientY + 15 });
+    b.canvas.fire('pointermove', at);
+    b.canvas.fire('pointerup', at);
+    b.hold(1);
+    // Near the free end's hex too, it may seat there; never in the one sunk in the top.
+    expect(b.toolJoint()?.hostConnector ?? HEX_AT_FREE_END).toBe(HEX_AT_FREE_END);
+  });
+});
+

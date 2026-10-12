@@ -439,6 +439,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     for (const j of assembly.all()) {
       taken.add(`${j.hardware}#${j.hardwareConnector}`);
       taken.add(`${j.host}#${j.hostConnector}`);
+      // A stud's hex at an end sunk in a hole is as taken as the end: no key seats in the wood.
+      for (const index of assembly.coincident(j.hardware, j.hardwareConnector)) taken.add(`${j.hardware}#${index}`);
     }
     return (c: WorldConnector) => taken.has(`${c.part.id}#${c.index}`);
   }
@@ -1147,7 +1149,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
         heads ??= screwedHeads();
         return capture(connectorWorld(joint.host, joint.hostConnector), heads)?.id ?? null;
       },
-      turnedBy: (hex) => assembly.turnedFrom(hex.part.id, hex.index),
+      turnedBy: (hex) => assembly.turnedFrom(hex.part.id, hex.index, joints),
     };
   }
 
@@ -1527,7 +1529,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const turnTarget = (part: Part) => turnJoints(part)[0] ?? null;
 
   // Every dial's engagement: each seated tool with its far end, then the hand-turned parts.
-  const engagements = () => dialEngagements(assembly.all(), (tool) => assembly.crankTarget(tool.hardware)?.target ?? null);
+  function engagements() {
+    const joints = assembly.all();
+    return dialEngagements(joints, (tool) => assembly.turnedFrom(tool.host, tool.hostConnector, joints));
+  }
 
   // The axis a turn tightens about, in the world. A tool turns a screw: the hardware's
   // into-hole axis, clockwise seen along it. A part circled by hand is the nut — or carries

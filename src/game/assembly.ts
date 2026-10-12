@@ -367,10 +367,24 @@ export function createAssembly(typeOf: (part: PartId) => string) {
    * is no end the tool is working. A single-ended bolt or cam lock has one candidate, which
    * is not at the tool's seat (its head is the far side of its thread), so it is the one
    * returned. Asked of a hex before any tool is on it, it is what a key put there would turn.
+   * A hex whose own end is seated in a hole is buried: null. `among` is a joint snapshot
+   * (`all()`), for a caller that asks many times a frame.
    */
-  function turnedFrom(part: PartId, seat: number) {
+  function turnedFrom(part: PartId, seat: number, among: Iterable<AssemblyJoint> = joints.values()) {
     const at = connectorOf(part, seat).position;
-    return all().find((j) => j.hardware === part && isCrankKind(j.kind) && distance(hardwareConnector(j).position, at) > CONTRACT.mateTolerance) ?? null;
+    const own = [...among].filter((j) => j.hardware === part && isCrankKind(j.kind));
+    // A hex at an end that is itself in a hole is buried: no key reaches it.
+    if (own.some((j) => distance(hardwareConnector(j).position, at) <= CONTRACT.mateTolerance)) return null;
+    return own[0] ?? null;
+  }
+
+  /**
+   * The other connectors of `part` at the very spot connector `index` is: a stud's hex at the
+   * end of the stud. Whatever is seated by `index` buries them too.
+   */
+  function coincident(part: PartId, index: number) {
+    const at = connectorOf(part, index).position;
+    return PART_TYPES[typeOf(part)].connectors.flatMap((c, i) => (i !== index && distance(c.position, at) <= CONTRACT.mateTolerance ? [i] : []));
   }
 
   /** For a tool seated on a head or slot: `{ tool, target }` joints, target null if none. */
@@ -581,6 +595,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     canRelease,
     crankTarget,
     turnedFrom,
+    coincident,
     handTarget,
     handTargets,
     handSeat,
