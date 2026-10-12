@@ -118,7 +118,7 @@ export const BOOKLET_UI = {
   // The sheet's own height round the page (handle, controls, gaps, padding; CSS pixels):
   // the page fits in maxHeight less this. index.html's pre-splash mirrors it.
   chromeHeight: 120,
-  // A notice on the sheet (a pick that would not build): laid over the foot of the page, so
+  // A notice on the sheet (a pick that would not build): laid over the head of the page, so
   // it never adds to chromeHeight — its type size and line height, and its inset, padding
   // and corner radius (CSS pixels).
   notice: { size: 14, lineHeight: 1.3, inset: 8, padding: 8, radius: 8 },

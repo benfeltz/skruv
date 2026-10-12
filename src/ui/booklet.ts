@@ -144,14 +144,17 @@ function injectStyle() {
     .booklet-controls button:disabled { opacity: 0.3; cursor: default; }
     .booklet-count { font-variant-numeric: tabular-nums; }
     /* A line that says something went wrong (a pick that would not build), laid over the
-       foot of the page rather than added to the sheet, so it never pushes the controls off a
-       short screen; there until the page flips or the sheet closes. */
+       head of the page rather than added to the sheet, so it never pushes the controls off a
+       short screen; there until the page flips or the sheet closes. At the head it is rows
+       away from the only thing on a page that takes a tap (BUILD IT, near the foot), and it
+       takes no pointer itself, so even a page drawn tiny never has it swallow a tap. */
     .booklet-page { position: relative; }
     .booklet-notice {
       position: absolute;
       left: ${BOOKLET_UI.notice.inset}px;
       right: ${BOOKLET_UI.notice.inset}px;
-      bottom: ${BOOKLET_UI.notice.inset}px;
+      top: ${BOOKLET_UI.notice.inset}px;
+      pointer-events: none;
       margin: 0;
       padding: ${BOOKLET_UI.notice.padding}px;
       border-radius: ${BOOKLET_UI.notice.radius}px;
@@ -296,7 +299,7 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
   count.className = 'booklet-count';
   count.setAttribute('aria-live', 'polite');
   controls.append(prev, count, next);
-  // Over the foot of the page, after the page itself, so the view's children keep their places.
+  // Over the head of the page, after the page itself, so the view's children keep their places.
   const notice = document.createElement('p');
   notice.className = 'booklet-notice';
   notice.setAttribute('role', 'alert');

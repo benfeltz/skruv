@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { BOOKLET, BOOKLET_UI, CATALOG } from '../src/constants.js';
 
 // 1.5 game-flow rules that live in wiring (main.ts, and the item world it builds since
 // 1.9.1: src/scene/itemWorld.ts) and DOM/scene modules — checked at the source, since the
@@ -137,13 +138,30 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
     expect(hover).toMatch(/z-index: 1;/);
   });
 
-  // A notice (a pick that would not build) must never push the controls off a short screen:
-  // it is laid over the page, absolutely, and adds nothing to the sheet's height.
-  it('lays the notice over the foot of the page, out of the flow', () => {
+  // A notice (a pick that would not build) must never push the controls off a short screen,
+  // nor take a tap meant for BUILD IT: laid over the head of the page, out of the flow, deaf
+  // to the pointer — and clear of the tag's rows even on a small phone held sideways.
+  it('lays the notice over the head of the page, out of the flow, never over BUILD IT', () => {
     const notice = booklet.slice(booklet.indexOf('.booklet-notice {'), booklet.indexOf('`;', booklet.indexOf('.booklet-notice {')));
     expect(booklet).toMatch(/\.booklet-page \{ position: relative; \}/);
     expect(notice).toMatch(/position: absolute;/);
+    expect(notice).toMatch(/top: \$\{BOOKLET_UI\.notice\.inset\}px;/);
+    expect(notice).not.toMatch(/bottom:/);
+    expect(notice).toMatch(/pointer-events: none;/);
     expect(booklet).toMatch(/view\.append\(notice\);/);
+
+    // The page as drawn on a small phone sideways (320 CSS px tall), height-limited.
+    const SCREEN_HEIGHT = 320;
+    const [pageW, pageH] = BOOKLET.pageSize;
+    const pageHeight = BOOKLET_UI.maxHeight * SCREEN_HEIGHT - BOOKLET_UI.chromeHeight;
+    const pageWidth = (pageHeight * pageW) / pageH;
+    const { size, lineHeight, inset, padding } = BOOKLET_UI.notice;
+    // Wrapped at about half an em a character (system-ui runs narrower), every line counted.
+    const perLine = Math.floor((pageWidth - 2 * inset - 2 * padding) / (size / 2));
+    const lines = Math.ceil(CATALOG.words.buildFailed.length / perLine);
+    const noticeBottom = inset + 2 * padding + lines * size * lineHeight;
+    const tagTop = (CATALOG.page.action[1] / pageH) * pageHeight;
+    expect(noticeBottom).toBeLessThan(tagTop);
   });
 
   it('puts the scrim over the room and the sheet over the scrim, mounted by the item world', () => {
