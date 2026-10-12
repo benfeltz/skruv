@@ -562,7 +562,8 @@ describe('boot with the catalog up (1.9.1)', () => {
       },
     }) as unknown as FakeBooklet;
     mounted.push(catalog);
-    const [, view, controls, notice] = catalog.element.children;
+    const [, view, controls] = catalog.element.children;
+    const notice = view.children[1];
     const [, buildIt] = view.children[0].children;
     const next = controls.children[2];
     expect(notice.hidden).toBe(true);
@@ -572,6 +573,8 @@ describe('boot with the catalog up (1.9.1)', () => {
     expect(catalog.expanded).toBe(true);
     expect(notice.hidden).toBe(false);
     expect(notice.attributes.role).toBe('alert');
+    // Laid over the page, never a row of its own: the sheet's rows are as before.
+    expect(catalog.element.children).toHaveLength(3);
     expect(notice.textContent).toBe(CATALOG.words.buildFailed);
     expect(errors).toHaveBeenCalledOnce();
     // Flipping away clears it; the next try builds.
@@ -595,7 +598,8 @@ describe('boot with the catalog up (1.9.1)', () => {
       },
     }) as unknown as FakeBooklet;
     mounted.push(catalog);
-    const [, view, controls, notice] = catalog.element.children;
+    const [, view, controls] = catalog.element.children;
+    const notice = view.children[1];
     const [, buildIt] = view.children[0].children;
     controls.children[2].fire('click');
     controls.children[2].fire('click');

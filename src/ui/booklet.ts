@@ -125,7 +125,6 @@ function injectStyle() {
       background: ${css(COLORS.bookletPaper)};
     }
     .booklet-controls {
-      order: 1;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -144,9 +143,23 @@ function injectStyle() {
     }
     .booklet-controls button:disabled { opacity: 0.3; cursor: default; }
     .booklet-count { font-variant-numeric: tabular-nums; }
-    /* A line that says something went wrong (a pick that would not build): over the controls,
-       in the sheet's own text colour, until the page flips or the sheet closes. */
-    .booklet-notice { margin: 0; text-align: center; font-size: 14px; line-height: 1.3; }
+    /* A line that says something went wrong (a pick that would not build), laid over the
+       foot of the page rather than added to the sheet, so it never pushes the controls off a
+       short screen; there until the page flips or the sheet closes. */
+    .booklet-page { position: relative; }
+    .booklet-notice {
+      position: absolute;
+      left: ${BOOKLET_UI.notice.inset}px;
+      right: ${BOOKLET_UI.notice.inset}px;
+      bottom: ${BOOKLET_UI.notice.inset}px;
+      margin: 0;
+      padding: ${BOOKLET_UI.notice.padding}px;
+      border-radius: ${BOOKLET_UI.notice.radius}px;
+      background: ${css(COLORS.uiSurface)};
+      text-align: center;
+      font-size: ${BOOKLET_UI.notice.size}px;
+      line-height: ${BOOKLET_UI.notice.lineHeight};
+    }
     /* A page with a control on it (the catalog's BUILD IT): the canvas and, over the part of
        it the control is drawn on, a clear button placed in page fractions. The frame is sized
        exactly as the page (the pre-splash's own fit) and the canvas fills it, so those
@@ -277,12 +290,13 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
   count.className = 'booklet-count';
   count.setAttribute('aria-live', 'polite');
   controls.append(prev, count, next);
-  // Last in the DOM, so the sheet's children keep their places; shown above the controls (CSS order).
+  // Over the foot of the page, after the page itself, so the view's children keep their places.
   const notice = document.createElement('p');
   notice.className = 'booklet-notice';
   notice.setAttribute('role', 'alert');
   notice.hidden = true;
-  element.append(handle, view, controls, notice);
+  view.append(notice);
+  element.append(handle, view, controls);
 
   /** Shows `text` on the sheet, or takes it away (null). */
   function notify(text: string | null) {
