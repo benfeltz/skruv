@@ -262,7 +262,7 @@ describe('side panel 2 and the carcass settle together (1.8.3.4 phone finding 1)
     h.frame(0, false);
     expect(h.offHoles()).toEqual([]);
     // The player's next move, a moment later: a tap pushes them all home — none dropped as
-    // stale while the carcass, handed back to the simulation, sagged in the meantime.
+    // stale in the meantime (the carcass stays held still under the seated panel until then).
     for (let n = 0; n < 60; n++) h.frame(n, false);
     h.tap();
     expect(h.assembly.all().filter((j) => j.host === SIDE_2)).toHaveLength(INTO_SIDE_2.length);
