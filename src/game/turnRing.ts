@@ -4,18 +4,21 @@
 // projects, src/ui/turnRing.ts draws.
 
 import { TURN_RING } from '../constants.js';
-import { isCrankKind, isFastened } from './fasteners.js';
+import { isCrankKind, isFastened, isHandTurned } from './fasteners.js';
 import { tightenSign } from './crankMath.js';
 import { KIND } from '../../tools/validate/lib/vocabulary.js';
 import type { AssemblyJoint } from './assembly.js';
 import type { Fastener } from './fasteners.js';
 import type { ScreenPoint } from './dragMath.js';
 
-/** A seated tool and the bolt or cam seat it drives. */
+/** A fastener seat being turned, and by what: a seated tool, or (null) the finger on the part itself. */
 export interface Engagement {
-  tool: AssemblyJoint;
+  tool: AssemblyJoint | null;
   target: AssemblyJoint;
 }
+
+/** The part whose press this engagement is: the tool, or the hand-turned part itself. */
+export const engagedPart = ({ tool, target }: Engagement) => (tool ? tool.hardware : target.host);
 
 /**
  * Whether a screen point is on the ring's grab band round `centre`: within `band` px either
@@ -39,16 +42,25 @@ export function arcLength(progress: number, radius: number = TURN_RING.radius) {
 export const tightensClockwise = (intoHole: number[], viewDirection: number[]) => tightenSign(intoHole, viewDirection) > 0;
 
 /**
- * The seated tools that get a dial: each tool joint whose host has a bolt or cam seat, as
- * `crankTarget` pairs them — for as long as the tool is seated, home or not, so a tool put
- * on a fastener already partly or fully in shows where it stands.
+ * The seated tools that get a dial: each tool joint whose host has a bolt, stud or cam seat,
+ * as `crankTarget` pairs them — for as long as the tool is seated, home or not, so a tool put
+ * on a fastener already partly or fully in shows where it stands. Then every hand-turned
+ * part not yet home (a leg on its stud), each with a dial of its own, tool null: home, it
+ * has nothing left to show.
  */
-export function dialEngagements(joints: readonly AssemblyJoint[]): Engagement[] {
-  return joints.flatMap((tool) => {
+export function dialEngagements(
+  joints: readonly AssemblyJoint[],
+  // What a tool turns: the graph's `crankTarget` (the far end of a stud), by default the host's first crank seat.
+  targetOf: (tool: AssemblyJoint) => AssemblyJoint | null = (tool) => joints.find((j) => j.hardware === tool.host && isCrankKind(j.kind)) ?? null,
+): Engagement[] {
+  const tooled = joints.flatMap((tool) => {
     if (tool.kind !== KIND.TOOL) return [];
-    const target = joints.find((j) => j.hardware === tool.host && isCrankKind(j.kind));
+    const target = targetOf(tool);
     return target ? [{ tool, target }] : [];
   });
+  const driven = new Set(tooled.map(({ target }) => target));
+  const byHand = joints.filter((j) => isHandTurned(j) && !driven.has(j) && !isHome(j.fastener)).map((target) => ({ tool: null, target }));
+  return [...tooled, ...byHand];
 }
 
 /** All the way home: fastened and fully turned — a screwed bolt backed off partway is not. */

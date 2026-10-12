@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { TURN_RING } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
 import { arcLength, dialEngagements, dialHit, isHome, isStalled, pickDial, tightensClockwise } from '../src/game/turnRing.js';
 import { createFastener, STATE } from '../src/game/fasteners.js';
+import { setItem } from '../src/game/item.js';
 
 // The turn ring's maths (1.8.2.2 step 1): headless, plain points and joints.
 
@@ -86,6 +87,45 @@ describe('dialEngagements', () => {
     const assembly = createAssembly((id) => types[id]);
     assembly.seat({ partA: 'bolt', connectorA: 0, partB: 'panel', connectorB: 2, mover: 'bolt' });
     expect(dialEngagements(assembly.all())).toEqual([]);
+  });
+});
+
+describe('dialEngagements: a part turned by hand (1.9.2)', () => {
+  beforeAll(() => setItem('blank'));
+  afterAll(() => setItem('johnny'));
+
+  // A stud in the top's first hole, a leg set onto its other end (the leg the part dragged), and a key.
+  function bench() {
+    const types: Record<string, string> = { top: 'top', stud: 'doubleEndedStud', leg: 'leg', key: 'allenWrench' };
+    const assembly = createAssembly((id) => types[id]);
+    const inTop = assembly.seat({ partA: 'stud', connectorA: 0, partB: 'top', connectorB: 0, mover: 'stud' });
+    const inLeg = assembly.seat({ partA: 'stud', connectorA: 1, partB: 'leg', connectorB: 0, mover: 'leg' });
+    return { assembly, inTop, inLeg };
+  }
+
+  it('gives a leg set onto its stud a toolless dial centred on its own hole — and the stud none', () => {
+    const { assembly, inLeg } = bench();
+    expect(dialEngagements(assembly.all())).toEqual([{ tool: null, target: inLeg }]);
+    // The dial's centre is the target's host connector: the leg's hole.
+    expect(assembly.hostConnector(inLeg).type).toBe('studHole');
+    expect(assembly.get(inLeg.id)!.host).toBe('leg');
+  });
+
+  it('drops the dial once the leg is home', () => {
+    const { assembly, inLeg } = bench();
+    assembly.drive(inLeg.id);
+    expect(dialEngagements(assembly.all())).toEqual([]);
+  });
+
+  it('gives the key the far end and the leg nothing twice over: one dial per fastener', () => {
+    const { assembly, inLeg } = bench();
+    // The key in the hex at the top end turns the leg-end joint, which the hand turns too.
+    assembly.seat({ partA: 'key', connectorA: 0, partB: 'stud', connectorB: 2, mover: 'key' });
+    const target = assembly.crankTarget('key')!.target!;
+    expect(target.id).toBe(inLeg.id);
+    const dials = dialEngagements(assembly.all(), () => target);
+    expect(dials).toHaveLength(1);
+    expect(dials[0].tool).not.toBeNull();
   });
 });
 

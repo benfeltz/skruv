@@ -25,7 +25,7 @@ import { findFits, heldOffer, isPanelType, preferredPoses, preferredTargets, pre
 import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
 import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
-import { dialEngagements, isHome, isStalled, pickDial, tightensClockwise } from '../game/turnRing.js';
+import { dialEngagements, engagedPart, isHome, isStalled, pickDial, tightensClockwise } from '../game/turnRing.js';
 import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { FitPair, Relatives } from '../game/panelFit.js';
 import type { Snap } from '../game/snapMath.js';
@@ -118,7 +118,7 @@ interface Drag {
   pointer: ClientPoint | null;
   start: ScreenPoint;
   joints: { id: number; axis: ScreenPoint }[];
-  engagement: { tool: AssemblyJoint; target: AssemblyJoint };
+  engagement: Engagement;
   crank: ReturnType<typeof createCrank>;
   carry: Carry | null;
 }
@@ -354,13 +354,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function dialUnder({ clientX, clientY }: ClientPoint, picked: Part | null): PartPress | null {
     if (picked && assembly.crankTarget(picked.id)) return null;
     const rect = domElement.getBoundingClientRect();
-    const dials = dialEngagements(assembly.all()).map((engagement) => {
+    const dials = engagements().map((engagement) => {
       const head = headOf(engagement);
       return { engagement, head, centre: screenPoint(head, rect), home: isHome(engagement.target.fastener) };
     });
     const hit = pickDial([clientX, clientY], dials);
     if (!hit) return null;
-    return { kind: 'part', part: partById.get(hit.engagement.tool.hardware)!, point: hit.head, distance: 0, dial: hit.engagement };
+    return { kind: 'part', part: partById.get(engagedPart(hit.engagement))!, point: hit.head, distance: 0, dial: hit.engagement };
   }
 
   // The nearest proxy hit per small part, with how far the ray passes from the real part
@@ -700,12 +700,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     pruneStale();
     letGoOf(part);
     const engagement = assembly.crankTarget(part.id);
+    const hand = assembly.handTarget(part.id);
     // A panel pushed home onto another pulls back off it, as before; a cam locked across the
     // seam stops the pull (pullable), and the panel carries its assembly instead.
     const pulls = assembly.pullable(part.id).length > 0;
     const carried = pulls ? null : carryOf(part);
     // Its target is set: checked just here.
-    if (engagement?.target) beginCrank(part, engagement as Drag['engagement'], event);
+    if (engagement?.target) beginCrank(part, engagement as Engagement, event);
+    // A part set onto its stud is circled by the hand, in place of being dragged off.
+    else if (hand) beginCrank(part, { tool: null, target: hand }, event);
     else if (pulls) beginPull(part, event);
     else if (carried) beginCarry(part, carried, point, event);
     else if (assembly.canRelease(part.id)) {
@@ -1429,15 +1432,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // --- crank: an engaged tool's drag turns its fastener ---
 
-  function beginCrank(part: Part, engagement: Drag['engagement'], event: ClientPoint) {
+  function beginCrank(part: Part, engagement: Engagement, event: ClientPoint) {
     // The crank's fields only.
     drag = { mode: 'crank', part, engagement, crank: createCrank() } as Drag;
     crankTo(event);
   }
 
   function crankTo(event: ClientPoint) {
-    const { tool, target } = drag!.engagement;
-    const head = connectorWorld(tool.host, tool.hostConnector).position;
+    const { target } = drag!.engagement;
+    const head = headOf(drag!.engagement);
     const delta = drag!.crank.move(screenPoint(head), [event.clientX, event.clientY]);
     if (!delta) return;
     const into = connectorWorld(target.hardware, target.hardwareConnector).axis;
@@ -1480,7 +1483,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     press.ms += delta * 1000;
     if (press.ms <= GESTURE.tapMaxMs) return;
     press.held = true;
-    const target = assembly.crankTarget(press.tool.id)?.target;
+    const target = turnTarget(press.tool);
     // Fully turned: home, or a cam turned onto nothing. A screwed bolt backed off partway still drives.
     if (!target || target.fastener.progress >= 1) return;
     turnFastener(target, driveRadians(spanOf(target), FASTENER.driveSeconds, delta));
@@ -1488,8 +1491,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // --- turn ring: a dial round each fastener a seated tool is on ---
 
-  // The head a tool sits on, where the crank measures its sweep about.
-  const headOf = ({ tool }: Engagement) => connectorWorld(tool.host, tool.hostConnector).position;
+  // What a press on `part` turns: the fastener its seated tool is on, or the stud it was set onto.
+  const turnTarget = (part: Part) => assembly.crankTarget(part.id)?.target ?? assembly.handTarget(part.id);
+
+  // Every dial's engagement: each seated tool with its far end, then the hand-turned parts.
+  const engagements = () => dialEngagements(assembly.all(), (tool) => assembly.crankTarget(tool.hardware)?.target ?? null);
+
+  // The head a tool sits on — or, circled by hand, the hole the part sits in — where the
+  // crank measures its sweep about.
+  const headOf = ({ tool, target }: Engagement) => (tool ? connectorWorld(tool.host, tool.hostConnector) : connectorWorld(target.host, target.hostConnector)).position;
 
   function dialOf(engagement: Engagement, flashing: boolean, rect: DOMRect): Dial {
     const head = headOf(engagement);
@@ -1507,8 +1517,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (!turnRing) return;
     const rect = domElement.getBoundingClientRect();
     const seen = new Map<PartId, boolean>();
-    const dials = dialEngagements(assembly.all()).map((engagement) => {
-      const id = engagement.tool.hardware;
+    const dials = engagements().map((engagement) => {
+      const id = engagedPart(engagement);
       const home = isHome(engagement.target.fastener);
       if (home && dialed.get(id) === false) dialFlashes.set(id, TURN_RING.flashMs);
       else if (!home) dialFlashes.delete(id);
@@ -1562,6 +1572,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     pruneStale();
     const engagement = assembly.crankTarget(part.id);
     if (engagement) return unseat(engagement.tool);
+    // A part set onto its stud and not yet turned lifts off on a tap; once turned it only
+    // comes off by backing out.
+    const hand = assembly.handTarget(part.id);
+    if (hand) return hand.fastener.progress === 0 ? unseat(hand) : undefined;
     const pressed = [...assembly.tap(part.id, behindFitting), ...pressCarried(part)];
     for (const id of pressed) reportFastening(id, false);
     if (pressed.length > 0) return reconcile();
@@ -1735,7 +1749,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     syncCamera();
     if (wasCamera && !state.cameraEnabled) domElement.setPointerCapture(event.pointerId);
     // A press on a seated tool, or on its ring, may turn out a hold.
-    if (hit?.kind === 'part' && state.owner === OWNER.DRAG_PART && (hit.dial || assembly.crankTarget(hit.part.id)?.target)) {
+    if (hit?.kind === 'part' && state.owner === OWNER.DRAG_PART && (hit.dial || turnTarget(hit.part))) {
       press = { id: event.pointerId, tool: hit.part, ms: 0, held: false };
     }
   }

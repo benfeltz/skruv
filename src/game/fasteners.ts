@@ -53,6 +53,12 @@ export const isTapKind = (kind: FastenerKind) => kind === KIND.DOWEL || kind ===
 /** Kinds turned by a tool. */
 export const isCrankKind = (kind: FastenerKind) => kind === KIND.BOLT || kind === KIND.CAM || kind === KIND.STUD;
 
+/**
+ * A joint circled by hand: a stud whose hole side was the part dragged into place — a leg
+ * set onto its stud. The hole side turns, with no tool; its own side is what the finger grabs.
+ */
+export const isHandTurned = (joint: { kind: FastenerKind; host: string; mover: string }) => joint.kind === KIND.STUD && joint.host === joint.mover;
+
 export const createFastener = (kind: FastenerKind): Fastener => ({ kind, state: STATE.SEATED, progress: 0 });
 
 /** Past seated: the joint holds and physics should bond it. */
