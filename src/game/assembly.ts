@@ -406,6 +406,26 @@ export function createAssembly(typeOf: (part: PartId) => string) {
    */
   const handTargets = (part: PartId) => all().filter((j) => isHandTurned(j) && j.mover === part);
 
+  /**
+   * The joints circling `part` turns, tightening (`direction` 1) or loosening (−1): its own
+   * hand joints and, once those are home, the stud ends beyond them. A stud screwed home in
+   * `part` is one piece with it, so its other end, in the top, is turned through `part` too
+   * — tightening takes the part's own first, loosening the far end first — and each is turned
+   * only while it has turn left that way. A stud merely seated in the top and a leg then
+   * screwed on, in either order, can be finished by circling the leg. `among` as for `handSeat`.
+   */
+  function handTurn(part: PartId, direction: 1 | -1, among: readonly AssemblyJoint[] = all()) {
+    const own = among.filter((j) => isHandTurned(j) && j.mover === part);
+    const homeOn = new Set(own.filter((j) => isFastened(j.fastener)).map((j) => j.hardware));
+    const beyond = among.filter((j) => j.kind === KIND.STUD && homeOn.has(j.hardware) && !own.includes(j));
+    const left = (j: AssemblyJoint) => (direction > 0 ? j.fastener.progress < 1 : j.fastener.progress > 0);
+    for (const stage of direction > 0 ? [own, beyond] : [beyond, own]) {
+      const live = stage.filter(left);
+      if (live.length > 0) return live;
+    }
+    return [];
+  }
+
   /** The first of `handTargets`, or null: whether a press on `part` is a turn at all. */
   const handTarget = (part: PartId) => handTargets(part)[0] ?? null;
 
@@ -601,6 +621,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     coincident,
     handTarget,
     handTargets,
+    handTurn,
     handSeat,
     connectorAt: connectorOf,
     screwedBolts,

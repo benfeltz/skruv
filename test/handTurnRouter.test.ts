@@ -151,6 +151,53 @@ function carriedBench() {
   return { ...m, top, stud, leg, inLeg, inTop, progress };
 }
 
+// A stud merely seated in the top — turned partway, unfastened — and a leg then screwed
+// home on its free end (review): both hexes buried, so the leg is the only handle.
+describe('a stud part-turned into the top with a leg screwed on (review)', () => {
+  function stacked() {
+    const b = bench();
+    // Undo bench()'s home stud: partway instead, so the leg goes on a stud still to be turned.
+    b.assembly.apply(b.assembly.all().find((j) => j.host === 'top-1')!.id, { type: 'crank', radians: -FASTENER.studRadians });
+    const inTop = b.assembly.all().find((j) => j.host === 'top-1')!;
+    b.assembly.apply(inTop.id, { type: 'crank', radians: FASTENER.studRadians / 2 });
+    b.assembly.drive(b.inLeg.id);
+    return { ...b, inTop };
+  }
+  const topProgress = (b: ReturnType<typeof stacked>) => b.assembly.get(b.inTop.id)!.fastener.progress;
+
+  it('is finished by circling the leg: the stud turns the rest of the way into the top, the leg with it', () => {
+    const b = stacked();
+    expect(topProgress(b)).toBeCloseTo(0.5, 9);
+    expect(b.assembly.get(b.inTop.id)!.fastener.state).toBe(STATE.SEATED);
+    // Both hexes are buried: no key.
+    expect(b.assembly.turnedFrom('doubleEndedStud-1', 2)).toBeNull();
+    expect(b.assembly.turnedFrom('doubleEndedStud-1', 3)).toBeNull();
+    b.circle(b.screen(b.leg.mesh.position), FREE_END, b.tighten * 400, 0, TURN_RING.radius);
+    expect(topProgress(b)).toBeGreaterThan(0.5);
+    expect(b.progress()).toBe(1);
+    b.circle(b.screen(b.leg.mesh.position), FREE_END, b.tighten * 2000, 0, TURN_RING.radius);
+    expect(b.assembly.get(b.inTop.id)!.fastener).toMatchObject({ state: STATE.SCREWED, progress: 1 });
+    expect(b.progress()).toBe(1);
+  });
+
+  it('draws the leg riding down with the stud as it turns into the top, not left behind', () => {
+    const b = stacked();
+    b.hold(1);
+    // The stud half in (a sink's half), and the leg screwed home on it goes with it.
+    expect(b.stud.mesh.position.y).toBeCloseTo(b.stud.body.translation().y - SINK / 2, 9);
+    expect(b.leg.mesh.position.y).toBeCloseTo(b.leg.body.translation().y - SINK / 2, 9);
+  });
+
+  it('backs the stud out of the top first, then the leg off the stud', () => {
+    const b = stacked();
+    b.assembly.drive(b.inTop.id);
+    expect(b.assembly.handTurn('leg-1', -1).map((j) => j.id)).toEqual([b.inTop.id]);
+    b.assembly.apply(b.inTop.id, { type: 'crank', radians: -FASTENER.studRadians });
+    expect(b.assembly.handTurn('leg-1', -1).map((j) => j.id)).toEqual([b.inLeg.id]);
+    expect(b.assembly.handTurn('leg-1', 1).map((j) => j.id)).toEqual([b.inTop.id]);
+  });
+});
+
 describe('a leg carried onto the top with its stud in it (review)', () => {
   it('is circled and driven like any hand-turned part, through the leg', () => {
     const b = carriedBench();
@@ -224,8 +271,13 @@ describe('a leg backed out to nothing (review)', () => {
     expect(b.progress()).toBe(0);
     expect(b.assembly.get(b.inLeg.id)!.fastener.state).toBe(STATE.SEATED);
     expect(b.grabbed).toContain(b.leg.body);
-    // Back at the mouth where it was first set, still seated and still its own to turn.
-    for (let i = 0; i < 3; i++) expect(b.leg.mesh.position.getComponent(i)).toBeCloseTo(LEG_AT[i], 6);
+    // Backed all the way out the stud has come out of the top with it (the unit turned out
+    // of the top first, then the leg off the stud): the stud back at the mouth, one sink up,
+    // and the leg held on its end — still seated, and still its own to turn.
+    expect(b.stud.mesh.position.y).toBeCloseTo(STUD_AT[1] + SINK, 6);
+    expect(b.leg.mesh.position.x).toBeCloseTo(LEG_AT[0], 6);
+    expect(b.leg.mesh.position.y).toBeCloseTo(LEG_AT[1] + SINK, 6);
+    expect(b.leg.mesh.position.z).toBeCloseTo(LEG_AT[2], 6);
     expect(b.seated()).toBe(true);
   });
 });

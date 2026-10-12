@@ -292,11 +292,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const turnedNow = new Set<Part>();
   // The ids of the joints a seated tool is turning this frame (update loop).
   const toolDriven = new Set<number>();
-  // Studs carried in a hand-turned part, with the move the turn made — see the update loop;
-  // `carriedStuds` is the pool, `carriedCount` how many are live this frame.
-  const carriedStuds: { part: Part | null; delta: THREE.Matrix4 }[] = [];
-  let carriedCount = 0;
-  const carriedPose = new THREE.Matrix4();
+  // Parts screwed onto a part being turned, with the move the turn made — see the update
+  // loop; `riding` is the pool, `ridingCount` how many are live this frame.
+  const riding: { part: Part | null; delta: THREE.Matrix4 }[] = [];
+  let ridingCount = 0;
+  const ridingPose = new THREE.Matrix4();
   const toolPose = new THREE.Matrix4();
   const hardwarePose = new THREE.Matrix4();
   const unitScale = new THREE.Vector3(1, 1, 1);
@@ -1494,8 +1494,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (!delta) return;
     const view = scratch.fromArray(head).sub(camera.position).toArray();
     const radians = tightenSign(tightenAxis(engagement), view) * delta;
-    // A part set onto several studs turns them all; a tool turns its one.
-    const joints = engagement.tool ? [target] : assembly.handTargets(target.mover);
+    // A part set onto several studs turns them all, and a stud screwed home in it its far end
+    // too; a tool turns its one.
+    const joints = engagement.tool ? [target] : assembly.handTurn(target.mover, radians > 0 ? 1 : -1);
     joints.forEach((joint, i) => turnFastener(joint, radians, i === 0));
   }
 
@@ -1541,7 +1542,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // for a part set onto several at once) it was set onto, all driven together.
   const turnJoints = (part: Part) => {
     const target = assembly.crankTarget(part.id)?.target;
-    return target ? [target] : assembly.handTargets(part.id);
+    return target ? [target] : assembly.handTurn(part.id, 1);
   };
   const turnTarget = (part: Part) => turnJoints(part)[0] ?? null;
 
@@ -1695,7 +1696,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     showPanelRings(goal);
     showDials(delta);
     turnedNow.clear();
-    carriedCount = 0;
+    ridingCount = 0;
     const joints = assembly.all();
     // The joints a seated tool is turning this frame: drawn as the tool turns them — the
     // hardware — however the seat was made (a top dropped on a stud, a key then put on it).
@@ -1735,23 +1736,27 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       offset.copy(pivot).sub(scratch.copy(pivot).applyQuaternion(twist)).applyQuaternion(mesh.quaternion);
       mesh.position.add(offset);
       mesh.quaternion.multiply(twist);
-      // A part carrying its stud takes the stud along: what the turn did to the part (its
-      // drawn pose over its body's) is done to the stud too, below.
-      if (hand && joint.mover !== joint.host) {
-        const entry = (carriedStuds[carriedCount] ??= { part: null, delta: new THREE.Matrix4() });
-        entry.part = partById.get(joint.hardware)!;
+      // What is screwed home onto the turned part goes with it: a stud in a leg that is
+      // carried onto the top, a leg on the stud that is being turned into it. What the turn
+      // did to the part (its drawn pose over its body's) is done to each, below.
+      for (const other of joints) {
+        if (other === joint || other.kind !== KIND.STUD || !isFastened(other.fastener)) continue;
+        const rider = other.hardware === turned.id ? other.host : other.host === turned.id ? other.hardware : null;
+        if (rider === null) continue;
+        const entry = (riding[ridingCount] ??= { part: null, delta: new THREE.Matrix4() });
+        entry.part = partById.get(rider)!;
         entry.delta.compose(mesh.position, mesh.quaternion, unitScale);
         entry.delta.multiply(toolPose.compose(scratch.set(t.x, t.y, t.z), twist.set(r.x, r.y, r.z, r.w), unitScale).invert());
-        carriedCount++;
+        ridingCount++;
       }
     }
-    for (let i = 0; i < carriedCount; i++) {
-      const { part, delta } = carriedStuds[i];
+    for (let i = 0; i < ridingCount; i++) {
+      const { part, delta } = riding[i];
       const { body, mesh } = part!;
       const r = body.rotation();
       const t = body.translation();
-      carriedPose.compose(scratch.set(t.x, t.y, t.z), twist.set(r.x, r.y, r.z, r.w), unitScale).premultiply(delta);
-      carriedPose.decompose(mesh.position, mesh.quaternion, scratch);
+      ridingPose.compose(scratch.set(t.x, t.y, t.z), twist.set(r.x, r.y, r.z, r.w), unitScale).premultiply(delta);
+      ridingPose.decompose(mesh.position, mesh.quaternion, scratch);
     }
     followRiders();
     for (const [id, { fastener, grip }] of toolGrips) {
