@@ -133,6 +133,12 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
     expect(main).toMatch(/catalog\.setOpen\(false\);\s*\/\/[^\n]*\n\s*world\.booklet\.thumb\.focus\(\{ preventScroll: true \}\);/);
   });
 
+  // A ?tune change to the corner fan moves the manual (the front thumb, fanned toward the
+  // room) as well as turning the catalog: main re-places both, live.
+  it('re-places both thumbs of the corner stack on a catalog knob change', () => {
+    expect(main).toMatch(/if \(group === 'catalog'\) \{\s*catalog\.place\(\);\s*items\.current\?\.booklet\.place\(\);\s*\}/);
+  });
+
   it('grows and raises a hovered thumb only after the pointer rests thumbHoverDelayMs, and undoes it at once', () => {
     const delay = '${BOOKLET_UI.thumbHoverDelayMs}ms';
     const hover = booklet.slice(booklet.indexOf('.booklet-thumb:hover {'), booklet.indexOf('.booklet-scrim {'));
