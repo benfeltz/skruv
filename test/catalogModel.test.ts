@@ -26,24 +26,15 @@ describe('catalogEntries', () => {
 });
 
 describe('createCatalog', () => {
-  it('opens on the cover, then one page per item in the given order', () => {
-    const pages = createCatalog(three, ['overkall', 'johnny', 'blank'], new Set(ids));
+  it('opens on the cover, then one page per item in the entries\' (registry) order', () => {
+    const pages = createCatalog(three, new Set(ids));
     expect(pages[0]).toEqual({ kind: 'cover' });
-    expect(pages.slice(1).map((page) => page.kind === 'item' && page.id)).toEqual(['overkall', 'johnny', 'blank']);
-    expect(pages[2]).toEqual({ kind: 'item', id: 'johnny', name: 'JOHNNY', partCount: 60, pickable: true });
-  });
-
-  it('still gives an item the order leaves out a page, after the ordered ones', () => {
-    const pages = createCatalog(three, ['blank'], new Set(ids));
-    expect(pages.slice(1).map((page) => page.kind === 'item' && page.id)).toEqual(['blank', 'johnny', 'overkall']);
-  });
-
-  it('throws on an ordered id with no item', () => {
-    expect(() => createCatalog(three, ['nope'], new Set(ids))).toThrow(/order names no item: nope/);
+    expect(pages.slice(1).map((page) => page.kind === 'item' && page.id)).toEqual(['johnny', 'blank', 'overkall']);
+    expect(pages[1]).toEqual({ kind: 'item', id: 'johnny', name: 'JOHNNY', partCount: 60, pickable: true });
   });
 
   it('marks each page pickable by the set, the rest sold out', () => {
-    const pages = createCatalog(three, ids, new Set(['blank']));
+    const pages = createCatalog(three, new Set(['blank']));
     expect(pages.flatMap((page) => (page.kind === 'item' ? [[page.id, page.pickable]] : []))).toEqual([
       ['johnny', false],
       ['blank', true],
@@ -52,7 +43,7 @@ describe('createCatalog', () => {
   });
 
   it("is the game's own catalog with CATALOG's order and flag: every carried item, all buildable by default", () => {
-    const pages = createCatalog(catalogEntries(), CATALOG.order, pickableSet(CATALOG.pickable, ITEM_IDS));
+    const pages = createCatalog(catalogEntries(), pickableSet(CATALOG.pickable, ITEM_IDS));
     expect(pages.length).toBe(1 + ITEM_IDS.length);
     expect(pages.every((page) => page.kind === 'cover' || page.pickable)).toBe(true);
   });

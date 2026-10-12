@@ -76,7 +76,7 @@ function itemOf(file: FlatpackFile) {
   });
 }
 
-// Every item, by id — the folder name under items/. Loaded once, here.
+// Every item, by id — the folder name under items/ — in catalog page order. Loaded once, here.
 const ITEMS: ReadonlyMap<string, Item> = new Map([['johnny', itemOf(johnny as unknown as FlatpackFile)]]);
 
 /** Every item the game carries, in registry order — what the catalog lists. */

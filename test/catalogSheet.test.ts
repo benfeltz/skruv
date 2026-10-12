@@ -13,7 +13,7 @@ const entries = [
 ];
 
 describe('buildTarget', () => {
-  const pages = createCatalog(entries, ['johnny', 'blank'], new Set(['blank']));
+  const pages = createCatalog(entries, new Set(['blank']));
 
   it('picks the item on a buildable page only', () => {
     expect(pages.map(buildTarget)).toEqual([null, null, pages[2]]);

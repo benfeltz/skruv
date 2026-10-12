@@ -47,7 +47,7 @@ describe('pre-splash: the catalog cover (1.6.1, 1.9.1)', () => {
 
   // The catalog as the sheet counts it: the cover and a page per item.
   it("counts the catalog's real pages", () => {
-    const count = createCatalog(catalogEntries(), CATALOG.order, pickableSet(CATALOG.pickable, ITEM_IDS)).length;
+    const count = createCatalog(catalogEntries(), pickableSet(CATALOG.pickable, ITEM_IDS)).length;
     expect(html).toContain(`<span class="pre-splash-count">1 / ${count}</span>`);
   });
 

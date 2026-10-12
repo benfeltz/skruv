@@ -108,7 +108,7 @@ const items = createItemSlot({
 // stack. BUILD IT goes straight into the room: the item is built, the catalog put down,
 // and both wait in the corner (the new manual docked in front). Until the first pick there
 // is no room to go back to, so nothing puts it down.
-const catalogPages = createCatalogPages(renderer, createCatalog(catalogEntries(), CATALOG.order, pickableSet(CATALOG.pickable, ITEM_IDS)));
+const catalogPages = createCatalogPages(renderer, createCatalog(catalogEntries(), pickableSet(CATALOG.pickable, ITEM_IDS)));
 const catalog = createCatalogSheet({
   pages: catalogPages,
   open: true,

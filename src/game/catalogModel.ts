@@ -25,16 +25,12 @@ export function catalogEntries(): CatalogEntry[] {
 }
 
 /**
- * The catalog's pages: the cover first, then one page per entry — those `order` names in
- * its order, then any it leaves out in registry order — each marked pickable or not. An id
- * in `order` with no entry throws.
+ * The catalog's pages: the cover first, then one page per entry in the entries' order — the
+ * registry's (src/game/item.ts, the one module that names the items) — each marked pickable
+ * or not.
  */
-export function createCatalog(entries: readonly CatalogEntry[], order: readonly string[], pickable: ReadonlySet<string>): CatalogPage[] {
-  const byId = new Map(entries.map((entry) => [entry.id, entry]));
-  const missing = order.filter((id) => !byId.has(id));
-  if (missing.length) throw new Error(`catalog order names no item: ${missing.join(', ')}`);
-  const ordered = [...order, ...entries.map(({ id }) => id).filter((id) => !order.includes(id))];
-  return [{ kind: 'cover' }, ...ordered.map((id) => ({ kind: 'item' as const, ...byId.get(id)!, pickable: pickable.has(id) }))];
+export function createCatalog(entries: readonly CatalogEntry[], pickable: ReadonlySet<string>): CatalogPage[] {
+  return [{ kind: 'cover' }, ...entries.map((entry) => ({ kind: 'item' as const, ...entry, pickable: pickable.has(entry.id) }))];
 }
 
 /** An item page as the catalog shows it. */
