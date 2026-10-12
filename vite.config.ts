@@ -89,13 +89,13 @@ function devStream(): Plugin {
   };
 }
 
-// The pickable flag (VITE_PICKABLE, CATALOG.pickable) checked when a build starts: an id the
-// game doesn't carry fails the build here, rather than shipping one that throws on boot
-// behind index.html's stand-in. The same rule the catalog runs (pickableSet).
+// The pickable flag (VITE_PICKABLE, CATALOG.pickable) checked as the config resolves, for a
+// build and the dev server alike: an id the game doesn't carry stops either here, with the
+// reason, rather than a page that throws on boot behind index.html's stand-in. The same
+// rule the catalog runs (pickableSet).
 function pickableCheck(): Plugin {
   return {
     name: 'skruv-pickable-check',
-    apply: 'build',
     configResolved(config) {
       pickableSet(config.env.VITE_PICKABLE ?? '', ITEM_IDS);
     },
