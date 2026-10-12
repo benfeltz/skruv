@@ -352,11 +352,15 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     return cache.get(index)!;
   }
 
+  // Set by dispose(): a booklet put away for good stops drawing in idle time.
+  let disposed = false;
+
   function prerender() {
     const idle: (fn: () => void) => unknown = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 1));
     const next = (i: number) => {
       if (i >= pages.length) return;
       idle(() => {
+        if (disposed) return;
         canvas(i);
         next(i + 1);
       });
@@ -364,7 +368,12 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     next(0);
   }
 
-  return { count: pages.length, pages, canvas, prerender };
+  /** Stops any idle drawing still to come — the item's booklet is going away. */
+  function dispose() {
+    disposed = true;
+  }
+
+  return { count: pages.length, pages, canvas, prerender, dispose };
 }
 
 // Hidden-line outline renders: every part a white box (faces hide what lies behind) with

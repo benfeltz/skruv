@@ -102,7 +102,7 @@ describe('physics boundary', () => {
   });
 
   it('lets the box drag but never takes it into the gizmo, the highlight or the repack', () => {
-    const main = read('src/main.ts');
+    const main = read('src/scene/itemWorld.ts');
     expect(main).toMatch(/const parts = \[flatpack\.base, flatpack\.lid\];/);
     expect(main).toMatch(/part !== flatpack\.base && part !== flatpack\.lid\);/);
     expect(main).toMatch(/if \(!part \|\| part === flatpack\.base\) \{/);

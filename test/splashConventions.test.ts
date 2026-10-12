@@ -50,8 +50,11 @@ describe('pre-splash (1.6.1)', () => {
     expect(html).toContain(`<span class="pre-splash-count">1 / ${count}</span>`);
   });
 
+  // The item world mounts the sheet as it is built (src/scene/itemWorld.ts); main removes
+  // the stand-in once that build returns.
   it("is removed in the frame that first paints the real sheet, once that sheet is mounted", () => {
-    const mount = main.indexOf('document.body.append(booklet.scrim, booklet.thumb, booklet.element);');
+    expect(read('src/scene/itemWorld.ts')).toContain('document.body.append(booklet.scrim, booklet.thumb, booklet.element);');
+    const mount = main.indexOf('const world = createItemWorld(');
     const remove = main.indexOf("requestAnimationFrame(() => document.getElementById('pre-splash')?.remove());");
     expect(mount).toBeGreaterThan(-1);
     expect(remove).toBeGreaterThan(mount);

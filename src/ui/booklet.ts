@@ -145,9 +145,10 @@ function injectStyle() {
 
 /**
  * The booklet sheet for `pages` (`{ count, canvas(index) }`, src/scene/bookletPages.ts).
- * Returns `{ scrim, thumb, element, currentPage, expanded, onChange(fn) }`: mount all three
- * elements; `onChange(fn)` calls `fn({ page, expanded })` whenever either changes. Starts
- * open on page 0, the cover. State is the module's own and read-only outside it.
+ * Returns `{ scrim, thumb, element, currentPage, expanded, onChange(fn), dispose() }`: mount
+ * all three elements; `onChange(fn)` calls `fn({ page, expanded })` whenever either changes;
+ * `dispose()` takes it all back off the page. Starts open on page 0, the cover. State is
+ * the module's own and read-only outside it.
  */
 export function createBookletSheet({ pages }: { pages: { count: number; canvas(index: number): CanvasImageSource } }) {
   injectStyle();
@@ -302,12 +303,13 @@ export function createBookletSheet({ pages }: { pages: { count: number; canvas(i
   view.addEventListener('pointerup', endSwipe);
   view.addEventListener('pointercancel', endSwipe);
 
-  window.addEventListener('keydown', (event) => {
+  function onKey(event: KeyboardEvent) {
     if (!open) return;
     if (event.key === 'ArrowLeft') flip(-1);
     else if (event.key === 'ArrowRight') flip(1);
     else if (event.key === 'Escape') setOpen(false);
-  });
+  }
+  window.addEventListener('keydown', onKey);
 
   render();
 
@@ -324,6 +326,15 @@ export function createBookletSheet({ pages }: { pages: { count: number; canvas(i
     onChange(fn: (state: { page: number; expanded: boolean }) => void) {
       listeners.add(fn);
       return () => listeners.delete(fn);
+    },
+    /** Takes the booklet off the page: its three elements, its window key listener and any lingering scrim timer. */
+    dispose() {
+      clearTimeout(lingering ?? undefined);
+      window.removeEventListener('keydown', onKey);
+      listeners.clear();
+      scrim.remove();
+      thumb.remove();
+      element.remove();
     },
   };
 }

@@ -1,14 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-// 1.5 game-flow rules that live in wiring (main.js) and DOM/scene modules — checked at the
-// source, since the behaviour itself is a manual device check.
+// 1.5 game-flow rules that live in wiring (main.ts, and the item world it builds since
+// 1.9.1: src/scene/itemWorld.ts) and DOM/scene modules — checked at the source, since the
+// behaviour itself is a manual device check.
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
-const main = read('src/main.ts');
+const world = read('src/scene/itemWorld.ts');
 const router = read('src/scene/gestureRouter.ts');
 
 describe('repack reset (decision 9)', () => {
-  const repack = main.slice(main.indexOf('function repack()'), main.indexOf('document.body.append(createResetButton'));
+  const repack = world.slice(world.indexOf('function repack()'), world.indexOf('function liftablePart()'));
 
   it("tears down through the router's own unseat and reconcile — no parallel delete path", () => {
     expect(repack).toMatch(/router\.unseatAll\(playerParts\.map/);
@@ -19,7 +20,7 @@ describe('repack reset (decision 9)', () => {
   });
 
   it("puts back only the player's parts and the lid, never the display shelf", () => {
-    expect(main).toMatch(/const playerParts = parts\.filter\(\(part\) => !display\.parts\.includes\(part\) && part !== flatpack\.base && part !== flatpack\.lid\);/);
+    expect(world).toMatch(/const playerParts = parts\.filter\(\(part\) => !display\.parts\.includes\(part\) && part !== flatpack\.base && part !== flatpack\.lid\);/);
     expect(repack).not.toMatch(/display/);
     expect(repack).toMatch(/physics\.place\(body, position, rotation\)/);
   });
@@ -36,7 +37,7 @@ describe('repack reset (decision 9)', () => {
 });
 
 describe('recovery sweep (Feedback #9)', () => {
-  const sweep = main.slice(main.indexOf('function sweep('), main.indexOf('createLoop('));
+  const sweep = world.slice(world.indexOf('function sweep('), world.indexOf('bookletPages.prerender()'));
 
   it('judges escape against the ROOM constants, on the RESET interval', () => {
     expect(sweep).toMatch(/hasEscaped\(\[x, y, z\], ROOM, RESET\.escapeMargin\)/);
@@ -58,8 +59,8 @@ describe('recovery sweep (Feedback #9)', () => {
 
 describe('highlight and booklet stay aids (decision 8)', () => {
   it("lights only the player's set, and only while the booklet is open", () => {
-    expect(main).toMatch(/createHighlight\(playerParts\)/);
-    expect(main).toMatch(/expanded && shown\.kind === 'step' \? shown\.types : \[\]/);
+    expect(world).toMatch(/createHighlight\(playerParts\)/);
+    expect(world).toMatch(/expanded && shown\.kind === 'step' \? shown\.types : \[\]/);
   });
 
   it('keeps the highlight out of the booklet DOM — main passes the page', () => {
@@ -76,7 +77,7 @@ describe('highlight and booklet stay aids (decision 8)', () => {
 });
 
 describe('no audio (0.0.1)', () => {
-  it.each(['src/main.ts', 'src/ui/booklet.ts', 'src/ui/resetButton.ts', 'src/scene/highlight.ts', 'src/scene/flatpack.ts', 'src/scene/displayShelf.ts', 'src/scene/bookletPages.ts'])(
+  it.each(['src/main.ts', 'src/scene/itemWorld.ts', 'src/ui/booklet.ts', 'src/ui/resetButton.ts', 'src/scene/highlight.ts', 'src/scene/flatpack.ts', 'src/scene/displayShelf.ts', 'src/scene/bookletPages.ts'])(
     '%s plays nothing',
     (path) => {
       expect(read(path)).not.toMatch(/\bAudio(Context|Listener)?\b|PositionalAudio|\.play\(/);
@@ -123,10 +124,10 @@ describe('boot with the manual up; tap off to put it down (1.6.1)', () => {
     expect(booklet).toMatch(/let page = 0;\s*let open = true;/);
   });
 
-  it('puts the scrim over the room and the sheet over the scrim, mounted by main', () => {
+  it('puts the scrim over the room and the sheet over the scrim, mounted by the item world', () => {
     expect(booklet).toMatch(/\.booklet-scrim \{[^}]*position: fixed;[^}]*inset: 0;[^}]*z-index: 1;/);
     expect(booklet.slice(booklet.indexOf('    .booklet {'), booklet.indexOf(".booklet[data-open='true'] {"))).toMatch(/z-index: 2;/);
-    expect(main).toMatch(/document\.body\.append\(booklet\.scrim, booklet\.thumb, booklet\.element\)/);
+    expect(world).toMatch(/document\.body\.append\(booklet\.scrim, booklet\.thumb, booklet\.element\)/);
   });
 
   it('swallows the put-down tap in the booklet, never in the gesture router', () => {

@@ -60,7 +60,8 @@ describe('placeholders and headers', () => {
   it('retires the temporary dev floor layout now the flatpack replaces it (1.5)', () => {
     expect(existsSync(new URL('../src/game/devLayout.ts', import.meta.url))).toBe(false);
     expect(read('src/main.ts')).not.toMatch(/devLayout|DEV_LAYOUT/);
-    expect(read('src/main.ts')).toMatch(/createPackedWorldLayout\(\)/);
+    expect(read('src/scene/itemWorld.ts')).not.toMatch(/devLayout|DEV_LAYOUT/);
+    expect(read('src/scene/itemWorld.ts')).toMatch(/createPackedWorldLayout\(\)/);
   });
 
   // The item is data in its Flatpack (1.7): parts, poses, pages, packing — never a mating

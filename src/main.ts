@@ -1,42 +1,17 @@
-import { PICK, RENDER, RESET, ROOM, TUNE } from './constants.js';
-import { createAssembly } from './game/assembly.js';
-import { ANY, createBus, EVENT, fpsEvent, recoveryEvent, resetEvent, sessionEvent, tuneEvent } from './game/events.js';
-import { createHaptics, CUE, cueFor, homeCue, patternFor } from './game/haptics.js';
+import { RENDER, TUNE } from './constants.js';
+import { ANY, createBus, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
+import { createHaptics, cueFor, patternFor } from './game/haptics.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
 import { createTunables, LIVE_KNOBS } from './game/tunables.js';
-import { ASSEMBLED, PART_TYPES } from './game/item.js';
-import { preferredRelatives } from './game/panelFit.js';
-import { createPartMesh } from './game/partMesh.js';
-import { hasEscaped } from './game/dragMath.js';
-import { fractionOf, heightAt, selectsDuringHold } from './game/liftLine.js';
-import { baseRest, boxPlacement, boxPoseOf, createPackedWorldLayout, lidRest, respawnSpots } from './game/boxLayout.js';
-import { isSmallPart } from './game/pickMath.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
-import { createPivotPick } from './scene/pivotPick.js';
 import { clampPixelRatio } from './scene/clamp.js';
-import { createGhost } from './scene/ghost.js';
-import { createCompoundPhysics } from './scene/compoundPhysics.js';
-import { createDisplayShelf } from './scene/displayShelf.js';
-import { createDropGuide } from './scene/dropGuide.js';
-import { createTargetRings } from './scene/targetRings.js';
 import { createFpsGuard } from './scene/fpsGuard.js';
-import { createFlatpack } from './scene/flatpack.js';
-import { createGestureRouter } from './scene/gestureRouter.js';
-import { createLiftHold, liftRangeOf } from './scene/liftHold.js';
-import { createGizmo } from './scene/gizmo.js';
-import { createHighlight } from './scene/highlight.js';
+import { createItemWorld } from './scene/itemWorld.js';
 import { createLoop } from './scene/loop.js';
 import { createRoom } from './scene/room.js';
 import { createScene } from './scene/scene.js';
-import { createSprue } from './scene/sprue.js';
 import { createBookletPages } from './scene/bookletPages.js';
-import { createBookletSheet } from './ui/booklet.js';
-import { createLiftLine } from './ui/liftLine.js';
-import { createTurnRing } from './ui/turnRing.js';
-import type { PartId } from './game/assembly.js';
-import type { Part } from './game/partMesh.js';
-import type { Pose, Vec3 } from '../tools/validate/lib/geometry.js';
 import { createResetButton } from './ui/resetButton.js';
 import { createToggleButton } from './ui/toggleButton.js';
 
@@ -72,108 +47,13 @@ tunables.subscribe((key, value) => {
   if (key === 'camera.mobileStartScale') cameraControls.frame(startPose());
 });
 
-// The game opens on the closed flatpack: every part packed flat inside, settling at once
-// and resting until the lid comes off and a hand disturbs it.
-const flatpack = createFlatpack(physics);
-scene.add(flatpack.base.mesh, flatpack.lid.mesh);
-
-// One record per physical part — what gestures pick, drag and snap. The box and its lid
-// are ones too.
-const parts = [flatpack.base, flatpack.lid];
-for (const { id, type, position, rotation } of createPackedWorldLayout()) {
-  const part = PART_TYPES[type];
-  const mesh = createPartMesh(part);
-  const body = physics.register(mesh, {
-    // map keeps the length; TS widens a mapped tuple to number[].
-    halfExtents: part.size.map((d) => d / 2) as Vec3,
-    // Every packed part is the pack's, with its mass.
-    mass: part.mass!,
-    position,
-    rotation,
-  });
-  scene.add(mesh);
-  parts.push({ id, type, mesh, body });
-}
-
-// The display JOHNNY against the wall: already built, its parts ordinary parts.
-const display = createDisplayShelf(physics);
-for (const part of display.parts) scene.add(part.mesh);
-parts.push(...display.parts);
-
-// The camera pivots about the first of these along the middle of the screen as a gesture
-// starts: every part and the box, never the overlays.
-const cameraControls = createCameraControls(camera, renderer.domElement, { pickDistance: createPivotPick(parts.map((part) => part.mesh)) });
-
-// What is seated on and fastened to what — every type-compatible pair, right or wrong.
-const typeById = new Map(parts.map(({ id, type }) => [id, type]));
-const assembly = createAssembly((id) => typeById.get(id)!);
-// The display shelf goes in fastened, through the graph's own events.
-display.fasten(assembly);
-// Manipulation goes through these seams: a fastened compound moves as one, and while a
-// finger is on the elevation line its part is held in mid-air at the line's height.
-const hold = createLiftHold(createCompoundPhysics(physics, parts, assembly));
-const manipulation = hold;
+// The camera pivots about the first part along the middle of the screen as a gesture
+// starts — the item world's parts, never the overlays (src/scene/itemWorld.ts).
+const cameraControls = createCameraControls(camera, renderer.domElement, { pickDistance: (origin, direction) => world.pickDistance(origin, direction) });
 
 // Rotation is free by default; the toggle turns 90° detents on.
 const snapRotate = createToggleButton({ label: 'Snap rotate' });
 document.body.append(snapRotate.element);
-
-const gizmo = createGizmo({
-  camera,
-  domElement: renderer.domElement,
-  physics: manipulation,
-  isFree: () => !snapRotate.pressed,
-});
-scene.add(gizmo.object);
-
-// The booklet: pages drawn from the same models, flipped freely — reference, never a gate.
-// The game opens with it in hand, on its cover; while it is open, a tap outside the sheet
-// puts it down and does nothing else.
-// Its controls page shows the device in hand: a coarse pointer is a touch screen.
-const bookletPages = createBookletPages(renderer, { scheme: matchMedia('(pointer: coarse)').matches ? 'touch' : 'desktop' });
-const booklet = createBookletSheet({ pages: bookletPages });
-document.body.append(booklet.scrim, booklet.thumb, booklet.element);
-// The real sheet now covers index.html's stand-in; it goes in the frame that first paints it.
-requestAnimationFrame(() => document.getElementById('pre-splash')?.remove());
-
-// While the booklet is open, the open page's parts glow — the player's own set only, never
-// the display shelf or the box and its lid.
-const playerParts = parts.filter((part) => !display.parts.includes(part) && part !== flatpack.base && part !== flatpack.lid);
-const highlight = createHighlight(playerParts);
-booklet.onChange(({ page, expanded }) => {
-  const shown = bookletPages.pages[page];
-  highlight.show(expanded && shown.kind === 'step' ? shown.types : []);
-});
-
-const ghost = createGhost();
-scene.add(ghost.object);
-
-// While a part is dragged: where it would land, and the hole it would drop onto.
-const dropGuide = createDropGuide();
-scene.add(dropGuide.object);
-
-// While a tool is carried: rings on the fasteners it can work right now.
-const targetRings = createTargetRings();
-scene.add(targetRings.object);
-
-// A model-kit handle on a selected fastener or tool, to drag millimetre hardware by.
-const sprue = createSprue();
-scene.add(sprue.object);
-
-// The box drags but never takes the gizmo: tapping it is tapping the room. While the line
-// holds a part, a tap on the room puts its rings away (a drag then moves it) and one on the
-// part brings them back (to turn it); no other part is picked.
-function select(part: Part | null) {
-  if (!selectsDuringHold(part === flatpack.base ? null : part, hold.held)) return;
-  if (!part || part === flatpack.base) {
-    gizmo.hide();
-    sprue.hide();
-    return;
-  }
-  gizmo.show(part);
-  if (isSmallPart(PART_TYPES[part.type].size, PICK)) sprue.show(part);
-  else sprue.hide();
-}
 
 // Haptics: every moment buzzes a named cue through the buzzer slot. The web's buzzer plays
 // HAPTICS patterns through navigator.vibrate (absent on iOS Safari; a 0 ms knob is silent); a
@@ -189,199 +69,36 @@ events.on(ANY, (event) => {
   if (cue) haptics.cue(cue);
 });
 
-// On a seated tool: the dial showing which way and how far to turn it.
-const turnRing = createTurnRing(document.body);
-
-const router = createGestureRouter({
-  domElement: renderer.domElement,
+// The item in the room — its flatpack, display, booklet and everything that works them
+// (src/scene/itemWorld.ts). The game opens with its booklet in hand, on its cover.
+const world = createItemWorld({
+  scene,
   camera,
+  domElement: renderer.domElement,
+  physics,
   cameraControls,
-  physics: manipulation,
-  parts,
-  assembly,
-  rings: gizmo,
-  // Tap a part to select it (unless the tap pushed a fastener home); tap empty space to
-  // deselect.
-  onTap: select,
-  ghost,
-  sprue,
-  dropGuide,
-  targetRings,
   events,
-  hold,
-  turnRing,
-  // Where each panel goes in the finished JOHNNY: offered first, never a gate.
-  relatives: preferredRelatives(ASSEMBLED, PART_TYPES),
-  // One tick a frame, however many eighths the turn crossed: a buzz can't land faster.
-  onRatchet: () => haptics.cue(CUE.TICK),
-  // A fastener backed off partway and turned home again buzzes as its first arrival did.
-  onRehome: (kind) => {
-    const cue = homeCue(kind);
-    if (cue) haptics.cue(cue);
-  },
+  haptics,
+  isFree: () => !snapRotate.pressed,
+  // Its controls page shows the device in hand: a coarse pointer is a touch screen.
+  pages: () => createBookletPages(renderer, { scheme: matchMedia('(pointer: coarse)').matches ? 'touch' : 'desktop' }),
 });
-// The line keeps whatever a panel carries (its dowels, its assembly) off the floor too: the router knows what it carries.
-hold.measure(router.verticalReachOf);
-// The display shelf's physics joints, made by the same reconcile every tap and turn runs.
-router.sync();
+// The real sheet now covers index.html's stand-in; it goes in the frame that first paints it.
+requestAnimationFrame(() => document.getElementById('pre-splash')?.remove());
 
-// Where the box sits now, as the level, in-room box frame the layout hangs off.
-function boxPose() {
-  const { x, y, z } = flatpack.base.body.translation();
-  const r = flatpack.base.body.rotation();
-  return boxPoseOf({ position: [x, y, z], rotation: [r.x, r.y, r.z, r.w] });
-}
-
-// Repack: the player's parts come apart by the normal teardown and go back into the box
-// as packed, lid on — wherever the box has been dragged to, stood upright there first if
-// it was left tilted. The display shelf is never touched.
-function repack() {
-  hold.end();
-  events.emit(resetEvent());
-  router.unseatAll(playerParts.map((part) => part.id));
-  select(null);
-  const box = boxPose();
-  const upright = baseRest(box);
-  physics.place(flatpack.base.body, upright.position, upright.rotation);
-  const packedPose = new Map<PartId, Pose>([[flatpack.lid.id, lidRest(box)], ...createPackedWorldLayout(box).map((p): [PartId, Pose] => [p.id, p])]);
-  for (const { id, body } of [...playerParts, flatpack.lid]) {
-    const { position, rotation } = packedPose.get(id)!;
-    physics.place(body, position, rotation);
-  }
-}
-document.body.append(createResetButton({ onReset: repack }).element);
-
-// The elevation line's part: the one being moved (never cranked or pulled, nor a compound,
-// whose range is not one part's), else the selected one — never the box, nor a part
-// sitting in a seat unless it is a panel the router carries with all it holds (its
-// assembly, its dowels), standing on nothing else.
-function liftablePart() {
-  if (hold.held) return hold.held;
-  const dragging = router.dragging;
-  const part = dragging ? (dragging.mode === 'move' ? dragging.part : null) : gizmo.selected;
-  if (!part || part === flatpack.base) return null;
-  return dragging || assembly.jointsOf(part.id).length === 0 || router.carries(part) ? part : null;
-}
-
-const rangeOf = (part: Part) => liftRangeOf(part, part.mesh.quaternion.toArray(), router.verticalReachOf);
-const heightOf = (part: Part) => (hold.held === part ? hold.height : part.mesh.position.y);
-
-// A finger on the line holds the part: a press on the line eases it toward the finger, one
-// on the knob drags it 1:1 from where it is. Letting go hands it back to gravity — unless
-// Shift still keeps it up.
-let knobOffset: number | null = null;
-function liftTo(fraction: number) {
-  const part = hold.held;
-  if (!part) return;
-  if (knobOffset === null) hold.target(heightAt(fraction, rangeOf(part)));
-  else hold.jump(heightAt(fraction + knobOffset, rangeOf(part)));
-}
-const liftLine = createLiftLine({
-  onPress(fraction, onKnob) {
-    const part = liftablePart();
-    if (!part) return;
-    hold.begin(part, 'line');
-    knobOffset = onKnob ? fractionOf(heightOf(part), rangeOf(part)) - fraction : null;
-    liftTo(fraction);
-  },
-  onMove: liftTo,
-  onRelease: () => hold.end('line'),
-});
-document.body.append(liftLine.element);
-
-// Shift is the desktop's finger on the line: while it is down, the part the line would lift
-// stays where it is — the pointer free to turn it, drag it (across the floor, as any drag)
-// or orbit, and Shift + scroll sets its height (src/scene/gestureRouter.ts) — and letting
-// go drops it. Window-level, so it counts wherever focus sits.
-let shiftDown = false;
-function onShift(event: KeyboardEvent) {
-  if (event.key !== 'Shift') return;
-  shiftDown = event.type === 'keydown';
-  if (!shiftDown) hold.end('key');
-}
-window.addEventListener('keydown', onShift);
-window.addEventListener('keyup', onShift);
-
-// Per frame, so a part picked up or selected with Shift already down is held from then on.
-function keepShiftHold() {
-  const part = shiftDown && liftablePart();
-  if (part) hold.begin(part, 'key');
-}
-
-function showLiftLine() {
-  const part = liftablePart();
-  if (part) liftLine.show(fractionOf(heightOf(part), rangeOf(part)));
-  else liftLine.hide();
-}
-
-// The hold ends with the finger and Shift, and also when its part seats, on a repack, and
-// whenever the app is backgrounded or loses focus — a Shift let go meanwhile never arrives.
-function dropHold() {
-  shiftDown = false;
-  hold.end();
-}
-events.on(EVENT.SEAT, ({ hardware, host }) => {
-  if (hold.held && (hardware === hold.held.id || host === hold.held.id)) hold.end();
-});
-// A panel carried in on its dowels seats through them: it is neither side of the joint, but its
-// mover — or another panel of the assembly it carries is.
-events.on(EVENT.SEAT, ({ joint }) => {
-  const mover = typeof joint === 'number' ? assembly.get(joint)?.mover : undefined;
-  if (hold.held && mover && assembly.compoundOf(hold.held.id).has(mover)) hold.end();
-});
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') dropHold();
-});
-window.addEventListener('blur', dropHold);
-
-// Recovery: a loose player part that has left the room (through a slab, off a wall) is set
-// down again beside the box. Bonded parts go back only with a repack. The box itself goes
-// back to where it last sat in the room — floor it held a moment ago, not the boot spot
-// the player may have built on since.
-let sweepIn = RESET.sweepInterval;
-let lastBox = boxPlacement();
-function sweep(delta: number) {
-  sweepIn -= delta;
-  if (sweepIn > 0) return;
-  sweepIn = RESET.sweepInterval;
-  const escaped = [...playerParts, flatpack.lid, flatpack.base].filter(({ id, body }) => {
-    const { x, y, z } = body.translation();
-    return hasEscaped([x, y, z], ROOM, RESET.escapeMargin) && assembly.compoundOf(id).size === 1;
-  });
-  if (!escaped.includes(flatpack.base)) lastBox = boxPose();
-  if (escaped.length === 0) return;
-  events.emit(recoveryEvent(escaped.map(({ id }) => id)));
-  // The box goes back first, so the rest are set down beside it there.
-  if (escaped.includes(flatpack.base)) {
-    const back = baseRest(lastBox);
-    physics.place(flatpack.base.body, back.position, back.rotation);
-  }
-  const loose = escaped.filter((part) => part !== flatpack.base);
-  const spots = respawnSpots(loose.map((part) => part.type), boxPose());
-  loose.forEach(({ body }, i) => physics.place(body, spots[i].position, spots[i].rotation));
-}
+document.body.append(createResetButton({ onReset: () => world.repack() }).element);
 
 // Under sustained load the room renders every other frame; everything else runs every frame.
 const fps = createFpsGuard();
 
 createLoop((delta, rawDelta) => {
   cameraControls.update(delta);
-  keepShiftHold();
-  hold.update(delta);
-  showLiftLine();
-  physics.step(delta);
-  sweep(delta);
-  router.update(delta);
-  gizmo.update();
-  sprue.update();
-  highlight.update(delta);
+  world.update(delta);
   // Measured on the true delta: the clamped one would floor every slow device at 15 fps.
   const { render, sample } = fps.frame(rawDelta);
   if (sample) events.emit(fpsEvent(Math.round(sample.fps * 10) / 10, sample.skipping));
   if (render) renderer.render(scene, camera);
 }).start();
-// The rest of the booklet draws in idle time, after the room is on screen.
-bookletPages.prerender();
 
 // Dev server only: the dev stream — events out, knob sets and screenshots in. The guard is
 // compile-time, so a build drops the import and src/dev with it.
