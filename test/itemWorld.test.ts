@@ -210,23 +210,21 @@ describe('the item world comes and goes without a trace', () => {
 });
 
 describe('the swap: picking from the catalog (1.9.1)', () => {
-  it('pick → repick → repick holds exactly one world, and its manual arrives docked', async () => {
+  it('a pick builds one world with its manual docked; picking it again keeps that world', async () => {
     const { deps, census } = await engine();
     const baseline = census();
     const items = createItemSlot({ select: setItem, build: () => createItemWorld(deps) });
 
-    items.pick('johnny');
+    const world = items.pick('johnny');
+    expect(ITEM_ID).toBe('johnny');
     const one = census();
     expect(one.physics.registered).toBeGreaterThan(MANIFEST.length);
-    for (let round = 0; round < 2; round++) {
-      run(items.current!, 0.3);
-      items.pick('johnny');
-      expect(ITEM_ID).toBe('johnny');
-      // The old world gone before the new one came: one world's worth, never two.
-      expect(census(), `repick ${round}`).toEqual(one);
-      expect(items.current!.booklet.expanded, `repick ${round}`).toBe(false);
-    }
-    items.current!.dispose();
+    expect(world.booklet.expanded).toBe(false);
+    run(world, 0.3);
+    // BUILD IT on the item already in the room: the same world, nothing torn down or added.
+    expect(items.pick('johnny')).toBe(world);
+    expect(census()).toEqual(one);
+    world.dispose();
     expect(census()).toEqual(baseline);
   });
 });

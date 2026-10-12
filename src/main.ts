@@ -80,7 +80,8 @@ events.on(ANY, (event) => {
 
 // The item in the room — its flatpack, display, booklet and everything that works them
 // (src/scene/itemWorld.ts) — none until the first pick. A pick swaps it in-scene: the old
-// world disposed, the door turned to the new pack, the new world built (src/game/itemSlot.ts).
+// world disposed, the door turned to the new pack, the new world built (src/game/itemSlot.ts);
+// picking the item already in the room keeps it, progress and all.
 const items = createItemSlot({
   select: setItem,
   build: () =>

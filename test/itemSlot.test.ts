@@ -30,13 +30,21 @@ describe('createItemSlot', () => {
     expect(log).toEqual(['select johnny', 'build 1']);
   });
 
-  it('swaps: dispose, then select, then build — a repick of the same item too', () => {
+  it('swaps: dispose, then select, then build', () => {
     const { items, log } = slot();
     items.pick('johnny');
     items.pick('blank');
-    items.pick('blank');
-    expect(log).toEqual(['select johnny', 'build 1', 'dispose 1', 'select blank', 'build 2', 'dispose 2', 'select blank', 'build 3']);
+    items.pick('johnny');
+    expect(log).toEqual(['select johnny', 'build 1', 'dispose 1', 'select blank', 'build 2', 'dispose 2', 'select johnny', 'build 3']);
     expect(items.current?.n).toBe(3);
+  });
+
+  it('keeps the world in the room when its own item is picked again — no teardown, no progress lost', () => {
+    const { items, log } = slot();
+    const world = items.pick('johnny');
+    expect(items.pick('johnny')).toBe(world);
+    expect(items.current).toBe(world);
+    expect(log).toEqual(['select johnny', 'build 1']);
   });
 
   it('a pick the door refuses leaves the room empty, never half-built', () => {

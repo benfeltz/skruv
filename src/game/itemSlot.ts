@@ -4,20 +4,25 @@
 // the caller's (src/main.ts passes createItemWorld and setItem). One at a time for now;
 // keeping an assembled item in the room later skips the dispose, nothing more.
 
-/** `{ current, pick(id) }`: `current` is the world in the room, null until the first pick; `pick` swaps it. */
+/**
+ * `{ current, pick(id) }`: `current` is the world in the room, null until the first pick;
+ * `pick` swaps it. Picking the item already in the room keeps that world as it is — a look
+ * through the catalog never costs a half-built item its progress.
+ */
 export function createItemSlot<World extends { dispose(): void }>({ select, build }: { select: (id: string) => void; build: () => World }) {
-  let current: World | null = null;
+  let current: { id: string; world: World } | null = null;
   return {
     get current() {
-      return current;
+      return current?.world ?? null;
     },
-    /** The room becomes item `id`: dispose the world in it, select `id`, build its world. */
+    /** The room becomes item `id`: unless it already is, dispose the world in it, select `id`, build its world. */
     pick(id: string) {
-      current?.dispose();
+      if (current?.id === id) return current.world;
+      current?.world.dispose();
       current = null;
       select(id);
-      current = build();
-      return current;
+      current = { id, world: build() };
+      return current.world;
     },
   };
 }
