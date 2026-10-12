@@ -51,7 +51,11 @@ tunables.subscribe((key, value) => {
   if (group === 'physics' || group === 'joint') physics.retune();
   if (key === 'render.maxPixelRatio') renderer.setPixelRatio(clampPixelRatio(window.devicePixelRatio, RENDER.maxPixelRatio));
   if (key === 'camera.mobileStartScale') cameraControls.frame(startPose());
-  if (group === 'catalog') catalog.place();
+  // The corner fan moves the manual in front, the catalog behind turns: re-place both.
+  if (group === 'catalog') {
+    catalog.place();
+    items.current?.booklet.place();
+  }
 });
 
 // The camera pivots about the first part along the middle of the screen as a gesture
