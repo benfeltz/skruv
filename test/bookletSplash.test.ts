@@ -148,6 +148,26 @@ describe('boot: the booklet in hand on its cover (1.6.1)', () => {
   });
 });
 
+describe('a sheet whose first render throws (1.9.1 review)', () => {
+  it('takes itself back out: no key listener left, and the next sheet still opens', () => {
+    const before = dom.windowListeners.get('keydown')?.length ?? 0;
+    expect(() =>
+      createBookletSheet({
+        pages: {
+          count: COUNT,
+          canvas: () => {
+            throw new Error('context lost');
+          },
+        },
+      }),
+    ).toThrow('context lost');
+    expect(dom.windowListeners.get('keydown')?.length ?? 0).toBe(before);
+    // A stale open entry would keep this one docked (one sheet open at a time).
+    const { booklet } = mount();
+    expect(booklet.expanded).toBe(true);
+  });
+});
+
 describe('tap off to put it down — every time it is open (1.6.1)', () => {
   // Open at boot, and open again from the thumb after a first put-down.
   const openings: [string, (sheet: Sheet) => void][] = [

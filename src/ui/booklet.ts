@@ -191,10 +191,13 @@ function injectStyle() {
 // Every sheet on the page (the catalog and the current manual): one is open at a time. While
 // any is open, every docked thumb is inert — out of the tab order and deaf to clicks — so the
 // keyboard can't open a second sheet under the first's scrim, and a key never drives two.
-const sheets = new Set<{ isOpen(): boolean; thumb: HTMLButtonElement }>();
+type LiveSheet = { isOpen(): boolean; thumb: HTMLButtonElement };
+const sheets = new Set<LiveSheet>();
+/** Whether any live sheet but `except` is open. */
+const anyOpen = (except?: LiveSheet) => [...sheets].some((sheet) => sheet !== except && sheet.isOpen());
 function syncSheets() {
-  const anyOpen = [...sheets].some((sheet) => sheet.isOpen());
-  for (const { thumb } of sheets) thumb.inert = anyOpen;
+  const inert = anyOpen();
+  for (const { thumb } of sheets) thumb.inert = inert;
 }
 
 /** A control laid over a page — the catalog's BUILD IT: what it is called, and what it does. */
@@ -233,7 +236,7 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
   let page = 0;
   let open = startsOpen;
   // Asked to start open while another sheet is: it starts docked (one open at a time).
-  if ([...sheets].some((sheet) => sheet.isOpen())) open = false;
+  if (anyOpen()) open = false;
   let lingering: ReturnType<typeof setTimeout> | null = null;
 
   // Over the whole room — canvas and buttons alike — and under the sheet, while the
@@ -351,7 +354,7 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
   function setOpen(value: boolean, { byRoomTap = false } = {}) {
     if (open === value || (!value && !canClose())) return;
     // One sheet open at a time: another one open keeps this one docked.
-    if (value && [...sheets].some((sheet) => sheet !== self && sheet.isOpen())) return;
+    if (value && anyOpen(self)) return;
     open = value;
     notify(null);
     showScrim(open, byRoomTap ? BOOKLET_UI.scrimLingerMs : 0);
@@ -445,12 +448,32 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
     thumb.style.transform = `translate(${x}px, ${y}px) rotate(${turn}rad)`;
   }
 
-  const self = { isOpen: () => open, thumb };
+  const self: LiveSheet = { isOpen: () => open, thumb };
   sheets.add(self);
 
-  place();
-  showScrim(open);
-  render();
+  /** Takes the booklet off the page: its three elements, its place among the live sheets, its window key listener and any lingering scrim timer. */
+  function dispose() {
+    clearTimeout(lingering ?? undefined);
+    window.removeEventListener('keydown', onKey);
+    sheets.delete(self);
+    syncSheets();
+    listeners.clear();
+    scrim.remove();
+    thumb.remove();
+    element.remove();
+  }
+
+  // The first render draws the open page (a WebGL render for a cover). If it throws, the
+  // sheet takes itself back out — registry entry and key listener — before the error goes on,
+  // since the caller never got a sheet to dispose.
+  try {
+    place();
+    showScrim(open);
+    render();
+  } catch (error) {
+    dispose();
+    throw error;
+  }
 
   return {
     scrim,
@@ -472,17 +495,7 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
-    /** Takes the booklet off the page: its three elements, its window key listener and any lingering scrim timer. */
-    dispose() {
-      clearTimeout(lingering ?? undefined);
-      window.removeEventListener('keydown', onKey);
-      sheets.delete(self);
-      syncSheets();
-      listeners.clear();
-      scrim.remove();
-      thumb.remove();
-      element.remove();
-    },
+    dispose,
   };
 }
 
