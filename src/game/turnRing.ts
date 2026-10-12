@@ -4,7 +4,7 @@
 // projects, src/ui/turnRing.ts draws.
 
 import { TURN_RING } from '../constants.js';
-import { isCrankKind, isFastened, isHandTurned } from './fasteners.js';
+import { isFastened, isHandTurned } from './fasteners.js';
 import { tightenSign } from './crankMath.js';
 import { KIND } from '../../tools/validate/lib/vocabulary.js';
 import type { AssemblyJoint } from './assembly.js';
@@ -51,8 +51,8 @@ export const tightensClockwise = (intoHole: number[], viewDirection: number[]) =
  */
 export function dialEngagements(
   joints: readonly AssemblyJoint[],
-  // What a tool turns: the graph's `crankTarget` (the far end of a stud), by default the host's first crank seat.
-  targetOf: (tool: AssemblyJoint) => AssemblyJoint | null = (tool) => joints.find((j) => j.hardware === tool.host && isCrankKind(j.kind)) ?? null,
+  // What a tool turns: the graph's `crankTarget` — the far end of a stud — never re-derived here.
+  targetOf: (tool: AssemblyJoint) => AssemblyJoint | null,
 ): Engagement[] {
   const tooled = joints.flatMap((tool) => {
     if (tool.kind !== KIND.TOOL) return [];

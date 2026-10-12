@@ -58,6 +58,9 @@ describe('tightensClockwise', () => {
   });
 });
 
+// What the router passes: the graph's own answer for what a seated tool turns.
+const turnedBy = (assembly: ReturnType<typeof createAssembly>) => (tool: { hardware: string }) => assembly.crankTarget(tool.hardware)?.target ?? null;
+
 describe('dialEngagements', () => {
   // A bolt and a cam lock seated in a panel, each with its tool on it.
   function bench() {
@@ -71,22 +74,22 @@ describe('dialEngagements', () => {
   it('gives a tool on a fastener not yet home a dial', () => {
     const { assembly, bolt, key } = bench();
     expect(key.kind).toBe(KIND.TOOL);
-    expect(dialEngagements(assembly.all())).toEqual([{ tool: key, target: bolt }]);
+    expect(dialEngagements(assembly.all(), turnedBy(assembly))).toEqual([{ tool: key, target: bolt }]);
   });
 
   it('keeps the dial of a tool on a fastener that is home, for as long as the tool is on', () => {
     const { assembly, bolt, key } = bench();
     assembly.drive(bolt.id);
-    expect(dialEngagements(assembly.all())).toEqual([{ tool: key, target: assembly.get(bolt.id) }]);
+    expect(dialEngagements(assembly.all(), turnedBy(assembly))).toEqual([{ tool: key, target: assembly.get(bolt.id) }]);
     assembly.unseat(key.id);
-    expect(dialEngagements(assembly.all())).toEqual([]);
+    expect(dialEngagements(assembly.all(), turnedBy(assembly))).toEqual([]);
   });
 
   it('gives none with no tool seated', () => {
     const types: Record<string, string> = { panel: 'sidePanel', bolt: 'camLockBolt' };
     const assembly = createAssembly((id) => types[id]);
     assembly.seat({ partA: 'bolt', connectorA: 0, partB: 'panel', connectorB: 2, mover: 'bolt' });
-    expect(dialEngagements(assembly.all())).toEqual([]);
+    expect(dialEngagements(assembly.all(), turnedBy(assembly))).toEqual([]);
   });
 });
 
@@ -105,7 +108,7 @@ describe('dialEngagements: a part turned by hand (1.9.2)', () => {
 
   it('gives a leg set onto its stud a toolless dial centred on its own hole — and the stud none', () => {
     const { assembly, inLeg } = bench();
-    expect(dialEngagements(assembly.all())).toEqual([{ tool: null, target: inLeg }]);
+    expect(dialEngagements(assembly.all(), turnedBy(assembly))).toEqual([{ tool: null, target: inLeg }]);
     // The dial's centre is the target's host connector: the leg's hole.
     expect(assembly.hostConnector(inLeg).type).toBe('studHole');
     expect(assembly.get(inLeg.id)!.host).toBe('leg');
@@ -122,7 +125,7 @@ describe('dialEngagements: a part turned by hand (1.9.2)', () => {
   it('drops the dial once the leg is home', () => {
     const { assembly, inLeg } = bench();
     assembly.drive(inLeg.id);
-    expect(dialEngagements(assembly.all())).toEqual([]);
+    expect(dialEngagements(assembly.all(), turnedBy(assembly))).toEqual([]);
   });
 
   it('gives the key the far end and the leg nothing twice over: one dial per fastener', () => {
@@ -131,9 +134,11 @@ describe('dialEngagements: a part turned by hand (1.9.2)', () => {
     assembly.seat({ partA: 'key', connectorA: 0, partB: 'stud', connectorB: 2, mover: 'key' });
     const target = assembly.crankTarget('key')!.target!;
     expect(target.id).toBe(inLeg.id);
-    const dials = dialEngagements(assembly.all(), () => target);
+    const dials = dialEngagements(assembly.all(), turnedBy(assembly));
     expect(dials).toHaveLength(1);
     expect(dials[0].tool).not.toBeNull();
+    // The dial is on the far end — the joint the graph says the key turns — not the end it sits in.
+    expect(dials[0].target.id).toBe(inLeg.id);
   });
 });
 
