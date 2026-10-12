@@ -2,7 +2,7 @@ import { CATALOG, RENDER, TUNE } from './constants.js';
 import { catalogEntries, createCatalog, pickableSet } from './game/catalogModel.js';
 import { ANY, createBus, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
 import { createHaptics, cueFor, patternFor } from './game/haptics.js';
-import { ITEM_IDS, setItem } from './game/item.js';
+import { ITEM_ID, ITEM_IDS, setItem } from './game/item.js';
 import { createItemSlot } from './game/itemSlot.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
 import { createTunables, LIVE_KNOBS } from './game/tunables.js';
@@ -79,12 +79,14 @@ events.on(ANY, (event) => {
 });
 
 // The item in the room — its flatpack, display, booklet and everything that works them
-// (src/scene/itemWorld.ts) — none until the first pick. A pick swaps it in-scene: the door
-// turned to the new pack, the new world built, then the old one disposed — a build that
-// throws leaves the old world and the door as they were (src/game/itemSlot.ts). Picking the
-// item already in the room keeps it, progress and all.
+// (src/scene/itemWorld.ts) — none until the first pick. A pick swaps it in-scene as one
+// transaction (src/game/itemSlot.ts): the old world disposed while the door still names it,
+// the door turned, the new world built; a build that throws turns the door back and leaves
+// the room empty, the catalog still in hand. Picking the item already in the room keeps it,
+// progress and all.
 const items = createItemSlot({
-  select: setItem,
+  // The door is item.ts itself: ITEM_ID is a live binding, read at each pick.
+  door: { selected: () => ITEM_ID, select: setItem },
   build: () =>
     createItemWorld({
       scene,

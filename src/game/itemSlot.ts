@@ -1,41 +1,54 @@
-// The one item in the room (1.9.1): picking an item swaps the room to it, in-scene — the
-// door (src/game/item.ts) pointed at the new pack, the new world built from it, and only
-// then the old world taken down. A build that throws leaves the room exactly as it was: the
-// door turned back, the old world untouched (createItemWorld takes back its own half-built
-// work). Pure: what a world is, and how the door turns, are the caller's (src/main.ts passes
-// createItemWorld and setItem). One at a time for now; keeping an assembled item in the
-// room later skips the dispose, nothing more.
+// The one item in the room (1.9.1): picking an item swaps the room to it, in-scene. Pure:
+// what a world is, and the door it is built through, are the caller's (src/main.ts passes
+// createItemWorld, and src/game/item.ts's ITEM_ID and setItem). One at a time for now;
+// keeping an assembled item in the room later skips the dispose, nothing more.
+//
+// The invariant, which every step below keeps:
+//   The door names the current item; the world in the room, if there is one, was built
+//   through the door for that item. There is no second record of "the current item" here —
+//   the slot reads the door.
+//
+// So a swap is one transaction, in this order:
+//   1. The old world is disposed while the door still names its item, so its teardown reads
+//      the pack it was built from. From here on the room is empty.
+//   2. The door turns to the new item.
+//   3. The new world is built through it.
+// If step 3 throws, the door turns back to the item it named before, and the room stays
+// explicitly empty: no world, and the caller sees the error (main keeps the catalog in hand,
+// since there is no room to put it down into). createItemWorld takes back its own
+// half-built work. If step 1 throws, the room is already empty and the door never turned.
+
+/** The item door the slot builds through: which item it names now, and how to turn it. */
+export interface ItemDoor {
+  selected(): string;
+  select(id: string): void;
+}
 
 /**
- * `{ current, pick(id) }`: `current` is the world in the room, null until the first pick;
- * `pick` swaps it. Picking the item already in the room keeps that world as it is — a look
- * through the catalog never costs a half-built item its progress.
+ * `{ current, pick(id) }`: `current` is the world in the room, null until the first pick and
+ * after a failed one; `pick` swaps it as above. Picking the item already in the room keeps
+ * that world as it is — a look through the catalog never costs a half-built item its progress.
  */
-export function createItemSlot<World extends { dispose(): void }>({ select, build }: { select: (id: string) => void; build: () => World }) {
-  let current: { id: string; world: World } | null = null;
+export function createItemSlot<World extends { dispose(): void }>({ door, build }: { door: ItemDoor; build: () => World }) {
+  let current: World | null = null;
   return {
     get current() {
-      return current?.world ?? null;
+      return current;
     },
-    /**
-     * The room becomes item `id`, unless it already is: select `id`, build its world, then
-     * dispose the old one. If the build throws, the previous item is selected again, its
-     * world stays, and the error goes on to the caller.
-     */
     pick(id: string) {
-      if (current?.id === id) return current.world;
-      const previous = current;
-      select(id);
-      let world: World;
+      if (current && door.selected() === id) return current;
+      const before = door.selected();
+      const old = current;
+      current = null;
+      old?.dispose();
+      door.select(id);
       try {
-        world = build();
+        current = build();
       } catch (error) {
-        if (previous) select(previous.id);
+        door.select(before);
         throw error;
       }
-      previous?.world.dispose();
-      current = { id, world };
-      return world;
+      return current;
     },
   };
 }
