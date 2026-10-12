@@ -256,17 +256,16 @@ export async function createPhysicsWorld() {
   /**
    * Takes a registered body out of the world, in order: its joints (as `unjoin`, so a body
    * it embedded collides again), then its colliders, then the body — out of Rapier, and out
-   * of `step`'s and `retune`'s bookkeeping. The body is dead afterwards; removing it twice is
-   * a bug upstream.
+   * of `step`'s and `retune`'s bookkeeping. The body is dead afterwards; removing it twice, or
+   * one never registered, is a bug upstream and throws before anything is touched.
    */
   function remove(body: Body) {
+    const index = bodies.findIndex((record) => record.body === body);
+    if (index < 0) throw new Error('remove: body is not registered (removed twice, or never registered)');
     for (const joint of joints.keys()) if (joint.body1().handle === body.handle || joint.body2().handle === body.handle) unjoin(joint);
     embedded.delete(body);
     while (body.numColliders() > 0) world.removeCollider(body.collider(0), false);
-    bodies.splice(
-      bodies.findIndex((record) => record.body === body),
-      1,
-    );
+    bodies.splice(index, 1);
     world.removeRigidBody(body);
   }
 

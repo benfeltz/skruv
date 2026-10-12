@@ -27,6 +27,19 @@ const run = (physics: PhysicsWorld, seconds: number) => {
 };
 
 describe('world.remove', () => {
+  it("throws on a body it doesn't hold, and leaves every other body's record alone", async () => {
+    const physics = await createPhysicsWorld();
+    const a = box(physics, 0);
+    const kept = box(physics, 0.5);
+    physics.remove(a);
+    const before = physics.census();
+    expect(() => physics.remove(a)).toThrow('not registered');
+    expect(physics.census()).toEqual(before);
+    // The survivor is still synced: stepped, it falls.
+    run(physics, 0.5);
+    expect(kept.translation().y).toBeLessThan(0.2);
+  });
+
   it('takes a body and every collider it has back out, to the baseline', async () => {
     const physics = await createPhysicsWorld();
     const baseline = physics.census();
