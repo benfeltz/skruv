@@ -76,7 +76,9 @@ function addRoomColliders(world: RAPIER.World) {
  * `grab`/`move`/`release` hand a registered body between the simulation and direct
  * control (part manipulation). `join`/`unjoin` add and remove the joints fastener state
  * calls for (src/game/assembly.ts `bonds()`). `retune` re-applies the live-tunable values
- * baked in at creation (src/game/tunables.ts) to every body, collider and joint.
+ * baked in at creation (src/game/tunables.ts) to every body, collider and joint. `remove`
+ * takes a registered body back out — an item swap's teardown — and `census` counts what
+ * the world holds.
  */
 export async function createPhysicsWorld() {
   await RAPIER.init();
@@ -251,7 +253,29 @@ export async function createPhysicsWorld() {
     world.removeImpulseJoint(joint, true);
   }
 
-  return { register, step, grab, move, release, place, join, unjoin, retune };
+  /**
+   * Takes a registered body out of the world, in order: its joints (as `unjoin`, so a body
+   * it embedded collides again), then its colliders, then the body — out of Rapier, and out
+   * of `step`'s and `retune`'s bookkeeping. The body is dead afterwards; removing it twice is
+   * a bug upstream.
+   */
+  function remove(body: Body) {
+    for (const joint of joints.keys()) if (joint.body1().handle === body.handle || joint.body2().handle === body.handle) unjoin(joint);
+    embedded.delete(body);
+    while (body.numColliders() > 0) world.removeCollider(body.collider(0), false);
+    bodies.splice(
+      bodies.findIndex((record) => record.body === body),
+      1,
+    );
+    world.removeRigidBody(body);
+  }
+
+  /** What the world holds: Rapier's bodies, colliders and joints (the room's slabs included), and the bodies `step` syncs. */
+  function census() {
+    return { bodies: world.bodies.len(), colliders: world.colliders.len(), joints: world.impulseJoints.len(), registered: bodies.length };
+  }
+
+  return { register, step, grab, move, release, place, join, unjoin, retune, remove, census };
 }
 
 export type PhysicsWorld = Awaited<ReturnType<typeof createPhysicsWorld>>;
