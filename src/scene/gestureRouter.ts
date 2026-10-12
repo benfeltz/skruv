@@ -1133,7 +1133,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const joints = assembly.all();
     const catches = catcher(joints);
     // A dowel's two ends take the same holes: each lights once.
-    const workable = [...new Set(ends.flatMap((end) => end.seats))].filter((c) => isWorkable(c, joints, catches));
+    const workable = [...new Set(ends.flatMap((end) => end.seats))].filter((c) => isWorkable(c, catches));
     const rect = domElement.getBoundingClientRect();
     const reach = ends.map((end) => connectorInWorld(end.connector, held!).position);
     return ringStrengths(workable, [pointer!.clientX, pointer!.clientY], (position) => screenPoint(position, rect), reach, RING);

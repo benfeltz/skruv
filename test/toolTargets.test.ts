@@ -62,35 +62,35 @@ describe('seat targets (the loose-bolt fix)', () => {
 describe('workable targets', () => {
   it('a seated, unscrewed bolt is workable; a screwed one is not; a loose one is not', () => {
     const open = build().assembly;
-    expect(isWorkable(head('camLockBolt-1'), open.all(), { captured: catching(open, NEAR), turnedBy: turned(open) })).toBe(true);
+    expect(isWorkable(head('camLockBolt-1'), { captured: catching(open, NEAR), turnedBy: turned(open) })).toBe(true);
     const screwed = build({ screwed: true }).assembly;
-    expect(isWorkable(head('camLockBolt-1'), screwed.all(), { captured: catching(screwed, NEAR), turnedBy: turned(screwed) })).toBe(false);
+    expect(isWorkable(head('camLockBolt-1'), { captured: catching(screwed, NEAR), turnedBy: turned(screwed) })).toBe(false);
     const loose = build({ boltSeated: false }).assembly;
-    expect(isWorkable(head('camLockBolt-1'), loose.all(), { captured: catching(loose, NEAR), turnedBy: turned(loose) })).toBe(false);
+    expect(isWorkable(head('camLockBolt-1'), { captured: catching(loose, NEAR), turnedBy: turned(loose) })).toBe(false);
   });
 
   it('a seated cam lock is workable only with a screwed bolt in reach', () => {
     const unscrewed = build().assembly;
-    expect(isWorkable(slot('camLock-1'), unscrewed.all(), { captured: catching(unscrewed, NEAR), turnedBy: turned(unscrewed) })).toBe(false);
+    expect(isWorkable(slot('camLock-1'), { captured: catching(unscrewed, NEAR), turnedBy: turned(unscrewed) })).toBe(false);
     const away = build({ screwed: true }).assembly;
-    expect(isWorkable(slot('camLock-1'), away.all(), { captured: catching(away, FAR), turnedBy: turned(away) })).toBe(false);
+    expect(isWorkable(slot('camLock-1'), { captured: catching(away, FAR), turnedBy: turned(away) })).toBe(false);
     const ready = build({ screwed: true }).assembly;
-    expect(isWorkable(slot('camLock-1'), ready.all(), { captured: catching(ready, NEAR), turnedBy: turned(ready) })).toBe(true);
+    expect(isWorkable(slot('camLock-1'), { captured: catching(ready, NEAR), turnedBy: turned(ready) })).toBe(true);
   });
 
   it('a locked cam lock is not workable; a loose one never is', () => {
     const { assembly, cam } = build({ screwed: true });
     assembly.drive(cam!.id, { captured: 'camLockBolt-1' });
-    expect(isWorkable(slot('camLock-1'), assembly.all(), { captured: catching(assembly, NEAR), turnedBy: turned(assembly) })).toBe(false);
+    expect(isWorkable(slot('camLock-1'), { captured: catching(assembly, NEAR), turnedBy: turned(assembly) })).toBe(false);
     const loose = build({ screwed: true, camSeated: false }).assembly;
-    expect(isWorkable(slot('camLock-1'), loose.all(), { captured: catching(loose, NEAR), turnedBy: turned(loose) })).toBe(false);
+    expect(isWorkable(slot('camLock-1'), { captured: catching(loose, NEAR), turnedBy: turned(loose) })).toBe(false);
   });
 
   // Plan amendment (Ben, 2026-10-10): fasteners light holes too, with no extra rule.
   it('lights any hole a fastener is carried to — a free compatible hole is workable', () => {
     const { assembly } = build();
-    expect(isWorkable({ type: CONNECTOR.CAM_BOLT_HOLE, part: { id: 'sidePanel-1' }, index: 0 }, assembly.all(), { captured: catching(assembly, NEAR), turnedBy: turned(assembly) })).toBe(true);
-    expect(isWorkable({ type: CONNECTOR.DOWEL_HOLE, part: { id: 'sidePanel-1' }, index: 0 }, assembly.all(), { captured: catching(assembly, NEAR), turnedBy: turned(assembly) })).toBe(true);
+    expect(isWorkable({ type: CONNECTOR.CAM_BOLT_HOLE, part: { id: 'sidePanel-1' }, index: 0 }, { captured: catching(assembly, NEAR), turnedBy: turned(assembly) })).toBe(true);
+    expect(isWorkable({ type: CONNECTOR.DOWEL_HOLE, part: { id: 'sidePanel-1' }, index: 0 }, { captured: catching(assembly, NEAR), turnedBy: turned(assembly) })).toBe(true);
   });
 });
 

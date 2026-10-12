@@ -105,9 +105,9 @@ describe("a stud's hex as a tool target", () => {
     expect(isSeatTarget(hex(HEX_AT_LEG_END), seatedHardware(assembly.all()))).toBe(false);
     const joint = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 0, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
     expect(isSeatTarget(hex(HEX_AT_LEG_END), seatedHardware(assembly.all()))).toBe(true);
-    expect(isWorkable(hex(HEX_AT_LEG_END), assembly.all(), { captured: none, turnedBy: turned(assembly) })).toBe(true);
+    expect(isWorkable(hex(HEX_AT_LEG_END), { captured: none, turnedBy: turned(assembly) })).toBe(true);
     assembly.drive(joint.id);
-    expect(isWorkable(hex(HEX_AT_LEG_END), assembly.all(), { captured: none, turnedBy: turned(assembly) })).toBe(false);
+    expect(isWorkable(hex(HEX_AT_LEG_END), { captured: none, turnedBy: turned(assembly) })).toBe(false);
   });
 
   // Review: a hex at an end that is itself seated is buried — in the top, in the leg — and
@@ -117,7 +117,7 @@ describe("a stud's hex as a tool target", () => {
     const inTop = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 0, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
     expect(turned(assembly)(hex(HEX_AT_LEG_END))).toMatchObject({ id: inTop.id });
     expect(turned(assembly)(hex(HEX_AT_TOP_END))).toBeNull();
-    expect(isWorkable(hex(HEX_AT_TOP_END), assembly.all(), { captured: none, turnedBy: turned(assembly) })).toBe(false);
+    expect(isWorkable(hex(HEX_AT_TOP_END), { captured: none, turnedBy: turned(assembly) })).toBe(false);
   });
 
   it('lights neither hex once both ends are seated, though the leg end is still to turn', () => {
@@ -127,7 +127,7 @@ describe("a stud's hex as a tool target", () => {
     assembly.drive(inTop.id);
     for (const index of [HEX_AT_TOP_END, HEX_AT_LEG_END]) {
       expect(turned(assembly)(hex(index))).toBeNull();
-      expect(isWorkable(hex(index), assembly.all(), { captured: none, turnedBy: turned(assembly) })).toBe(false);
+      expect(isWorkable(hex(index), { captured: none, turnedBy: turned(assembly) })).toBe(false);
     }
   });
 
