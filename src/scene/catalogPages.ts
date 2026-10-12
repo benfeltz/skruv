@@ -6,6 +6,7 @@ import { createViewRenderer } from './bookletPages.js';
 import { createPageCache, FAINT, font, INK, newPage, PAPER } from './pagePaper.js';
 import type { CatalogPage } from '../game/catalogModel.js';
 import type { ViewItem } from './bookletPages.js';
+import { placeLayout } from '../../tools/validate/lib/geometry.js';
 import type { Size, Vec3 } from '../../tools/validate/lib/geometry.js';
 
 // The catalog's pages (1.9.1), drawn live from the real packs in the booklet's own register:
@@ -18,7 +19,6 @@ import type { Size, Vec3 } from '../../tools/validate/lib/geometry.js';
 // CATALOG.page.action.
 
 type Ctx = CanvasRenderingContext2D;
-type Rect = [number, number, number, number];
 
 // A view item's type names its item too: `johnny/sidePanel`, or `room/floor` for the cover's walls.
 const typeOf = (item: string, type: string) => `${item}/${type}`;
@@ -41,15 +41,11 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
   const views = createViewRenderer(renderer, (type) => sizes.get(type)!);
 
 
-  function drawView(ctx: Ctx, viewItems: ViewItem[], [x, y, w, h]: Rect) {
-    ctx.drawImage(views.render(viewItems, Math.round(w), Math.round(h)), x, y, w, h);
-  }
-
   // Item `id` built, as its pack poses it, moved by `offset`: its parts, drawn `weight`.
   const built = (id: string, offset: Vec3, weight: ViewItem['weight']): ViewItem[] =>
-    itemById(id).assembled.parts.map(({ type, position, rotation }) => ({
+    placeLayout(itemById(id).assembled.parts, { position: offset, rotation: [0, 0, 0, 1] }).map(({ type, position, rotation }) => ({
       type: typeOf(id, type),
-      position: [position[0] + offset[0], position[1] + offset[1], position[2] + offset[2]],
+      position,
       rotation,
       weight,
     }));
@@ -104,7 +100,7 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
       viewItems.push({ type: typeOf('room', name), position: at, rotation: [0, 0, 0, 1], weight: 'faint' });
     }
     const top = m + layout.wordmarkSize + layout.taglineSize * layout.drawingDrop;
-    drawView(ctx, viewItems, [m, top, pageW - 2 * m, pageH - top - m]);
+    views.draw(ctx, viewItems, [m, top, pageW - 2 * m, pageH - top - m]);
   }
 
   // The item built, its name and box count, and BUILD IT or SOLD OUT.
@@ -116,7 +112,7 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
     ctx.fillText(`${page.partCount} ${words.parts}`, m + layout.detailIndent, m + layout.nameSize * layout.baseline + layout.detailSize * layout.subtitleDrop);
     const top = m + layout.nameSize + layout.detailSize * layout.drawingDrop;
     const [, actionY] = layout.action;
-    drawView(ctx, built(page.id, [0, 0, 0], 'bold'), [m, top, pageW - 2 * m, actionY - top - m]);
+    views.draw(ctx, built(page.id, [0, 0, 0], 'bold'), [m, top, pageW - 2 * m, actionY - top - m]);
     if (page.pickable) tag(ctx, words.build);
     else stamp(ctx, words.soldOut);
   }

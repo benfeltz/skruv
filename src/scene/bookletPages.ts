@@ -84,10 +84,6 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
   };
 
   // An outline drawing of `items` into the rectangle [x, y, w, h] of the page.
-  function drawView(ctx: Ctx, items: ViewItem[], [x, y, w, h]: Rect, orientation = UPRIGHT) {
-    ctx.drawImage(views.render(items, Math.round(w), Math.round(h), orientation), x, y, w, h);
-  }
-
   const itemsFor = (ids: Set<InstanceId>, bold: Set<InstanceId>): ViewItem[] =>
     // Every id drawn is a part of the layout.
     [...ids].map((id) => ({ ...partById.get(id)!, weight: bold.has(id) ? 'bold' : 'faint' }));
@@ -103,7 +99,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     ctx.font = font(30, 600);
     ctx.fillText(IDENTITY.maker, m + 4, m + 158);
     const all = new Set(layout.parts.map((p) => p.id));
-    drawView(ctx, itemsFor(all, all), [m, 240, pageW - 2 * m, pageH - 240 - m]);
+    views.draw(ctx, itemsFor(all, all), [m, 240, pageW - 2 * m, pageH - 240 - m]);
   }
 
   function backCover({ ctx }: Sheet) {
@@ -187,7 +183,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     items.forEach(({ type, count, partNumber }, i) => {
       const x = m + (i % cols) * cellW;
       const y = m + Math.floor(i / cols) * cellH;
-      drawView(ctx, [single(type)], [x + 8, y + 4, cellW - 16, cellH - 58]);
+      views.draw(ctx, [single(type)], [x + 8, y + 4, cellW - 16, cellH - 58]);
       ctx.fillStyle = INK;
       ctx.textAlign = 'center';
       ctx.font = font(30, 800);
@@ -210,7 +206,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     let bx = m + 190 + r;
     for (const { type, count, partNumber } of page.hardware) {
       bubble(ctx, bx, m + r, r);
-      drawView(ctx, [single(type)], [bx - r * 0.62, m + r * 0.28, r * 1.24, r * 0.95]);
+      views.draw(ctx, [single(type)], [bx - r * 0.62, m + r * 0.28, r * 1.24, r * 0.95]);
       ctx.fillStyle = INK;
       ctx.textAlign = 'center';
       ctx.font = font(28, 800);
@@ -222,12 +218,12 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     }
     if (page.tool) {
       bubble(ctx, bx, m + r, r);
-      drawView(ctx, [single(page.tool)], [bx - r * 0.7, m + r * 0.3, r * 1.4, r * 1.4]);
+      views.draw(ctx, [single(page.tool)], [bx - r * 0.7, m + r * 0.3, r * 1.4, r * 1.4]);
     }
 
     const frame: Rect = [m, m + 2 * r + 80, pageW - 2 * m, pageH - (2 * m + 2 * r + 80)];
-    if (page.pose === 'parts') drawView(ctx, looseParts(page), frame);
-    else drawView(ctx, itemsFor(new Set(page.shown), page.tip ? new Set() : boldOf(page)), frame, ORIENTATION[page.pose]);
+    if (page.pose === 'parts') views.draw(ctx, looseParts(page), frame);
+    else views.draw(ctx, itemsFor(new Set(page.shown), page.tip ? new Set() : boldOf(page)), frame, ORIENTATION[page.pose]);
     if (page.turns.length) turnArrow(ctx, frame[0] + frame[2] - 80, frame[1] + 70, 46);
     if (page.tip) {
       // Two people tip it up together: an arc over the drawing, a figure at each side.
@@ -332,7 +328,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
  * Hidden-line outline renders: every part a white box (faces hide what lies behind) with
  * its edges drawn as fat lines, bold or faint, sized by `sizeOf(type)`. Geometry is built
  * once per part type. `render(items, width, height, orientation)` returns a canvas of the
- * drawing framed to fit; `dispose()` frees the geometry and materials. Shared with the catalog's pages (src/scene/catalogPages.ts).
+ * drawing framed to fit, `draw(ctx, items, rect, orientation)` puts one on a page; `dispose()` frees the geometry and materials. Shared with the catalog's pages (src/scene/catalogPages.ts).
  */
 export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type: string) => Size) {
   const fill = new THREE.MeshBasicMaterial({
@@ -437,6 +433,11 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
     return out;
   }
 
+  /** Draws `items` into the rectangle [x, y, w, h] of a page's `ctx`, framed to fit. */
+  function draw(ctx: Ctx, items: ViewItem[], [x, y, w, h]: Rect, orientation = UPRIGHT) {
+    ctx.drawImage(render(items, Math.round(w), Math.round(h), orientation), x, y, w, h);
+  }
+
   /** Frees every geometry and material it built — the pages it drew are plain canvases and stay. */
   function dispose() {
     for (const { box, edges } of geometries.values()) {
@@ -448,7 +449,7 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
     for (const material of Object.values(lines)) material.dispose();
   }
 
-  return { render, dispose };
+  return { render, draw, dispose };
 }
 
 // --- pictograms, canvas 2D ---
