@@ -7,14 +7,13 @@ import { capture, carryPose, createAssembly, relativePose, seatHome } from '../s
 import { STATE } from '../src/game/fasteners.js';
 import type { Pose, Quat, Vec3 } from '../tools/validate/lib/geometry.js';
 import type { FastenerKind } from '../tools/validate/lib/vocabulary.js';
-import type { Assembly, AssemblyJoint, Bond, Head, JointFrame, PartId } from '../src/game/assembly.js';
+import type { Assembly, AssemblyJoint, Bond, Head, JointFrame } from '../src/game/assembly.js';
 
 const typeOf = (id: string) => id.replace(/-\d+$/, '');
 const expectVec = (actual: number[], expected: number[], digits = 9) => actual.forEach((v, i) => expect(v).toBeCloseTo(expected[i], digits));
-// The specs below only look up joints and tools that exist, so `get` and `crankTarget` are typed total.
-type TestAssembly = Omit<Assembly, 'get' | 'crankTarget'> & {
+// The specs below only look up joints that exist, so `get` is typed total.
+type TestAssembly = Omit<Assembly, 'get'> & {
   get(id: number): AssemblyJoint;
-  crankTarget(tool: PartId): { tool: AssemblyJoint; target: AssemblyJoint };
 };
 
 // Catalog connector indices used below.
@@ -185,11 +184,27 @@ describe('cam lock', () => {
     expect(assembly.pullable('topBottomPanel-1')).toHaveLength(1);
   });
 
-  it('finds the fastener a seated tool turns', () => {
+  // The turn record (1.9.2) on JOHNNY's tools — the full set is test/turnOf.test.ts; this
+  // pins the answers the router had before the record, which it must keep.
+  it('gives a seated tool the turn of the fastener it sits on, and a tool on nothing no turn', () => {
     const { assembly, bolt } = locked();
     assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'camLockBolt-1', connectorB: END_HIGH, mover: 'allenWrench-1' });
-    expect(assembly.crankTarget('allenWrench-1').target.id).toBe(bolt.id);
-    expect(assembly.crankTarget('screwdriver-1')).toBeNull();
+    expect(assembly.turnOf('allenWrench-1')!.joints.map((j) => j.id)).toEqual([bolt.id]);
+    expect(assembly.turnOf('screwdriver-1')).toBeNull();
+  });
+
+  it('turns a screwdriver on a cam slot to the cam, and a wrench on a head to its bolt, with both on the panel', () => {
+    const { assembly, bolt, cam } = locked();
+    const tool = assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'camLockBolt-1', connectorB: END_HIGH, mover: 'allenWrench-1' });
+    const driver = assembly.seat({ partA: 'screwdriver-1', connectorA: 0, partB: 'camLock-1', connectorB: 1, mover: 'screwdriver-1' });
+    expect(assembly.turnOf('allenWrench-1')).toMatchObject({ grip: { kind: 'tool', tool: { id: tool.id } }, joints: [{ id: bolt.id, kind: KIND.BOLT }] });
+    expect(assembly.turnOf('screwdriver-1')).toMatchObject({ grip: { kind: 'tool', tool: { id: driver.id } }, joints: [{ id: cam.id, kind: KIND.CAM }] });
+  });
+
+  it('gives a tool on a head with nothing to turn a turn with no joints — still the tool\'s own', () => {
+    const assembly = createAssembly(typeOf) as TestAssembly;
+    assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'camLockBolt-1', connectorB: END_HIGH, mover: 'allenWrench-1' });
+    expect(assembly.turnOf('allenWrench-1')).toMatchObject({ grip: { kind: 'tool' }, joints: [] });
   });
 });
 

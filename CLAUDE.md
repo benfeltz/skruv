@@ -10,7 +10,7 @@ Mobile-first, browser-playable 3D flatpack-assembly game. Strict TypeScript, Thr
 | Production build | `npm run build` |
 | Full test suite | `npx vitest run` (same as `npm test`) |
 | Single test file | `npx vitest run <path>` — e.g. `npx vitest run test/clamp.test.ts` |
-| Validate an item | `npx tsx tools/validate/index.ts items/johnny` (once: `npm ci --prefix tools/validate`) |
+| Validate an item | `npx tsx tools/validate/index.ts items/johnny` (and `items/blank`; once: `npm ci --prefix tools/validate`) |
 | Typecheck | `npm run typecheck` (`tsc --noEmit`) |
 | Lint | `npm run lint` (ESLint: `@eslint/js` + `typescript-eslint` recommended); the pre-commit hook runs `eslint --fix` on staged `.ts` |
 
@@ -20,7 +20,8 @@ CI: every PR runs the typecheck, lint, validator, tests and build (`.github/work
 
 ```
 items/
-  johnny/flatpack.json  the item: parts, assembled poses, booklet pages, packing (Flatpack format 1)
+  johnny/flatpack.json  an item: parts, assembled poses, booklet pages, packing (Flatpack format 1)
+  blank/flatpack.json   the second item: a side table of box legs and double-ended studs
 tools/
   validate/      Flatpack schema + validator CLI (adds ajv); lib/ is the one pack implementation and owns the Flatpack types
   agent-bridge/  MCP bridge to a dev session
@@ -38,7 +39,7 @@ test/            Vitest specs, *.test.ts
 
 - **Pure logic never imports Three, Rapier, or the DOM.** Math, clamps, state machines and rules live in their own modules so Vitest covers them headlessly. If a function you want to test needs Three, split it.
 - **Item data lives in its pack, never in code.** JOHNNY's parts, poses, pages and packing are `items/johnny/flatpack.json`; `src/game/item.ts` is the only module that imports it. Joints are derived from the assembled poses, never written down; the file lists connectors in index order, and engine code keys them by index.
-- **One pack implementation.** Loading, name resolution, joint derivation and the geometry checks live in `tools/validate/lib/` — pure, zero dependencies, browser-safe, imported by both the game and the validator CLI. Never a second loader; only the CLI adds ajv. The Flatpack types are declared there, beside the code that owns them; the pack-format types (`pack.ts`, `joints.ts`) reach the game only through `src/game/item.ts`, while the vocabulary and pose maths the game imports directly bring their own types. A pack edit must pass `npx tsx tools/validate/index.ts items/johnny`.
+- **One pack implementation.** Loading, name resolution, joint derivation and the geometry checks live in `tools/validate/lib/` — pure, zero dependencies, browser-safe, imported by both the game and the validator CLI. Never a second loader; only the CLI adds ajv. The Flatpack types are declared there, beside the code that owns them; the pack-format types (`pack.ts`, `joints.ts`) reach the game only through `src/game/item.ts`, while the vocabulary and pose maths the game imports directly bring their own types. A pack edit must pass `npx tsx tools/validate/index.ts items/<item>`.
 - **Tunables live in `src/constants.ts`.** No magic numbers in modules — name the value there and import it.
 - **Setup and per-frame work are separate modules.** Build objects once; the loop only updates.
 - **Strict TypeScript, no escape hatches.** `tsconfig.json` is `strict` + bundler resolution + `noEmit`; no `any`, no `@ts-ignore`, no inline `eslint-disable` (a rule the tree fights is turned off in `eslint.config.js` with a reason). Relative imports keep their `.js` specifiers (`'../constants.js'`) — TS resolves them to the `.ts` sources.

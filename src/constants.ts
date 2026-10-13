@@ -531,6 +531,8 @@ export const DECAL = {
     shelfPinHole: 0.0035,
     backFittingHole: 0.0045,
     camLockRecess: 0.009,
+    // A threaded insert in a table top or leg: a hole a hair wider than the stud it takes.
+    studHole: 0.0035,
   },
   // A recess is drawn as a ring: inner radius as a fraction of the outer.
   recessInner: 0.55,
@@ -571,6 +573,10 @@ export const MODELS = {
   // Back fitting: the plug's radius, and the head's share of the length.
   fittingShaft: 0.5,
   fittingHead: 0.25,
+  // Double-ended stud: each end's hex socket, as a dark hexagonal plug — its depth (share of
+  // the length) and its radius (share of the rod's).
+  studSocketDepth: 0.1,
+  studSocket: 0.6,
 };
 
 // Fasteners (src/game/fasteners.ts, src/game/assembly.ts) and the joints that follow them
@@ -580,6 +586,9 @@ export const FASTENER = {
   pullDistance: 40,
   // Wrench crank from a seated cam bolt to a screwed one: two full turns.
   screwRadians: 4 * Math.PI,
+  // Hand or key turn from a seated threaded stud end to a screwed one: two full turns, a
+  // fiddly stud being a turn-and-a-bit slower to seat than a bolt on the phone (?tune it).
+  studRadians: 4 * Math.PI,
   // Screwdriver turn from an open cam lock to a locked one.
   quarterTurn: Math.PI / 2,
   // A cam catches any screwed bolt head this close to its recess, and how deep each

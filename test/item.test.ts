@@ -54,7 +54,9 @@ describe('src/game/item.ts — the current item', () => {
   it('serves JOHNNY by default', () => {
     expect(door.ITEM_ID).toBe('johnny');
     expect(ITEM_IDS).toContain('johnny');
-    expect(served()).toEqual({ ...itemById('johnny') });
+    // Every piece but its kinds, which the booklet reads off the item it draws (itemById).
+    const pieces = Object.entries(itemById('johnny')).filter(([key]) => key !== 'kinds');
+    expect(served()).toEqual(Object.fromEntries(pieces));
   });
 
   it('serves every piece of the item setItem names, as live bindings', () => {
@@ -62,8 +64,9 @@ describe('src/game/item.ts — the current item', () => {
       setItem(id);
       expect(door.ITEM_ID).toBe(id);
       const item = itemById(id);
-      // Every piece the item has is served, and each is the item's own object.
-      expect(Object.keys(served()).sort()).toEqual(Object.keys(item).sort());
+      // Every piece the item has is served, and each is the item's own object — bar its kinds,
+      // which only the booklet reads, off the item it draws (itemById).
+      expect(Object.keys(served()).sort()).toEqual(Object.keys(item).filter((key) => key !== 'kinds').sort());
       for (const [key, value] of Object.entries(served())) expect(value, key).toBe(item[key as keyof typeof item]);
     }
     setItem('johnny');
@@ -75,5 +78,12 @@ describe('src/game/item.ts — the current item', () => {
     expect(() => itemById('nope')).toThrow(/no item "nope"/);
     expect(door.ITEM_ID).toBe('johnny');
     for (const [key, value] of Object.entries(served())) expect(value, key).toBe(before[key as keyof typeof before]);
+  });
+});
+
+describe('src/game/item.ts — the fastener kinds (1.9.2)', () => {
+  it("lists each item's kinds, read off its part types", () => {
+    expect([...itemById('johnny').kinds].sort()).toEqual(['bolt', 'cam', 'dowel', 'fitting', 'pin', 'tool']);
+    expect([...itemById('blank').kinds].sort()).toEqual(['stud', 'tool']);
   });
 });

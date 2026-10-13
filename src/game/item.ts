@@ -10,12 +10,15 @@
 
 import { deriveJoints } from '../../tools/validate/lib/joints.js';
 import { loadPack } from '../../tools/validate/lib/pack.js';
+import { isFastenerEnd, kindOf } from '../../tools/validate/lib/vocabulary.js';
+import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { FlatpackFile, PartType } from '../../tools/validate/lib/pack.js';
 
 // The pack format's types, for the rest of the game: they reach it only through here.
 export type { Connector, ConnectorName, DrawingPose, InstanceId, ManifestEntry, PageFields, Resolver } from '../../tools/validate/lib/pack.js';
 export type { Joint } from '../../tools/validate/lib/joints.js';
 import johnny from '../../items/johnny/flatpack.json';
+import blank from '../../items/blank/flatpack.json';
 
 /** A part type as the game holds it: the pack's, or the box base — which has no part number or mass of its own. */
 export type GamePartType = Omit<PartType, 'partNumber' | 'mass'> & Partial<Pick<PartType, 'partNumber' | 'mass'>>;
@@ -69,6 +72,14 @@ function itemOf(file: FlatpackFile) {
      *            hardwareConnector, host, hostConnector, kind, mover, through, captured }`
      */
     assembled: Object.freeze({ parts: pack.assembled, joints: deriveJoints(pack) }),
+    /**
+     * Every fastener kind this item uses, tools included: read off the fastener ends of the
+     * part types it ships, never written down. The game's own pages depend on it — the
+     * controls page leaves out rows for gestures the item never asks for.
+     */
+    kinds: new Set<FastenerKind>(
+      Object.values(pack.partTypes).flatMap((part) => part.connectors.filter((c) => isFastenerEnd(c.type)).map((c) => kindOf(c.type)!)),
+    ) as ReadonlySet<FastenerKind>,
     /** The booklet as the pack writes it: `{ pages }`, cover to back (src/game/bookletModel.ts). */
     manual: pack.manual,
     /** `resolve('dowel-1/dowelEnd-2') → { part: 'dowel-1', connector: 1 }`. */
@@ -77,7 +88,10 @@ function itemOf(file: FlatpackFile) {
 }
 
 // Every item, by id — the folder name under items/ — in catalog page order. Loaded once, here.
-const ITEMS: ReadonlyMap<string, Item> = new Map([['johnny', itemOf(johnny as unknown as FlatpackFile)]]);
+const ITEMS: ReadonlyMap<string, Item> = new Map([
+  ['johnny', itemOf(johnny as unknown as FlatpackFile)],
+  ['blank', itemOf(blank as unknown as FlatpackFile)],
+]);
 
 /** Every item the game carries, in registry order — what the catalog lists. */
 export const ITEM_IDS: readonly string[] = Object.freeze([...ITEMS.keys()]);

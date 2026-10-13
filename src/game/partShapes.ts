@@ -153,6 +153,17 @@ const backFitting: Builder = (size, tip) => {
   return [rod(0, head, MODELS.fittingShaft), rod(head, length, 1)];
 };
 
+// A double-ended stud: a plain rod end to end, with a dark hexagonal plug at each end for
+// the hex socket the key goes in (each end carries a bolt-head connector of its own). The
+// plugs are narrower than the rod, so they read as sockets sunk into its ends.
+const studEnd: Builder = (size, end) => {
+  const { length, radius, place, rod } = straight(size, end);
+  const depth = length * MODELS.studSocketDepth;
+  const plug = (from: number, to: number) =>
+    place(from, to, { shape: 'cylinder', radius: radius * MODELS.studSocket, sides: MODELS.hexSides }, 'dark');
+  return [plug(0, depth), rod(depth, length - depth, 1), plug(length - depth, length)];
+};
+
 const BUILDERS: Readonly<Partial<Record<ConnectorType, Builder>>> = Object.freeze({
   [CONNECTOR.WRENCH_TIP]: allenKey,
   [CONNECTOR.SCREWDRIVER_TIP]: screwdriver,
@@ -161,6 +172,7 @@ const BUILDERS: Readonly<Partial<Record<ConnectorType, Builder>>> = Object.freez
   [CONNECTOR.CAM_LOCK_BODY]: camLock,
   [CONNECTOR.PIN_TIP]: shelfPin,
   [CONNECTOR.BACK_FITTING_TIP]: backFitting,
+  [CONNECTOR.STUD_END]: studEnd,
 });
 
 /**

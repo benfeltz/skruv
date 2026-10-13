@@ -108,3 +108,35 @@ describe('shapeOf', () => {
     });
   });
 });
+
+describe('the double-ended stud (1.9.2)', () => {
+  // BLANK's stud is the pack's, not JOHNNY's: the shape is keyed by its stud-end connector, so
+  // any item's stud gets it. Sized as the pack sizes it, run through the same builder.
+  const stud = {
+    size: [0.006, 0.04, 0.006] as [number, number, number],
+    connectors: [
+      { id: 'studEnd-1', type: 'studEnd', position: [0, 0.02, 0], axis: [0, 1, 0] },
+      { id: 'studEnd-2', type: 'studEnd', position: [0, -0.02, 0], axis: [0, -1, 0] },
+      { id: 'boltHead-1', type: 'boltHead', position: [0, 0.02, 0], axis: [0, 1, 0] },
+      { id: 'boltHead-2', type: 'boltHead', position: [0, -0.02, 0], axis: [0, -1, 0] },
+    ] as Connector[],
+  };
+
+  it('is a rod with a dark hexagonal socket plug at each end — not a plain box', () => {
+    const primitives = shapeOf(stud)!;
+    expect(primitives).not.toBeNull();
+    const plugs = primitives.filter((p) => p.tone === 'dark');
+    expect(plugs).toHaveLength(2);
+    for (const plug of plugs) expect(plug).toMatchObject({ shape: 'cylinder', sides: 6 });
+    expect(primitives.filter((p) => p.tone === 'body')).toHaveLength(1);
+  });
+
+  it('draws inside its box, with every connector on a primitive end face', () => {
+    const primitives = shapeOf(stud)!;
+    for (const primitive of primitives) {
+      const half = halfExtents(primitive);
+      for (const i of [0, 1, 2]) expect(Math.abs(primitive.position[i]) + half[i]).toBeLessThanOrEqual(stud.size[i] / 2 + EPS);
+    }
+    for (const connector of stud.connectors) expect(faceUnder(primitives, connector), connector.id).toBeDefined();
+  });
+});

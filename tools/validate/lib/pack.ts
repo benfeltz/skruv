@@ -65,7 +65,7 @@ export interface AssembledSpec extends InstancePose {
 }
 
 /** How a booklet page draws the item. */
-export type DrawingPose = 'parts' | 'lying' | 'faceDown' | 'upright';
+export type DrawingPose = 'parts' | 'lying' | 'faceDown' | 'upright' | 'upsideDown';
 
 interface PageBase {
   art?: AssetPath;

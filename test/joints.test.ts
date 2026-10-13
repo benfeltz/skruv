@@ -67,4 +67,32 @@ describe('deriveJoints', () => {
     const joints = deriveJoints({ partTypes, assembled: [...boards(), bolt(0.05), cam] });
     expect(joints.find((j) => j.kind === KIND.CAM)!.captured).toBeNull();
   });
+
+  describe('a double-ended stud', () => {
+    const studTypes = {
+      top: { size: [0.5, 0.05, 0.5], connectors: [c('studHole', [0, -0.025, 0], [0, -1, 0])] },
+      leg: { size: [0.05, 0.4, 0.05], connectors: [c('studHole', [0, 0.2, 0], [0, 1, 0])] },
+      stud: { size: [0.006, 0.04, 0.006], connectors: [c('studEnd', [0, 0.02, 0], [0, 1, 0]), c('studEnd', [0, -0.02, 0], [0, -1, 0])] },
+    } as unknown as Record<string, PartType>;
+    const sink = CONTRACT.sinkDepth.stud!;
+    // Top at y 0.5 (underside 0.475); its hole's axis points down. The leg hangs below it.
+    const top: AssembledPart = { id: 'top-1', type: 'top', role: 'top', position: [0, 0.5, 0], rotation: IDENTITY };
+    const leg: AssembledPart = { id: 'leg-1', type: 'leg', role: 'leg', position: [0, 0.475 - 0.2, 0], rotation: IDENTITY };
+    const stud: AssembledPart = { id: 'stud-1', type: 'stud', role: 'hardware', position: [0, 0.475, 0], rotation: IDENTITY };
+
+    it('derives one stud joint for an end seated in the top', () => {
+      const joints = deriveJoints({ partTypes: studTypes, assembled: [top, { ...stud, position: [0, 0.475 + sink - 0.02, 0] }] });
+      expect(joints).toEqual([
+        { hardware: 'stud-1', hardwareConnector: 0, host: 'top-1', hostConnector: 0, kind: KIND.STUD, mover: 'stud-1', through: null, captured: null },
+      ]);
+    });
+
+    it('derives two joints when both ends are seated: the stud moves for the first, the leg for the second', () => {
+      const joints = deriveJoints({ partTypes: studTypes, assembled: [top, leg, stud] });
+      expect(joints.map((j) => [j.kind, j.hardwareConnector, j.host, j.mover])).toEqual([
+        [KIND.STUD, 0, 'top-1', 'stud-1'],
+        [KIND.STUD, 1, 'leg-1', 'leg-1'],
+      ]);
+    });
+  });
 });

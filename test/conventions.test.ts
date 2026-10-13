@@ -173,7 +173,7 @@ describe('target rings (1.8.2.1)', () => {
     expect(imports).not.toMatch(/physics|\/game\//);
     expect(rings).not.toMatch(/\.intersectObjects?\(|physics\./);
     expect(router).toMatch(/ringStrengths\(workable, /);
-    expect(router).toMatch(/isWorkable\(c, joints, catches\)/);
+    expect(router).toMatch(/isWorkable\(c, catches\)/);
   });
 
   it('build their pool once; show and hide only update it', () => {

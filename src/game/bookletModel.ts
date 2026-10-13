@@ -8,6 +8,7 @@
 
 import type { ConnectorName, DrawingPose, GamePartType, InstanceId, Joint, ManifestEntry, PageFields, Resolver } from './item.js';
 import type { Scheme } from './controlsPage.js';
+import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 
 /** The assembled item the booklet draws: its parts and derived joints (item.ts ASSEMBLED). */
 export interface BookletLayout {
@@ -38,12 +39,13 @@ export interface BuildStep {
 
 /**
  * A page the game adds to every booklet, whatever the pack's manual says: the controls for
- * the device in hand (src/game/controlsPage.ts). The site's own pages join this union.
+ * the device in hand, and for the item's own fasteners (src/game/controlsPage.ts). The
+ * site's own pages join this union.
  */
-export type GamePage = { kind: 'controls'; scheme: Scheme };
+export type GamePage = { kind: 'controls'; scheme: Scheme; kinds: readonly FastenerKind[] };
 
-/** The pages the game adds to the booklet, in order, for a device using `scheme`. */
-export const gamePagesFor = (scheme: Scheme): GamePage[] => [{ kind: 'controls', scheme }];
+/** The pages the game adds to the booklet, in order, for a device using `scheme` and an item using `kinds`. */
+export const gamePagesFor = (scheme: Scheme, kinds: ReadonlySet<FastenerKind>): GamePage[] => [{ kind: 'controls', scheme, kinds: [...kinds] }];
 
 /** One booklet page as drawn — see `createBooklet`. */
 export type BookletPage =
@@ -92,7 +94,7 @@ function jointIndices(pairs: [ConnectorName, ConnectorName][] = [], layout: Book
  *   tool     — the tool in hand ('allenWrench', 'screwdriver') or null
  *   tip      — the page tips the carcass upright (a 'special' tipUpright page)
  *   pose     — 'parts' (loose), 'lying' (carcass on its left side), 'faceDown' (on its
- *              front, back up) or 'upright'
+ *              front, back up), 'upright' or 'upsideDown' (a table turned over on its top)
  */
 export function createBuildSteps(
   pages: PageFields[],

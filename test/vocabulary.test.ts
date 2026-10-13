@@ -39,6 +39,14 @@ describe('Flatpack vocabulary', () => {
     expect(CONTRACT.sinkDepth).not.toHaveProperty(KIND.TOOL);
   });
 
+  it('pairs a stud end with a stud hole, both ways, and runs the stud machine', () => {
+    expect(kindOf(CONNECTOR.STUD_END)).toBe(KIND.STUD);
+    expect(areCompatible(CONNECTOR.STUD_END, CONNECTOR.STUD_HOLE)).toBe(true);
+    expect(areCompatible(CONNECTOR.STUD_HOLE, CONNECTOR.STUD_END)).toBe(true);
+    expect(areCompatible(CONNECTOR.STUD_END, CONNECTOR.DOWEL_HOLE)).toBe(false);
+    expect(CONTRACT.sinkDepth.stud).toBeGreaterThan(0);
+  });
+
   it('pairs within reach, and checks far tighter than it pairs', () => {
     expect(CONTRACT.mateTolerance).toBeLessThan(CONTRACT.mateReach);
     expect(CONTRACT.mateReach).toBeLessThan(CONTRACT.captureRadius);
