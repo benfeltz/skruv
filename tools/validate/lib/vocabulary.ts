@@ -23,6 +23,8 @@ export const CONNECTOR = Object.freeze({
   SCREWDRIVER_TIP: 'screwdriverTip',
   STUD_END: 'studEnd',
   STUD_HOLE: 'studHole',
+  SCREW_THREAD: 'screwThread',
+  SCREW_HOLE: 'screwHole',
 });
 
 /** A connector type the format knows (the schema's `connectorType`). */
@@ -38,6 +40,7 @@ export const COMPATIBLE: Readonly<Partial<Record<ConnectorType, ConnectorType>>>
   [CONNECTOR.WRENCH_TIP]: CONNECTOR.HEX_SOCKET,
   [CONNECTOR.SCREWDRIVER_TIP]: CONNECTOR.DRIVE_SLOT,
   [CONNECTOR.STUD_END]: CONNECTOR.STUD_HOLE,
+  [CONNECTOR.SCREW_THREAD]: CONNECTOR.SCREW_HOLE,
 });
 
 export const areCompatible = (a: ConnectorType, b: ConnectorType) => COMPATIBLE[a] === b || COMPATIBLE[b] === a;
@@ -56,6 +59,8 @@ export const KIND = Object.freeze({
   TOOL: 'tool',
   // A double-ended threaded stud: each end screws into a threaded hole (a table leg's, a top's).
   STUD: 'stud',
+  // A slotted wood screw: driven through a hole in the part it attaches, into the part behind.
+  SCREW: 'screw',
 });
 
 /** A fastener machine the format knows (the schema's `fastenerKind`). */
@@ -71,10 +76,14 @@ const KIND_FOR_END: Readonly<Partial<Record<ConnectorType, FastenerKind>>> = Obj
   [CONNECTOR.WRENCH_TIP]: KIND.TOOL,
   [CONNECTOR.SCREWDRIVER_TIP]: KIND.TOOL,
   [CONNECTOR.STUD_END]: KIND.STUD,
+  [CONNECTOR.SCREW_THREAD]: KIND.SCREW,
 });
 
 /** The fastener kind for a pair whose fastener end has connector type `endType`, or null. */
 export const kindOf = (endType: ConnectorType) => KIND_FOR_END[endType] ?? null;
+
+/** Kinds whose tip holds the part behind the hole: a back fitting's, a screw's. */
+export const passesThrough = (kind: FastenerKind) => kind === KIND.FITTING || kind === KIND.SCREW;
 
 /**
  * The geometric contract every engine honours, in metres. A pack's assembled poses are
@@ -86,7 +95,7 @@ export const kindOf = (endType: ConnectorType) => KIND_FOR_END[endType] ?? null;
  *   mateTolerance — how exactly a derived pair must then sit (the validator's coincidence rule)
  */
 export const CONTRACT = Object.freeze({
-  sinkDepth: Object.freeze<Partial<Record<FastenerKind, number>>>({ dowel: 0.015, pin: 0.008, fitting: 0.012, bolt: 0.011, cam: 0.012, stud: 0.02 }),
+  sinkDepth: Object.freeze<Partial<Record<FastenerKind, number>>>({ dowel: 0.015, pin: 0.008, fitting: 0.012, bolt: 0.011, cam: 0.012, stud: 0.02, screw: 0.025 }),
   captureRadius: 0.015,
   mateReach: 0.005,
   mateTolerance: 1e-6,
