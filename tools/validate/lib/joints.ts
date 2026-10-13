@@ -9,7 +9,7 @@
 import { connectorInWorld, contains } from './geometry.js';
 import type { Frame, Vec3 } from './geometry.js';
 import type { AssembledPart, InstanceId, Pack, PartType } from './pack.js';
-import { COMPATIBLE, CONNECTOR, CONTRACT, isFastenerEnd, KIND, kindOf } from './vocabulary.js';
+import { canPassInto, COMPATIBLE, CONNECTOR, CONTRACT, isFastenerEnd, KIND, kindOf, passesThrough } from './vocabulary.js';
 import type { FastenerKind } from './vocabulary.js';
 
 /** One derived joint: a fastener end seated in a hole, connectors as part-list indices. */
@@ -21,7 +21,7 @@ export interface Joint {
   kind: FastenerKind;
   /** Which side moves to seat it: the hardware, or the panel pressed onto it. */
   mover: InstanceId;
-  /** A back fitting's: the panel its tip passes into. */
+  /** A back fitting's or a screw's: the panel its tip passes into. */
   through: InstanceId | null;
   /** A cam's: the bolt whose head it catches. */
   captured: InstanceId | null;
@@ -104,7 +104,7 @@ export function captureBolts({ partTypes, assembled }: PosedItem, joints: Joint[
   const heads = joints
     .filter((j) => j.kind === KIND.BOLT)
     .flatMap((j) => {
-      const headIndex = partTypes[byId.get(j.hardware)!.type].connectors.findIndex((c) => c.type === CONNECTOR.BOLT_HEAD);
+      const headIndex = partTypes[byId.get(j.hardware)!.type].connectors.findIndex((c) => c.type === CONNECTOR.HEX_SOCKET);
       return headIndex < 0 ? [] : [{ id: j.hardware, position: world(j.hardware, headIndex).position }];
     });
   return joints.map((j) => {
@@ -124,16 +124,16 @@ export function captureBolts({ partTypes, assembled }: PosedItem, joints: Joint[
 }
 
 /**
- * Each back fitting joint's `through`: the first panel (not hardware, not the fitting's
- * own host) whose box holds the fitting's tip, or null.
+ * Each back fitting or screw joint's `through`: the first panel (not hardware, not the
+ * joint's own host) whose box holds the fastener's tip, or null.
  */
 export function passThrough({ partTypes, assembled }: PosedItem, joints: Joint[]): Joint[] {
   const byId = new Map(assembled.map((inst) => [inst.id, inst]));
-  const panels = assembled.filter((inst) => !isHardwareType(partTypes[inst.type]));
+  const panels = assembled.filter((inst) => canPassInto(partTypes[inst.type].connectors));
   return joints.map((j) => {
-    if (j.kind !== KIND.FITTING) return j;
-    const fitting = byId.get(j.hardware)!;
-    const tip = connectorInWorld(partTypes[fitting.type].connectors[j.hardwareConnector], fitting).position;
+    if (!passesThrough(j.kind)) return j;
+    const fastener = byId.get(j.hardware)!;
+    const tip = connectorInWorld(partTypes[fastener.type].connectors[j.hardwareConnector], fastener).position;
     const behind = panels.find((p) => p.id !== j.host && contains(partTypes[p.type].size, p, tip));
     return { ...j, through: behind?.id ?? null };
   });

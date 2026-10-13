@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { COMPATIBLE, CONNECTOR, KIND, kindOf } from '../tools/validate/lib/vocabulary.js';
 import { FASTENER } from '../src/constants.js';
-import { canRelease, createFastener, isCrankKind, spanOf, isEngaged, isFastened, isTapKind, STATE, transition } from '../src/game/fasteners.js';
+import { canRelease, createFastener, fastensOn, isCrankKind, spanOf, isEngaged, isFastened, isTapKind, STATE, transition } from '../src/game/fasteners.js';
 import type { Fastener, FastenerContext, FastenerEvent } from '../src/game/fasteners.js';
 import type { ConnectorType } from '../tools/validate/lib/vocabulary.js';
 
@@ -63,7 +63,7 @@ describe('back fitting: a push-pin on the press/pull machine (1.5)', () => {
 });
 
 describe('bolt: seated ⇄ screwed by signed crank', () => {
-  const span = FASTENER.screwRadians;
+  const span = FASTENER.boltRadians;
 
   it('screws in on reaching full progress, and stays seated partway', () => {
     const half = transition(createFastener(KIND.BOLT), crank(span / 2));
@@ -96,9 +96,21 @@ describe('bolt: seated ⇄ screwed by signed crank', () => {
 
 describe('spanOf', () => {
   it('names each crank kind\'s turn, once', () => {
-    expect(spanOf(KIND.BOLT)).toBe(FASTENER.screwRadians);
+    expect(spanOf(KIND.BOLT)).toBe(FASTENER.boltRadians);
     expect(spanOf(KIND.STUD)).toBe(FASTENER.studRadians);
+    expect(spanOf(KIND.SCREW)).toBe(FASTENER.screwRadians);
     expect(spanOf(KIND.CAM)).toBe(FASTENER.quarterTurn);
+  });
+
+  it('is read live: a ?tune of the screw span moves the machine and the span together', () => {
+    const was = FASTENER.screwRadians;
+    try {
+      FASTENER.screwRadians = 2 * Math.PI;
+      expect(spanOf(KIND.SCREW)).toBe(2 * Math.PI);
+      expect(transition(createFastener(KIND.SCREW), crank(2 * Math.PI))).toMatchObject({ state: STATE.SCREWED, progress: 1 });
+    } finally {
+      FASTENER.screwRadians = was;
+    }
   });
 
   it('is read live: a ?tune of the stud span moves the machine and the span together', () => {
@@ -133,6 +145,40 @@ describe('stud: seated ⇄ screwed by signed crank, either direction free', () =
 
   it('ignores taps and pulls (same record back)', () => {
     const f = createFastener(KIND.STUD);
+    expect(transition(f, TAP)).toBe(f);
+    expect(transition(f, PULL)).toBe(f);
+  });
+});
+
+describe('screw: seated ⇄ screwed by signed crank, either direction free', () => {
+  const span = FASTENER.screwRadians;
+
+  it('is a crank kind that screws in on a full span and stays seated partway', () => {
+    expect(isCrankKind(KIND.SCREW)).toBe(true);
+    const half = transition(createFastener(KIND.SCREW), crank(span / 2));
+    expect(half).toMatchObject({ state: STATE.SEATED, progress: 0.5 });
+    expect(transition(half, crank(span / 2))).toMatchObject({ state: STATE.SCREWED, progress: 1 });
+  });
+
+  it('backs out all the way to zero (hysteresis)', () => {
+    const screwed = transition(createFastener(KIND.SCREW), crank(span));
+    expect(transition(screwed, crank(-span / 4))).toMatchObject({ state: STATE.SCREWED, progress: 0.75 });
+    expect(transition(screwed, crank(-span))).toEqual(createFastener(KIND.SCREW));
+  });
+
+  it('names the crank that fastens it — reaching home from unfastened, never one after', () => {
+    const seated = createFastener(KIND.SCREW);
+    expect(fastensOn(seated, span)).toBe(true);
+    expect(fastensOn(seated, span / 2)).toBe(false);
+    const half = transition(seated, crank(span / 2));
+    expect(fastensOn(half, span / 2)).toBe(true);
+    expect(fastensOn(half, -span / 2)).toBe(false);
+    const screwed = transition(seated, crank(span));
+    expect(fastensOn(transition(screwed, crank(-span / 4)), span / 4)).toBe(false);
+  });
+
+  it('ignores taps and pulls (same record back)', () => {
+    const f = createFastener(KIND.SCREW);
     expect(transition(f, TAP)).toBe(f);
     expect(transition(f, PULL)).toBe(f);
   });

@@ -12,16 +12,18 @@
 //
 // `bonds()` derives the physics joints fastener state calls for: each fastened piece of
 // hardware embeds rigidly in its first host, and two hosts sharing fastened hardware are
-// bridged — with angular play while only dowels hold them, rigid once a cam locks.
+// bridged — with angular play while only dowels hold them, rigid once a cam locks or a
+// screw drives home.
 
 import { FASTENER } from '../constants.js';
 import { PART_TYPES } from './item.js';
-import { COMPATIBLE, CONTRACT, KIND, kindOf } from '../../tools/validate/lib/vocabulary.js';
+import { COMPATIBLE, CONTRACT, KIND, kindOf, passesThrough } from '../../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, multiplyQuaternions, rotateVector, rotationBetween } from '../../tools/validate/lib/geometry.js';
 import {
   canRelease as fastenersRelease,
   createFastener,
   isFastened,
+  bindsRigidly,
   isCrankKind,
   isHandTurned,
   isHome,
@@ -338,7 +340,8 @@ export function createAssembly(typeOf: (part: PartId) => string) {
 
   /**
    * Feeds `event` to a joint's machine. `ctx.captured` (a cam's caught bolt id or null) and
-   * `ctx.through` (the part behind a back fitting) come from the caller's geometry. True if it
+   * `ctx.through` (the part behind a back fitting or a screw, read on the event that fastens
+   * it and kept until it is back to seated) come from the caller's geometry. True if it
    * changed.
    */
   function apply(id: number, event: FastenerEvent, ctx: ApplyContext = {}) {
@@ -350,7 +353,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     });
     if (fastener === joint.fastener) return false;
     const next = { ...joint, fastener };
-    if (joint.kind === KIND.FITTING) next.through = isFastened(fastener) ? (ctx.through ?? null) : null;
+    if (passesThrough(joint.kind)) next.through = !isFastened(fastener) ? null : isFastened(joint.fastener) ? joint.through : (ctx.through ?? null);
     // Locking needs `ctx.captured` (the machine's `captured`), so one of the two is set.
     if (joint.kind === KIND.CAM) next.captured = fastener.state === STATE.LOCKED ? ((joint.captured ?? ctx.captured) as PartId | null) : null;
     joints.set(id, next);
@@ -375,7 +378,8 @@ export function createAssembly(typeOf: (part: PartId) => string) {
   /**
    * Lets go of `parts` wherever a joint holds them as its third party — neither its
    * hardware nor its host — each by its own reverse move: a cam locked on one of their
-   * bolts turns open, a back fitting pressed through into one of them pulls back. The
+   * bolts turns open, a back fitting pressed through into one of them pulls back, a screw
+   * driven into one of them backs out. The
    * joints stay seated where they are. A teardown that takes those parts away runs this
    * first, so nothing is left fastened to a part that has gone. Returns the ids changed.
    */
@@ -386,6 +390,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
         return { type: 'crank', radians: -FASTENER.quarterTurn };
       }
       if (j.kind === KIND.FITTING && set.has(j.through)) return { type: 'pull' };
+      if (j.kind === KIND.SCREW && set.has(j.through)) return { type: 'crank', radians: -spanOf(KIND.SCREW) };
       return null;
     };
     return all()
@@ -420,23 +425,26 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     return hosts;
   }
 
-  /** True when a locked cam ties hosts `a` and `b` together. */
-  function lockedBetween(a: PartId, b: PartId) {
+  /**
+   * True when a joint that binds rigidly ties hosts `a` and `b` together: a locked cam, its
+   * host to its bolt's; a screwed screw, its host to the part behind its hole.
+   */
+  function boundBetween(a: PartId, b: PartId) {
     return all().some((j) => {
-      if (j.kind !== KIND.CAM || j.fastener.state !== STATE.LOCKED) return false;
-      const other = screwedHost(j.captured);
+      if (!bindsRigidly(j.fastener)) return false;
+      const other = j.kind === KIND.CAM ? screwedHost(j.captured) : j.through;
       return (j.host === a && other === b) || (j.host === b && other === a);
     });
   }
 
   /**
    * Fastened tap-kind joints `part` can be pulled out of: it was the part pushed into the
-   * seat, and no locked cam binds the connection.
+   * seat, and no locked cam or screwed screw binds the connection.
    */
   function pullable(part: PartId) {
     return all().filter((j) => {
       if (j.mover !== part || !isTapKind(j.kind) || !isFastened(j.fastener)) return false;
-      return !hostsOf(j.hardware).some((other) => other !== j.host && lockedBetween(j.host, other));
+      return !hostsOf(j.hardware).some((other) => other !== j.host && boundBetween(j.host, other));
     });
   }
 
@@ -716,12 +724,13 @@ export function createAssembly(typeOf: (part: PartId) => string) {
             frame: () => jointFrame(compose(inFirst, invert(inSecond)), hostConnector(second).position),
           });
         } else {
-          // A back fitting into what lies behind, or a cam onto another host's bolt: as they are.
+          // A back fitting or a screw into what lies behind, or a cam onto another host's bolt:
+          // as they are. A cam onto its bolt, a screw into what lies behind: solid.
           const pivot = connectorInWorld(hostConnector(first), poseOf(first.host)).position;
           addBridge({
             a: first.host,
             b: other,
-            rigid: first.kind === KIND.CAM,
+            rigid: bindsRigidly(first.fastener),
             via: null,
             frame: () => currentFrame(first.host, other, pivot, poseOf),
           });

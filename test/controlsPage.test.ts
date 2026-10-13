@@ -91,6 +91,11 @@ describe('rowsFor', () => {
     expect(rowsFor('touch', kinds(KIND.DOWEL)).map((row) => row.pictogram)).not.toContain('turnTool');
   });
 
+  it.each(['touch', 'desktop'] as const)('gives screws no row of their own: the screwdriver\'s row covers them (%s)', (scheme) => {
+    const withScrews = rowsFor(scheme, kinds(KIND.DOWEL, KIND.SCREW, KIND.TOOL));
+    expect(withScrews).toEqual(rowsFor(scheme, kinds(KIND.DOWEL, KIND.TOOL)));
+  });
+
   it('keeps the rows no kind gates, and the order', () => {
     const none = rowsFor('desktop', kinds()).map((row) => row.pictogram);
     expect(none).toEqual(CONTROLS.desktop.filter((row) => row.needs === undefined).map((row) => row.pictogram));

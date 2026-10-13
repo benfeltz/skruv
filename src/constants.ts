@@ -533,6 +533,10 @@ export const DECAL = {
     camLockRecess: 0.009,
     // A threaded insert in a table top or leg: a hole a hair wider than the stud it takes.
     studHole: 0.0035,
+    // A pilot hole through the part a wood screw attaches: a hair wider than its thread.
+    screwHole: 0.002,
+    // The pilot a wood screw's tip lands in, in the part behind the one it attaches.
+    screwPilot: 0.002,
   },
   // A recess is drawn as a ring: inner radius as a fraction of the outer.
   recessInner: 0.55,
@@ -560,12 +564,18 @@ export const MODELS = {
   screwdriverBladeThickness: 0.35,
   // Cam bolt: the thread's radius, and the head's share of the length.
   boltShaft: 0.55,
-  boltHead: 0.14,
-  // Cam lock: the slot's depth (share of the height), and its width and length across the
-  // top face (shares of the disc's diameter).
-  camSlotDepth: 0.1,
-  camSlotWidth: 0.16,
-  camSlotLength: 0.8,
+  boltCap: 0.14,
+  // A drive slot (a cam lock's top, a wood screw's head): its depth (share of the piece's
+  // length), and its width and length across the end face (shares of the piece's diameter).
+  driveSlotDepth: 0.1,
+  driveSlotWidth: 0.16,
+  driveSlotLength: 0.8,
+  // Wood screw: the thread's radius (share of the head's), the head's share of the length (it
+  // runs to the end of the box), and how far (share of the length) its drive slot's mark
+  // stands proud of the head's top face.
+  screwShaft: 0.45,
+  screwHead: 0.15,
+  screwSlotProud: 0.02,
   // Shelf pin: the rod's radius, and its collar (where it starts, how thick).
   pinRod: 0.6,
   pinCollarAt: 0.5,
@@ -585,10 +595,12 @@ export const FASTENER = {
   // A dowel, pin or back fitting comes back out when dragged this far (CSS px) along its axis.
   pullDistance: 40,
   // Wrench crank from a seated cam bolt to a screwed one: two full turns.
-  screwRadians: 4 * Math.PI,
+  boltRadians: 4 * Math.PI,
   // Hand or key turn from a seated threaded stud end to a screwed one: two full turns, a
   // fiddly stud being a turn-and-a-bit slower to seat than a bolt on the phone (?tune it).
   studRadians: 4 * Math.PI,
+  // Screwdriver turn from a seated wood screw to one driven home: two full turns (?tune it).
+  screwRadians: 4 * Math.PI,
   // Screwdriver turn from an open cam lock to a locked one.
   quarterTurn: Math.PI / 2,
   // A cam catches any screwed bolt head this close to its recess, and how deep each
@@ -604,10 +616,13 @@ export const FASTENER = {
   driveSeconds: 1.5,
   // The ratchet ticks once every this much turn (an eighth), cranked or driven.
   ratchetRadians: Math.PI / 4,
-  // Dowel-stage connections: rigid in translation, this much angular play, and damped so
-  // the carcass slumps to the limit and stays (no spring, no bounce). Cam-locked = rigid.
-  angularPlayDegrees: 4,
-  // Torque per rad/s resisting the slump (N·m·s/rad), so it reads as a sag, not a drop.
+  // Dowel-stage connections: rigid in translation, this much angular play about the pivot.
+  // Zero: a dowelled carcass holds square until its cams lock or its screws drive home.
+  // Ben's playtest of ÖVERKÄLL's drawer (2026-10-13) showed any sag knocks the next part's
+  // dowels out of line, so the slump ships off; the ?tune knob (joint.angularPlay) puts it
+  // back for a feel pass. Cam-locked = rigid.
+  angularPlayDegrees: 0,
+  // Torque per rad/s resisting the slump (N·m·s/rad) when there is play: a sag, not a drop.
   playDamping: 1000,
 };
 

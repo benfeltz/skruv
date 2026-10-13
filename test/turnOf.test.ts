@@ -12,8 +12,8 @@ import type { Assembly, AssemblyJoint, Turn } from '../src/game/assembly.js';
 // / `assembly.turns`. Headless, against the graph alone; test/turnRouter.test.ts runs the same
 // six cases through the router. Every review finding of rounds 1–4 maps to one of them.
 //
-// BLANK's real pack. Stud connectors: 0 studEnd-1 and 2 its hex (boltHead-1), 1 studEnd-2 and
-// 3 its hex (boltHead-2). A leg's one hole is 0; the top's four are 0..3.
+// BLANK's real pack. Stud connectors: 0 studEnd-1 and 2 its hex (hexSocket-1), 1 studEnd-2 and
+// 3 its hex (hexSocket-2). A leg's one hole is 0; the top's four are 0..3.
 
 const STUD_END_1 = 0;
 const STUD_END_2 = 1;
@@ -335,15 +335,15 @@ describe('6. JOHNNY: a bolt under the key, a cam under the screwdriver — as be
   afterAll(() => setItem('blank'));
   const SIDE_CAM_BOLT_HOLE = 2;
   const SHELF_RECESS = 2;
-  const BOLT_HEAD = 1;
-  const CAM_SLOT = 1;
+  const HEX_SOCKET = 1;
+  const DRIVE_SLOT = 1;
 
   function bench() {
     const assembly = createAssembly(typeOf);
     const bolt = assembly.seat({ partA: 'camLockBolt-1', connectorA: 0, partB: 'sidePanel-1', connectorB: SIDE_CAM_BOLT_HOLE, mover: 'camLockBolt-1' });
     const cam = assembly.seat({ partA: 'camLock-1', connectorA: 0, partB: 'topBottomPanel-1', connectorB: SHELF_RECESS, mover: 'camLock-1' });
-    const key = assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'camLockBolt-1', connectorB: BOLT_HEAD, mover: 'allenWrench-1' });
-    const driver = assembly.seat({ partA: 'screwdriver-1', connectorA: 0, partB: 'camLock-1', connectorB: CAM_SLOT, mover: 'screwdriver-1' });
+    const key = assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'camLockBolt-1', connectorB: HEX_SOCKET, mover: 'allenWrench-1' });
+    const driver = assembly.seat({ partA: 'screwdriver-1', connectorA: 0, partB: 'camLock-1', connectorB: DRIVE_SLOT, mover: 'screwdriver-1' });
     return { assembly, bolt, cam, key, driver };
   }
 
@@ -352,7 +352,7 @@ describe('6. JOHNNY: a bolt under the key, a cam under the screwdriver — as be
     expect(turn(assembly, 'allenWrench-1')).toEqual<Turn>({
       grip: { kind: 'tool', tool: assembly.get(key.id)! },
       joints: [assembly.get(bolt.id)!],
-      turned: { part: 'camLockBolt-1', connector: BOLT_HEAD, sense: -1, spins: true },
+      turned: { part: 'camLockBolt-1', connector: HEX_SOCKET, sense: -1, spins: true },
       riders: [],
       loose: { parts: ['camLockBolt-1'], restFrom: assembly.get(bolt.id)! },
       state: 'loose',
@@ -366,7 +366,7 @@ describe('6. JOHNNY: a bolt under the key, a cam under the screwdriver — as be
     expect(turn(assembly, 'screwdriver-1')).toEqual<Turn>({
       grip: { kind: 'tool', tool: assembly.get(driver.id)! },
       joints: [assembly.get(cam.id)!],
-      turned: { part: 'camLock-1', connector: CAM_SLOT, sense: -1, spins: true },
+      turned: { part: 'camLock-1', connector: DRIVE_SLOT, sense: -1, spins: true },
       riders: [],
       loose: { parts: ['camLock-1'], restFrom: assembly.get(cam.id)! },
       state: 'loose',

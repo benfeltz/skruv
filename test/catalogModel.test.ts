@@ -8,7 +8,7 @@ import { ITEM_IDS, itemById } from '../src/game/item.js';
 // The catalog as data (1.9.1): a cover, then a page per item, each buildable or sold out by
 // the build's pickable flag. Pure — drawn by src/scene/catalogPages.ts.
 
-// Three items, as the epic will carry them; the registry carries JOHNNY and BLANK so far.
+// A fixture of three items: the counts are the fixture's own, not the registry's (those are pinned below).
 const three = [
   { id: 'johnny', name: 'JOHNNY', partCount: 60 },
   { id: 'blank', name: 'BLANK', partCount: 9 },
@@ -24,9 +24,10 @@ describe('catalogEntries', () => {
     expect(catalogEntries()[0]).toMatchObject({ id: 'johnny', name: 'JOHNNY' });
   });
 
-  it('carries BLANK second, JOHNNY staying first — the order the catalog pages and the pre-splash count follow', () => {
-    expect([...ITEM_IDS]).toEqual(['johnny', 'blank']);
+  it('carries BLANK second and ÖVERKÄLL third, JOHNNY staying first — the order the catalog pages and the pre-splash count follow', () => {
+    expect([...ITEM_IDS]).toEqual(['johnny', 'blank', 'overkall']);
     expect(catalogEntries()[1]).toMatchObject({ id: 'blank', name: 'BLANK', partCount: 10 });
+    expect(catalogEntries()[2]).toMatchObject({ id: 'overkall', name: 'ÖVERKÄLL', partCount: 69 });
   });
 });
 

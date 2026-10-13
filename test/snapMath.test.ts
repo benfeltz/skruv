@@ -21,7 +21,7 @@ describe('type compatibility', () => {
     expect(areCompatible(CONNECTOR.DOWEL_HOLE, CONNECTOR.DOWEL_END)).toBe(true);
     expect(areCompatible(CONNECTOR.CAM_LOCK_BODY, CONNECTOR.CAM_LOCK_RECESS)).toBe(true);
     expect(areCompatible(CONNECTOR.BACK_FITTING_HOLE, CONNECTOR.BACK_FITTING_TIP)).toBe(true);
-    expect(areCompatible(CONNECTOR.WRENCH_TIP, CONNECTOR.BOLT_HEAD)).toBe(true);
+    expect(areCompatible(CONNECTOR.WRENCH_TIP, CONNECTOR.HEX_SOCKET)).toBe(true);
   });
 
   it('never pairs incompatible types', () => {
@@ -32,16 +32,18 @@ describe('type compatibility', () => {
   });
 
   it('pairs the screwdriver tip with a cam slot and nothing else', () => {
-    expect(areCompatible(CONNECTOR.SCREWDRIVER_TIP, CONNECTOR.CAM_SLOT)).toBe(true);
-    expect(areCompatible(CONNECTOR.CAM_SLOT, CONNECTOR.SCREWDRIVER_TIP)).toBe(true);
-    const others = Object.values(CONNECTOR).filter((t) => t !== CONNECTOR.CAM_SLOT);
+    expect(areCompatible(CONNECTOR.SCREWDRIVER_TIP, CONNECTOR.DRIVE_SLOT)).toBe(true);
+    expect(areCompatible(CONNECTOR.DRIVE_SLOT, CONNECTOR.SCREWDRIVER_TIP)).toBe(true);
+    const others = Object.values(CONNECTOR).filter((t) => t !== CONNECTOR.DRIVE_SLOT);
     for (const type of others) expect(areCompatible(CONNECTOR.SCREWDRIVER_TIP, type)).toBe(false);
     // The allen wrench keeps hex bolts; it never turns a cam.
-    expect(areCompatible(CONNECTOR.WRENCH_TIP, CONNECTOR.CAM_SLOT)).toBe(false);
+    expect(areCompatible(CONNECTOR.WRENCH_TIP, CONNECTOR.DRIVE_SLOT)).toBe(false);
   });
 
-  it('covers every catalog connector type exactly once', () => {
-    const covered = [...Object.keys(COMPATIBLE), ...Object.values(COMPATIBLE)].sort();
+  it('covers every catalog connector type exactly once, the screw pilot apart', () => {
+    // The pilot a screw's tip lands in pairs with no end of its own: the validator's
+    // `pilot-hole` rule reads it, never the snap.
+    const covered = [...Object.keys(COMPATIBLE), ...Object.values(COMPATIBLE), CONNECTOR.SCREW_PILOT].sort();
     expect(covered).toEqual(Object.values(CONNECTOR).sort());
   });
 });

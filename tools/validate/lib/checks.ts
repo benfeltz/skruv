@@ -12,7 +12,7 @@ import { deriveJoints, isHardwareType, seatedPoint } from './joints.js';
 import type { Joint } from './joints.js';
 import { expandManifest, shapeParts } from './pack.js';
 import type { ConnectorName, ConnectorRef, FlatpackFile, InstanceId, PageFields, PartType, StepPage } from './pack.js';
-import { COMPATIBLE, CONTRACT, isFastenerEnd, KIND, kindOf } from './vocabulary.js';
+import { COMPATIBLE, CONNECTOR, CONTRACT, isFastenerEnd, KIND, kindOf, passesThrough } from './vocabulary.js';
 
 /** One semantic error: which rule, where in the pack (a JSON path), and what is wrong. */
 export interface CheckError {
@@ -190,7 +190,7 @@ function holeOnce({ joints }: Context) {
   });
 }
 
-/** Every cam catches its own bolt head; every back fitting passes into a panel. */
+/** Every cam catches its own bolt head; every back fitting and screw passes into a panel. */
 function camAndFitting({ joints }: Context) {
   if (!joints) return [];
   const caught = new Set<InstanceId>();
@@ -200,9 +200,46 @@ function camAndFitting({ joints }: Context) {
       if (caught.has(j.captured)) return [error('cam-capture', `assembled[${j.hardware}]`, `${j.hardware} catches ${j.captured}, already caught`)];
       caught.add(j.captured);
     }
-    if (j.kind === KIND.FITTING && !j.through) return [error('fitting-through', `assembled[${j.hardware}]`, `${j.hardware} passes into no panel`)];
+    if (passesThrough(j.kind) && !j.through) return [error('fitting-through', `assembled[${j.hardware}]`, `${j.hardware} passes into no panel`)];
     return [];
   });
+}
+
+/**
+ * Every screw's tip lands in a pilot hole of the part behind its hole, and every pilot hole
+ * of an assembled part is filled by a tip: down the hole's axis, within `pilotRadius` of it
+ * and no deeper than `pilotDepth`. A screw whose tip misses its pilot is the error a
+ * mis-sized or mis-placed hole makes; a pilot no tip reaches is one left over.
+ */
+function pilotHoles({ partTypes, assembled, joints }: Context) {
+  if (!joints) return [];
+  const byId = new Map(assembled.map((a) => [a.id, a]));
+  // `joints` is only ever set when `partTypes` is.
+  const connectorsOf = (inst: { type: string }) => partTypes![inst.type].connectors;
+  const pilots = assembled.flatMap((inst) =>
+    connectorsOf(inst).flatMap((c, index) => (c.type === CONNECTOR.SCREW_PILOT ? [{ id: inst.id, name: c.id, key: `${inst.id}#${index}`, ...connectorInWorld(c, inst) }] : [])),
+  );
+  const lands = (tip: Vec3, pilot: (typeof pilots)[number]) => {
+    const d = sub(tip, pilot.position);
+    const depth = -d.reduce((sum, v, i) => sum + v * pilot.axis[i], 0);
+    const off = Math.hypot(...d.map((v, i) => v + pilot.axis[i] * depth));
+    return depth > 0 && depth <= CONTRACT.pilotDepth && off <= CONTRACT.pilotRadius;
+  };
+  const filled = new Set<string>();
+  const errors: CheckError[] = [];
+  for (const j of joints) {
+    // A screw that passes into nothing is `fitting-through`'s.
+    if (j.kind !== KIND.SCREW || !j.through) continue;
+    const screw = byId.get(j.hardware)!;
+    const tip = connectorInWorld(connectorsOf(screw)[j.hardwareConnector], screw).position;
+    const pilot = pilots.find((p) => p.id === j.through && lands(tip, p));
+    if (pilot) filled.add(pilot.key);
+    else errors.push(error('pilot-hole', `assembled[${j.hardware}]`, `${j.hardware} tip lands in no screwPilot of ${j.through}`));
+  }
+  for (const p of pilots) {
+    if (!filled.has(p.key)) errors.push(error('pilot-hole', `assembled[${p.id}]`, `${p.id}/${p.name} takes no screw tip`));
+  }
+  return errors;
 }
 
 /** Step pages fasten every derived joint exactly once, and turn every cam exactly once. */
@@ -372,6 +409,7 @@ export const RULES = Object.freeze([
   'hole-once',
   'cam-capture',
   'fitting-through',
+  'pilot-hole',
   'step-coverage',
   'step-order',
   'counts',
@@ -398,6 +436,7 @@ export function checkPack(pack: FlatpackFile, { assetExists = () => true }: { as
     ...mateCoincidence(ctx),
     ...holeOnce(ctx),
     ...camAndFitting(ctx),
+    ...pilotHoles(ctx),
     ...stepCoverage(ctx),
     ...stepOrder(ctx),
     ...counts(ctx),

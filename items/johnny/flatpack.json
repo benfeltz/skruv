@@ -8,7 +8,7 @@
     "description": "Bookcase, about 80 × 28 × 202 cm"
   },
   "vocabulary": {
-    "connectors": ["dowelHole", "camBoltHole", "camLockRecess", "shelfPinHole", "backFittingHole", "dowelEnd", "boltThread", "boltHead", "camLockBody", "pinTip", "backFittingTip", "wrenchTip", "camSlot", "screwdriverTip"],
+    "connectors": ["dowelHole", "camBoltHole", "camLockRecess", "shelfPinHole", "backFittingHole", "dowelEnd", "boltThread", "hexSocket", "camLockBody", "pinTip", "backFittingTip", "wrenchTip", "driveSlot", "screwdriverTip"],
     "fasteners": ["dowel", "pin", "fitting", "bolt", "cam", "tool"]
   },
   "parts": {
@@ -341,8 +341,8 @@
           "axis": [0, -1, 0]
         },
         {
-          "id": "boltHead-1",
-          "type": "boltHead",
+          "id": "hexSocket-1",
+          "type": "hexSocket",
           "position": [0, 0.0175, 0],
           "axis": [0, 1, 0]
         }
@@ -363,8 +363,8 @@
           "axis": [0, -1, 0]
         },
         {
-          "id": "camSlot-1",
-          "type": "camSlot",
+          "id": "driveSlot-1",
+          "type": "driveSlot",
           "position": [0, 0.006, 0],
           "axis": [0, 1, 0]
         }

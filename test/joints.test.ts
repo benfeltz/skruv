@@ -22,8 +22,8 @@ const partTypes = {
     ],
   },
   dowel: { size: [0.008, 0.03, 0.008], connectors: [c('dowelEnd', [0, -0.015, 0], [0, -1, 0]), c('dowelEnd', [0, 0.015, 0], [0, 1, 0])] },
-  bolt: { size: [0.007, 0.02, 0.007], connectors: [c('boltThread', [0, -0.01, 0], [0, -1, 0]), c('boltHead', [0, 0.01, 0], [0, 1, 0])] },
-  cam: { size: [0.015, 0.012, 0.015], connectors: [c('camLockBody', [0, -0.006, 0], [0, -1, 0]), c('camSlot', [0, 0.006, 0], [0, 1, 0])] },
+  bolt: { size: [0.007, 0.02, 0.007], connectors: [c('boltThread', [0, -0.01, 0], [0, -1, 0]), c('hexSocket', [0, 0.01, 0], [0, 1, 0])] },
+  cam: { size: [0.015, 0.012, 0.015], connectors: [c('camLockBody', [0, -0.006, 0], [0, -1, 0]), c('driveSlot', [0, 0.006, 0], [0, 1, 0])] },
 } as unknown as Record<string, PartType>;
 // Dowel along x: its first end (local -y) turned to point at -x into board-1's +x hole.
 const ALONG_X: Quat = [0, 0, -Math.SQRT1_2, Math.SQRT1_2];
@@ -93,6 +93,33 @@ describe('deriveJoints', () => {
         [KIND.STUD, 0, 'top-1', 'stud-1'],
         [KIND.STUD, 1, 'leg-1', 'leg-1'],
       ]);
+    });
+  });
+
+  describe('a wood screw', () => {
+    // A thin rail lying on a panel; the rail's screw hole is on its top face, axis up. The
+    // screw (thread end down) sinks through the rail and on into the panel beneath.
+    const screwTypes = (panelHeight: number) => ({
+      rail: { size: [0.1, 0.01, 0.02], connectors: [c('screwHole', [0, 0.005, 0], [0, 1, 0])] },
+      panel: { size: [0.3, panelHeight, 0.3], connectors: [] },
+      screw: { size: [0.004, 0.03, 0.004], connectors: [c('screwThread', [0, -0.015, 0], [0, -1, 0]), c('driveSlot', [0, 0.015, 0], [0, 1, 0])] },
+    }) as unknown as Record<string, PartType>;
+    const sink = CONTRACT.sinkDepth.screw!;
+    // The rail's top face at y 0.005; the screw's tip at 0.005 - sink, below the rail's underside.
+    const rail: AssembledPart = { id: 'rail-1', type: 'rail', role: 'rail', position: [0, 0, 0], rotation: IDENTITY };
+    const panel = (height: number): AssembledPart => ({ id: 'panel-1', type: 'panel', role: 'panel', position: [0, -0.005 - height / 2, 0], rotation: IDENTITY });
+    const screw: AssembledPart = { id: 'screw-1', type: 'screw', role: 'hardware', position: [0, 0.005 - sink + 0.015, 0], rotation: IDENTITY };
+
+    it('passes through the rail into the panel behind it', () => {
+      const joints = deriveJoints({ partTypes: screwTypes(0.03), assembled: [rail, panel(0.03), screw] });
+      expect(joints).toEqual([
+        { hardware: 'screw-1', hardwareConnector: 0, host: 'rail-1', hostConnector: 0, kind: KIND.SCREW, mover: 'screw-1', through: 'panel-1', captured: null },
+      ]);
+    });
+
+    it('passes into nothing when the panel behind is too thin for its tip to reach', () => {
+      const joints = deriveJoints({ partTypes: screwTypes(0.005), assembled: [rail, panel(0.005), screw] });
+      expect(joints.map((j) => [j.kind, j.through])).toEqual([[KIND.SCREW, null]]);
     });
   });
 });

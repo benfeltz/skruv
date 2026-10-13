@@ -92,7 +92,7 @@ describe('what a key on a stud turns (the turn record: test/turnOf.test.ts)', ()
 describe("a stud's hex as a tool target", () => {
   const HEX_AT_TOP_END = 2;
   const HEX_AT_LEG_END = 3;
-  const hex = (index: number) => ({ type: CONNECTOR.BOLT_HEAD, part: { id: 'doubleEndedStud-1' }, index });
+  const hex = (index: number) => ({ type: CONNECTOR.HEX_SOCKET, part: { id: 'doubleEndedStud-1' }, index });
   const none = () => null;
 
   function bench() {
@@ -134,7 +134,7 @@ describe("a stud's hex as a tool target", () => {
 
   it('names the hex that shares an end with the end — the connectors a seated end buries', () => {
     const assembly = bench();
-    // studEnd-1 (0) with boltHead-1 (2); studEnd-2 (1) with boltHead-2 (3).
+    // studEnd-1 (0) with hexSocket-1 (2); studEnd-2 (1) with hexSocket-2 (3).
     expect(assembly.coincident('doubleEndedStud-1', 0)).toEqual([HEX_AT_TOP_END]);
     expect(assembly.coincident('doubleEndedStud-1', 1)).toEqual([HEX_AT_LEG_END]);
     // JOHNNY's bolt has none: its head is the far end of its thread.

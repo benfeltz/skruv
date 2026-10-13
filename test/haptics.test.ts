@@ -52,6 +52,7 @@ describe('cueFor', () => {
     [{ type: EVENT.SEAT, kind: KIND.TOOL }, CUE.ENGAGE],
     [{ type: EVENT.FASTEN, kind: KIND.BOLT }, CUE.HOME],
     [{ type: EVENT.FASTEN, kind: KIND.STUD }, CUE.HOME],
+    [{ type: EVENT.FASTEN, kind: KIND.SCREW }, CUE.HOME],
     [{ type: EVENT.FASTEN, kind: KIND.CAM }, CUE.LOCK],
     [{ type: EVENT.FASTEN, kind: KIND.DOWEL }, null],
     [{ type: EVENT.UNFASTEN, kind: KIND.BOLT }, null],
@@ -68,6 +69,7 @@ describe('homeCue', () => {
     expect(homeCue(KIND.CAM)).toBe(CUE.LOCK);
     expect(homeCue(KIND.BOLT)).toBe(cueFor({ type: EVENT.FASTEN, kind: KIND.BOLT }));
     expect(homeCue(KIND.STUD)).toBe(CUE.HOME);
+    expect(homeCue(KIND.SCREW)).toBe(CUE.HOME);
     expect(homeCue(KIND.DOWEL)).toBeNull();
   });
 });

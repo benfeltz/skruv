@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ConnectorType } from '../tools/validate/lib/vocabulary.js';
-import { areCompatible, COMPATIBLE, CONNECTOR, CONTRACT, isFastenerEnd, KIND, kindOf } from '../tools/validate/lib/vocabulary.js';
+import { areCompatible, COMPATIBLE, CONNECTOR, CONTRACT, isFastenerEnd, KIND, kindOf, passesThrough } from '../tools/validate/lib/vocabulary.js';
 
 describe('Flatpack vocabulary', () => {
   it('freezes every name table and the contract', () => {
@@ -45,6 +45,18 @@ describe('Flatpack vocabulary', () => {
     expect(areCompatible(CONNECTOR.STUD_HOLE, CONNECTOR.STUD_END)).toBe(true);
     expect(areCompatible(CONNECTOR.STUD_END, CONNECTOR.DOWEL_HOLE)).toBe(false);
     expect(CONTRACT.sinkDepth.stud).toBeGreaterThan(0);
+  });
+
+  it('pairs a screw thread with a screw hole, both ways, and runs the screw machine', () => {
+    expect(kindOf(CONNECTOR.SCREW_THREAD)).toBe(KIND.SCREW);
+    expect(areCompatible(CONNECTOR.SCREW_THREAD, CONNECTOR.SCREW_HOLE)).toBe(true);
+    expect(areCompatible(CONNECTOR.SCREW_HOLE, CONNECTOR.SCREW_THREAD)).toBe(true);
+    expect(areCompatible(CONNECTOR.SCREW_THREAD, CONNECTOR.STUD_HOLE)).toBe(false);
+    expect(CONTRACT.sinkDepth.screw).toBeGreaterThan(0);
+  });
+
+  it('passes through to the part behind for a fitting and a screw only', () => {
+    expect(Object.values(KIND).filter(passesThrough)).toEqual([KIND.FITTING, KIND.SCREW]);
   });
 
   it('pairs within reach, and checks far tighter than it pairs', () => {

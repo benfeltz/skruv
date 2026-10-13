@@ -11,7 +11,7 @@
     "connectors": [
       "studEnd",
       "studHole",
-      "boltHead",
+      "hexSocket",
       "wrenchTip"
     ],
     "fasteners": [
@@ -156,8 +156,8 @@
           ]
         },
         {
-          "id": "boltHead-1",
-          "type": "boltHead",
+          "id": "hexSocket-1",
+          "type": "hexSocket",
           "position": [
             0,
             0.02,
@@ -170,8 +170,8 @@
           ]
         },
         {
-          "id": "boltHead-2",
-          "type": "boltHead",
+          "id": "hexSocket-2",
+          "type": "hexSocket",
           "position": [
             0,
             -0.02,

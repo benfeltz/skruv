@@ -14,15 +14,19 @@ export const CONNECTOR = Object.freeze({
   BACK_FITTING_HOLE: 'backFittingHole',
   DOWEL_END: 'dowelEnd',
   BOLT_THREAD: 'boltThread',
-  BOLT_HEAD: 'boltHead',
+  HEX_SOCKET: 'hexSocket',
   CAM_LOCK_BODY: 'camLockBody',
   PIN_TIP: 'pinTip',
   BACK_FITTING_TIP: 'backFittingTip',
   WRENCH_TIP: 'wrenchTip',
-  CAM_SLOT: 'camSlot',
+  DRIVE_SLOT: 'driveSlot',
   SCREWDRIVER_TIP: 'screwdriverTip',
   STUD_END: 'studEnd',
   STUD_HOLE: 'studHole',
+  SCREW_THREAD: 'screwThread',
+  SCREW_HOLE: 'screwHole',
+  // A hole in the part a wood screw's tip lands in: it takes no fastener end of its own.
+  SCREW_PILOT: 'screwPilot',
 });
 
 /** A connector type the format knows (the schema's `connectorType`). */
@@ -35,9 +39,10 @@ export const COMPATIBLE: Readonly<Partial<Record<ConnectorType, ConnectorType>>>
   [CONNECTOR.CAM_LOCK_BODY]: CONNECTOR.CAM_LOCK_RECESS,
   [CONNECTOR.PIN_TIP]: CONNECTOR.SHELF_PIN_HOLE,
   [CONNECTOR.BACK_FITTING_TIP]: CONNECTOR.BACK_FITTING_HOLE,
-  [CONNECTOR.WRENCH_TIP]: CONNECTOR.BOLT_HEAD,
-  [CONNECTOR.SCREWDRIVER_TIP]: CONNECTOR.CAM_SLOT,
+  [CONNECTOR.WRENCH_TIP]: CONNECTOR.HEX_SOCKET,
+  [CONNECTOR.SCREWDRIVER_TIP]: CONNECTOR.DRIVE_SLOT,
   [CONNECTOR.STUD_END]: CONNECTOR.STUD_HOLE,
+  [CONNECTOR.SCREW_THREAD]: CONNECTOR.SCREW_HOLE,
 });
 
 export const areCompatible = (a: ConnectorType, b: ConnectorType) => COMPATIBLE[a] === b || COMPATIBLE[b] === a;
@@ -56,6 +61,8 @@ export const KIND = Object.freeze({
   TOOL: 'tool',
   // A double-ended threaded stud: each end screws into a threaded hole (a table leg's, a top's).
   STUD: 'stud',
+  // A slotted wood screw: driven through a hole in the part it attaches, into the part behind.
+  SCREW: 'screw',
 });
 
 /** A fastener machine the format knows (the schema's `fastenerKind`). */
@@ -71,10 +78,21 @@ const KIND_FOR_END: Readonly<Partial<Record<ConnectorType, FastenerKind>>> = Obj
   [CONNECTOR.WRENCH_TIP]: KIND.TOOL,
   [CONNECTOR.SCREWDRIVER_TIP]: KIND.TOOL,
   [CONNECTOR.STUD_END]: KIND.STUD,
+  [CONNECTOR.SCREW_THREAD]: KIND.SCREW,
 });
 
 /** The fastener kind for a pair whose fastener end has connector type `endType`, or null. */
 export const kindOf = (endType: ConnectorType) => KIND_FOR_END[endType] ?? null;
+
+/** Kinds whose tip holds the part behind the hole: a back fitting's, a screw's. */
+export const passesThrough = (kind: FastenerKind) => kind === KIND.FITTING || kind === KIND.SCREW;
+
+/**
+ * True for a part type a fastener's tip can pass into: anything that is not hardware or a
+ * tool — a panel with holes, or a plain block with no connectors at all (a drawer bottom, a
+ * knob). The one rule `passThrough` here and the game's router both ask.
+ */
+export const canPassInto = (connectors: readonly { type: ConnectorType }[]) => !connectors.some((c) => isFastenerEnd(c.type));
 
 /**
  * The geometric contract every engine honours, in metres. A pack's assembled poses are
@@ -84,10 +102,15 @@ export const kindOf = (endType: ConnectorType) => KIND_FOR_END[endType] ?? null;
  *   mateReach     — a fastener end this near its seated spot in a compatible hole is paired
  *                   with it when joints are derived
  *   mateTolerance — how exactly a derived pair must then sit (the validator's coincidence rule)
+ *   pilotRadius, pilotDepth — where a screw's tip may lie in a pilot hole: off its axis, down it
  */
 export const CONTRACT = Object.freeze({
-  sinkDepth: Object.freeze<Partial<Record<FastenerKind, number>>>({ dowel: 0.015, pin: 0.008, fitting: 0.012, bolt: 0.011, cam: 0.012, stud: 0.02 }),
+  sinkDepth: Object.freeze<Partial<Record<FastenerKind, number>>>({ dowel: 0.015, pin: 0.008, fitting: 0.012, bolt: 0.011, cam: 0.012, stud: 0.02, screw: 0.025 }),
   captureRadius: 0.015,
   mateReach: 0.005,
   mateTolerance: 1e-6,
+  // A screw's tip lands in a pilot hole when it is this near the hole's axis (a hair wider
+  // than the thread) and no deeper than the hole runs.
+  pilotRadius: 0.002,
+  pilotDepth: 0.015,
 });
