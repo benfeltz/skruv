@@ -4,7 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { checkPack, RULES } from '../tools/validate/lib/checks.js';
 import type { Rule } from '../tools/validate/lib/checks.js';
+import { rotateVector } from '../tools/validate/lib/geometry.js';
 import type { Vec3, Pose } from '../tools/validate/lib/geometry.js';
+import { CONTRACT } from '../tools/validate/lib/vocabulary.js';
 import type { FlatpackFile, PageFields, StepPage } from '../tools/validate/lib/pack.js';
 
 const JOHNNY: FlatpackFile = JSON.parse(readFileSync(new URL('../items/johnny/flatpack.json', import.meta.url), 'utf8'));
@@ -64,6 +66,29 @@ describe('checkPack on JOHNNY', () => {
     pack.parts.sidePanel.mesh = 'assets/side.glb';
     expect(checkPack(pack, { assetExists: () => false }).map((e) => e.rule)).toEqual(['assets']);
     expect(checkPack(pack, { assetExists: (path) => path === 'assets/side.glb' })).toEqual([]);
+  });
+
+  // JOHNNY with its back fittings made wood screws: each screw sunk its own depth through the
+  // back panel's screw hole, its thread on into the side panel behind.
+  const screwed = () => {
+    const pack = copy();
+    const sink = CONTRACT.sinkDepth.screw! - CONTRACT.sinkDepth.fitting!;
+    pack.vocabulary.connectors = pack.vocabulary.connectors.map((t) => (t === 'backFittingTip' ? 'screwThread' : t === 'backFittingHole' ? 'screwHole' : t));
+    pack.vocabulary.fasteners = pack.vocabulary.fasteners.map((k) => (k === 'fitting' ? 'screw' : k));
+    pack.parts.backFitting.connectors[0].type = 'screwThread';
+    for (const hole of pack.parts.backPanel.connectors) if (hole.type === 'backFittingHole') hole.type = 'screwHole';
+    for (const screw of pack.assembled.filter((a) => a.id.startsWith('backFitting-'))) {
+      const deeper = rotateVector(screw.rotation, pack.parts.backFitting.connectors[0].axis);
+      screw.position = screw.position.map((v, i) => v + deeper[i] * sink) as Vec3;
+    }
+    return pack;
+  };
+
+  it('[fitting-through] holds a screw to the panel behind its hole, and rejects one passing into none', () => {
+    expect(checkPack(screwed()).map((e) => e.rule)).not.toContain('fitting-through');
+    const pack = screwed();
+    pack.parts.sidePanel.box[2] = 0.23;
+    expect(checkPack(pack).filter((e) => e.rule === 'fitting-through').map((e) => e.message)).toContain('backFitting-1 passes into no panel');
   });
 
   it('seeds every rule with a mutation', () => {

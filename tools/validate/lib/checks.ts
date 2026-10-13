@@ -12,7 +12,7 @@ import { deriveJoints, isHardwareType, seatedPoint } from './joints.js';
 import type { Joint } from './joints.js';
 import { expandManifest, shapeParts } from './pack.js';
 import type { ConnectorName, ConnectorRef, FlatpackFile, InstanceId, PageFields, PartType, StepPage } from './pack.js';
-import { COMPATIBLE, CONTRACT, isFastenerEnd, KIND, kindOf } from './vocabulary.js';
+import { COMPATIBLE, CONTRACT, isFastenerEnd, KIND, kindOf, passesThrough } from './vocabulary.js';
 
 /** One semantic error: which rule, where in the pack (a JSON path), and what is wrong. */
 export interface CheckError {
@@ -190,7 +190,7 @@ function holeOnce({ joints }: Context) {
   });
 }
 
-/** Every cam catches its own bolt head; every back fitting passes into a panel. */
+/** Every cam catches its own bolt head; every back fitting and screw passes into a panel. */
 function camAndFitting({ joints }: Context) {
   if (!joints) return [];
   const caught = new Set<InstanceId>();
@@ -200,7 +200,7 @@ function camAndFitting({ joints }: Context) {
       if (caught.has(j.captured)) return [error('cam-capture', `assembled[${j.hardware}]`, `${j.hardware} catches ${j.captured}, already caught`)];
       caught.add(j.captured);
     }
-    if (j.kind === KIND.FITTING && !j.through) return [error('fitting-through', `assembled[${j.hardware}]`, `${j.hardware} passes into no panel`)];
+    if (passesThrough(j.kind) && !j.through) return [error('fitting-through', `assembled[${j.hardware}]`, `${j.hardware} passes into no panel`)];
     return [];
   });
 }
