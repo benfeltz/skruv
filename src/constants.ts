@@ -28,6 +28,9 @@ export const COLORS = {
   partWrench: 0x2f3136,
   partScrewdriver: 0xd9a21b,
   partFitting: 0x5d5853,
+  // Second tones on a shaped piece (src/game/partShapes.ts): bare metal (the screwdriver's
+  // blade and shaft) reuses partMetal; a recess, like the slot across a cam lock, is dark.
+  partRecess: 0x2b2826,
   cardboard: 0xb48a5a,
   // Rotate gizmo rings, one per world axis, x/y/z in the usual red/green/blue.
   gizmoX: 0xe5534b,
@@ -39,6 +42,9 @@ export const COLORS = {
   uiAccent: 0xe0a64a,
   // Snap preview (src/scene/ghost.ts).
   ghost: 0xe0a64a,
+  // The ghost, and the glow on the hole it seats in, when a panel's fit on offer is where it
+  // goes in the finished item (src/game/panelFit.ts); any other fit keeps `ghost`'s amber.
+  whereItGoes: 0x6cc46a,
   // Hole markings (src/game/decals.ts) and the flash when a fastener seats in one.
   decal: 0x3a3029,
   decalFlash: 0xe0a64a,
@@ -55,6 +61,8 @@ export const COLORS = {
   bookletFaint: 0xbdbdbd,
   // Per-page highlight (src/scene/highlight.ts): the warm accent, glowing softly.
   highlight: 0xe0a64a,
+  // Target rings on the fasteners a carried tool can work (src/scene/targetRings.ts).
+  targetRing: 0xe0a64a,
 };
 
 // Per-page highlight (src/scene/highlight.ts): the parts the open booklet page is about
@@ -82,6 +90,19 @@ export const BOOKLET = {
   numeralSize: 150,
   bubbleRadius: 64,
   font: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+  // The controls page (src/game/controlsPage.ts): a title, then rows in columns — each a
+  // square pictogram, drawn on a 100-unit grid at `pictogramLine`, and its label beside it,
+  // wrapped onto as many lines as it needs.
+  controls: {
+    titleSize: 44,
+    titleGap: 28,
+    columns: 2,
+    pictogram: 96,
+    pictogramLine: 4,
+    labelGap: 16,
+    labelSize: 27,
+    labelLeading: 1.2,
+  },
 };
 
 // The booklet in hand (src/ui/booklet.ts): CSS pixels.
@@ -94,12 +115,85 @@ export const BOOKLET_UI = {
   // The open sheet never grows wider than this, nor taller than this share of the screen.
   maxWidth: 520,
   maxHeight: 0.92,
+  // The sheet's own height round the page (handle, controls, gaps, padding; CSS pixels):
+  // the page fits in maxHeight less this. index.html's pre-splash mirrors it.
+  chromeHeight: 120,
+  // A notice on the sheet (a pick that would not build): laid over the head of the page, so
+  // it never adds to chromeHeight — its type size and line height, and its inset, padding
+  // and corner radius (CSS pixels).
+  notice: { size: 14, lineHeight: 1.3, inset: 8, padding: 8, radius: 8 },
   // After a tap on the room puts the booklet down, the scrim stays this long to catch the
   // click a touch synthesises after the lift.
   scrimLingerMs: 400,
   // A mouse over the docked thumbnail grows it to fit this share of the screen's width and
   // height (a quarter of the screen), big enough to read the page.
   thumbHoverShare: 0.5,
+  // ...but only once the pointer has rested on it this long (ms): a pointer passing over a
+  // thumb on its way elsewhere — the manual's, past the catalog's — never grows it.
+  thumbHoverDelayMs: 400,
+};
+
+// The catalog (1.9.1): the game's front door, a second booklet of items to build
+// (src/game/catalogModel.ts lays it out). Its items' names and part counts are their packs'.
+export const CATALOG = {
+  // Which items this build lets you build: a comma list of ids from the build-time flag
+  // VITE_PICKABLE (`VITE_PICKABLE=johnny npm run build`), or every item when it is unset or
+  // empty. Every build ships every pack; the rest show SOLD OUT. (vite.config.ts reads this
+  // file in plain Node, where import.meta.env doesn't exist.)
+  pickable: import.meta.env?.VITE_PICKABLE ?? '',
+  // Its pages (src/scene/catalogPages.ts), in page-canvas pixels on BOOKLET.pageSize paper.
+  page: {
+    wordmarkSize: 156,
+    taglineSize: 30,
+    nameSize: 96,
+    detailSize: 30,
+    // The headings' setting, as fractions of a type size: a title's baseline sits this far
+    // down its size; the line under it (tagline, part count) this many of its own sizes below
+    // that baseline; the drawing starts this many of them below the title's full size. The
+    // line under is indented this far (page pixels) to sit optically flush under the title.
+    baseline: 0.8,
+    subtitleDrop: 1.6,
+    drawingDrop: 2.4,
+    taglineIndent: 6,
+    detailIndent: 4,
+    // The BUILD IT tag, or the SOLD OUT stamp in its place: [x, y, w, h], also the hit
+    // target src/ui/booklet.ts lays over the page. Below it, down to the page margin, nothing
+    // is drawn: the space held for a store link on a sold-out page, once there is a store.
+    action: [180, 770, 360, 104] satisfies [number, number, number, number],
+    actionTextSize: 52,
+    // The tag's corners and punched hole; the stamp's outline and tilt (radians).
+    tagRadius: 18,
+    tagHole: 12,
+    stampLine: 6,
+    stampTurn: -0.08,
+  },
+  // The cover's wire-drawn room corner (metres): the items stand on its floor this far
+  // apart and this far in from its walls, which rise this many times the tallest item.
+  cover: {
+    gap: 0.5,
+    margin: 0.6,
+    wallRise: 1.5,
+    slab: 0.03,
+  },
+  // The corner stack (src/game/cornerStack.ts): the front booklet (the manual) fanned this far
+  // right and up (CSS pixels) from the one behind it (the catalog), which stays in the corner
+  // turned this much (radians) — far enough that the strip of catalog left showing, below and
+  // left of the manual, is a thumb's target, and out of the path from the room to the
+  // manual. ?tune knobs.
+  stack: {
+    fanX: 10,
+    fanY: 44,
+    fanTurn: -0.12,
+  },
+  words: {
+    brand: 'SKRUV',
+    tagline: 'Catalog',
+    parts: 'parts',
+    build: 'BUILD IT',
+    soldOut: 'SOLD OUT',
+    // On the sheet when BUILD IT's item could not be built (src/ui/catalogSheet.ts).
+    buildFailed: "That one couldn't be built. Try again, or pick another.",
+  },
 };
 
 export const LIGHTS = {
@@ -124,12 +218,19 @@ export const CAMERA = {
   // same view, so a cold load frames the room without pinching out first. Dialed on
   // device through ?tune (camera.mobileStartScale) before freezing.
   mobileStartScale: 1.4,
+  // Where a camera gesture pivots (src/scene/cameraControls.ts): 1, the first part (or the
+  // box) along the line through the middle of the screen, else the floor, held for the
+  // whole gesture; 0, today's floor pivot, re-seated every update. A 0/1 switch because
+  // ?tune knobs hold numbers. Temporary: the losing mode goes once Ben picks on the phone.
+  pivotOnParts: 1,
 };
 
 // Orbit limits (src/scene/cameraLimits.ts, applied by src/scene/cameraControls.ts). The
-// orbit target roams the whole floor so the camera can get right up to any part; the
-// camera is clamped inside the walls and above the floor every frame, and may rise over
-// the wall tops when zoomed out (dollhouse view).
+// orbit target roams the whole floor so the camera can get right up to any part; as a
+// gesture starts it moves along the view to the first part in the middle of the screen,
+// else the floor (CAMERA.pivotOnParts), and holds there. The camera is clamped inside the
+// walls and above the floor every frame, and may rise over the wall tops when zoomed out
+// (dollhouse view).
 export const CAMERA_LIMITS = {
   // The target stays this far inside the walls, between these heights: down to the parts
   // lying on the floor, up to just over the standing bookcase.
@@ -234,7 +335,7 @@ export const GESTURE = {
   detentStep: Math.PI / 2,
   // Lift channel (second finger on a phone): metres per CSS px of travel.
   liftRate: 0.004,
-  // Desktop lift (Shift-held drag, or the wheel): gentler, since trackpad scrolls and mouse
+  // Desktop lift (the wheel mid-drag, or Shift + scroll): gentler, since trackpad scrolls and mouse
   // sweeps run to hundreds of px where a phone's second finger travels tens.
   desktopLiftRate: 0.0025,
   // A lifted part's top stays this far below the walls' tops.
@@ -330,6 +431,96 @@ export const SNAP = {
   flashMs: 450,
 };
 
+// Panel fit (src/game/panelFit.ts, driven by src/scene/gestureRouter.ts): a carried panel
+// seats by all its holes at once onto free fastener ends — a dowel standing in another
+// panel. Its own window, wider than SNAP's: a small finger move swings a panel's holes a
+// long way. SNAP stays hardware's.
+export const PANEL = {
+  // A hole this near a free end (metres), and its axis this far off (radians), seeds a fit.
+  maxDistance: 0.15,
+  maxAngle: (60 * Math.PI) / 180,
+  // With the fit seated, any other hole this near a compatible end across its axis (metres),
+  // up to seatSlack along it, axis against axis within matchAngle (radians), seats on it too.
+  // The slack is a dowel sink and a little: one dowel tapped home stands a sink lower than
+  // one only seated at its hole's mouth, and a panel over both still seats on both.
+  matchTolerance: 0.01,
+  seatSlack: 0.02,
+  matchAngle: (5 * Math.PI) / 180,
+  // Where it goes: a fit is the panel's place in the finished item when it sits there within
+  // matchTolerance across the dowels and matchAngle, and up to this far (metres) along them —
+  // a dowel not yet pushed home in either panel stands that much proud (two dowel sinks).
+  preferSlide: 0.035,
+  // Magnetism: within `zone` metres (panel centre to where it goes), a carried panel with no
+  // fit on offer turns toward where it goes, at `rate` (1/s) at full strength.
+  zone: 0.4,
+  rate: 6,
+  // A fit on offer holds (hysteresis) until the finger has moved the panel more than
+  // holdReach metres, or turned it more than holdTurn radians, since the offer was taken, or a
+  // better fit comes in reach — where it goes, or more pairs; another fit as good takes over
+  // only once the panel is offerMargin metres nearer it. The same fit found again stays as
+  // first offered (what it seats on is held still under it). So a trembling finger, the line
+  // easing, or a carcass the panel nudges never flips the offer frame to frame (1.8.3.4 phone
+  // finding 1).
+  holdReach: 0.08,
+  holdTurn: (20 * Math.PI) / 180,
+  offerMargin: 0.02,
+};
+
+// Self-aim (src/game/toolAim.ts, driven by src/scene/gestureRouter.ts): dragged hardware —
+// a tool, a dowel, a bolt, a cam lock, a pin, a fitting — whose fastener end comes within
+// `zone` of a seat that takes it turns that end to point in, harder the nearer it is, so
+// SNAP's 40° window is reached without the gizmo. Outside the zone the part keeps whatever
+// orientation it has; panels never aim.
+export const AIM = {
+  // Fasteners — a dowel, bolt, cam lock, pin or fitting into its hole: metres from the end
+  // at which aiming starts (strength 0 there, 1 at the seat), and the turn rate at full
+  // strength (1/s, the seat assist's exponential law).
+  zone: 0.3,
+  rate: 8,
+  // Tools — a tip onto a bolt head or cam slot — the same, tuned apart.
+  toolZone: 0.3,
+  toolRate: 8,
+  // An end this close (radians) to pointing straight in is left as it is.
+  settled: 0.001,
+};
+
+// Target rings (src/game/toolTargets.ts picks them, src/scene/targetRings.ts draws them):
+// while hardware is carried, each place it can go right now — a free hole that takes a
+// fastener, a fastener a tool can turn — lights a ring as the finger nears it on screen,
+// never one across the room from the part, the nearest brightest. Letting go over a lit
+// ring seats the part there.
+export const RING = {
+  // CSS px from the finger at which a ring starts to fade in.
+  screenRadius: 120,
+  // CSS px from a lit ring within which letting go seats the part: a fingertip.
+  hitRadius: 36,
+  // Metres from the carried part's ends beyond which nothing lights, however close it looks.
+  maxDistance: 0.5,
+  // The ring lying round a head or slot (m), and its look at full strength.
+  radius: 0.012,
+  width: 0.004,
+  opacity: 0.9,
+  // Rings drawn at once, nearest first: plenty for the holes around one finger.
+  pool: 12,
+};
+
+// Turn ring (src/game/turnRing.ts decides, src/ui/turnRing.ts draws): a flat dial facing
+// the screen round the head of each fastener a seated tool is on, with arrows the
+// tightening way and an arc filled to how far home it is. CSS px; it flashes this long as
+// the fastener goes home.
+export const TURN_RING = {
+  // Radius of the drawn ring — a comfortable finger's reach from the head.
+  radius: 64,
+  // Half-width of the grab band either side of the ring: a fingertip.
+  band: 24,
+  // How long the ring flashes as its fastener goes home.
+  flashMs: 400,
+  // Drawn ring and arc widths, and the arrowheads' size.
+  width: 4,
+  arcWidth: 6,
+  arrowSize: 14,
+};
+
 // Hole markings (src/game/decals.ts, drawn by src/game/partMesh.ts). Radii are keyed by
 // the catalog's socket connector type and sized a touch wider than what fills them, so a
 // seated fastener still shows a rim.
@@ -346,6 +537,40 @@ export const DECAL = {
   // Laid this far proud of the face, so it never z-fights the panel.
   surfaceOffset: 0.0004,
   segments: 24,
+};
+
+// Hardware and tool shapes (src/game/partShapes.ts): visual only, each drawn inside its
+// pack box. Radii are fractions of the box's half-width across the piece's axis; lengths
+// are fractions of its length along it, measured from the end that goes in first.
+export const MODELS = {
+  // Round faces: low, because these are a few millimetres on screen.
+  segments: 12,
+  // The Allen key's hexagonal rod.
+  hexSides: 6,
+  // The key's rod, as a fraction of half the box's thickness: under 1 keeps the short
+  // leg's axis close to the tip connector on the box's edge.
+  wrenchRod: 0.75,
+  // Screwdriver: the handle's share of the length, the shaft's radius, and the flat blade
+  // at the tip (its length; its thickness as a fraction of the shaft's diameter).
+  screwdriverHandle: 0.45,
+  screwdriverShaft: 0.2,
+  screwdriverBlade: 0.05,
+  screwdriverBladeThickness: 0.35,
+  // Cam bolt: the thread's radius, and the head's share of the length.
+  boltShaft: 0.55,
+  boltHead: 0.14,
+  // Cam lock: the slot's depth (share of the height), and its width and length across the
+  // top face (shares of the disc's diameter).
+  camSlotDepth: 0.1,
+  camSlotWidth: 0.16,
+  camSlotLength: 0.8,
+  // Shelf pin: the rod's radius, and its collar (where it starts, how thick).
+  pinRod: 0.6,
+  pinCollarAt: 0.5,
+  pinCollar: 0.12,
+  // Back fitting: the plug's radius, and the head's share of the length.
+  fittingShaft: 0.5,
+  fittingHead: 0.25,
 };
 
 // Fasteners (src/game/fasteners.ts, src/game/assembly.ts) and the joints that follow them
@@ -365,6 +590,11 @@ export const FASTENER = {
   // Crank motion this close (CSS px) to the fastener's on-screen centre is ignored — the
   // angle swings wildly there.
   crankDeadzone: 12,
+  // Hold-to-drive: a still press on a seated tool drives its fastener home in this many
+  // seconds, whatever its span — the cam's quarter turn as long as the bolt's two turns.
+  driveSeconds: 1.5,
+  // The ratchet ticks once every this much turn (an eighth), cranked or driven.
+  ratchetRadians: Math.PI / 4,
   // Dowel-stage connections: rigid in translation, this much angular play, and damped so
   // the carcass slumps to the limit and stays (no spring, no bounce). Cam-locked = rigid.
   angularPlayDegrees: 4,
@@ -407,11 +637,15 @@ export const TUNE = {
 };
 
 // Android haptics (navigator.vibrate; iOS Safari has none), in ms: a tick when a part
-// seats, a double tick when a cam lock locks. 0 turns one off.
+// seats (a tool engaging too), a double tick when a cam lock locks, a buzz when a bolt goes
+// home, and a ratchet tick every FASTENER.ratchetRadians a fastener turns. 0 turns one off.
+// The cues they back are src/game/haptics.ts's; a native shell maps those its own way.
 export const HAPTICS = {
   seatMs: 10,
   lockMs: 18,
   lockGapMs: 60,
+  tickMs: 4,
+  homeMs: 24,
 };
 
 // Dev stream (dev server only — never in a build): the socket a dev session streams its

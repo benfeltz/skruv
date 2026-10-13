@@ -38,9 +38,9 @@
         height: 100%;
         touch-action: none;
       }
-      /* The pre-splash: the booklet sheet open on its cover, drawn before any script runs so a
+      /* The pre-splash: the catalog open on its cover, drawn before any script runs so a
          cold load never shows the bare void. It mirrors src/ui/booklet.ts's open sheet and
-         the cover page of src/scene/bookletPages.ts (the outline drawing joins it when the
+         the cover page of src/scene/catalogPages.ts (the wire-drawn room joins it when the
          real sheet takes over); main.ts removes it on that sheet's first paint.
          test/splashConventions.test.ts pins these values to src/constants.ts. */
       .pre-splash {
@@ -125,13 +125,13 @@
       <div class="pre-splash-handle"></div>
       <div class="pre-splash-page">
         <svg viewBox="0 0 720 1000" fill="#1c1c1c" font-family='system-ui, -apple-system, "Segoe UI", sans-serif'>
-          <text x="44" y="154" font-size="124" font-weight="800">JOHNNY</text>
-          <text x="48" y="202" font-size="30" font-weight="600">SKRUV</text>
+          <text x="44" y="168.8" font-size="156" font-weight="800">SKRUV</text>
+          <text x="50" y="216.8" font-size="30" font-weight="600">Catalog</text>
         </svg>
       </div>
       <div class="pre-splash-controls">
         <button type="button" tabindex="-1">‹</button>
-        <span class="pre-splash-count">1 / 18</span>
+        <span class="pre-splash-count">1 / 2</span>
         <button type="button" tabindex="-1">›</button>
       </div>
     </section>

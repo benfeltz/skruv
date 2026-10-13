@@ -6,12 +6,13 @@ import { describe, expect, it } from 'vitest';
 // the ease, two-handed use, setting a part down upright — is the manual plan.
 
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
-const main = read('src/main.ts');
+// The wiring lives in the item world's factory since 1.9.1 (src/scene/itemWorld.ts).
+const main = read('src/scene/itemWorld.ts');
 
-// The body of `function name(` in `source`, up to the next top-level declaration.
+// The body of `function name(` in `source`, up to the next declaration at the factory's level.
 function body(source: string, name: string) {
   const start = source.indexOf(`function ${name}(`);
-  const end = source.slice(start).search(/\n(?:function|const|let|document|events|window|createLoop)\b/);
+  const end = source.slice(start).search(/\n {0,2}(?:function|const|let|document|events|window|unsubscribe|return)\b/);
   return source.slice(start, start + end);
 }
 
@@ -23,7 +24,7 @@ describe('seam order', () => {
   });
 
   it('eases the hold and draws the line before the physics step', () => {
-    const loop = main.slice(main.indexOf('createLoop('));
+    const loop = main.slice(main.indexOf('update(delta: number) {'));
     const at = (call: string) => loop.indexOf(call);
     expect(at('hold.update(delta)')).toBeGreaterThan(-1);
     expect(at('hold.update(delta)')).toBeLessThan(at('physics.step(delta)'));
@@ -36,6 +37,12 @@ describe('seam order', () => {
 describe('which part the line shows for (review round 1)', () => {
   it('takes a dragged part only in a plain move, never a compound, crank or pull', () => {
     expect(body(main, 'liftablePart')).toMatch(/dragging \? \(dragging\.mode === 'move' \? dragging\.part : null\) : gizmo\.selected/);
+  });
+
+  // 1.8.3.4 (deliberate): a selected panel sitting in seats is liftable when the router
+  // carries it — its assembly and dowels, standing on nothing else. The router decides.
+  it('takes a selected part with no seats, or one the router carries', () => {
+    expect(body(main, 'liftablePart')).toMatch(/return dragging \|\| assembly\.jointsOf\(part\.id\)\.length === 0 \|\| router\.carries\(part\) \? part : null;/);
   });
 });
 
@@ -69,7 +76,8 @@ describe('every path ends the hold (regression risk: a hold that never ends)', (
   });
 
   it('the app hidden or blurred — whoever keeps it, and Shift is forgotten too', () => {
-    expect(main).toMatch(/document\.addEventListener\('visibilitychange', \(\) => \{\n\s*if \(document\.visibilityState === 'hidden'\) dropHold\(\);/);
+    expect(body(main, 'onVisibilityChange')).toMatch(/\{\n\s*if \(document\.visibilityState === 'hidden'\) dropHold\(\);/);
+    expect(main).toMatch(/document\.addEventListener\('visibilitychange', onVisibilityChange\);/);
     expect(main).toMatch(/window\.addEventListener\('blur', dropHold\);/);
     expect(body(main, 'dropHold')).toMatch(/shiftDown = false;\n\s*hold\.end\(\);/);
   });

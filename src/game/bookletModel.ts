@@ -7,6 +7,7 @@
 // is reference; the player judges.
 
 import type { ConnectorName, DrawingPose, GamePartType, InstanceId, Joint, ManifestEntry, PageFields, Resolver } from './item.js';
+import type { Scheme } from './controlsPage.js';
 
 /** The assembled item the booklet draws: its parts and derived joints (item.ts ASSEMBLED). */
 export interface BookletLayout {
@@ -35,8 +36,18 @@ export interface BuildStep {
   shown: InstanceId[];
 }
 
+/**
+ * A page the game adds to every booklet, whatever the pack's manual says: the controls for
+ * the device in hand (src/game/controlsPage.ts). The site's own pages join this union.
+ */
+export type GamePage = { kind: 'controls'; scheme: Scheme };
+
+/** The pages the game adds to the booklet, in order, for a device using `scheme`. */
+export const gamePagesFor = (scheme: Scheme): GamePage[] => [{ kind: 'controls', scheme }];
+
 /** One booklet page as drawn — see `createBooklet`. */
 export type BookletPage =
+  | GamePage
   | ({ kind: 'step' } & BuildStep)
   | { kind: 'inventory'; items: PartCount[] }
   | { kind: 'backCover' }
@@ -149,15 +160,33 @@ function countHardware(pieces: InstanceId[], typeOf: (id: InstanceId) => string,
  * The whole booklet, front to back, as the pack's manual runs: `{ kind, ... }` records —
  * 'cover', 'warning' and 'doDont' (with their `subject`), 'inventory' (with `items`: every
  * instance in the box counted by type, spares and tools included), 'step' (a build step's
- * fields; a 'special' page is a step that tips) and 'backCover'.
+ * fields; a 'special' page is a step that tips) and 'backCover' — with the game's own
+ * `gamePages`, in order, just before the back cover (at the end, if the pack has none).
  */
 export function createBooklet(
+  pages: PageFields[],
+  {
+    layout,
+    manifest,
+    partTypes,
+    resolve,
+    gamePages = [],
+  }: { layout: BookletLayout; manifest: readonly ManifestEntry[]; partTypes: PartTypes; resolve: Resolver; gamePages?: readonly GamePage[] },
+): BookletPage[] {
+  const booklet = packPages(pages, { layout, manifest, partTypes, resolve });
+  const back = booklet.findIndex((page) => page.kind === 'backCover');
+  booklet.splice(back === -1 ? booklet.length : back, 0, ...gamePages);
+  return booklet;
+}
+
+// The pack's own pages, as its manual runs.
+function packPages(
   pages: PageFields[],
   { layout, manifest, partTypes, resolve }: { layout: BookletLayout; manifest: readonly ManifestEntry[]; partTypes: PartTypes; resolve: Resolver },
 ): BookletPage[] {
   const steps = createBuildSteps(pages, { layout, partTypes, resolve });
   let next = 0;
-  return pages.map((page) => {
+  return pages.map((page): BookletPage => {
     switch (page.kind) {
       case 'step':
       case 'special':

@@ -11,7 +11,7 @@
 // never a JS object path — and units are the schema's, in the engine's own units; a key
 // once published is renamed only with a profile format bump.
 
-import { CAMERA, FASTENER, GESTURE, HAPTICS, LIFT_LINE, PHYSICS, RENDER, SNAP, TUNE } from '../constants.js';
+import { AIM, CAMERA, CATALOG, FASTENER, GESTURE, HAPTICS, LIFT_LINE, PANEL, PHYSICS, RENDER, RING, SNAP, TUNE, TURN_RING } from '../constants.js';
 
 /** Bumped whenever a key is renamed or its unit changes, so old profiles stay readable. */
 export const PROFILE_FORMAT = 1;
@@ -57,6 +57,46 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
     object: SNAP, prop: 'assistStrength', min: 0, max: 30, step: 0.5, unit: '1/s', group: 'snap',
     desc: 'How fast a held part eases into the seat on offer (0: no pull)',
   },
+  'aim.zone': {
+    object: AIM, prop: 'zone', min: 0.05, max: 0.6, step: 0.01, unit: 'm', group: 'aim',
+    desc: "How near a carried fastener's end (a dowel's, a bolt's) must come to a hole before it turns to point in",
+  },
+  'aim.rate': {
+    object: AIM, prop: 'rate', min: 0, max: 30, step: 0.5, unit: '1/s', group: 'aim',
+    desc: 'How fast a carried fastener turns toward a hole at full strength (0: no aim)',
+  },
+  'aim.toolZone': {
+    object: AIM, prop: 'toolZone', min: 0.05, max: 0.6, step: 0.01, unit: 'm', group: 'aim',
+    desc: "How near a carried tool's tip must come to a bolt head or cam slot before it turns to point in",
+  },
+  'aim.toolRate': {
+    object: AIM, prop: 'toolRate', min: 0, max: 30, step: 0.5, unit: '1/s', group: 'aim',
+    desc: 'How fast a carried tool turns toward a bolt head or cam slot at full strength (0: no aim)',
+  },
+  'panel.maxDistance': {
+    object: PANEL, prop: 'maxDistance', min: 0.02, max: 0.4, step: 0.005, unit: 'm', group: 'panel',
+    desc: "How near one of a carried panel's holes must come to a free dowel end before a fit is offered",
+  },
+  'panel.maxAngle': {
+    object: PANEL, prop: 'maxAngle', min: 5 * DEGREE, max: 90 * DEGREE, step: DEGREE, unit: 'rad', group: 'panel',
+    desc: "How far off a dowel's axis a carried panel's hole may be and still be offered a fit",
+  },
+  'panel.zone': {
+    object: PANEL, prop: 'zone', min: 0.05, max: 1, step: 0.01, unit: 'm', group: 'panel',
+    desc: 'How near where it goes a carried panel must come before it turns toward it and its dowel ends light',
+  },
+  'panel.rate': {
+    object: PANEL, prop: 'rate', min: 0, max: 30, step: 0.5, unit: '1/s', group: 'panel',
+    desc: 'How fast a carried panel turns toward where it goes at full strength (0: no magnetism)',
+  },
+  'rings.screenRadius': {
+    object: RING, prop: 'screenRadius', min: 30, max: 300, step: 5, unit: 'px', group: 'rings',
+    desc: 'How near the finger, on screen, a place the carried part can go starts to light',
+  },
+  'rings.hitRadius': {
+    object: RING, prop: 'hitRadius', min: 10, max: 100, step: 2, unit: 'px', group: 'rings',
+    desc: 'How near a lit ring the finger must let go of a carried part to seat it there',
+  },
   'gesture.hoverLift': {
     object: GESTURE, prop: 'hoverLift', min: 0, max: 0.15, step: 0.005, unit: 'm', group: 'gesture',
     desc: 'How high a grabbed part rides above where it was picked up',
@@ -76,6 +116,14 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
   'gesture.liftLineEase': {
     object: LIFT_LINE, prop: 'easeRate', min: 1, max: 30, step: 0.5, unit: '1/s', group: 'gesture',
     desc: 'How fast a touch on the elevation line eases the part to that height',
+  },
+  'gesture.turnRingRadius': {
+    object: TURN_RING, prop: 'radius', min: 32, max: 160, step: 4, unit: 'px', group: 'gesture',
+    desc: "How far from a seated tool's fastener its turn ring sits — where a finger grabs to crank it",
+  },
+  'fastener.driveSeconds': {
+    object: FASTENER, prop: 'driveSeconds', min: 0.25, max: 5, step: 0.25, unit: 's', group: 'fastener',
+    desc: 'How long a still hold on a seated tool takes to drive its fastener home',
   },
   'joint.angularPlay': {
     object: FASTENER, prop: 'angularPlayDegrees', min: 0, max: 15, step: 0.5, unit: 'deg', group: 'joint',
@@ -117,9 +165,33 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
     object: HAPTICS, prop: 'lockMs', min: 0, max: 80, step: 1, unit: 'ms', group: 'haptics',
     desc: 'Each tick of the double vibration when a cam lock locks (Android; 0: off)',
   },
+  'haptics.tickMs': {
+    object: HAPTICS, prop: 'tickMs', min: 0, max: 30, step: 1, unit: 'ms', group: 'haptics',
+    desc: 'Ratchet tick every eighth of a turn while a fastener is cranked or driven (Android; 0: off)',
+  },
+  'haptics.homeMs': {
+    object: HAPTICS, prop: 'homeMs', min: 0, max: 80, step: 1, unit: 'ms', group: 'haptics',
+    desc: 'Vibration when a bolt is screwed home (Android; 0: off)',
+  },
   'camera.mobileStartScale': {
     object: CAMERA, prop: 'mobileStartScale', min: 1, max: 1.75, step: 0.05, unit: 'x', group: 'camera',
     desc: 'How much further out a phone starts than the desktop view (re-frames on change)',
+  },
+  'camera.pivotOnParts': {
+    object: CAMERA, prop: 'pivotOnParts', min: 0, max: 1, step: 1, unit: '', group: 'camera',
+    desc: 'Orbit about the first part in the middle of the screen (1) or the floor behind it, as before (0)',
+  },
+  'catalog.fanX': {
+    object: CATALOG.stack, prop: 'fanX', min: 0, max: 40, step: 1, unit: 'px', group: 'catalog',
+    desc: 'How far right the manual sits off the catalog in the corner stack — the catalog strip left of it',
+  },
+  'catalog.fanY': {
+    object: CATALOG.stack, prop: 'fanY', min: 0, max: 80, step: 1, unit: 'px', group: 'catalog',
+    desc: 'How far up the manual sits off the catalog — the catalog strip below it, the one to tap',
+  },
+  'catalog.fanTurn': {
+    object: CATALOG.stack, prop: 'fanTurn', min: -0.5, max: 0.5, step: 0.01, unit: 'rad', group: 'catalog',
+    desc: 'How far the catalog, in the corner behind the manual, is turned',
   },
 });
 

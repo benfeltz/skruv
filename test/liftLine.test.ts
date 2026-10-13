@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GESTURE, LIFT_LINE, ROOM } from '../src/constants.js';
 import { clampLift } from '../src/game/dragMath.js';
-import { easeHeight, fractionOf, heightAt, liftRange, pressOnKnob, selectsDuringHold } from '../src/game/liftLine.js';
+import { easeHeight, fractionOf, heightAt, liftRange, pressOnKnob, selectsDuringHold, shiftScroll } from '../src/game/liftLine.js';
 
 describe('liftRange', () => {
   it.each([
@@ -13,6 +13,19 @@ describe('liftRange', () => {
     expect(max).toBe(clampLift(100, half, ROOM, GESTURE.ceilingMargin));
     expect(min).toBe(half);
     expect(max).toBeCloseTo(ROOM.height - GESTURE.ceilingMargin - half, 12);
+  });
+});
+
+// 1.8.3.4 review round 1: an assembly held by its bottom panel reaches far above it.
+describe('liftRange off-centre', () => {
+  it("shifts clampLift's bounds for the reach's centre back to the part's own", () => {
+    const [min, max] = liftRange(0.4, 0.39);
+    expect(min).toBeCloseTo(0.4 - 0.39, 12);
+    expect(max).toBeCloseTo(ROOM.height - GESTURE.ceilingMargin - 0.4 - 0.39, 12);
+  });
+
+  it('is the centred range with no offset', () => {
+    expect(liftRange(0.2, 0)).toEqual(liftRange(0.2));
   });
 });
 
@@ -91,5 +104,27 @@ describe('selectsDuringHold', () => {
 
   it('never selects another part while one is held', () => {
     expect(selectsDuringHold(other, held)).toBe(false);
+  });
+});
+
+// 1.8.3.3: Shift + scroll is the desktop's height control (src/scene/gestureRouter.ts).
+describe('shiftScroll', () => {
+  it('lifts by the vertical scroll with Shift: up raises, down lowers', () => {
+    expect(shiftScroll({ deltaX: 0, deltaY: -40, shiftKey: true })).toBe(40);
+    expect(shiftScroll({ deltaX: 0, deltaY: 25, shiftKey: true })).toBe(-25);
+  });
+
+  it('reads deltaX when Shift has turned the scroll sideways (macOS)', () => {
+    expect(shiftScroll({ deltaX: -40, deltaY: 0, shiftKey: true })).toBe(40);
+    expect(shiftScroll({ deltaX: 30, deltaY: 0, shiftKey: true })).toBe(-30);
+  });
+
+  it('prefers deltaY when both come', () => {
+    expect(shiftScroll({ deltaX: 90, deltaY: -10, shiftKey: true })).toBe(10);
+  });
+
+  it('is null without Shift — the wheel stays the camera\'s and the drag\'s', () => {
+    expect(shiftScroll({ deltaX: 0, deltaY: -40, shiftKey: false })).toBeNull();
+    expect(shiftScroll({ deltaX: -40, deltaY: 0, shiftKey: false })).toBeNull();
   });
 });

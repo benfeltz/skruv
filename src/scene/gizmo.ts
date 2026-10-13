@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { COLORS, GESTURE, GIZMO, ROOM } from '../constants.js';
+import { PART_TYPES } from '../game/item.js';
 import { arcDelta, clampToRoom, quantizeAngle, rotatedHalfExtents } from '../game/dragMath.js';
 import type { ScreenPoint } from '../game/dragMath.js';
 import type { Part } from '../game/partMesh.js';
@@ -147,8 +148,8 @@ export function createGizmo({
   }
 
   function halfSizes() {
-    // A part the rings turn is one box.
-    const { width, height, depth } = (part!.mesh.geometry as THREE.BoxGeometry).parameters;
+    // The part's pack box — its collider — whatever shape its mesh draws inside it.
+    const [width, height, depth] = PART_TYPES[part!.type].size;
     return [width / 2, height / 2, depth / 2];
   }
 

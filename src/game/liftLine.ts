@@ -7,9 +7,13 @@ import { clampLift } from './dragMath.js';
 /** A part's centre-height range [min, max]: resting on the floor up to the lift ceiling. */
 export type LiftRange = [number, number];
 
-/** The lift range for a part of half-height `halfHeight` — clampLift's own bounds. */
-export function liftRange(halfHeight: number): LiftRange {
-  const at = (y: number) => clampLift(y, halfHeight, ROOM, GESTURE.ceilingMargin);
+/**
+ * The lift range for a part reaching `halfHeight` either side of a point `centre` above its
+ * own centre — clampLift's own bounds for that point, given back as the part's centre. An
+ * assembly held by its bottom panel reaches far above it and barely below.
+ */
+export function liftRange(halfHeight: number, centre = 0): LiftRange {
+  const at = (y: number) => clampLift(y, halfHeight, ROOM, GESTURE.ceilingMargin) - centre;
   return [at(-Infinity), at(Infinity)];
 }
 
@@ -31,6 +35,16 @@ export function heightAt(fraction: number, [min, max]: LiftRange) {
  */
 export function easeHeight(current: number, target: number, rate: number, delta: number) {
   return current + (target - current) * (1 - Math.exp(-rate * delta));
+}
+
+/**
+ * Shift + scroll as a lift of the held part (CSS px, up positive), or null without Shift —
+ * the wheel's own business then. Scrolling down lowers. With Shift down macOS turns a
+ * vertical scroll sideways, so `deltaX` stands in when `deltaY` is 0.
+ */
+export function shiftScroll({ deltaX, deltaY, shiftKey }: { deltaX: number; deltaY: number; shiftKey: boolean }) {
+  if (!shiftKey) return null;
+  return -(deltaY !== 0 ? deltaY : deltaX);
 }
 
 /** True when a press at screen y `pointerY` lands on the knob drawn at `knobY`. */

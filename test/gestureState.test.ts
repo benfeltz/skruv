@@ -312,7 +312,9 @@ describe('lift channel (second finger during a part drag)', () => {
   });
 });
 
-describe('modifier channel (Shift-held drag lifts on desktop)', () => {
+// 1.8.3.3 (Ben, 2026-10-10): Shift only holds the part up (src/main.ts), so the primary
+// pointer has no lift of its own — a Shift-drag pushes, pulls and slides like any drag.
+describe('the primary pointer only drags', () => {
   const dragging = () => {
     const g = createGestureState(T);
     g.down(at(1, 0, 100, 0, PART));
@@ -320,87 +322,34 @@ describe('modifier channel (Shift-held drag lifts on desktop)', () => {
     return g;
   };
 
-  it('turns vertical travel into lift while held; horizontal travel still drags', () => {
+  it('reports vertical travel as a drag move with the pointer\'s full y, never a lift', () => {
     const g = dragging();
-    g.modifier(true);
-    expect(g.move(at(1, 40, 80, 20))).toEqual({ type: 'lift', owner: OWNER.DRAG_PART, hit: PART, dy: 20, x: 40, y: 100 });
-    expect(g.move(at(1, 40, 90, 30))).toMatchObject({ type: 'lift', dy: -10, x: 40, y: 100 });
-    // Sideways only: a plain plane drag, at the height the drag left off.
-    expect(g.move(at(1, 70, 90, 40))).toEqual({ type: 'dragMove', owner: OWNER.DRAG_PART, hit: PART, x: 70, y: 100 });
+    expect(g.move(at(1, 40, 80, 20))).toEqual({ type: 'dragMove', owner: OWNER.DRAG_PART, hit: PART, x: 40, y: 80 });
+    expect(g.move(at(1, 40, 20, 30))).toEqual({ type: 'dragMove', owner: OWNER.DRAG_PART, hit: PART, x: 40, y: 20 });
+    expect(g.up(at(1, 40, 10, 40))).toMatchObject({ type: 'dragEnd', x: 40, y: 10 });
   });
 
-  it('resumes the plane drag mid-gesture on release, without a jump', () => {
+  it('has no modifier channel: keys are never the state machine\'s', () => {
+    expect('modifier' in createGestureState(T)).toBe(false);
+  });
+
+  it('keeps the camera off a second pointer, still the lift channel, and hands it back at the end', () => {
     const g = dragging();
-    g.modifier(true);
-    g.move(at(1, 30, 60, 20)); // 40 px spent lifting
-    g.modifier(false);
-    expect(g.move(at(1, 30, 50, 30))).toEqual({ type: 'dragMove', owner: OWNER.DRAG_PART, hit: PART, x: 30, y: 90 });
-    expect(g.up(at(1, 30, 50, 40))).toMatchObject({ type: 'dragEnd', y: 90 });
-  });
-
-  it('changes nothing for an unmodified drag', () => {
-    const g = dragging();
-    expect(g.move(at(1, 30, 60, 20))).toEqual({ type: 'dragMove', owner: OWNER.DRAG_PART, hit: PART, x: 30, y: 60 });
-  });
-
-  it('starts every gesture with nothing spent, though the key stays held across gestures', () => {
-    const g = dragging();
-    g.modifier(true);
-    g.move(at(1, 30, 60, 20));
-    g.up(at(1, 30, 60, 30));
-    g.down(at(1, 0, 100, 40, PART));
-    expect(g.move(at(1, 30, 100, 50))).toMatchObject({ type: 'dragStart', y: 100 });
-    expect(g.move(at(1, 30, 70, 60))).toMatchObject({ type: 'lift', dy: 30, y: 100 });
-  });
-
-  it('only lifts a part drag — never a ring turn or the camera', () => {
-    const ring = createGestureState(T);
-    ring.modifier(true);
-    ring.down(at(1, 0, 100, 0, RING));
-    ring.move(at(1, 30, 100, 10));
-    expect(ring.move(at(1, 30, 60, 20))).toMatchObject({ type: 'dragMove', owner: OWNER.GIZMO_RING, y: 60 });
-    const camera = createGestureState(T);
-    camera.modifier(true);
-    camera.down(at(1, 0, 100, 0));
-    expect(camera.move(at(1, 30, 40, 10))).toBeNull();
-    expect(camera.cameraEnabled).toBe(true);
-  });
-
-  it('emits nothing before the press has become a drag', () => {
-    const g = createGestureState(T);
-    g.modifier(true);
-    g.down(at(1, 0, 100, 0, PART));
-    expect(g.move(at(1, 0, 95, 10))).toBeNull();
-  });
-
-  it('keeps the camera off a second pointer while Shift-lifting, and hands it back at the end', () => {
-    const g = dragging();
-    g.modifier(true);
     g.down(at(2, 200, 200, 20));
     expect(g.owner).toBe(OWNER.DRAG_PART);
     expect(g.cameraEnabled).toBe(false);
-    // The second pointer is still the lift channel, never a camera pointer.
     expect(g.move(at(2, 200, 180, 30))).toEqual({ type: 'lift', owner: OWNER.DRAG_PART, hit: PART, dy: 20 });
-    expect(g.move(at(1, 30, 80, 40))).toMatchObject({ type: 'lift', dy: 20 });
-    expect(g.cameraEnabled).toBe(false);
+    expect(g.move(at(1, 30, 80, 40))).toMatchObject({ type: 'dragMove', y: 80 });
     g.up(at(1, 30, 80, 50));
     expect(g.cameraEnabled).toBe(true);
     expect(g.move(at(2, 200, 100, 60))).toBeNull();
     expect(g.up(at(2, 200, 100, 70))).toBeNull();
     expect(g.owner).toBeNull();
   });
-
-  it('a cancelled Shift-lift drag reports a cancel and hands the camera back', () => {
-    const g = dragging();
-    g.modifier(true);
-    g.move(at(1, 30, 60, 20));
-    expect(g.cancel(at(1, 30, 60, 30))).toMatchObject({ type: 'dragCancel', owner: OWNER.DRAG_PART });
-    expect(g.cameraEnabled).toBe(true);
-  });
 });
 
-describe('camera invariant under the modifier', () => {
-  // Seeded random gestures with Shift toggling at random: the camera never claims a pointer
+describe('camera invariant under random gestures', () => {
+  // Seeded random gestures: the camera never claims a pointer
   // during a part gesture, and is handed back once every pointer has ended.
   it('never enables the camera mid part-gesture and always hands it back', () => {
     let seed = 4321;
@@ -412,7 +361,6 @@ describe('camera invariant under the modifier', () => {
       let t = 0;
       for (let i = 0; i < 14; i++) {
         t += Math.floor(random() * 200);
-        if (random() < 0.2) g.modifier(random() < 0.5);
         const id = 1 + Math.floor(random() * 3);
         const p = at(id, random() * 200, random() * 200, t);
         if (!live.has(id)) {

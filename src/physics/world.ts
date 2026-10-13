@@ -76,7 +76,9 @@ function addRoomColliders(world: RAPIER.World) {
  * `grab`/`move`/`release` hand a registered body between the simulation and direct
  * control (part manipulation). `join`/`unjoin` add and remove the joints fastener state
  * calls for (src/game/assembly.ts `bonds()`). `retune` re-applies the live-tunable values
- * baked in at creation (src/game/tunables.ts) to every body, collider and joint.
+ * baked in at creation (src/game/tunables.ts) to every body, collider and joint. `remove`
+ * takes a registered body back out — an item swap's teardown — and `census` counts what
+ * the world holds.
  */
 export async function createPhysicsWorld() {
   await RAPIER.init();
@@ -86,7 +88,8 @@ export async function createPhysicsWorld() {
   addRoomColliders(world);
 
   const accumulator = createAccumulator(PHYSICS.timestep, PHYSICS.maxStepsPerFrame);
-  const bodies: { body: Body; mesh: PoseTarget; friction: number | undefined }[] = [];
+  // Every registered body, keyed by itself: what `step` syncs and `retune` re-applies to, in register order.
+  const bodies = new Map<Body, { mesh: PoseTarget; friction: number | undefined }>();
 
   /**
    * Glues `mesh` to a new dynamic body at `position`/`rotation`. Its shape is one cuboid
@@ -118,7 +121,7 @@ export async function createPhysicsWorld() {
     });
     mesh.position.set(...position);
     mesh.quaternion.set(...rotation);
-    bodies.push({ body, mesh, friction });
+    bodies.set(body, { mesh, friction });
     return body;
   }
 
@@ -126,7 +129,7 @@ export async function createPhysicsWorld() {
     const steps = accumulator.consume(delta);
     if (steps === 0) return;
     for (let i = 0; i < steps; i++) world.step();
-    for (const { body, mesh } of bodies) {
+    for (const [body, { mesh }] of bodies) {
       // Kinematic bodies are synced even if Rapier has put them to sleep: a held or placed
       // part must always show the pose `move` gave it.
       if (body.isSleeping() && !body.isKinematic()) continue;
@@ -221,7 +224,7 @@ export async function createPhysicsWorld() {
    */
   function retune() {
     world.forEachCollider((collider) => collider.setFriction(PHYSICS.friction));
-    for (const { body, friction } of bodies) {
+    for (const [body, { friction }] of bodies) {
       body.setLinearDamping(PHYSICS.linearDamping);
       body.setAngularDamping(PHYSICS.angularDamping);
       if (friction === undefined) continue;
@@ -251,7 +254,26 @@ export async function createPhysicsWorld() {
     world.removeImpulseJoint(joint, true);
   }
 
-  return { register, step, grab, move, release, place, join, unjoin, retune };
+  /**
+   * Takes a registered body out of the world: its joints first (as `unjoin`, so a body it
+   * embedded collides again and its own embed count drops to nothing), then the body and,
+   * with it in Rapier, its colliders — out of `step`'s and `retune`'s bookkeeping too. The
+   * body is dead afterwards; removing it twice, or one never registered, is a bug upstream
+   * and throws before anything is touched. The joint scan is over the world's joints, a few
+   * dozen at most — a whole item's teardown stays well under a frame.
+   */
+  function remove(body: Body) {
+    if (!bodies.delete(body)) throw new Error('remove: body is not registered (removed twice, or never registered)');
+    for (const joint of joints.keys()) if (joint.body1().handle === body.handle || joint.body2().handle === body.handle) unjoin(joint);
+    world.removeRigidBody(body);
+  }
+
+  /** What the world holds: Rapier's bodies, colliders and joints (the room's slabs included), and the bodies `step` syncs. */
+  function census() {
+    return { bodies: world.bodies.len(), colliders: world.colliders.len(), joints: world.impulseJoints.len(), registered: bodies.size };
+  }
+
+  return { register, step, grab, move, release, place, join, unjoin, retune, remove, census };
 }
 
 export type PhysicsWorld = Awaited<ReturnType<typeof createPhysicsWorld>>;

@@ -184,8 +184,8 @@ describe('a fastened compound moves as one (compoundPhysics seam)', () => {
     expect(seam.join()).toBe('joined');
   });
 
-  it('is what both the router and the gizmo are handed in main.js', () => {
-    const main = read('src/main.ts');
+  it('is what both the router and the gizmo are handed in the item world', () => {
+    const main = read('src/scene/itemWorld.ts');
     expect(main).toMatch(/createCompoundPhysics\(physics, parts, assembly\)/);
     expect(main.match(/physics: manipulation/g)).toHaveLength(2);
   });

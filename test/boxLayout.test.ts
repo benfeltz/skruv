@@ -8,7 +8,7 @@ import {
   boxPoseOf,
   createPackedWorldLayout,
   lidRest,
-  PACKED_BOX as BOX,
+  packedBox,
   respawnSpots,
 } from '../src/game/boxLayout.js';
 import { MANIFEST, PACKING, PART_TYPES } from '../src/game/item.js';
@@ -17,6 +17,7 @@ import type { Pose, Quat, Vec3 } from '../tools/validate/lib/geometry.js';
 // The flatpack in the room: the pack's packed placements carried to where the box stands,
 // the lid closed over them, and the patch recovered parts are set down in.
 
+const BOX = packedBox();
 const [width, height, length] = BOX.inner;
 const EPS = 1e-9;
 
@@ -213,5 +214,14 @@ describe('the layout follows the box wherever it is dragged (1.7.1)', () => {
   it('falls back to the boot patch when the box is wedged in a corner and neither side fits', () => {
     const inCorner: Pose = { position: [ROOM.width / 2 - 0.6, 0, ROOM.depth / 2 - length / 2 - BOX.wall - 0.01], rotation: [0, 0, 0, 1] };
     expect(respawnSpots(types, inCorner)).toEqual(respawnSpots(types));
+  });
+});
+
+describe('packedBox, built once per item (1.9.1 review)', () => {
+  it('serves the same frozen box until the door serves another pack', () => {
+    const box = packedBox();
+    expect(packedBox()).toBe(box);
+    expect(Object.isFrozen(box)).toBe(true);
+    expect(box.inner).toBe(PACKING.boxInner);
   });
 });

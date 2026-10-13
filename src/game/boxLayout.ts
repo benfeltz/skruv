@@ -37,17 +37,32 @@ export interface PackedPart extends Pose {
   type: string;
 }
 
+/** The box as packed and placed — `packedBox()`'s shape. */
+export type PackedBox = ReturnType<typeof packedBox>;
+
+function boxOf(packing: typeof PACKING) {
+  return Object.freeze({
+    ...BOX,
+    inner: packing.boxInner,
+    wall: packing.wall,
+    floor: packing.floor,
+    lidThickness: packing.lid.thickness,
+  });
+}
+
+// Built once per item: rebuilt only when the door serves another pack (BOX is not a live knob).
+let packed: { packing: typeof PACKING; box: ReturnType<typeof boxOf> } | null = null;
+
 /**
- * The box as packed and placed: the pack's inside, walls and lid (`inner`, `wall`,
- * `floor`, `lidThickness`), stood where the room puts it (`position`, `yaw`).
+ * The current item's box as packed and placed: the pack's inside, walls and lid (`inner`,
+ * `wall`, `floor`, `lidThickness`), stood where the room puts it (`position`, `yaw`). Read
+ * at call time, so it follows an item swap (src/game/item.ts); the same frozen object until
+ * then, so the sweep, repack and respawn don't build one per call.
  */
-export const PACKED_BOX = Object.freeze({
-  ...BOX,
-  inner: PACKING.boxInner,
-  wall: PACKING.wall,
-  floor: PACKING.floor,
-  lidThickness: PACKING.lid.thickness,
-});
+export function packedBox() {
+  if (packed?.packing !== PACKING) packed = { packing: PACKING, box: boxOf(PACKING) };
+  return packed.box;
+}
 
 const QUARTER_TURN = Math.SQRT1_2;
 const IDENTITY: Quat = [0, 0, 0, 1];
@@ -112,7 +127,7 @@ function packRows(items: Pick<Lay, 'footprint'>[], [minX, minZ, maxX, maxZ]: num
 }
 
 /** Where the box stands in the room: `{ position, rotation }` of its box-local frame. */
-export function boxPlacement(box: Pick<typeof PACKED_BOX, 'position' | 'yaw'> = PACKED_BOX): Pose {
+export function boxPlacement(box: Pick<PackedBox, 'position' | 'yaw'> = packedBox()): Pose {
   const half = box.yaw / 2;
   return { position: box.position, rotation: [0, Math.sin(half), 0, Math.cos(half)] };
 }
@@ -122,7 +137,7 @@ export function boxPlacement(box: Pick<typeof PACKED_BOX, 'position' | 'yaw'> = 
  * `{ size, offset }` in the body's frame, which sits at the middle of the box's height —
  * the centre the router and the gizmo assume every part turns about.
  */
-export function boxSlabs(box: Pick<typeof PACKED_BOX, 'inner' | 'wall' | 'floor'> = PACKED_BOX): Slab[] {
+export function boxSlabs(box: Pick<PackedBox, 'inner' | 'wall' | 'floor'> = packedBox()): Slab[] {
   const [width, height, length] = box.inner;
   const { wall, floor } = box;
   const outerW = width + 2 * wall;
@@ -138,11 +153,14 @@ export function boxSlabs(box: Pick<typeof PACKED_BOX, 'inner' | 'wall' | 'floor'
 }
 
 // The box base body's centre, in the box-local frame: halfway up the box.
-const BASE_CENTRE: Vec3 = [0, (PACKED_BOX.floor + PACKED_BOX.inner[1]) / 2, 0];
+function baseCentre(): Vec3 {
+  const { floor, inner } = packedBox();
+  return [0, (floor + inner[1]) / 2, 0];
+}
 
 /** The box base's body pose for a box standing at `pose`. */
 export function baseRest(pose: Pose = boxPlacement()): Pose {
-  const [rest] = placeLayout([{ position: BASE_CENTRE, rotation: IDENTITY }], pose);
+  const [rest] = placeLayout([{ position: baseCentre(), rotation: IDENTITY }], pose);
   return { position: rest.position, rotation: rest.rotation };
 }
 
@@ -158,14 +176,15 @@ export function boxPoseOf({ position, rotation: [, qy, , qw] }: Pose): Pose {
   const norm = Math.hypot(qy, qw);
   const yaw: Quat = norm > 1e-9 ? [0, qy / norm, 0, qw / norm] : IDENTITY;
   const [hx, , hz] = rotatedHalfExtents(PART_TYPES.boxBase.size.map((d) => d / 2), yaw);
-  const centre = rotateVector(yaw, BASE_CENTRE);
+  const centre = rotateVector(yaw, baseCentre());
   const [x, , z] = clampToRoom(position.map((v, i) => v - centre[i]), [hx, hz], ROOM, GESTURE.wallMargin);
   return { position: [x, 0, z], rotation: yaw };
 }
 
 /** The lid's pose closed on the walls' top edges of a box at `pose`. */
 export function lidRest(pose: Pose = boxPlacement()): Pose {
-  const local: Pose = { position: [0, PACKED_BOX.floor + PACKED_BOX.inner[1] + PACKED_BOX.lidThickness / 2, 0], rotation: IDENTITY };
+  const { floor, inner, lidThickness } = packedBox();
+  const local: Pose = { position: [0, floor + inner[1] + lidThickness / 2, 0], rotation: IDENTITY };
   const [rest] = placeLayout([local], pose);
   return { position: rest.position, rotation: rest.rotation };
 }
@@ -195,7 +214,7 @@ function insideRoom(type: string, { position: [x, , z], rotation }: Pose) {
 
 // The respawn patch on the box's +x (`side` 1) or −x (−1) long side.
 function spotsBeside(types: string[], pose: Pose, side: number, respawn: Respawn): Pose[] {
-  const box = PACKED_BOX;
+  const box = packedBox();
   const [width, , length] = box.inner;
   const near = width / 2 + box.wall + respawn.offset;
   // Along the box, overhanging each end by the same clearance, so even the lid fits.

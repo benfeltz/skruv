@@ -3,7 +3,10 @@ import type { Camera } from 'three';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CAMERA, CAMERA_LIMITS, ROOM } from '../constants.js';
-import { clampCamera, clampTargetAlongView, panSpeedAt, seatOnFloor } from './cameraLimits.js';
+import { clampCamera, clampTargetAlongView, panSpeedAt, pivotAlongView, seatOnFloor } from './cameraLimits.js';
+
+/** How far along `direction` (unit) from `origin` the first part is, or null for none. */
+export type PickDistance = (origin: Vec3, direction: Vec3) => number | null;
 
 /**
  * Touch camera: one finger orbits, two fingers pan + pinch-zoom toward the fingers (so a
@@ -11,10 +14,17 @@ import { clampCamera, clampTargetAlongView, panSpeedAt, seatOnFloor } from './ca
  * every update the target and camera are clamped (cameraLimits.js) — camera inside the
  * walls horizontally, above the floor, free to rise over the wall tops.
  *
+ * The pivot: when a gesture starts (OrbitControls' `start` — a press, a wheel, a second
+ * finger joining) the target moves along the line of sight to the first part `pickDistance`
+ * finds there, else the floor (cameraLimits.js `pivotAlongView`), and holds for the whole
+ * gesture — the view never jumps, and the camera turns about what is in the middle of the
+ * screen. With `CAMERA.pivotOnParts` 0 (?tune) it is the floor pivot as before 1.8.3.2,
+ * re-seated every update instead.
+ *
  * `enable()`/`disable()` is the seam the gesture router drives to hand touches to part
  * manipulation — callers never reach into OrbitControls directly.
  */
-export function createCameraControls(camera: Camera, domElement: HTMLElement) {
+export function createCameraControls(camera: Camera, domElement: HTMLElement, { pickDistance }: { pickDistance?: PickDistance } = {}) {
   const controls = new OrbitControls(camera, domElement);
 
   controls.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN };
@@ -59,14 +69,30 @@ export function createCameraControls(camera: Camera, domElement: HTMLElement) {
     camera.lookAt(controls.target);
   }
 
+  // A gesture's pivot, picked once as it starts — from the unclamped eye, down the line
+  // OrbitControls orbits along. Every press handler has only recorded screen positions by
+  // then (and the wheel fires it before zooming), so moving the target here is safe. While
+  // the wall clamp has pushed the camera, that line is not the one on screen — moving the
+  // target along it would turn the view — so the target stays.
+  function pickPivot() {
+    if (!CAMERA.pivotOnParts || camera.position.distanceTo(free) > 1e-6) return;
+    const eye = free.toArray();
+    const target = controls.target.toArray();
+    const direction = controls.target.clone().sub(free).normalize().toArray();
+    const hit = pickDistance ? pickDistance(eye, direction) : null;
+    controls.target.set(...pivotAlongView(eye, target, hit, ROOM, CAMERA_LIMITS));
+  }
+  controls.addEventListener('start', pickPivot);
+
   // Every update runs from the unclamped pose and ends clamped — the per-frame one AND the
   // ones OrbitControls fires from inside its own wheel/pointer handlers, which would
   // otherwise read the clamped pose or have their zoom and pan thrown away.
   const orbitUpdate = controls.update.bind(controls);
   controls.update = (deltaSeconds) => {
     unconfine();
-    // Orbit and zoom about the floor spot in view, not a point hanging in the air.
-    controls.target.set(...seatOnFloor(free.toArray(), controls.target.toArray(), CAMERA_LIMITS));
+    // pivotOnParts 0 (the floor pivot as before): orbit and zoom about the floor spot in
+    // view, re-seated every update. Read here, so a live ?tune flip lands at once.
+    if (!CAMERA.pivotOnParts) controls.target.set(...seatOnFloor(free.toArray(), controls.target.toArray(), CAMERA_LIMITS));
     const changed = orbitUpdate(deltaSeconds);
     confine();
     return changed;
@@ -98,6 +124,7 @@ export function createCameraControls(camera: Camera, domElement: HTMLElement) {
     },
     dispose() {
       domElement.removeEventListener('pointerdown', unswapShift, { capture: true });
+      controls.removeEventListener('start', pickPivot);
       controls.dispose();
     },
   };

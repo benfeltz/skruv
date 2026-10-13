@@ -44,6 +44,8 @@ describe('pure-logic modules', () => {
     'src/game/events.ts',
     'src/game/sessionBuffer.ts',
     'src/game/tunables.ts',
+    'src/game/toolTargets.ts',
+    'src/game/toolAim.ts',
     'src/scene/fpsGuard.ts',
   ];
 
@@ -70,6 +72,8 @@ describe('pure-logic modules', () => {
     'src/game/events.ts',
     'src/game/sessionBuffer.ts',
     'src/game/tunables.ts',
+    'src/game/toolTargets.ts',
+    'src/game/toolAim.ts',
     'src/scene/fpsGuard.ts',
   ])(
     '%s touches no DOM globals',
@@ -101,6 +105,7 @@ describe('hit proxies (1.4.1)', () => {
   it('are never registered with physics', () => {
     expect(proxy).not.toMatch(/physics\./);
     expect(read('src/main.ts')).not.toMatch(/register\([^)]*proxy/i);
+    expect(read('src/scene/itemWorld.ts')).not.toMatch(/register\([^)]*proxy/i);
   });
 
   it('leave the pick decision to the pure preference rule', () => {
@@ -119,20 +124,20 @@ describe('seat assist and flash (1.4.1)', () => {
   });
 
   it('plays no audio anywhere (dropped for 0.0.1)', () => {
-    for (const path of ['src/main.ts', 'src/scene/gestureRouter.ts', 'src/scene/sprue.ts', 'src/game/partMesh.ts']) {
+    for (const path of ['src/main.ts', 'src/scene/itemWorld.ts', 'src/scene/gestureRouter.ts', 'src/scene/sprue.ts', 'src/game/partMesh.ts']) {
       expect(read(path)).not.toMatch(/\bAudio(Context|Listener)?\b|PositionalAudio|\.play\(/);
     }
   });
 });
 
-describe('Shift-lift never skews a crank or a pull (1.4.1 review)', () => {
+describe('a lift never cranks or pulls (1.4.1 review; 1.8.3.3)', () => {
   const router = read('src/scene/gestureRouter.ts');
   const moveDrag = router.slice(router.indexOf('function moveDrag('), router.indexOf('function apply('));
 
-  it('cranks and pulls on the real pointer, not the lift-adjusted one', () => {
+  it('cranks and pulls on the real pointer, and a lift does neither', () => {
     expect(moveDrag).toMatch(/crankTo\(event\)/);
-    expect(moveDrag).toMatch(/pullTo\(event, at\)/);
-    expect(moveDrag).not.toMatch(/crankTo\(at\)|pullTo\(at\)/);
+    expect(moveDrag).toMatch(/pullTo\(event\)/);
+    expect(moveDrag).toMatch(/if \(effect\.type === 'lift'\) return;/);
   });
 });
 
@@ -159,6 +164,39 @@ describe('drop guide (1.4.1, Ben)', () => {
   });
 });
 
+describe('target rings (1.8.2.1)', () => {
+  const router = read('src/scene/gestureRouter.ts');
+  const rings = read('src/scene/targetRings.ts');
+
+  it('render only — which targets light, and how brightly, is toolTargets.js', () => {
+    const imports = rings.match(/^import .*$/gm)!.join('\n');
+    expect(imports).not.toMatch(/physics|\/game\//);
+    expect(rings).not.toMatch(/\.intersectObjects?\(|physics\./);
+    expect(router).toMatch(/ringStrengths\(workable, /);
+    expect(router).toMatch(/isWorkable\(c, joints, catches\)/);
+  });
+
+  it('build their pool once; show and hide only update it', () => {
+    const perFrame = rings.slice(rings.indexOf('return {'));
+    expect(perFrame).not.toMatch(/new THREE\./);
+  });
+
+  it('go away when the drag ends, however it ends', () => {
+    const stop = router.slice(router.indexOf('function stopDrag()'), router.indexOf('}', router.indexOf('function stopDrag()')));
+    expect(stop).toMatch(/targetRings\?\.hide\(\)/);
+  });
+
+  // Review round 1: one connector sweep per frame on the phone path, shared by aim and rings.
+  it('share one sweep of the carried part\'s seats per frame with the aim', () => {
+    const update = router.slice(router.indexOf('function update('), router.indexOf('// --- effects from the state machine'));
+    expect(update.match(/carriedEnds\(\)/g)).toHaveLength(1);
+    expect(update).toMatch(/aimHardware\(ends, delta\)/);
+    expect(update).toMatch(/showRings\(ends\)/);
+    const perFrame = router.slice(router.indexOf('function aimHardware('), router.indexOf('// The bolt a seated cam lock'));
+    expect(perFrame).not.toMatch(/seatsFor\(|carriedEnds\(/);
+  });
+});
+
 describe('seat flash hands back to the drop glow (1.4.1 review)', () => {
   const router = read('src/scene/gestureRouter.ts');
   const fade = router.slice(router.indexOf('function fadeFlashes('), router.indexOf('// --- pull'));
@@ -175,7 +213,11 @@ describe('the wall clamp never shrinks the orbit (1.4.1 review)', () => {
   it('runs every OrbitControls update — per frame and event-fired — from its unclamped pose, clamping after', () => {
     // OrbitControls calls this.update() inside its wheel/pointer handlers; wrapping the
     // instance method covers those too (wrapping only the per-frame call dropped zoom).
-    expect(controls).toMatch(/const orbitUpdate = controls\.update\.bind\(controls\);\s*controls\.update = \(deltaSeconds\) => \{\s*unconfine\(\);[\s\S]*?seatOnFloor\(free\.toArray\(\)[^\n]*\n\s*const changed = orbitUpdate\(deltaSeconds\);\s*confine\(\);/);
+    // 1.8.3.2: the floor re-seat runs per update only with pivotOnParts 0; otherwise the
+    // pivot is picked once, on OrbitControls' `start`, and holds through the gesture.
+    expect(controls).toMatch(/const orbitUpdate = controls\.update\.bind\(controls\);\s*controls\.update = \(deltaSeconds\) => \{\s*unconfine\(\);[\s\S]*?if \(!CAMERA\.pivotOnParts\) controls\.target\.set\(\.\.\.seatOnFloor\(free\.toArray\(\)[^\n]*\n\s*const changed = orbitUpdate\(deltaSeconds\);\s*confine\(\);/);
+    expect(controls).toMatch(/controls\.addEventListener\('start', pickPivot\);/);
+    expect(controls).toMatch(/function pickPivot\(\) \{\s*if \(!CAMERA\.pivotOnParts \|\| camera\.position\.distanceTo\(free\) > 1e-6\) return;\s*const eye = free\.toArray\(\);[\s\S]*?pivotAlongView\(eye,/);
     expect(controls).toMatch(/function unconfine\(\) \{\s*camera\.position\.copy\(free\);/);
     expect(controls).toMatch(/free\.copy\(camera\.position\);[\s\S]*clampCamera\(free\.toArray\(\)/);
     expect(update).not.toMatch(/unconfine\(\)/);

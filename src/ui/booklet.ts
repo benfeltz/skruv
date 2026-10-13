@@ -1,4 +1,5 @@
-import { BOOKLET, BOOKLET_UI, COLORS, GESTURE } from '../constants.js';
+import { BOOKLET, BOOKLET_UI, CATALOG, COLORS, GESTURE } from '../constants.js';
+import { fanOffset, STACK_SLOT } from '../game/cornerStack.js';
 
 // The booklet in hand: a bottom sheet over the room. Collapsed, it is a thumbnail of the
 // open page in the corner — the only thing it puts under a finger, so the room stays
@@ -34,19 +35,25 @@ function injectStyle() {
       cursor: pointer;
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
-      transition: width 160ms ease-out;
+      transition: width 160ms ease-out, z-index 0s;
     }
-    /* A mouse over the docked thumbnail grows it from its corner to a readable page,
-       about a quarter of the screen. Hover-capable pointers only: a touch never hovers. */
+    /* A mouse resting on the docked thumbnail grows it from its corner to a readable page,
+       about a quarter of the screen, raised over the other thumb in the corner stack (the
+       catalog's would grow behind the manual's) — still under the scrim (2) and the sheet (3).
+       Grow and raise both wait thumbHoverDelayMs, so a pointer passing over on its way
+       elsewhere changes nothing; leaving undoes them at once. Hover-capable pointers only: a
+       touch never hovers. */
     @media (hover: hover) {
       .booklet-thumb:hover {
         width: min(${BOOKLET_UI.thumbHoverShare * 100}vw, ${BOOKLET_UI.thumbHoverShare * 100}vh * ${pageW} / ${pageH});
+        z-index: 1;
+        transition: width 160ms ease-out ${BOOKLET_UI.thumbHoverDelayMs}ms, z-index 0s ${BOOKLET_UI.thumbHoverDelayMs}ms;
       }
     }
     .booklet-scrim {
       position: fixed;
       inset: 0;
-      z-index: 1;
+      z-index: 2;
       touch-action: none;
       -webkit-tap-highlight-color: transparent;
     }
@@ -74,7 +81,7 @@ function injectStyle() {
       box-shadow: 0 -8px 30px #0008;
       transition: transform 220ms ease-out, visibility 0s linear 220ms;
       visibility: hidden;
-      z-index: 2;
+      z-index: 3;
     }
     .booklet[data-open='true'] {
       transform: translate(-50%, 0);
@@ -83,6 +90,8 @@ function injectStyle() {
     }
     @media (prefers-reduced-motion: reduce) {
       .booklet, .booklet[data-open='true'], .booklet-thumb { transition: none; }
+      /* No growing animation, but still the wait: a passing pointer grows nothing. */
+      .booklet-thumb:hover { transition: width 0s ${BOOKLET_UI.thumbHoverDelayMs}ms, z-index 0s ${BOOKLET_UI.thumbHoverDelayMs}ms; }
     }
     .booklet-handle {
       align-self: center;
@@ -115,7 +124,7 @@ function injectStyle() {
     .booklet-page canvas {
       display: block;
       max-width: 100%;
-      max-height: calc(${BOOKLET_UI.maxHeight * 100}dvh - 120px);
+      max-height: calc(${BOOKLET_UI.maxHeight * 100}dvh - ${BOOKLET_UI.chromeHeight}px);
       aspect-ratio: ${pageW} / ${pageH};
       border-radius: 6px;
       background: ${css(COLORS.bookletPaper)};
@@ -139,21 +148,102 @@ function injectStyle() {
     }
     .booklet-controls button:disabled { opacity: 0.3; cursor: default; }
     .booklet-count { font-variant-numeric: tabular-nums; }
+    /* A line that says something went wrong (a pick that would not build), laid over the
+       head of the page rather than added to the sheet, so it never pushes the controls off a
+       short screen; there until the page flips or the sheet closes. At the head it is rows
+       away from the only thing on a page that takes a tap (BUILD IT, near the foot), and it
+       takes no pointer itself, so even a page drawn tiny never has it swallow a tap. */
+    .booklet-page { position: relative; }
+    .booklet-notice {
+      position: absolute;
+      left: ${BOOKLET_UI.notice.inset}px;
+      right: ${BOOKLET_UI.notice.inset}px;
+      top: ${BOOKLET_UI.notice.inset}px;
+      pointer-events: none;
+      margin: 0;
+      padding: ${BOOKLET_UI.notice.padding}px;
+      border-radius: ${BOOKLET_UI.notice.radius}px;
+      background: ${css(COLORS.uiSurface)};
+      text-align: center;
+      font-size: ${BOOKLET_UI.notice.size}px;
+      line-height: ${BOOKLET_UI.notice.lineHeight};
+    }
+    /* A page with a control on it (the catalog's BUILD IT): the canvas and, over the part of
+       it the control is drawn on, a clear button placed in page fractions. The frame is sized
+       exactly as the page (the pre-splash's own fit) and the canvas fills it, so those
+       fractions land on the drawn page at any size. */
+    .booklet-frame {
+      position: relative;
+      display: block;
+      width: min(100%, ${pageW}px, calc((${BOOKLET_UI.maxHeight * 100}dvh - ${BOOKLET_UI.chromeHeight}px) * ${pageW} / ${pageH}));
+      aspect-ratio: ${pageW} / ${pageH};
+      line-height: 0;
+    }
+    .booklet-frame canvas { width: 100%; height: 100%; max-height: none; }
+    .booklet-action {
+      position: absolute;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
   `;
   document.head.append(style);
 }
 
+// Every sheet on the page (the catalog and the current manual): one is open at a time. While
+// any is open, every docked thumb is inert — out of the tab order and deaf to clicks — so the
+// keyboard can't open a second sheet under the first's scrim, and a key never drives two.
+type LiveSheet = { isOpen(): boolean; thumb: HTMLButtonElement };
+const sheets = new Set<LiveSheet>();
+/** Whether any live sheet but `except` is open. */
+const anyOpen = (except?: LiveSheet) => [...sheets].some((sheet) => sheet !== except && sheet.isOpen());
+function syncSheets() {
+  const inert = anyOpen();
+  for (const { thumb } of sheets) thumb.inert = inert;
+}
+
+/** A control laid over a page — the catalog's BUILD IT: what it is called, and what it does. */
+export interface PageAction {
+  label: string;
+  run(): void;
+}
+
+/** What `createBookletSheet` takes — see there. */
+export interface BookletSheetOptions {
+  pages: { count: number; canvas(index: number): CanvasImageSource };
+  /** What the sheet is, for its accessible names: 'instructions' by default, 'catalog'. */
+  name?: string;
+  /** Whether it starts open, on its cover (default) — or docked as a thumb. */
+  open?: boolean;
+  /** Its place in the corner stack (STACK_SLOT): the manual in front by default, fanned toward the room; the catalog behind, in the corner (src/game/cornerStack.ts). */
+  slot?: number;
+  /** Whether it may be put down now. While false, every way of closing it does nothing. */
+  canClose?: () => boolean;
+  /** What its docked thumb shows: the open page (default, the manual), or always its cover (the catalog, a brand object in the corner). */
+  thumbShows?: 'page' | 'cover';
+  /** A control on a page: `at(page)` names it, or null for none; it sits over `rect`, its corners rounded by `radius` (page pixels). */
+  action?: { rect: readonly [number, number, number, number]; radius: number; at(page: number): PageAction | null };
+}
+
 /**
- * The booklet sheet for `pages` (`{ count, canvas(index) }`, src/scene/bookletPages.ts).
- * Returns `{ scrim, thumb, element, currentPage, expanded, onChange(fn) }`: mount all three
- * elements; `onChange(fn)` calls `fn({ page, expanded })` whenever either changes. Starts
- * open on page 0, the cover. State is the module's own and read-only outside it.
+ * The booklet sheet for `pages` (`{ count, canvas(index) }`, src/scene/bookletPages.ts or
+ * src/scene/catalogPages.ts). Returns `{ scrim, thumb, element, currentPage, expanded,
+ * onChange(fn), setOpen(value), place(), dispose() }`: mount all three elements;
+ * `onChange(fn)` calls `fn({ page, expanded })` whenever either changes; `setOpen` opens or
+ * docks it from outside; `place()` re-applies its stack slot after a ?tune change;
+ * `dispose()` takes it all back off the page. Starts open on page 0, the cover, unless told
+ * otherwise — or another sheet is open: one sheet is open at a time. State is the module's own and read-only outside it.
  */
-export function createBookletSheet({ pages }: { pages: { count: number; canvas(index: number): CanvasImageSource } }) {
+export function createBookletSheet({ pages, name = 'instructions', open: startsOpen = true, slot = STACK_SLOT.manual, canClose = () => true, action, thumbShows = 'page' }: BookletSheetOptions) {
   injectStyle();
   const listeners = new Set<(state: { page: number; expanded: boolean }) => void>();
   let page = 0;
-  let open = true;
+  let open = startsOpen;
+  // Asked to start open while another sheet is: it starts docked (one open at a time).
+  if (anyOpen()) open = false;
   let lingering: ReturnType<typeof setTimeout> | null = null;
 
   // Over the whole room — canvas and buttons alike — and under the sheet, while the
@@ -165,25 +255,51 @@ export function createBookletSheet({ pages }: { pages: { count: number; canvas(i
   const thumb = document.createElement('button');
   thumb.type = 'button';
   thumb.className = 'booklet-thumb';
-  thumb.setAttribute('aria-label', 'Open the instructions');
+  thumb.setAttribute('aria-label', `Open the ${name}`);
   // Full page resolution: hovered, the thumbnail is read at up to a quarter of the screen.
   const thumbCanvas = pageCanvas(pageW, pageH);
   thumb.append(thumbCanvas);
 
   const element = document.createElement('section');
   element.className = 'booklet';
-  element.setAttribute('aria-label', 'Instructions');
+  element.setAttribute('aria-label', name[0].toUpperCase() + name.slice(1));
 
   const handle = document.createElement('button');
   handle.type = 'button';
   handle.className = 'booklet-handle';
-  handle.setAttribute('aria-label', 'Close the instructions');
+  handle.setAttribute('aria-label', `Close the ${name}`);
 
   const view = document.createElement('div');
   view.className = 'booklet-page';
   const viewCanvas = pageCanvas(pageW, pageH);
   viewCanvas.setAttribute('role', 'img');
-  view.append(viewCanvas);
+  // A page control rides on the canvas in a frame of its own; a sheet without one keeps the
+  // canvas straight in the view. `showAction` shows the open page's control, or hides it.
+  let showAction = () => {};
+  if (action) {
+    const actionButton = button('', '');
+    const frame = document.createElement('div');
+    frame.className = 'booklet-frame';
+    actionButton.className = 'booklet-action';
+    const [x, y, w, h] = action.rect;
+    // Its corners as the drawn tag's: the radius as a share of the button's own width and height.
+    const r = action.radius;
+    Object.assign(actionButton.style, {
+      left: `${(100 * x) / pageW}%`,
+      top: `${(100 * y) / pageH}%`,
+      width: `${(100 * w) / pageW}%`,
+      height: `${(100 * h) / pageH}%`,
+      borderRadius: `${(100 * r) / w}% / ${(100 * r) / h}%`,
+    });
+    actionButton.addEventListener('click', () => action.at(page)?.run());
+    frame.append(viewCanvas, actionButton);
+    view.append(frame);
+    showAction = () => {
+      const control = action.at(page);
+      actionButton.hidden = !control;
+      actionButton.setAttribute('aria-label', control?.label ?? '');
+    };
+  } else view.append(viewCanvas);
 
   const controls = document.createElement('div');
   controls.className = 'booklet-controls';
@@ -193,21 +309,33 @@ export function createBookletSheet({ pages }: { pages: { count: number; canvas(i
   count.className = 'booklet-count';
   count.setAttribute('aria-live', 'polite');
   controls.append(prev, count, next);
+  // Over the head of the page, after the page itself, so the view's children keep their places.
+  const notice = document.createElement('p');
+  notice.className = 'booklet-notice';
+  notice.setAttribute('role', 'alert');
+  notice.hidden = true;
+  view.append(notice);
   element.append(handle, view, controls);
 
+  /** Shows `text` on the sheet, or takes it away (null). */
+  function notify(text: string | null) {
+    notice.textContent = text ?? '';
+    notice.hidden = text === null;
+  }
+
   function render() {
-    const source = pages.canvas(page);
-    for (const target of open ? [viewCanvas, thumbCanvas] : [thumbCanvas]) {
-      // A canvas always gives a 2D context the first time it is asked.
-      const ctx = target.getContext('2d')!;
-      ctx.drawImage(source, 0, 0, target.width, target.height);
-    }
+    // A canvas always gives a 2D context the first time it is asked.
+    const draw = (target: HTMLCanvasElement, index: number) => target.getContext('2d')!.drawImage(pages.canvas(index), 0, 0, target.width, target.height);
+    if (open) draw(viewCanvas, page);
+    draw(thumbCanvas, thumbShows === 'cover' ? 0 : page);
     count.textContent = `${page + 1} / ${pages.count}`;
     viewCanvas.setAttribute('aria-label', `Page ${page + 1} of ${pages.count}`);
     prev.disabled = page === 0;
     next.disabled = page === pages.count - 1;
     element.dataset.open = String(open);
     thumb.hidden = open;
+    showAction();
+    syncSheets();
     for (const fn of listeners) fn({ page, expanded: open });
   }
 
@@ -215,6 +343,7 @@ export function createBookletSheet({ pages }: { pages: { count: number; canvas(i
     const to = Math.min(pages.count - 1, Math.max(0, page + by));
     if (to === page) return;
     page = to;
+    notify(null);
     render();
   };
 
@@ -228,8 +357,11 @@ export function createBookletSheet({ pages }: { pages: { count: number; canvas(i
   }
 
   function setOpen(value: boolean, { byRoomTap = false } = {}) {
-    if (open === value) return;
+    if (open === value || (!value && !canClose())) return;
+    // One sheet open at a time: another one open keeps this one docked.
+    if (value && anyOpen(self)) return;
     open = value;
+    notify(null);
     showScrim(open, byRoomTap ? BOOKLET_UI.scrimLingerMs : 0);
     render();
     // Into the sheet on a control that can take focus (a disabled one can't, on the last
@@ -287,6 +419,8 @@ export function createBookletSheet({ pages }: { pages: { count: number; canvas(i
   // Swipe on the page: across flips, down closes.
   let swipe: { id: number; x: number; y: number } | null = null;
   view.addEventListener('pointerdown', (event) => {
+    // A press on a page control is that control's: no swipe, no capture that would take its click.
+    if ((event.target as Element).closest('button')) return;
     swipe = { id: event.pointerId, x: event.clientX, y: event.clientY };
     view.setPointerCapture(event.pointerId);
   });
@@ -302,14 +436,48 @@ export function createBookletSheet({ pages }: { pages: { count: number; canvas(i
   view.addEventListener('pointerup', endSwipe);
   view.addEventListener('pointercancel', endSwipe);
 
-  window.addEventListener('keydown', (event) => {
+  function onKey(event: KeyboardEvent) {
     if (!open) return;
     if (event.key === 'ArrowLeft') flip(-1);
     else if (event.key === 'ArrowRight') flip(1);
     else if (event.key === 'Escape') setOpen(false);
-  });
+  }
+  window.addEventListener('keydown', onKey);
 
-  render();
+  // Its place in the corner stack (src/game/cornerStack.ts): the front one fanned up and
+  // right toward the room, the ones behind it in the corner, turned — read at use time so
+  // ?tune moves it live. Paint order is mount order: mount the back ones first.
+  function place() {
+    const { x, y, turn } = fanOffset(slot, CATALOG.stack);
+    thumb.style.transform = `translate(${x}px, ${y}px) rotate(${turn}rad)`;
+  }
+
+  const self: LiveSheet = { isOpen: () => open, thumb };
+  sheets.add(self);
+
+  /** Takes the booklet off the page: its three elements, its place among the live sheets, its window key listener and any lingering scrim timer. */
+  function dispose() {
+    clearTimeout(lingering ?? undefined);
+    window.removeEventListener('keydown', onKey);
+    sheets.delete(self);
+    syncSheets();
+    listeners.clear();
+    scrim.remove();
+    thumb.remove();
+    element.remove();
+  }
+
+  // The first render draws the open page (a WebGL render for a cover). If it throws, the
+  // sheet takes itself back out — registry entry and key listener — before the error goes on,
+  // since the caller never got a sheet to dispose.
+  try {
+    place();
+    showScrim(open);
+    render();
+  } catch (error) {
+    dispose();
+    throw error;
+  }
 
   return {
     scrim,
@@ -321,10 +489,17 @@ export function createBookletSheet({ pages }: { pages: { count: number; canvas(i
     get expanded() {
       return open;
     },
+    /** Opens it, or docks it — as its own controls do, focus and all; `canClose` still holds. */
+    setOpen(value: boolean) {
+      setOpen(value);
+    },
+    place,
+    notify,
     onChange(fn: (state: { page: number; expanded: boolean }) => void) {
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
+    dispose,
   };
 }
 
