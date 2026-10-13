@@ -568,7 +568,8 @@ export const MODELS = {
   driveSlotDepth: 0.1,
   driveSlotWidth: 0.16,
   driveSlotLength: 0.8,
-  // Wood screw: the thread's radius (share of the head's), and the head's share of the length.
+  // Wood screw: the thread's radius (share of the head's), and the solid head's share of the
+  // length, under its drive slot.
   screwShaft: 0.45,
   screwHead: 0.15,
   // Shelf pin: the rod's radius, and its collar (where it starts, how thick).

@@ -168,8 +168,8 @@ const studEnd: Builder = (size, end) => {
 // slot across the head's top face where the screwdriver goes in.
 const woodScrew: Builder = (size, thread) => {
   const { length, radius, place, rod } = straight(size, thread);
-  const head = length * (1 - MODELS.screwHead);
   const slot = length * (1 - MODELS.driveSlotDepth);
+  const head = slot - length * MODELS.screwHead;
   return [
     rod(0, head, MODELS.screwShaft, 'metal'),
     rod(head, slot, 1),

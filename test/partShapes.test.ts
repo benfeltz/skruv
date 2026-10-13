@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MODELS } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/item.js';
 import { acrossOf, halfExtents, shapeOf } from '../src/game/partShapes.js';
 import type { Primitive } from '../src/game/partShapes.js';
@@ -155,6 +156,8 @@ describe('the wood screw (1.9.3.1)', () => {
   it('is a thin metal thread under a head the box width, a dark slot across the head', () => {
     const [thread, head, slot] = shapeOf(screw)!;
     expect(thread.tone).toBe('metal');
+    // The head is solid for its whole named share, the slot on top of it.
+    expect(head.length).toBeCloseTo(screw.size[1] * MODELS.screwHead, 9);
     expect(head.shape === 'cylinder' && head.radius).toBeCloseTo(screw.size[0] / 2, 9);
     expect(thread.shape === 'cylinder' && head.shape === 'cylinder' && thread.radius < head.radius).toBe(true);
     expect(faceUnder([thread], screw.connectors[0])).toBe(thread);
