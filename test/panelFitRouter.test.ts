@@ -694,7 +694,7 @@ const ON_SIDE: Vec3 = [0.4, 0.016, 0.05];
 // A cam bolt standing in the side panel's middle cam-bolt hole, in view, and its head.
 const BOLT_HALF = PART_TYPES.camLockBolt.size[1] / 2;
 const BOLT_IN_SIDE = { id: 'camLockBolt-1', type: 'camLockBolt', pose: { position: sideHole(6).position.map((v, i) => v + (i === 1 ? BOLT_HALF : 0)) as Vec3, rotation: IDENTITY } };
-const BOLT_HEAD = sideHole(6).position.map((v, i) => v + (i === 1 ? 2 * BOLT_HALF : 0)) as Vec3;
+const HEX_SOCKET = sideHole(6).position.map((v, i) => v + (i === 1 ? 2 * BOLT_HALF : 0)) as Vec3;
 const TIP_DOWN: Quat = [Math.SQRT1_2, 0, 0, Math.SQRT1_2];
 
 function pair({ extra = [], lift = false }: Pick<Options, 'extra' | 'lift'> = {}) {
@@ -793,7 +793,7 @@ describe('a panel carries its whole assembly (1.8.3.4 Step 1)', () => {
 
   it('a tool on any member refuses the carry: the assembly drags as a compound, as before', () => {
     const tip = rotateVector(TIP_DOWN, PART_TYPES.allenWrench.connectors[0].position);
-    const h = pair({ extra: [BOLT_IN_SIDE, { id: 'allenWrench-1', type: 'allenWrench', pose: { position: BOLT_HEAD.map((v, i) => v - tip[i]) as Vec3, rotation: TIP_DOWN } }] });
+    const h = pair({ extra: [BOLT_IN_SIDE, { id: 'allenWrench-1', type: 'allenWrench', pose: { position: HEX_SOCKET.map((v, i) => v - tip[i]) as Vec3, rotation: TIP_DOWN } }] });
     h.assembly.drive(h.assembly.seat({ partA: 'camLockBolt-1', connectorA: 0, partB: h.side.id, connectorB: 6, mover: 'camLockBolt-1' }).id);
     h.assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'camLockBolt-1', connectorB: 1, mover: 'allenWrench-1' });
     h.router.sync();

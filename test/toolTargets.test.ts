@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { CONNECTOR } from '../tools/validate/lib/vocabulary.js';
 import { RING } from '../src/constants.js';
 import { capture, createAssembly } from '../src/game/assembly.js';
@@ -6,6 +6,9 @@ import { isSeatTarget, isWorkable, ringStrengths, seatedHardware } from '../src/
 import type { ScreenPoint } from '../src/game/dragMath.js';
 import type { Vec3 } from '../tools/validate/lib/geometry.js';
 import type { Captured, TargetConnector } from '../src/game/toolTargets.js';
+import { RAIL_HOLE, SCREW_SLOT, SCREW_THREAD } from './support/screwParts.js';
+
+vi.mock('../src/game/item.js', async (original) => (await import('./support/screwParts.js')).withScrews(await original()));
 
 // The real catalog's indices: a bolt's thread into a side panel's cam-bolt hole, a cam
 // lock's body into a shelf's recess.
@@ -15,10 +18,10 @@ const SIDE_CAM_BOLT_HOLE = 2;
 const CAM_BODY = 0;
 const SHELF_RECESS = 2;
 
-const BOLT_HEAD_INDEX = 1;
-const CAM_SLOT_INDEX = 1;
-const head = (id: string): TargetConnector => ({ type: CONNECTOR.BOLT_HEAD, part: { id }, index: BOLT_HEAD_INDEX });
-const slot = (id: string): TargetConnector => ({ type: CONNECTOR.CAM_SLOT, part: { id }, index: CAM_SLOT_INDEX });
+const HEX_SOCKET_INDEX = 1;
+const DRIVE_SLOT_INDEX = 1;
+const head = (id: string): TargetConnector => ({ type: CONNECTOR.HEX_SOCKET, part: { id }, index: HEX_SOCKET_INDEX });
+const slot = (id: string): TargetConnector => ({ type: CONNECTOR.DRIVE_SLOT, part: { id }, index: DRIVE_SLOT_INDEX });
 // What a key put on a hex would turn, from the graph: `assembly.turnedFrom`, as the router resolves it.
 const turned = (assembly: ReturnType<typeof createAssembly>) => (hex: TargetConnector) => assembly.turnedFrom(hex.part.id, hex.index);
 
@@ -84,6 +87,20 @@ describe('workable targets', () => {
     expect(isWorkable(slot('camLock-1'), { captured: catching(assembly, NEAR), turnedBy: turned(assembly) })).toBe(false);
     const loose = build({ screwed: true, camSeated: false }).assembly;
     expect(isWorkable(slot('camLock-1'), { captured: catching(loose, NEAR), turnedBy: turned(loose) })).toBe(false);
+  });
+
+  // 1.9.3.1: a screw's slot is the screwdriver's as a bolt's head is the key's — workable
+  // while the screw is not driven home, with no bolt to catch.
+  it('a seated screw\'s drive slot is workable until it is screwed, and asks for no capture', () => {
+    const assembly = createAssembly(typeOf);
+    const screw = assembly.seat({ partA: 'woodScrew-1', connectorA: SCREW_THREAD, partB: 'rail-1', connectorB: RAIL_HOLE, mover: 'woodScrew-1' });
+    const driveSlot: TargetConnector = { type: CONNECTOR.DRIVE_SLOT, part: { id: 'woodScrew-1' }, index: SCREW_SLOT };
+    const noCapture: Captured = () => {
+      throw new Error('a screw asks for no capture');
+    };
+    expect(isWorkable(driveSlot, { captured: noCapture, turnedBy: turned(assembly) })).toBe(true);
+    assembly.drive(screw.id);
+    expect(isWorkable(driveSlot, { captured: noCapture, turnedBy: turned(assembly) })).toBe(false);
   });
 
   // Plan amendment (Ben, 2026-10-10): fasteners light holes too, with no extra rule.

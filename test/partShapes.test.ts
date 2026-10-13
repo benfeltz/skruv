@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MODELS } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/item.js';
 import { acrossOf, halfExtents, shapeOf } from '../src/game/partShapes.js';
 import type { Primitive } from '../src/game/partShapes.js';
@@ -59,16 +60,16 @@ describe('shapeOf', () => {
 
   it('gives the cam bolt a thinner thread under a head the box width', () => {
     const [thread, head] = shapeOf(PART_TYPES.camLockBolt)!;
-    const [boltThread, boltHead] = PART_TYPES.camLockBolt.connectors;
+    const [boltThread, hexSocket] = PART_TYPES.camLockBolt.connectors;
     expect(faceUnder([thread], boltThread)).toBe(thread);
-    expect(faceUnder([head], boltHead)).toBe(head);
+    expect(faceUnder([head], hexSocket)).toBe(head);
     expect(head.shape === 'cylinder' && head.radius).toBeCloseTo(PART_TYPES.camLockBolt.size[0] / 2, 9);
     expect(thread.shape === 'cylinder' && head.shape === 'cylinder' && thread.radius < head.radius).toBe(true);
   });
 
   it('cuts a dark slot across the cam lock top, where the screwdriver goes in', () => {
     const primitives = shapeOf(PART_TYPES.camLock)!;
-    const slot = PART_TYPES.camLock.connectors.find((c) => c.type === 'camSlot')!;
+    const slot = PART_TYPES.camLock.connectors.find((c) => c.type === 'driveSlot')!;
     expect(faceUnder(primitives, slot)?.tone).toBe('dark');
   });
 
@@ -117,8 +118,8 @@ describe('the double-ended stud (1.9.2)', () => {
     connectors: [
       { id: 'studEnd-1', type: 'studEnd', position: [0, 0.02, 0], axis: [0, 1, 0] },
       { id: 'studEnd-2', type: 'studEnd', position: [0, -0.02, 0], axis: [0, -1, 0] },
-      { id: 'boltHead-1', type: 'boltHead', position: [0, 0.02, 0], axis: [0, 1, 0] },
-      { id: 'boltHead-2', type: 'boltHead', position: [0, -0.02, 0], axis: [0, -1, 0] },
+      { id: 'hexSocket-1', type: 'hexSocket', position: [0, 0.02, 0], axis: [0, 1, 0] },
+      { id: 'hexSocket-2', type: 'hexSocket', position: [0, -0.02, 0], axis: [0, -1, 0] },
     ] as Connector[],
   };
 
@@ -138,5 +139,37 @@ describe('the double-ended stud (1.9.2)', () => {
       for (const i of [0, 1, 2]) expect(Math.abs(primitive.position[i]) + half[i]).toBeLessThanOrEqual(stud.size[i] / 2 + EPS);
     }
     for (const connector of stud.connectors) expect(faceUnder(primitives, connector), connector.id).toBeDefined();
+  });
+});
+
+describe('the wood screw (1.9.3.1)', () => {
+  // No shipped pack carries a screw yet: sized as a pack would size one, thread end down and
+  // its drive slot on the head end, run through the builder its thread connector names.
+  const screw = {
+    size: [0.004, 0.03, 0.004] as [number, number, number],
+    connectors: [
+      { id: 'screwThread-1', type: 'screwThread', position: [0, -0.015, 0], axis: [0, -1, 0] },
+      { id: 'driveSlot-1', type: 'driveSlot', position: [0, 0.015, 0], axis: [0, 1, 0] },
+    ] as Connector[],
+  };
+
+  it('is a thin metal thread under a head the box width, a dark slot across the head', () => {
+    const [thread, head, slot] = shapeOf(screw)!;
+    expect(thread.tone).toBe('metal');
+    // The head is solid for its whole named share, the slot on top of it.
+    expect(head.length).toBeCloseTo(screw.size[1] * MODELS.screwHead, 9);
+    expect(head.shape === 'cylinder' && head.radius).toBeCloseTo(screw.size[0] / 2, 9);
+    expect(thread.shape === 'cylinder' && head.shape === 'cylinder' && thread.radius < head.radius).toBe(true);
+    expect(faceUnder([thread], screw.connectors[0])).toBe(thread);
+    expect(faceUnder([head, slot], screw.connectors[1])?.tone).toBe('dark');
+  });
+
+  it('draws inside its box, with every connector on a primitive end face', () => {
+    const primitives = shapeOf(screw)!;
+    for (const primitive of primitives) {
+      const half = halfExtents(primitive);
+      for (const i of [0, 1, 2]) expect(Math.abs(primitive.position[i]) + half[i]).toBeLessThanOrEqual(screw.size[i] / 2 + EPS);
+    }
+    for (const connector of screw.connectors) expect(faceUnder(primitives, connector), connector.id).toBeDefined();
   });
 });

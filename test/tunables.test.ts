@@ -49,6 +49,7 @@ describe('LIVE_KNOBS', () => {
       'gesture.turnRingRadius',
       'fastener.driveSeconds',
       'fastener.studRadians',
+      'fastener.screwRadians',
       'joint.angularPlay',
       'joint.playDamping',
       'physics.linearDamping',

@@ -7,9 +7,12 @@ import { EVENT } from '../src/game/events.js';
 import { STATE } from '../src/game/fasteners.js';
 import { PART_TYPES, setItem } from '../src/game/item.js';
 import { FRAME, makePart, mount } from './support/routerBench.js';
+import { RAIL_HOLE, SCREW_SLOT, SCREW_THREAD } from './support/screwParts.js';
 import type { AssemblyJoint } from '../src/game/assembly.js';
 import type { Part } from '../src/game/partMesh.js';
 import type { Quat, Vec3 } from '../tools/validate/lib/geometry.js';
+
+vi.mock('../src/game/item.js', async (original) => (await import('./support/screwParts.js')).withScrews(await original()));
 
 // The turn record through the real router (1.9.2, review round 5): the six cases of
 // test/turnOf.test.ts — a leg on a standing stud; a leg home on a loose stud, carried on; a
@@ -604,5 +607,48 @@ describe('6. JOHNNY: the key on a bolt, as before', () => {
     m.circle({ clientX: at.clientX + TURN_RING.radius, clientY: at.clientY }, head, 180, 0, TURN_RING.radius);
     expect(m.assembly.get(bolt.id)!.fastener.progress).toBeGreaterThan(0);
     expect(m.log.filter((e) => e.type === EVENT.FASTEN)).toEqual([]);
+  });
+});
+
+describe('7. a wood screw under the screwdriver (1.9.3.1)', () => {
+  // JOHNNY's side panel lying flat, a rail on it, a screw standing in the rail's hole and the
+  // screwdriver seated in its slot: a hold drives it home, into the side panel below.
+  beforeAll(() => setItem('johnny'));
+  afterAll(() => setItem('blank'));
+
+  // The side panel's top face at y 0.016; the rail `gap` above it.
+  function driven(gap = 0) {
+    const panelPose = { position: [0, 0.008, 0] as Vec3, rotation: [0, 0, Math.SQRT1_2, Math.SQRT1_2] as Quat };
+    const railHalf = PART_TYPES.rail.size[1] / 2;
+    const screwHalf = PART_TYPES.woodScrew.size[1] / 2;
+    const railAt: Vec3 = [0, 0.016 + gap + railHalf, 0];
+    const hole = connectorInWorld(PART_TYPES.rail.connectors[RAIL_HOLE], { position: railAt, rotation: [0, 0, 0, 1] }).position;
+    const driver = makePart('screwdriver-1', 'screwdriver', [hole[0] + 0.03, hole[1] + 2 * screwHalf + 0.05, hole[2]]);
+    const m = mount([
+      makePart('sidePanel-1', 'sidePanel', panelPose.position, panelPose.rotation),
+      makePart('rail-1', 'rail', railAt),
+      makePart('woodScrew-1', 'woodScrew', [hole[0], hole[1] + screwHalf, hole[2]]),
+      driver,
+    ]);
+    const screw = m.assembly.seat({ partA: 'woodScrew-1', connectorA: SCREW_THREAD, partB: 'rail-1', connectorB: RAIL_HOLE, mover: 'woodScrew-1' });
+    m.assembly.seat({ partA: 'screwdriver-1', connectorA: 0, partB: 'woodScrew-1', connectorB: SCREW_SLOT, mover: 'screwdriver-1' });
+    const at = m.screen(driver.mesh.position);
+    m.canvas.fire('pointerdown', at);
+    m.hold(TAP_FRAMES + DRIVE_FRAMES);
+    m.canvas.fire('pointerup', at);
+    return { ...m, screw };
+  }
+
+  it('drives the screw home on a hold of the screwdriver, into the panel behind its hole', () => {
+    const m = driven();
+    expect(m.assembly.get(m.screw.id)).toMatchObject({ through: 'sidePanel-1', fastener: { state: STATE.SCREWED, progress: 1 } });
+    expect(m.fastens()).toHaveLength(1);
+  });
+
+  // PR #51 review: in play as in the validator, the part behind is the one holding the tip
+  // its sink depth down the hole — not anything within the screw's length.
+  it('takes no part behind when the panel lies past the tip, though within the screw\'s length', () => {
+    const m = driven(FASTENER.sinkDepth.screw! - PART_TYPES.rail.size[1] + 0.002);
+    expect(m.assembly.get(m.screw.id)).toMatchObject({ through: null, fastener: { state: STATE.SCREWED, progress: 1 } });
   });
 });

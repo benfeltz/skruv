@@ -129,6 +129,10 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
     object: FASTENER, prop: 'studRadians', min: Math.PI, max: 12 * Math.PI, step: Math.PI, unit: 'rad', group: 'fastener',
     desc: 'How far a threaded stud (key or hand) turns from seated to screwed home',
   },
+  'fastener.screwRadians': {
+    object: FASTENER, prop: 'screwRadians', min: Math.PI, max: 12 * Math.PI, step: Math.PI, unit: 'rad', group: 'fastener',
+    desc: 'How far a wood screw turns under the screwdriver from seated to driven home',
+  },
   'joint.angularPlay': {
     object: FASTENER, prop: 'angularPlayDegrees', min: 0, max: 15, step: 0.5, unit: 'deg', group: 'joint',
     desc: 'Angular play a dowel-stage joint slumps through before it stops',

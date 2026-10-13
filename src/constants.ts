@@ -533,6 +533,8 @@ export const DECAL = {
     camLockRecess: 0.009,
     // A threaded insert in a table top or leg: a hole a hair wider than the stud it takes.
     studHole: 0.0035,
+    // A pilot hole through the part a wood screw attaches: a hair wider than its thread.
+    screwHole: 0.002,
   },
   // A recess is drawn as a ring: inner radius as a fraction of the outer.
   recessInner: 0.55,
@@ -560,12 +562,16 @@ export const MODELS = {
   screwdriverBladeThickness: 0.35,
   // Cam bolt: the thread's radius, and the head's share of the length.
   boltShaft: 0.55,
-  boltHead: 0.14,
-  // Cam lock: the slot's depth (share of the height), and its width and length across the
-  // top face (shares of the disc's diameter).
-  camSlotDepth: 0.1,
-  camSlotWidth: 0.16,
-  camSlotLength: 0.8,
+  boltCap: 0.14,
+  // A drive slot (a cam lock's top, a wood screw's head): its depth (share of the piece's
+  // length), and its width and length across the end face (shares of the piece's diameter).
+  driveSlotDepth: 0.1,
+  driveSlotWidth: 0.16,
+  driveSlotLength: 0.8,
+  // Wood screw: the thread's radius (share of the head's), and the solid head's share of the
+  // length, under its drive slot.
+  screwShaft: 0.45,
+  screwHead: 0.15,
   // Shelf pin: the rod's radius, and its collar (where it starts, how thick).
   pinRod: 0.6,
   pinCollarAt: 0.5,
@@ -585,10 +591,12 @@ export const FASTENER = {
   // A dowel, pin or back fitting comes back out when dragged this far (CSS px) along its axis.
   pullDistance: 40,
   // Wrench crank from a seated cam bolt to a screwed one: two full turns.
-  screwRadians: 4 * Math.PI,
+  boltRadians: 4 * Math.PI,
   // Hand or key turn from a seated threaded stud end to a screwed one: two full turns, a
   // fiddly stud being a turn-and-a-bit slower to seat than a bolt on the phone (?tune it).
   studRadians: 4 * Math.PI,
+  // Screwdriver turn from a seated wood screw to one driven home: two full turns (?tune it).
+  screwRadians: 4 * Math.PI,
   // Screwdriver turn from an open cam lock to a locked one.
   quarterTurn: Math.PI / 2,
   // A cam catches any screwed bolt head this close to its recess, and how deep each

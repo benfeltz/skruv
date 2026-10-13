@@ -46,7 +46,7 @@ describe('the BLANK pack', () => {
 
   it('gives every stud a hex socket at each end, on the end itself, and keeps legs and top plain boxes', () => {
     const stud = pack.partTypes.doubleEndedStud.connectors;
-    expect(stud.map((c) => c.type)).toEqual([CONNECTOR.STUD_END, CONNECTOR.STUD_END, CONNECTOR.BOLT_HEAD, CONNECTOR.BOLT_HEAD]);
+    expect(stud.map((c) => c.type)).toEqual([CONNECTOR.STUD_END, CONNECTOR.STUD_END, CONNECTOR.HEX_SOCKET, CONNECTOR.HEX_SOCKET]);
     expect(stud[2].position).toEqual(stud[0].position);
     expect(stud[3].position).toEqual(stud[1].position);
     for (const part of Object.values(FILE.parts)) expect(part.mesh).toBeUndefined();

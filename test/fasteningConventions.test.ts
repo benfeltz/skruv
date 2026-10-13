@@ -34,14 +34,14 @@ describe('every fastener is bidirectional (decision 2)', () => {
     [KIND.DOWEL]: [{ type: 'tap' }],
     [KIND.PIN]: [{ type: 'tap' }],
     [KIND.FITTING]: [{ type: 'tap' }],
-    [KIND.BOLT]: [{ type: 'crank', radians: FASTENER.screwRadians }],
+    [KIND.BOLT]: [{ type: 'crank', radians: FASTENER.boltRadians }],
     [KIND.CAM]: [{ type: 'crank', radians: FASTENER.quarterTurn }],
   };
   const reverse: Record<string, FastenerEvent[]> = {
     [KIND.DOWEL]: [{ type: 'pull' }],
     [KIND.PIN]: [{ type: 'pull' }],
     [KIND.FITTING]: [{ type: 'pull' }],
-    [KIND.BOLT]: [{ type: 'crank', radians: -FASTENER.screwRadians }],
+    [KIND.BOLT]: [{ type: 'crank', radians: -FASTENER.boltRadians }],
     [KIND.CAM]: [{ type: 'crank', radians: -FASTENER.quarterTurn }],
   };
 
@@ -107,7 +107,7 @@ describe('cams can lock on the real catalog geometry', () => {
       const bolt = `camLockBolt-${i + 1}`;
       poses[bolt] = { position: [0, 0, 0], rotation: ALONG_X };
       const joint = assembly.seat({ partA: bolt, connectorA: 0, partB: 'sidePanel-1', connectorB: hole, mover: bolt });
-      assembly.apply(joint.id, { type: 'crank', radians: FASTENER.screwRadians });
+      assembly.apply(joint.id, { type: 'crank', radians: FASTENER.boltRadians });
     });
     const bonds = assembly.bonds((id) => poses[id]);
     const pose = (id: string): Pose | null => {

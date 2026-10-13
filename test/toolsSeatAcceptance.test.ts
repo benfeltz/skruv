@@ -218,7 +218,7 @@ describe('JOHNNY\'s tool steps by touch, in build order (1.8.2.1 acceptance)', (
 
     // Circling the seated key screws the bolt home, as cranking always has.
     const keyEnd: Vec3 = [-0.025, 0, 0];
-    expect(b.crank(b.on(b.key, keyEnd), HEAD, Math.ceil(FASTENER.screwRadians / (2 * Math.PI)) + 1)).toBe('crank');
+    expect(b.crank(b.on(b.key, keyEnd), HEAD, Math.ceil(FASTENER.boltRadians / (2 * Math.PI)) + 1)).toBe('crank');
     expect(b.boltSeat()!.fastener.state).toBe(STATE.SCREWED);
     expect(b.log.some((e) => e.type === EVENT.FASTEN && e.hardware === 'camLockBolt-1')).toBe(true);
 
