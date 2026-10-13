@@ -3,8 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { FASTENER, TURN_RING } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
-import { arcLength, dialHit, gripOf, isDrawn, isHome, isTurnHome, turnProgress, isStalled, pickDial, tightensClockwise } from '../src/game/turnRing.js';
-import { createFastener, STATE } from '../src/game/fasteners.js';
+import { arcLength, dialHit, gripOf, isDrawn, isTurnHome, turnProgress, isStalled, pickDial, tightensClockwise } from '../src/game/turnRing.js';
+import { createFastener, isHome, STATE } from '../src/game/fasteners.js';
 import { setItem } from '../src/game/item.js';
 
 // The turn ring's maths (1.8.2.2 step 1): headless, plain points and joints.

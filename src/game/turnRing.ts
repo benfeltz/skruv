@@ -12,7 +12,6 @@ import type { PartId, Turn } from './assembly.js';
 import type { Fastener } from './fasteners.js';
 import type { ScreenPoint } from './dragMath.js';
 
-export { isHome };
 
 /** The part a turn's press and dial belong to: the seated tool, or the part circled by hand. */
 export const gripOf = ({ grip }: Turn): PartId => (grip.kind === 'tool' ? grip.tool.hardware : grip.part);
