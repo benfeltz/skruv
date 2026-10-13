@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { COMPATIBLE, CONNECTOR, KIND, kindOf } from '../tools/validate/lib/vocabulary.js';
 import { FASTENER } from '../src/constants.js';
-import { canRelease, createFastener, isCrankKind, spanOf, isEngaged, isFastened, isTapKind, STATE, transition } from '../src/game/fasteners.js';
+import { canRelease, createFastener, fastensOn, isCrankKind, spanOf, isEngaged, isFastened, isTapKind, STATE, transition } from '../src/game/fasteners.js';
 import type { Fastener, FastenerContext, FastenerEvent } from '../src/game/fasteners.js';
 import type { ConnectorType } from '../tools/validate/lib/vocabulary.js';
 
@@ -164,6 +164,17 @@ describe('screw: seated ⇄ screwed by signed crank, either direction free', () 
     const screwed = transition(createFastener(KIND.SCREW), crank(span));
     expect(transition(screwed, crank(-span / 4))).toMatchObject({ state: STATE.SCREWED, progress: 0.75 });
     expect(transition(screwed, crank(-span))).toEqual(createFastener(KIND.SCREW));
+  });
+
+  it('names the crank that fastens it — reaching home from unfastened, never one after', () => {
+    const seated = createFastener(KIND.SCREW);
+    expect(fastensOn(seated, span)).toBe(true);
+    expect(fastensOn(seated, span / 2)).toBe(false);
+    const half = transition(seated, crank(span / 2));
+    expect(fastensOn(half, span / 2)).toBe(true);
+    expect(fastensOn(half, -span / 2)).toBe(false);
+    const screwed = transition(seated, crank(span));
+    expect(fastensOn(transition(screwed, crank(-span / 4)), span / 4)).toBe(false);
   });
 
   it('ignores taps and pulls (same record back)', () => {

@@ -409,6 +409,14 @@ describe('a wood screw: driven into what lies behind its hole, held there solid'
     expect(bridges(assembly)).toMatchObject([{ a: 'rail-1', b: 'sidePanel-1', mode: 'rigid' }]);
   });
 
+  it('keeps the part behind while backed off partway, still screwed, with no context asked', () => {
+    const { assembly, screw } = screwed();
+    assembly.apply(screw.id, { type: 'crank', radians: -FASTENER.screwRadians / 4 });
+    expect(assembly.get(screw.id)).toMatchObject({ through: 'sidePanel-1', fastener: { state: STATE.SCREWED, progress: 0.75 } });
+    assembly.apply(screw.id, { type: 'crank', radians: FASTENER.screwRadians / 4 });
+    expect(assembly.get(screw.id)).toMatchObject({ through: 'sidePanel-1', fastener: { progress: 1 } });
+  });
+
   it('drops the part behind, and the bridge, once backed off to seated', () => {
     const { assembly, screw } = screwed();
     assembly.apply(screw.id, { type: 'crank', radians: -FASTENER.screwRadians });

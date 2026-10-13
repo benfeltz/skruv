@@ -340,7 +340,8 @@ export function createAssembly(typeOf: (part: PartId) => string) {
 
   /**
    * Feeds `event` to a joint's machine. `ctx.captured` (a cam's caught bolt id or null) and
-   * `ctx.through` (the part behind a back fitting or a screw) come from the caller's geometry. True if it
+   * `ctx.through` (the part behind a back fitting or a screw, read on the event that fastens
+   * it and kept until it is back to seated) come from the caller's geometry. True if it
    * changed.
    */
   function apply(id: number, event: FastenerEvent, ctx: ApplyContext = {}) {
@@ -352,7 +353,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     });
     if (fastener === joint.fastener) return false;
     const next = { ...joint, fastener };
-    if (passesThrough(joint.kind)) next.through = isFastened(fastener) ? (ctx.through ?? null) : null;
+    if (passesThrough(joint.kind)) next.through = !isFastened(fastener) ? null : isFastened(joint.fastener) ? joint.through : (ctx.through ?? null);
     // Locking needs `ctx.captured` (the machine's `captured`), so one of the two is set.
     if (joint.kind === KIND.CAM) next.captured = fastener.state === STATE.LOCKED ? ((joint.captured ?? ctx.captured) as PartId | null) : null;
     joints.set(id, next);

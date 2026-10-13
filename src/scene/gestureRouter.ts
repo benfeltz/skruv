@@ -8,7 +8,7 @@ import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
 import { driveRadians, ratchetTicks } from '../game/driveMath.js';
 import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rebaseDragOffset, rotatedHalfExtents } from '../game/dragMath.js';
-import { isCrankKind, isFastened, isHome, isTapKind, sinksAsTurned, spanOf } from '../game/fasteners.js';
+import { fastensOn, isCrankKind, isFastened, isHome, isTapKind, sinksAsTurned, spanOf } from '../game/fasteners.js';
 import {
   fastenEvent,
   grabEvent,
@@ -1528,7 +1528,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     let changed = false;
     for (const joint of joints) {
       const before = assembly.get(joint.id)!.fastener;
-      if (!assembly.apply(joint.id, { type: 'crank', radians: radiansOf(joint) }, crankContext(joint))) continue;
+      const radians = radiansOf(joint);
+      if (!assembly.apply(joint.id, { type: 'crank', radians }, crankContext(joint, radians))) continue;
       const after = assembly.get(joint.id)!.fastener;
       const span = spanOf(joint.kind);
       const clicks = ratchetTicks(before.progress * span, after.progress * span, FASTENER.ratchetRadians);
@@ -1615,10 +1616,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     else turnRing.hide();
   }
 
-  // A screw drives into whatever lies behind its hole; a cam catches the nearest screwed
-  // bolt head within reach of its recess, any bolt.
-  function crankContext(joint: AssemblyJoint): ApplyContext {
-    if (passesThrough(joint.kind)) return behind(joint);
+  // A screw drives into whatever lies behind its hole, looked up only on the turn that takes
+  // it home; a cam catches the nearest screwed bolt head within reach of its recess, any bolt.
+  function crankContext(joint: AssemblyJoint, radians: number): ApplyContext {
+    if (passesThrough(joint.kind)) return fastensOn(assembly.get(joint.id)!.fastener, radians) ? behind(joint) : {};
     if (joint.kind !== KIND.CAM) return {};
     const recess = connectorWorld(joint.host, joint.hostConnector);
     return { captured: capture(recess, screwedHeads())?.id ?? null };

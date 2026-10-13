@@ -75,6 +75,9 @@ export const spanOf = (kind: FastenerKind) => {
   }
 };
 
+/** True when a crank of `radians` takes an unfastened turned fastener home — the event that fastens it. */
+export const fastensOn = (f: Fastener, radians: number) => !isFastened(f) && radians > 0 && f.progress + radians / spanOf(f.kind) >= 1;
+
 /**
  * A joint circled by hand: a stud seated by dragging something onto it rather than the stud
  * into something — a leg set onto its stud, a top dropped on studs, a leg already carrying
