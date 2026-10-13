@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { checkPack } from '../tools/validate/lib/checks.js';
+import { connectorInWorld } from '../tools/validate/lib/geometry.js';
 import { deriveJoints } from '../tools/validate/lib/joints.js';
 import { loadPack } from '../tools/validate/lib/pack.js';
 import { CONNECTOR, KIND } from '../tools/validate/lib/vocabulary.js';
@@ -74,7 +75,19 @@ describe('the ÖVERKÄLL pack', () => {
       expect(inDrawer(j.host), `${j.hardware} host`).toBe(true);
       expect(inDrawer(j.through), `${j.hardware} through`).toBe(true);
     }
-    expect(screws.filter((j) => typeOf.get(j.through!) === 'knob')).toHaveLength(1);
+    // The knob carries its own hole: it is the part attached, the front the part behind.
+    expect(screws.filter((j) => typeOf.get(j.host) === 'knob' && typeOf.get(j.through!) === 'drawerFront')).toHaveLength(1);
+  });
+
+  it('keeps the drawer front flush: no screw head stands out past the carcass front plane except on the knob', () => {
+    const frontPlane = 0.175;
+    const byId = new Map(pack.assembled.map((a) => [a.id, a]));
+    const slot = pack.partTypes.screw.connectors.findIndex((c) => c.type === CONNECTOR.DRIVE_SLOT);
+    for (const j of ofKind(KIND.SCREW).filter((x) => typeOf.get(x.host) === 'drawerFront')) {
+      const screw = byId.get(j.hardware)!;
+      const head = connectorInWorld(pack.partTypes.screw.connectors[slot], screw).position;
+      expect(head[2], `${j.hardware} head`).toBeLessThanOrEqual(frontPlane + 1e-9);
+    }
   });
 
   it('keeps the drawer apart from the carcass: no joint spans a drawer part and a carcass part', () => {
