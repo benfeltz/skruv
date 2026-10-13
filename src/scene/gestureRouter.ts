@@ -1516,20 +1516,20 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // tightens) — and whatever that changed reported, then reconciled once for the batch. The
   // ratchet clicks the first crossed come first, so the last click lands before it reports
   // home — by a FASTEN event, or, for one only backed off partway, by onRehome; joints turned
-  // together (a top's four studs) click and buzz once, on the first.
+  // together (a top's four studs) click and buzz once, for the first of them that moved.
   function turnJoints(joints: AssemblyJoint[], radiansOf: (joint: AssemblyJoint) => number) {
     let changed = false;
-    joints.forEach((joint, i) => {
+    for (const joint of joints) {
       const before = assembly.get(joint.id)!.fastener;
-      if (!assembly.apply(joint.id, { type: 'crank', radians: radiansOf(joint) }, crankContext(joint))) return;
-      changed = true;
+      if (!assembly.apply(joint.id, { type: 'crank', radians: radiansOf(joint) }, crankContext(joint))) continue;
       const after = assembly.get(joint.id)!.fastener;
       const span = spanOf(joint.kind);
       const clicks = ratchetTicks(before.progress * span, after.progress * span, FASTENER.ratchetRadians);
-      if (i === 0 && clicks > 0) onRatchet?.(clicks);
+      if (!changed && clicks > 0) onRatchet?.(clicks);
       reportFastening(joint.id, isFastened(before));
-      if (i === 0 && isFastened(before) && !isHome(before) && isHome(after)) onRehome?.(joint.kind);
-    });
+      if (!changed && isFastened(before) && !isHome(before) && isHome(after)) onRehome?.(joint.kind);
+      changed = true;
+    }
     if (changed) reconcile();
   }
 

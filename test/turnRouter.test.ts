@@ -299,6 +299,18 @@ describe('3. a top dropped onto four standing studs', () => {
     expect(b.clicks()).toBe(Math.floor((first * FASTENER.studRadians) / FASTENER.ratchetRadians + 1e-9));
   });
 
+  // Review round 5: the clicks are the first joint that moved, not joints[0] whatever it did.
+  it('clicks for the first stud that moved when the first in the batch does not', () => {
+    const b = bench();
+    const apply = b.assembly.apply.bind(b.assembly);
+    let calls = 0;
+    vi.spyOn(b.assembly, 'apply').mockImplementation((id, event, ctx) => (calls++ % 4 === 0 ? false : apply(id, event, ctx)));
+    b.sweep(120);
+    expect(b.progresses()[0]).toBe(0);
+    expect(b.progresses()[1]).toBeGreaterThan(0);
+    expect(b.clicks()).toBeGreaterThan(0);
+  });
+
   it('draws the top sinking onto its four studs without spinning — every hole stays over its stud', () => {
     const b = bench();
     const holes = () =>
