@@ -658,7 +658,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // opened by a teardown) holds its hardware, pushed in, fastened to nothing.
   function holdLooseHardware() {
     const joints = assembly.all();
-    const world = assembly.turns(joints);
+    const world = assembly.turns();
     for (const { loose } of world) if (loose) holdUnit(loose);
     const turned = new Set(world.flatMap((turn) => turn.joints.map((j) => j.id)));
     for (const joint of joints) {
@@ -1696,7 +1696,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     showPanelRings(goal);
     // Every turn the graph has, once per frame: the dials and the draw read the same records.
     const joints = assembly.all();
-    const world = assembly.turns(joints);
+    const world = assembly.turns();
     showDials(delta, world);
     drawTurns(joints, world);
     followRiders();

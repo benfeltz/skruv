@@ -351,3 +351,21 @@ describe('6. JOHNNY: a bolt under the key, a cam under the screwdriver — as be
     expect(KIND.BOLT).toBe('bolt');
   });
 });
+
+describe('turns, worked out once per change to the graph', () => {
+  it('is the same record until a joint is seated, turned or unseated, then a fresh one', () => {
+    const assembly = createAssembly(typeOf);
+    const inLeg = legOntoStud(assembly);
+    studIntoTop(assembly);
+    const first = assembly.turns();
+    expect(assembly.turns()).toBe(first);
+    expect(assembly.turnOf('leg-1')).toBe(first.find((t) => t.grip.kind === 'hand'));
+    set(assembly, inLeg, 0.5);
+    const turned = assembly.turns();
+    expect(turned).not.toBe(first);
+    expect(turnProgress(turned[0])).toBeCloseTo(0.5, 9);
+    assembly.unseat(inLeg.id);
+    expect(assembly.turns()).toEqual([]);
+  });
+});
+

@@ -266,6 +266,11 @@ export function seatHome(assembly: Assembly, pairs: (SeatPair & { ctx?: ApplyCon
 export function createAssembly(typeOf: (part: PartId) => string) {
   const joints = new Map<number, AssemblyJoint>();
   let nextId = 1;
+  // The graph's turns as it stands, until it next changes (`turns`).
+  let memo: Turn[] | null = null;
+  const changed = () => {
+    memo = null;
+  };
 
   const connectorOf = (part: PartId, index: number) => PART_TYPES[typeOf(part)].connectors[index];
   const hardwareConnector = (j: AssemblyJoint) => connectorOf(j.hardware, j.hardwareConnector);
@@ -297,11 +302,13 @@ export function createAssembly(typeOf: (part: PartId) => string) {
       captured: null,
     };
     joints.set(joint.id, joint);
+    changed();
     return joint;
   }
 
   function unseat(id: number) {
     joints.delete(id);
+    changed();
   }
 
   const all = () => [...joints.values()];
@@ -337,6 +344,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     // Locking needs `ctx.captured` (the machine's `captured`), so one of the two is set.
     if (joint.kind === KIND.CAM) next.captured = fastener.state === STATE.LOCKED ? ((joint.captured ?? ctx.captured) as PartId | null) : null;
     joints.set(id, next);
+    changed();
     return true;
   }
 
@@ -537,7 +545,8 @@ export function createAssembly(typeOf: (part: PartId) => string) {
    * nothing to turn); a part has one by hand while it has studs to turn. `among` is a joint
    * snapshot (`all()`).
    */
-  function turnOf(part: PartId, among: readonly AssemblyJoint[] = all()): Turn | null {
+  function turnOf(part: PartId, among?: readonly AssemblyJoint[]): Turn | null {
+    if (!among) return turns().find(({ grip }) => (grip.kind === 'tool' ? grip.tool.hardware : grip.part) === part) ?? null;
     const tool = among.find((j) => j.hardware === part && j.kind === KIND.TOOL);
     return tool ? toolTurn(tool, among) : handTurn(part, among, toolDriven(among));
   }
@@ -545,9 +554,15 @@ export function createAssembly(typeOf: (part: PartId) => string) {
   /**
    * Every turn the graph has right now, each joint in at most one: every seated tool's,
    * then every hand grip's (what a tool is turning is the tool's). What the frame draws,
-   * dials and holds.
+   * dials and holds. Asked of the graph as it stands (no `among`), it is worked out once per
+   * change to the graph and shared — by the crank, the frame's draw and dials, and the hold.
    */
-  function turns(among: readonly AssemblyJoint[] = all()): Turn[] {
+  function turns(among?: readonly AssemblyJoint[]): Turn[] {
+    if (!among) return (memo ??= turnsIn(all()));
+    return turnsIn(among);
+  }
+
+  function turnsIn(among: readonly AssemblyJoint[]): Turn[] {
     const driven = toolDriven(among);
     const tools = among.filter((j) => j.kind === KIND.TOOL).map((tool) => toolTurn(tool, among));
     const grips = [...new Set(among.filter((j) => j.kind === KIND.STUD && isHandTurned(j) && !driven.has(j.id)).map((j) => j.mover))];
