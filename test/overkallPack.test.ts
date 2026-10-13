@@ -33,15 +33,15 @@ describe('the ÖVERKÄLL pack', () => {
     expect(checkPack(FILE)).toEqual([]);
   });
 
-  it('boxes 55 instances with their per-type counts and five spares', () => {
-    expect(pack.manifest).toHaveLength(55);
+  it('boxes 69 instances with their per-type counts and five spares', () => {
+    expect(pack.manifest).toHaveLength(69);
     expect(pack.spares.size).toBe(5);
     const types = [
       'sidePanel', 'topBottomPanel', 'backPanel', 'drawerFront', 'drawerSide', 'drawerBack', 'drawerBottom', 'knob',
       'dowel', 'camLockBolt', 'camLock', 'backFitting', 'screw', 'allenWrench', 'screwdriver',
     ];
-    expect(types.map(count)).toEqual([2, 2, 1, 1, 2, 1, 1, 1, 10, 4, 5, 6, 17, 1, 1]);
-    expect(types.reduce((sum, t) => sum + count(t), 0)).toBe(55);
+    expect(types.map(count)).toEqual([2, 2, 1, 1, 2, 1, 1, 1, 24, 4, 5, 6, 17, 1, 1]);
+    expect(types.reduce((sum, t) => sum + count(t), 0)).toBe(69);
     expect(Object.keys(FILE.parts).sort()).toEqual([...types].sort());
   });
 
@@ -50,15 +50,42 @@ describe('the ÖVERKÄLL pack', () => {
     expect(JSON.stringify(FILE)).not.toMatch(/IKEA|STORKLINTA|LACK/i);
   });
 
-  it('derives 45 joints: 16 dowel ends, 4 bolt, 4 cam, 6 fitting, 15 screw', () => {
-    expect(joints).toHaveLength(45);
-    expect([KIND.DOWEL, KIND.BOLT, KIND.CAM, KIND.FITTING, KIND.SCREW].map((k) => ofKind(k).length)).toEqual([16, 4, 4, 6, 15]);
+  it('derives 73 joints: 44 dowel ends, 4 bolt, 4 cam, 6 fitting, 15 screw', () => {
+    expect(joints).toHaveLength(73);
+    expect([KIND.DOWEL, KIND.BOLT, KIND.CAM, KIND.FITTING, KIND.SCREW].map((k) => ofKind(k).length)).toEqual([44, 4, 4, 6, 15]);
   });
 
-  it('seats every dowel end once: 8 dowels, an end in a panel and an end in a side', () => {
+  it('seats every dowel end once: 8 dowels in the carcass, an end in a panel and an end in a side', () => {
     const dowels = ofKind(KIND.DOWEL);
     expect(dowels.filter((j) => typeOf.get(j.host) === 'topBottomPanel')).toHaveLength(8);
     expect(dowels.filter((j) => typeOf.get(j.host) === 'sidePanel')).toHaveLength(8);
+  });
+
+  it('lines every drawer joint up with two dowels, and every screwed joint is one of them', () => {
+    // A dowel's two ends are two joints; the part pair it joins is the pair of their hosts.
+    const ends = new Map<string, string[]>();
+    for (const j of ofKind(KIND.DOWEL).filter((x) => inDrawer(x.host))) ends.set(j.hardware, [...(ends.get(j.hardware) ?? []), j.host]);
+    const pair = (a: string, b: string) => [a, b].sort().join('|');
+    const dowelsPerPair = new Map<string, number>();
+    for (const hosts of ends.values()) {
+      expect(hosts, 'a drawer dowel joins two parts').toHaveLength(2);
+      dowelsPerPair.set(pair(hosts[0], hosts[1]), (dowelsPerPair.get(pair(hosts[0], hosts[1])) ?? 0) + 1);
+    }
+    expect(ends.size).toBe(14);
+    expect([...dowelsPerPair.values()]).toEqual(Array(7).fill(2));
+    // Every screw but the knob's drives through a joint two dowels already hold true.
+    for (const j of ofKind(KIND.SCREW).filter((x) => typeOf.get(x.host) !== 'knob')) {
+      expect(dowelsPerPair.get(pair(j.host, j.through!)), `${j.hardware}: ${j.host} → ${j.through}`).toBe(2);
+    }
+  });
+
+  it('gives every part a screw drives into a pilot hole where the tip lands, 15 in all', () => {
+    const pilots = (type: string) => FILE.parts[type].connectors.filter((c) => c.type === CONNECTOR.SCREW_PILOT).length;
+    expect(['drawerSide', 'drawerBottom', 'drawerFront'].map(pilots)).toEqual([4, 6, 1]);
+    const filled = (type: string) => pack.manifest.filter((p) => p.type === type).length * pilots(type);
+    expect(filled('drawerSide') + filled('drawerBottom') + filled('drawerFront')).toBe(15);
+    // The validator rule `pilot-hole` holds the tips to them; every screw has one under it.
+    for (const j of ofKind(KIND.SCREW)) expect(pilots(typeOf.get(j.through!)!), `${j.hardware} through ${j.through}`).toBeGreaterThan(0);
   });
 
   it('catches every bolt head with a cam, and passes every fitting into a panel', () => {
@@ -110,11 +137,11 @@ describe('the ÖVERKÄLL pack', () => {
     for (const part of Object.values(pack.partTypes)) expect(COLORS).toHaveProperty(part.color);
   });
 
-  it('draws parts ×2, lying ×5, faceDown ×2, upright ×5', () => {
+  it('draws parts ×2, lying ×5, faceDown ×2, upright ×11', () => {
     const poses = FILE.manual.pages.flatMap((p) => (p.kind === 'step' || p.kind === 'special' ? [p.pose] : []));
     const tally = (pose: string) => poses.filter((p) => p === pose).length;
-    expect(['parts', 'lying', 'faceDown', 'upright'].map(tally)).toEqual([2, 5, 2, 5]);
-    expect(poses).toHaveLength(14);
+    expect(['parts', 'lying', 'faceDown', 'upright'].map(tally)).toEqual([2, 5, 2, 11]);
+    expect(poses).toHaveLength(20);
   });
 });
 
@@ -142,15 +169,27 @@ describe("ÖVERKÄLL's booklet", () => {
     }
   });
 
-  it('builds the drawer first, before the carcass closes around it, every screw with the screwdriver', () => {
+  it('builds the drawer first, at each joint dowels in, the part pressed on, then the screws', () => {
     const steps = pages.flatMap((p) => (p.kind === 'step' ? [p] : []));
-    expect(steps.slice(0, 4).map((s) => [s.number, s.pose, s.parts.length, s.joints.length, s.tool])).toEqual([
-      [1, 'upright', 3, 4, 'screwdriver'],
-      [2, 'upright', 1, 6, 'screwdriver'],
-      [3, 'upright', 1, 4, 'screwdriver'],
-      [4, 'upright', 1, 1, 'screwdriver'],
+    const drawer = steps.slice(0, 10);
+    expect(drawer.map((s) => [s.number, s.pose, s.parts.length, s.joints.length, s.tool])).toEqual([
+      [1, 'upright', 2, 4, null],
+      [2, 'upright', 1, 4, null],
+      [3, 'upright', 0, 4, 'screwdriver'],
+      [4, 'upright', 0, 6, null],
+      [5, 'upright', 1, 6, null],
+      [6, 'upright', 0, 6, 'screwdriver'],
+      [7, 'upright', 0, 4, null],
+      [8, 'upright', 1, 4, null],
+      [9, 'upright', 0, 4, 'screwdriver'],
+      [10, 'upright', 1, 1, 'screwdriver'],
+    ]);
+    // The hardware a page brings out: the dowels on the page that puts them in, the screws on
+    // the one that drives them; the page that presses the part on shows no new hardware.
+    expect(drawer.map((s) => s.hardware.map((h) => h.type))).toEqual([
+      ['dowel'], [], ['screw'], ['dowel'], [], ['screw'], ['dowel'], [], ['screw'], ['screw'],
     ]);
     const firstCarcass = steps.findIndex((s) => s.parts.some((id) => CARCASS.includes(typeOf.get(id)!)));
-    expect(firstCarcass).toBe(4);
+    expect(firstCarcass).toBe(10);
   });
 });

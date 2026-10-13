@@ -22,7 +22,7 @@ CI: every PR runs the typecheck, lint, validator, tests and build (`.github/work
 items/
   johnny/flatpack.json  an item: parts, assembled poses, booklet pages, packing (Flatpack format 1)
   blank/flatpack.json   the second item: a side table of box legs and double-ended studs
-  overkall/flatpack.json  the third item: a nightstand whose drawer is a screwed box
+  overkall/flatpack.json  the third item: a nightstand whose drawer is a dowelled, screwed box
 tools/
   validate/      Flatpack schema + validator CLI (adds ajv); lib/ is the one pack implementation and owns the Flatpack types
   agent-bridge/  MCP bridge to a dev session

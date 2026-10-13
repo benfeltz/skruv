@@ -57,10 +57,12 @@ describe('AC2: the carcass is JOHNNY\'s vocabulary; the drawer is built with scr
     }
   });
 
-  it('builds the drawer with 15 screws and no other fastener inside it', () => {
+  it('builds the drawer with dowels to line it up and 15 screws to fix it, and no other fastener', () => {
     const drawerJoints = item.assembled.joints.filter((j) => !carcass.includes(typeOf.get(j.host)!));
-    expect(drawerJoints.every((j) => j.kind === KIND.SCREW)).toBe(true);
-    expect(drawerJoints).toHaveLength(15);
+    expect(drawerJoints.every((j) => j.kind === KIND.SCREW || j.kind === KIND.DOWEL)).toBe(true);
+    expect(drawerJoints.filter((j) => j.kind === KIND.SCREW)).toHaveLength(15);
+    // 14 dowels, an end in each of two drawer parts.
+    expect(drawerJoints.filter((j) => j.kind === KIND.DOWEL)).toHaveLength(28);
   });
 
   it('sets the drawer into the cavity with no joint between it and the carcass', () => {
