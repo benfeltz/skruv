@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, rotateVector } from '../tools/validate/lib/geometry.js';
 import { FASTENER } from '../src/constants.js';
@@ -8,6 +8,9 @@ import { STATE } from '../src/game/fasteners.js';
 import type { Pose, Quat, Vec3 } from '../tools/validate/lib/geometry.js';
 import type { FastenerKind } from '../tools/validate/lib/vocabulary.js';
 import type { Assembly, AssemblyJoint, Bond, Head, JointFrame } from '../src/game/assembly.js';
+import { RAIL_HOLE, SCREW_THREAD } from './support/screwParts.js';
+
+vi.mock('../src/game/item.js', async (original) => (await import('./support/screwParts.js')).withScrews(await original()));
 
 const typeOf = (id: string) => id.replace(/-\d+$/, '');
 const expectVec = (actual: number[], expected: number[], digits = 9) => actual.forEach((v, i) => expect(v).toBeCloseTo(expected[i], digits));
@@ -386,6 +389,38 @@ describe('drive and seatHome: a part set put in already fastened (1.5 display sh
     }
     for (const p of layout.parts) expect(assembly.canRelease(p.id), p.id).toBe(true);
     expect(assembly.bonds(poseOf)).toEqual([]);
+  });
+});
+
+describe('a wood screw: driven into what lies behind its hole, held there solid', () => {
+  const ORIGIN: Pose = { position: [0, 0, 0], rotation: IDENTITY };
+  function screwed() {
+    const assembly = createAssembly(typeOf) as TestAssembly;
+    const screw = assembly.seat({ partA: 'woodScrew-1', connectorA: SCREW_THREAD, partB: 'rail-1', connectorB: RAIL_HOLE, mover: 'woodScrew-1' });
+    assembly.apply(screw.id, { type: 'crank', radians: FASTENER.screwRadians }, { through: 'sidePanel-1' });
+    return { assembly, screw };
+  }
+  const bridges = (assembly: TestAssembly) => assembly.bonds(() => ORIGIN).filter((b) => b.key.startsWith('bridge:'));
+
+  it('screws home on its span, records the part behind, and bridges rail and part rigidly', () => {
+    const { assembly, screw } = screwed();
+    expect(screw.kind).toBe(KIND.SCREW);
+    expect(assembly.get(screw.id)).toMatchObject({ through: 'sidePanel-1', fastener: { state: STATE.SCREWED, progress: 1 } });
+    expect(bridges(assembly)).toMatchObject([{ a: 'rail-1', b: 'sidePanel-1', mode: 'rigid' }]);
+  });
+
+  it('drops the part behind, and the bridge, once backed off to seated', () => {
+    const { assembly, screw } = screwed();
+    assembly.apply(screw.id, { type: 'crank', radians: -FASTENER.screwRadians });
+    expect(assembly.get(screw.id)).toMatchObject({ through: null, fastener: { state: STATE.SEATED, progress: 0 } });
+    expect(bridges(assembly)).toEqual([]);
+  });
+
+  it('unscrews to seated when the part behind is taken away', () => {
+    const { assembly, screw } = screwed();
+    expect(assembly.letGoOf(['sidePanel-1'])).toEqual([screw.id]);
+    expect(assembly.get(screw.id)).toMatchObject({ through: null, fastener: { state: STATE.SEATED, progress: 0 } });
+    expect([...assembly.compoundOf('sidePanel-1')]).toEqual(['sidePanel-1']);
   });
 });
 
