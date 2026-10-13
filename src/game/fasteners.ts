@@ -7,6 +7,7 @@
 //   back fitting
 //   bolt         seated ⇄ screwed          signed crank progress (wrench)
 //   stud         seated ⇄ screwed          signed crank progress (hand or key), either end
+//   screw        seated ⇄ screwed          signed crank progress (screwdriver)
 //   cam          seated ⇄ locked           signed quarter turn (screwdriver), lock needs a
 //                                          captured bolt head
 //   tool         always seated             a tool on a head or slot fastens nothing
@@ -51,16 +52,24 @@ interface TurnLimits {
 export const isTapKind = (kind: FastenerKind) => kind === KIND.DOWEL || kind === KIND.PIN || kind === KIND.FITTING;
 
 /** Kinds turned by a tool (a stud, also by hand). */
-export const isCrankKind = (kind: FastenerKind) => kind === KIND.BOLT || kind === KIND.CAM || kind === KIND.STUD;
+export const isCrankKind = (kind: FastenerKind) => kind === KIND.BOLT || kind === KIND.CAM || kind === KIND.STUD || kind === KIND.SCREW;
 
 /**
  * The turn that takes a crank kind from seated to home, in radians — the one place a kind
- * names its span. Read from FASTENER at call time, so a ?tune of `fastener.studRadians`
- * applies at once.
+ * names its span. Read from FASTENER at call time, so a ?tune of `fastener.studRadians` or
+ * `fastener.screwRadians` applies at once.
  */
 export const spanOf = (kind: FastenerKind) => {
-  if (kind === KIND.BOLT) return FASTENER.boltRadians;
-  return kind === KIND.STUD ? FASTENER.studRadians : FASTENER.quarterTurn;
+  switch (kind) {
+    case KIND.BOLT:
+      return FASTENER.boltRadians;
+    case KIND.STUD:
+      return FASTENER.studRadians;
+    case KIND.SCREW:
+      return FASTENER.screwRadians;
+    default:
+      return FASTENER.quarterTurn;
+  }
 };
 
 /**
@@ -118,9 +127,11 @@ export function transition(f: Fastener, event: FastenerEvent, ctx: FastenerConte
     case KIND.PIN:
     case KIND.FITTING:
       return tapPull(f, event.type);
-    // Nothing holds a stud in (`held` is a locked cam's, set only on bolts), so it backs out freely.
+    // Nothing holds a stud or a screw in (`held` is a locked cam's, set only on bolts), so
+    // either backs out freely.
     case KIND.BOLT:
     case KIND.STUD:
+    case KIND.SCREW:
       if (event.type !== 'crank') return f;
       return turned(f, event.radians, spanOf(f.kind), { canFasten: true, canLoosen: !ctx.held }, STATE.SCREWED);
     case KIND.CAM:

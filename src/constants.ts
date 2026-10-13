@@ -589,6 +589,8 @@ export const FASTENER = {
   // Hand or key turn from a seated threaded stud end to a screwed one: two full turns, a
   // fiddly stud being a turn-and-a-bit slower to seat than a bolt on the phone (?tune it).
   studRadians: 4 * Math.PI,
+  // Screwdriver turn from a seated wood screw to one driven home: two full turns (?tune it).
+  screwRadians: 4 * Math.PI,
   // Screwdriver turn from an open cam lock to a locked one.
   quarterTurn: Math.PI / 2,
   // A cam catches any screwed bolt head this close to its recess, and how deep each
