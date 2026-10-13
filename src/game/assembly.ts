@@ -128,7 +128,24 @@ export interface Turn {
    * something fastened holds it.
    */
   loose: { parts: PartId[]; restFrom: AssemblyJoint } | null;
+  /**
+   * Where the turn stands, the one answer to carry, turn and lift:
+   *   loose    nothing partway and something loose (`loose`): a drag carries the part, a
+   *            tap lifts it off its unfastened seats, a still press on it is a tap
+   *   partway  some joint strictly between seated and home: a drag on the part turns it
+   *   home     every joint fastened, nothing loose: a drag carries the whole assembly, as
+   *            any fastened compound — loosening starts only from the ring, as under a key
+   */
+  state: TurnState;
 }
+
+/** Where a turn stands — see `Turn.state`. */
+export type TurnState = 'loose' | 'partway' | 'home';
+
+const stateOf = (joints: readonly AssemblyJoint[], loose: Turn['loose']): TurnState => {
+  if (joints.some((j) => j.fastener.progress > 0 && j.fastener.progress < 1)) return 'partway';
+  return loose ? 'loose' : 'home';
+};
 
 /**
  * The joints a turn moves now, tightening (`direction` 1) or loosening (−1): of a tool's,
@@ -144,15 +161,6 @@ export function advancing(turn: Turn, direction: 1 | -1): AssemblyJoint[] {
   }
   return [];
 }
-
-/**
- * Whether a turn by hand is under way — a drag on its part turns it rather than carrying it,
- * a tap is no lift-off: some joint is partway, or the unit it turns is fastened in place
- * (nothing loose). At nothing, or home on a stud that is still at nothing in the top (a leg
- * screwed onto its stud and carried on), the unit is loose: a drag carries it, a tap lifts
- * it off its unfastened seats.
- */
-export const isUnderWay = (turn: Turn) => turn.loose === null || turn.joints.some((j) => j.fastener.progress > 0 && j.fastener.progress < 1);
 
 /**
  * A turn's joints by layer, nearest first: a tool's one; a hand's near joints (the part on
@@ -266,6 +274,8 @@ export function seatHome(assembly: Assembly, pairs: (SeatPair & { ctx?: ApplyCon
 export function createAssembly(typeOf: (part: PartId) => string) {
   const joints = new Map<number, AssemblyJoint>();
   let nextId = 1;
+  // A part type's coincident connectors, by `type#index` — a property of the type, found once.
+  const coincidentByType = new Map<string, number[]>();
   // The graph's turns as it stands, until it next changes (`turns`).
   let memo: Turn[] | null = null;
   const changed = () => {
@@ -459,8 +469,14 @@ export function createAssembly(typeOf: (part: PartId) => string) {
    * end of the stud. Whatever is seated by `index` buries them too.
    */
   function coincident(part: PartId, index: number) {
-    const at = connectorOf(part, index).position;
-    return PART_TYPES[typeOf(part)].connectors.flatMap((c, i) => (i !== index && distance(c.position, at) <= CONTRACT.mateTolerance ? [i] : []));
+    const key = `${typeOf(part)}#${index}`;
+    let found = coincidentByType.get(key);
+    if (!found) {
+      const at = connectorOf(part, index).position;
+      found = PART_TYPES[typeOf(part)].connectors.flatMap((c, i) => (i !== index && distance(c.position, at) <= CONTRACT.mateTolerance ? [i] : []));
+      coincidentByType.set(key, found);
+    }
+    return found;
   }
 
   // --- turns: one record for everything a turn is ---
@@ -479,13 +495,15 @@ export function createAssembly(typeOf: (part: PartId) => string) {
   // the unit that moved into that seat: a bolt at its mouth, a leg at its stud's end.
   function toolTurn(tool: AssemblyJoint, among: readonly AssemblyJoint[]): Turn {
     const target = turnedFrom(tool.host, tool.hostConnector, among);
-    const loose = target && looseOf(target.mover, [target], among);
+    const joints = target ? [target] : [];
+    const loose = target && looseOf(target.mover, joints, among);
     return {
       grip: { kind: 'tool', tool },
-      joints: target ? [target] : [],
+      joints,
       turned: { part: tool.host, connector: tool.hostConnector, sense: -1, spins: true },
       riders: [],
       loose,
+      state: stateOf(joints, loose),
     };
   }
 
@@ -511,8 +529,12 @@ export function createAssembly(typeOf: (part: PartId) => string) {
       const nearJoint = own.find((j) => j.host === part) ?? null;
       const beyond = own.filter((j) => j !== nearJoint && (j.mover === id || j.mover === part));
       const nearHome = nearJoint !== null && isHome(nearJoint.fastener);
+      // The stud is one piece with the part once its near joint is home — or, keyed in rather
+      // than turned on by this part, as long as that joint holds at all (screwed, if backed
+      // off partway): the part is carrying it.
+      const carries = nearJoint !== null && (nearHome || (nearJoint.mover !== part && isFastened(nearJoint.fastener)));
       if (nearJoint && nearJoint.mover === part && !(nearHome && beyond.length === 0)) near.push(nearJoint);
-      if (nearHome) {
+      if (carries) {
         far.push(...beyond);
         riders.push(id);
       } else if (!nearJoint) far.push(...beyond.filter((j) => j.mover === part));
@@ -520,12 +542,14 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     }
     const joints = [...near, ...far];
     if (joints.length === 0) return null;
+    const loose = looseOf(part, joints, among);
     return {
       grip: { kind: 'hand', part },
       joints,
       turned: turned ?? { part: joints[0].hardware, connector: joints[0].hardwareConnector, sense: 1, spins: studs.length === 1 },
       riders,
-      loose: looseOf(part, joints, among),
+      loose,
+      state: stateOf(joints, loose),
     };
   }
 

@@ -47,12 +47,11 @@ export function arcLength(progress: number, radius: number = TURN_RING.radius) {
 export const tightensClockwise = (intoHole: number[], viewDirection: number[]) => tightenSign(intoHole, viewDirection) > 0;
 
 /**
- * Whether a turn's dial is drawn. A turn with nothing to turn (a key on a buried hex) has
- * none. A tool's stays for as long as the tool is on, home or not; a hand-turned part's goes
- * once the turn is home — four rings forever on a built table would be noise — but is kept
- * while `flashing`, to flash its arrival.
+ * Whether a turn's dial is drawn: whenever it has something to turn, home or not — the ring
+ * is where a tool's or a hand's turn is loosened from (a drag on a home part carries it). A
+ * turn with nothing to turn (a key on a buried hex) has none.
  */
-export const isDrawn = (turn: Turn, flashing: boolean) => turn.joints.length > 0 && (turn.grip.kind === 'tool' || !isTurnHome(turn) || flashing);
+export const isDrawn = (turn: Turn) => turn.joints.length > 0;
 
 /**
  * Of the dials whose grab band takes `point`, the one a press there means: one whose

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { FASTENER } from '../src/constants.js';
-import { advancing, createAssembly, isUnderWay } from '../src/game/assembly.js';
+import { advancing, createAssembly } from '../src/game/assembly.js';
 import { STATE } from '../src/game/fasteners.js';
 import { ASSEMBLED, setItem } from '../src/game/item.js';
 import { isTurnHome, turnProgress } from '../src/game/turnRing.js';
@@ -56,13 +56,13 @@ describe('1. a leg set onto a standing stud: circled home, loosened, tapped off'
 
   it('is the leg\'s turn by hand: its own joint, about its hole, nothing riding, the leg loose at the stud\'s end', () => {
     const { assembly, inLeg } = bench();
-    expect(isUnderWay(turn(assembly, 'leg-1'))).toBe(false);
     expect(turn(assembly, 'leg-1')).toEqual<Turn>({
       grip: { kind: 'hand', part: 'leg-1' },
       joints: [assembly.get(inLeg.id)!],
       turned: { part: 'leg-1', connector: LEG_HOLE, sense: 1, spins: true },
       riders: [],
       loose: { parts: ['leg-1'], restFrom: assembly.get(inLeg.id)! },
+      state: 'loose',
     });
     // The stud and the top are nobody's grip: the stud is keyed, the top's joint the stud's.
     expect(assembly.turnOf('doubleEndedStud-1')).toBeNull();
@@ -79,8 +79,8 @@ describe('1. a leg set onto a standing stud: circled home, loosened, tapped off'
     expect(t.riders).toEqual(['doubleEndedStud-1']);
     expect(t.loose).toBeNull();
     expect(isTurnHome(t)).toBe(true);
-    // Fastened in place: under way — a drag loosens it.
-    expect(isUnderWay(t)).toBe(true);
+    // Fastened in place: home — a drag carries the table, the ring loosens it.
+    expect(t.state).toBe('home');
     expect(advancing(t, 1)).toEqual([]);
     expectOnce(assembly);
   });
@@ -135,11 +135,11 @@ describe('2. a leg screwed home onto a loose stud, carried onto the top', () => 
       turned: { part: 'leg-1', connector: LEG_HOLE, sense: 1, spins: true },
       riders: ['doubleEndedStud-1'],
       loose: { parts: ['leg-1', 'doubleEndedStud-1'], restFrom: assembly.get(inTop.id)! },
+      state: 'loose',
     });
     // The leg is already home on its stud: tightening goes on into the top. Nothing is
-    // partway and the pair is loose: not under way — a drag carries it, a tap lifts it off.
+    // partway and the pair is loose — a drag carries it, a tap lifts it off.
     expect(ids(advancing(t, 1))).toEqual([inTop.id]);
-    expect(isUnderWay(t)).toBe(false);
     expectOnce(assembly);
   });
 
@@ -152,6 +152,22 @@ describe('2. a leg screwed home onto a loose stud, carried onto the top', () => 
     expect(ids(advancing(turn(assembly, 'leg-1'), -1))).toEqual([inLeg.id]);
     set(assembly, inLeg, 0);
     expect(turn(assembly, 'leg-1').loose).toEqual({ parts: ['leg-1'], restFrom: assembly.get(inLeg.id)! });
+  });
+
+  // Review round 6: keyed into the leg, then backed off partway (screwed, not home) and
+  // carried on — the leg still carries its stud, so the top joint is the leg's turn.
+  it('keyed in and backed off partway, still carries its stud: the top joint is the leg\'s turn, the pair loose', () => {
+    const assembly = createAssembly(typeOf);
+    const keyed = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: STUD_END_2, partB: 'leg-1', connectorB: LEG_HOLE, mover: 'doubleEndedStud-1' });
+    home(assembly, keyed);
+    set(assembly, keyed, 0.5);
+    expect(assembly.get(keyed.id)!.fastener.state).toBe(STATE.SCREWED);
+    const inTop = carryOn(assembly);
+    const t = turn(assembly, 'leg-1');
+    expect(ids(t.joints)).toEqual([inTop.id]);
+    expect(t.riders).toEqual(['doubleEndedStud-1']);
+    expect(t.loose).toEqual({ parts: ['leg-1', 'doubleEndedStud-1'], restFrom: assembly.get(inTop.id)! });
+    expect(t.state).toBe('loose');
   });
 
   it('rests the pair at the top\'s mouth, the stud and the leg it is in together', () => {
@@ -204,6 +220,15 @@ describe('3. a top dropped onto four standing studs', () => {
     expect(turnProgress(t)).toBe(0);
   });
 
+  it('stands loose at nothing, partway as it goes on, home on all four', () => {
+    const { assembly, onTop } = bench();
+    expect(turn(assembly, 'top-1').state).toBe('loose');
+    for (const j of onTop) set(assembly, j, 0.5);
+    expect(turn(assembly, 'top-1').state).toBe('partway');
+    for (const j of onTop) home(assembly, j);
+    expect(turn(assembly, 'top-1').state).toBe('home');
+  });
+
   it('home on all four, is home; loosening turns all four off together', () => {
     const { assembly, onTop } = bench();
     for (const j of onTop) home(assembly, j);
@@ -232,6 +257,7 @@ describe('4. a stud half into the top with a leg screwed home on it', () => {
     expect(t.riders).toEqual(['doubleEndedStud-1']);
     expect(turnProgress(t)).toBeCloseTo(0.5, 9);
     expect(isTurnHome(t)).toBe(false);
+    expect(t.state).toBe('partway');
     expect(ids(advancing(t, 1))).toEqual([inTop.id]);
     // Both hexes buried: no key reaches the stud — the leg is the only handle.
     expect(assembly.turnedFrom('doubleEndedStud-1', 2)).toBeNull();
@@ -269,6 +295,7 @@ describe('5. a key on a hand-seated stud', () => {
       riders: [],
       // Loose, it is the top that moved into the seat: held at the stud's end, as by hand.
       loose: { parts: ['top-1'], restFrom: assembly.get(joint.id)! },
+      state: 'loose',
     });
     expect(assembly.turnOf('top-1')).toBeNull();
     expect(assembly.turns().map((t) => t.grip.kind)).toEqual(['tool']);
@@ -328,6 +355,7 @@ describe('6. JOHNNY: a bolt under the key, a cam under the screwdriver — as be
       turned: { part: 'camLockBolt-1', connector: BOLT_HEAD, sense: -1, spins: true },
       riders: [],
       loose: { parts: ['camLockBolt-1'], restFrom: assembly.get(bolt.id)! },
+      state: 'loose',
     });
     home(assembly, bolt);
     expect(turn(assembly, 'allenWrench-1').loose).toBeNull();
@@ -341,6 +369,7 @@ describe('6. JOHNNY: a bolt under the key, a cam under the screwdriver — as be
       turned: { part: 'camLock-1', connector: CAM_SLOT, sense: -1, spins: true },
       riders: [],
       loose: { parts: ['camLock-1'], restFrom: assembly.get(cam.id)! },
+      state: 'loose',
     });
   });
 

@@ -85,7 +85,15 @@ function table({ studs = 1, sunk = 1, on = 0, camera = [0, 1.2, 0.8] as Vec3 }: 
     const c = m.screen(world);
     m.circle({ clientX: c.clientX + TURN_RING.radius, clientY: c.clientY }, world, degrees, 0, TURN_RING.radius);
   };
-  return { ...m, top, studs: studParts, legs: legParts, joint, progress, tighten, centre, holdOn, dragOff, ring };
+  // A press on the ring's band round `world`, held `frames` frames still, let go.
+  const holdRing = (world: Vec3, frames: number) => {
+    const c = m.screen(world);
+    const at = { clientX: c.clientX + TURN_RING.radius, clientY: c.clientY };
+    m.canvas.fire('pointerdown', at);
+    m.hold(frames);
+    m.canvas.fire('pointerup', at);
+  };
+  return { ...m, top, studs: studParts, legs: legParts, joint, progress, tighten, centre, holdOn, dragOff, ring, holdRing };
 }
 type Table = ReturnType<typeof table>;
 const studIntoTop = (t: Table, n = 1, mover = `doubleEndedStud-${n}`) =>
@@ -106,6 +114,7 @@ describe('1. a leg set onto a standing stud', () => {
 
   it('carries off on a drag at nothing, and turns from a drag on its ring — clockwise from above, as a nut goes on', () => {
     const b = bench();
+    expect(b.assembly.turnOf('leg-1')!.state).toBe('loose');
     expect(b.dragOff(b.leg)).toBe('move');
     const c = bench();
     expect(c.tighten(c.leg, 0)).toBe(1);
@@ -113,40 +122,63 @@ describe('1. a leg set onto a standing stud', () => {
     expect(c.dials.at(-1)).toMatchObject([{ progress: 0, clockwise: true }]);
     c.ring(c.centre(c.leg, 0), 120);
     expect(c.progress(c.inLeg)).toBeGreaterThan(0);
-    // Under way, a drag on the leg itself turns it too: the other way backs it off.
+    // Partway, a drag on the leg itself turns it too: the other way backs it off.
     const turned = c.progress(c.inLeg);
     c.circle(c.screen(c.leg.mesh.position), c.centre(c.leg, 0), -60, 0, TURN_RING.radius);
     expect(c.progress(c.inLeg)).toBeLessThan(turned);
   });
 
-  it('drives home on a still press, flashes its dial home, then shows none', () => {
+  it('drives home on a still press on its ring, flashes home, and keeps its ring, full', () => {
     const b = bench();
-    b.holdOn(b.leg, TAP_FRAMES + DRIVE_FRAMES);
+    b.holdRing(b.centre(b.leg, 0), TAP_FRAMES + DRIVE_FRAMES);
     expect(b.joint(b.inLeg.id).fastener).toMatchObject({ state: STATE.SCREWED, progress: 1 });
     expect(b.fastens()).toHaveLength(1);
     b.dials.length = 0;
     b.hold(1);
     expect(b.dials.some((d) => d?.[0]?.flashing)).toBe(true);
     b.hold(FLASH_FRAMES);
-    expect(b.dials.at(-1)).toBeNull();
+    expect(b.dials.at(-1)).toMatchObject([{ progress: 1, flashing: false }]);
   });
 
-  it('home, loosens off its stud from a drag — the stud staying in the top — and is held at the stud\'s end at nothing', () => {
+  // Review round 6: home, a drag carries — loosening starts from the ring, as under a key.
+  it('home, carries the table on a drag on the leg — not a turn', () => {
     const b = bench();
-    b.holdOn(b.leg, TAP_FRAMES + DRIVE_FRAMES);
+    b.assembly.drive(b.inLeg.id);
+    expect(b.assembly.turnOf('leg-1')!.state).toBe('home');
+    expect(b.dragOff(b.leg)).not.toBe('crank');
+    expect(b.joint(b.inLeg.id).fastener.progress).toBe(1);
+  });
+
+  it("home, loosens off its stud from its ring — the stud staying in the top — held at the stud's end mid-drag, not falling", () => {
+    const b = bench();
+    b.assembly.drive(b.inLeg.id);
+    b.hold(1);
     b.grabbed.length = 0;
-    b.circle(b.screen(b.leg.mesh.position), b.centre(b.leg, 0), -b.tighten(b.leg, 0) * 1500, 0, TURN_RING.radius);
+    // The whole loosening in one drag: held at nothing before the finger lifts.
+    const centre = b.centre(b.leg, 0);
+    const c = b.screen(centre);
+    const at = (deg: number) => {
+      const a = (deg * Math.PI) / 180;
+      return { clientX: c.clientX + TURN_RING.radius * Math.cos(a), clientY: c.clientY + TURN_RING.radius * Math.sin(a) };
+    };
+    const sign = -b.tighten(b.leg, 0);
+    b.canvas.fire('pointerdown', at(0));
+    for (let d = 10; d <= 1500; d += 10) {
+      b.canvas.fire('pointermove', at(sign * d));
+      b.router.update(FRAME);
+    }
     expect(b.progress(b.inLeg)).toBe(0);
-    expect(b.joint(b.inTop.id).fastener).toMatchObject({ state: STATE.SCREWED, progress: 1 });
+    expect(b.router.dragging?.mode).toBe('crank');
     expect(b.grabbed).toContain(b.leg.body);
+    b.canvas.fire('pointerup', at(sign * 1500));
+    expect(b.joint(b.inTop.id).fastener).toMatchObject({ state: STATE.SCREWED, progress: 1 });
     const [x, y, z] = legAt(0, 1, 0);
     expect(b.leg.mesh.position.toArray()).toEqual([expect.closeTo(x, 6), expect.closeTo(y, 6), expect.closeTo(z, 6)]);
   });
 
-  it('lifts off on a tap at nothing, handed back to the simulation; part-turned, the tap is the ordinary one', () => {
+  it('lifts off on a tap at nothing, handed back to the simulation; partway, the tap is the ordinary one', () => {
     const b = bench();
-    b.holdOn(b.leg, TAP_FRAMES + 3);
-    expect(b.progress(b.inLeg)).toBeGreaterThan(0);
+    b.assembly.apply(b.inLeg.id, { type: 'crank', radians: FASTENER.studRadians / 4 });
     const tapped = vi.spyOn(b.assembly, 'tap');
     b.tap(b.screen(b.leg.mesh.position));
     expect(b.joint(b.inLeg.id)).not.toBeNull();
@@ -160,6 +192,13 @@ describe('1. a leg set onto a standing stud', () => {
     c.tap(c.screen(c.leg.mesh.position));
     expect(c.assembly.get(c.inLeg.id)).toBeNull();
     expect(c.released).toContain(c.leg.body);
+  });
+
+  // Review round 6: a slow tap on a loose leg is still a tap, not a drive.
+  it('lifts off on a slow tap at nothing — a still press on a loose leg drives nothing', () => {
+    const b = bench();
+    b.holdOn(b.leg, TAP_FRAMES + 3);
+    expect(b.assembly.get(b.inLeg.id)).toBeNull();
   });
 
   // Two legs on two studs, the camera far enough off that leg 2 lies in leg 1's ring band.
@@ -187,11 +226,13 @@ describe('1. a leg set onto a standing stud', () => {
     expect(pair().drag()).toEqual({ mode: 'move', part: 'leg-2' });
   });
 
-  it("is its own press inside a neighbour's ring: home and ringless, its own loosening turn", () => {
+  it("is its own press inside a neighbour's ring: home, its own carry — never the neighbour's crank", () => {
     const b = pair();
     b.assembly.drive(b.assembly.all().find((j) => j.host === 'leg-2')!.id);
     b.hold(FLASH_FRAMES);
-    expect(b.drag()).toEqual({ mode: 'crank', part: 'leg-2' });
+    const drag = b.drag();
+    expect(drag).toMatchObject({ part: 'leg-2' });
+    expect(drag?.mode).not.toBe('crank');
   });
 });
 
@@ -240,13 +281,29 @@ describe('2. a leg screwed home onto a loose stud, carried onto the top', () => 
     expect(c.joint(c.inLeg.id).fastener).toMatchObject({ state: STATE.SCREWED, progress: 1 });
   });
 
+  // A stud keyed into the leg and backed off partway still rides the leg into the top: its
+  // own joint, which no turn owns, does not draw it back where its body is.
+  it('keyed, backed off partway and carried on, draws its stud riding down with the leg', () => {
+    const b = bench({ keyed: true });
+    b.assembly.apply(b.inLeg.id, { type: 'crank', radians: -FASTENER.studRadians / 2 });
+    expect(b.joint(b.inLeg.id).fastener).toMatchObject({ state: STATE.SCREWED, progress: 0.5 });
+    const inTop = carryOn(b);
+    b.assembly.apply(inTop.id, { type: 'crank', radians: FASTENER.studRadians / 8 });
+    b.hold(1);
+    expect(b.leg.mesh.position.y).toBeCloseTo(b.leg.body.translation().y - SINK() / 8, 9);
+    expect(b.stud.mesh.position.y).toBeCloseTo(b.stud.body.translation().y - SINK() / 8, 9);
+  });
+
   it('keyed into the leg and carried on, circles out of the top to nothing and is held there as a pair; a tap hands both back', () => {
     const b = bench({ keyed: true });
     const inTop = carryOn(b);
-    b.holdOn(b.leg, TAP_FRAMES + DRIVE_FRAMES);
+    // Loose, the ring is where it starts: a hold there drives it home.
+    b.hold(1);
+    b.holdRing(b.centre(b.leg, 0), TAP_FRAMES + DRIVE_FRAMES);
     expect(b.progress(inTop)).toBe(1);
     b.grabbed.length = 0;
-    b.circle(b.screen(b.leg.mesh.position), b.centre(b.leg, 0), -b.tighten(b.leg, 0) * 1500, 0, TURN_RING.radius);
+    // Home, loosening is from the ring too.
+    b.ring(b.centre(b.leg, 0), -b.tighten(b.leg, 0) * 1500);
     expect(b.progress(inTop)).toBe(0);
     expect(b.progress(b.inLeg)).toBe(1);
     expect(b.grabbed).toEqual(expect.arrayContaining([b.leg.body, b.stud.body]));
@@ -279,13 +336,15 @@ describe('3. a top dropped onto four standing studs', () => {
       const c = m.screen(hole);
       m.circle({ clientX: c.clientX + TURN_RING.radius, clientY: c.clientY }, hole, degrees, 0, TURN_RING.radius);
     };
-    const holdOn = (frames: number) => {
-      const at = m.screen(top.mesh.position);
+    // A press on the top's ring band, held still `frames` frames.
+    const holdRing = (frames: number) => {
+      const c = m.screen(hole);
+      const at = { clientX: c.clientX + TURN_RING.radius, clientY: c.clientY };
       m.canvas.fire('pointerdown', at);
       m.hold(frames);
       m.canvas.fire('pointerup', at);
     };
-    return { ...m, top, studs, legs, onTop, inLegs, progresses, hole, sweep, holdOn };
+    return { ...m, top, studs, legs, onTop, inLegs, progresses, hole, sweep, holdRing };
   }
 
   it('shows one dial, and turns all four from one circle with one set of ratchet clicks', () => {
@@ -333,7 +392,8 @@ describe('3. a top dropped onto four standing studs', () => {
   it('drives the rest home when one is home early, and draws the riding studs each once', () => {
     const b = bench();
     b.assembly.drive(b.onTop[0].id);
-    b.holdOn(TAP_FRAMES + DRIVE_FRAMES);
+    b.hold(1);
+    b.holdRing(TAP_FRAMES + DRIVE_FRAMES);
     expect(b.progresses()).toEqual([1, 1, 1, 1]);
     // Home on all four, the studs ride with the top — one move each, the top's, which at
     // home is none: each stud drawn where its body is.
@@ -344,11 +404,24 @@ describe('3. a top dropped onto four standing studs', () => {
     }
   });
 
-  it('loosens all four together from a drag on the top', () => {
+  // Review round 6: home on all four, the table moves as one; the ring loosens it.
+  it('home on all four: a drag on the top moves the table, not a turn', () => {
     const b = bench();
     for (const j of b.onTop) b.assembly.drive(j.id);
-    // Home, a drag on the top itself is the turn: its ring is gone.
-    b.circle(b.screen(b.top.mesh.position), b.hole, -240, 0, TURN_RING.radius);
+    expect(b.assembly.turnOf('top-1')!.state).toBe('home');
+    const at = b.screen(b.top.mesh.position);
+    b.canvas.fire('pointerdown', at);
+    b.canvas.fire('pointermove', { clientX: at.clientX + 60, clientY: at.clientY });
+    expect(b.router.dragging?.mode).not.toBe('crank');
+    b.canvas.fire('pointerup', { clientX: at.clientX + 60, clientY: at.clientY });
+    expect(b.progresses()).toEqual([1, 1, 1, 1]);
+  });
+
+  it('loosens all four together from its ring', () => {
+    const b = bench();
+    for (const j of b.onTop) b.assembly.drive(j.id);
+    b.hold(1);
+    b.sweep(-240);
     const p = b.progresses();
     expect(p[0]).toBeLessThan(1);
     for (const x of p) expect(x).toBeCloseTo(p[0], 9);
@@ -458,6 +531,20 @@ describe('5. a key on a hand-seated stud', () => {
     expect(b.assembly.turnOf(b.key.id)).toMatchObject({ joints: [] });
     b.tap(b.screen(b.key.mesh.position));
     expect(b.assembly.get(keyJoint.id)).toBeNull();
+  });
+});
+
+// Review round 6: joints no turn owns — a stud keyed into its leg and keyed into the top,
+// the stud the mover of both — draw the stud once, by the one still to go home.
+describe('a stud with two joints no turn owns', () => {
+  it('is drawn once a frame, sunk by the joint still going in — not reset by the one home', () => {
+    const t = table({ sunk: 0, on: 1 });
+    const inTop = studIntoTop(t);
+    t.assembly.drive(legOntoStud(t, 1, 'doubleEndedStud-1').id);
+    set(t, inTop, 0.5);
+    expect(t.assembly.turns()).toEqual([]);
+    t.hold(1);
+    expect(t.studs[0].mesh.position.y).toBeCloseTo(t.studs[0].body.translation().y - SINK() / 2, 9);
   });
 });
 
