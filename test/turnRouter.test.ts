@@ -211,6 +211,17 @@ describe('1. a leg set onto a standing stud', () => {
     expect(c.rings.selected).toBeNull();
   });
 
+  // Ben's manual test: home, the leg is part of the built table — a tap selects it, and the
+  // gizmo on it turns (flips) the whole table.
+  it('home, is selected by a tap, as any part of the built table', () => {
+    const b = bench();
+    b.assembly.drive(b.inLeg.id);
+    b.tap(b.screen(b.leg.mesh.position));
+    expect(b.rings.selected).toBe(b.leg);
+    b.hold(1);
+    expect(b.rings.selected).toBe(b.leg);
+  });
+
   // Two legs on two studs, the camera far enough off that leg 2 lies in leg 1's ring band.
   function pair() {
     const b = table({ studs: 2, sunk: 1, on: 0, camera: [0, 7, 5] });

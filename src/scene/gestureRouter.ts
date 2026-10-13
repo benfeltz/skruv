@@ -1564,6 +1564,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // --- turn ring: a dial round what each turn turns ---
 
+  // Whether a turn is a part being screwed on by hand — loose on its stud or partway, not yet
+  // home: the gizmo stays off it until it is part of the built piece.
+  const screwing = (turn: Turn | null | undefined) => turn?.grip.kind === 'hand' && turn.state !== 'home';
+
   // Whether the finger is on a turn's grip — the part's own press, cranking or still.
   const isPressed = (turn: Turn) => touching !== null && touching.id === gripOf(turn);
 
@@ -1664,8 +1668,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     for (const id of pressed) reportFastening(id, false);
     if (pressed.length > 0) return reconcile();
     // A part held at its seat is the router's: turning it would drop it off the seat.
-    // A part with a turn by hand gets no gizmo: it sits on its studs, and turns by its circle.
-    if (!placed.has(part) && turn?.grip.kind !== 'hand') onTap?.(part);
+    // A part being screwed on by hand gets no gizmo — it turns by its circle. Home, it is part
+    // of the built piece, and a tap selects it as any part: the gizmo turns (flips) the whole.
+    if (!placed.has(part) && !screwing(turn)) onTap?.(part);
   }
 
   // A panel carried in on its hardware, or with its assembly, sits in seats it touches only
@@ -1712,10 +1717,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     // Every turn the graph has, once per frame: the dials and the draw read the same records.
     const joints = assembly.all();
     const world = assembly.turns();
-    // A part circled by hand has no gizmo — selected and then set onto its stud, it sheds it:
-    // it turns by its circle, and the gizmo cannot turn a seated part anyway.
+    // A part being screwed on by hand has no gizmo — selected and then set onto its stud, it
+    // sheds it: it turns by its circle, and the gizmo cannot turn a seated part anyway.
     const selected = rings?.selected;
-    if (selected && world.some((turn) => turn.grip.kind === 'hand' && turn.grip.part === selected.id)) onTap?.(null);
+    if (selected && world.some((turn) => screwing(turn) && gripOf(turn) === selected.id)) onTap?.(null);
     showDials(delta, world);
     drawTurns(joints, world);
     followRiders();
