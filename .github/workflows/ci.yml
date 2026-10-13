@@ -21,5 +21,6 @@ jobs:
       - run: npm run lint
       - run: npx tsx tools/validate/index.ts items/johnny
       - run: npx tsx tools/validate/index.ts items/blank
+      - run: npx tsx tools/validate/index.ts items/overkall
       - run: npx vitest run
       - run: npm run build

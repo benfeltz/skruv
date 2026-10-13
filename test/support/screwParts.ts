@@ -15,6 +15,12 @@ export const SCREW_PARTS = Object.freeze({
       { id: 'dowelHole-1', type: 'dowelHole', position: [0.03, -0.005, 0], axis: [0, -1, 0] },
     ],
   },
+  // A plain block with no connectors at all: what a screw can still end in.
+  block: {
+    size: [0.1, 0.016, 0.1],
+    color: 'partPanel',
+    connectors: [],
+  },
   woodScrew: {
     size: [0.004, 0.03, 0.004],
     color: 'partMetal',

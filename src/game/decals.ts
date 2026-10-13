@@ -31,6 +31,7 @@ const KIND_BY_SOCKET: Readonly<Partial<Record<ConnectorType, DecalKind>>> = Obje
   [CONNECTOR.CAM_LOCK_RECESS]: 'recess',
   [CONNECTOR.STUD_HOLE]: 'hole',
   [CONNECTOR.SCREW_HOLE]: 'hole',
+  [CONNECTOR.SCREW_PILOT]: 'hole',
 });
 
 // A decal's flat face is drawn facing +z before it is turned onto the hole's axis.

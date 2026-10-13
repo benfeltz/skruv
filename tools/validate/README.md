@@ -51,6 +51,7 @@ is no scripting in format 1.
 | `hole-once` | No hole takes two fasteners |
 | `cam-capture` | Every cam catches a bolt head within `CONTRACT.captureRadius`, one bolt per cam |
 | `fitting-through` | Every back fitting's tip lands inside a panel behind its host |
+| `pilot-hole` | Every screw's tip lands in a `screwPilot` of the part behind its hole (within `CONTRACT.pilotRadius` of its axis, no deeper than `CONTRACT.pilotDepth`), and every `screwPilot` of an assembled part takes a tip |
 | `step-coverage` | Step pages fasten every derived joint exactly once and turn every cam exactly once |
 | `step-order` | Pages run in number order; each panel is brought in once, no later than its first joint; a cam turns on or after its seat page |
 | `counts` | Steps fasten each built-in hardware type's `quantity`; spares are never fastened |
@@ -75,6 +76,7 @@ rule:
 | `hole-once` | `shelfPin-2` posed in `shelfPin-1`'s hole |
 | `cam-capture` | `camLockBolt-1` removed from the assembly |
 | `fitting-through` | side panels made 26 cm deep, short of the back fittings' tips |
+| `pilot-hole` | a `screwPilot` added to a `sidePanel`, which no screw tip reaches |
 | `step-coverage` | one pair dropped from step 1 |
 | `step-order` | the back panel brought in on step 12, after its fittings on step 9 |
 | `counts` | a spare dowel (`dowel-15`) fastened in step 1 |

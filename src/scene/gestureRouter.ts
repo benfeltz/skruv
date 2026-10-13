@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { AIM, COLORS, DROP, FASTENER, GESTURE, PANEL, PICK, RING, ROOM, SNAP, TURN_RING } from '../constants.js';
-import { areCompatible, CONNECTOR, isFastenerEnd, KIND, passesThrough } from '../../tools/validate/lib/vocabulary.js';
+import { areCompatible, canPassInto, CONNECTOR, isFastenerEnd, KIND, passesThrough } from '../../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, contains, rotateVector } from '../../tools/validate/lib/geometry.js';
 import { advancing, capture, carryPose, layersOf } from '../game/assembly.js';
 import { PART_TYPES } from '../game/item.js';
@@ -276,7 +276,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const meshes = parts.map((part) => part.mesh);
-  const panels = parts.filter((part) => isPanel(part.type));
+  // What a tip can end in: panels, and plain blocks with no connectors (a drawer bottom, a knob).
+  const holders = parts.filter((part) => canPassInto(PART_TYPES[part.type].connectors));
   const partByMesh = new Map<THREE.Object3D, Part>(parts.map((part) => [part.mesh, part]));
   const partById = new Map<PartId, Part>(parts.map((part) => [part.id, part]));
   const proxies = parts.filter((part) => isSmall(part.type)).map(addHitProxy);
@@ -1686,14 +1687,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       .map((j) => j.id);
   }
 
-  // A back fitting pressed home, or a screw driven in, lands in whichever panel holds its tip
+  // A back fitting pressed home, or a screw driven in, lands in whichever part holds its tip
   // once home — its sink depth down the hole, the validator's test (tools/validate/lib/joints.ts).
   function behind(joint: AssemblyJoint): ApplyContext {
     if (!passesThrough(joint.kind)) return {};
     const hole = connectorWorld(joint.host, joint.hostConnector);
     const sink = FASTENER.sinkDepth[joint.kind]!;
     const tip = hole.position.map((v, i) => v - hole.axis[i] * sink) as Vec3;
-    const panel = panels.find((part) => part.id !== joint.host && contains(PART_TYPES[part.type].size, poseOf(part.id), tip));
+    const panel = holders.find((part) => part.id !== joint.host && contains(PART_TYPES[part.type].size, poseOf(part.id), tip));
     return { through: panel?.id ?? null };
   }
 

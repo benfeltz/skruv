@@ -535,6 +535,8 @@ export const DECAL = {
     studHole: 0.0035,
     // A pilot hole through the part a wood screw attaches: a hair wider than its thread.
     screwHole: 0.002,
+    // The pilot a wood screw's tip lands in, in the part behind the one it attaches.
+    screwPilot: 0.002,
   },
   // A recess is drawn as a ring: inner radius as a fraction of the outer.
   recessInner: 0.55,
@@ -568,10 +570,12 @@ export const MODELS = {
   driveSlotDepth: 0.1,
   driveSlotWidth: 0.16,
   driveSlotLength: 0.8,
-  // Wood screw: the thread's radius (share of the head's), and the solid head's share of the
-  // length, under its drive slot.
+  // Wood screw: the thread's radius (share of the head's), the head's share of the length (it
+  // runs to the end of the box), and how far (share of the length) its drive slot's mark
+  // stands proud of the head's top face.
   screwShaft: 0.45,
   screwHead: 0.15,
+  screwSlotProud: 0.02,
   // Shelf pin: the rod's radius, and its collar (where it starts, how thick).
   pinRod: 0.6,
   pinCollarAt: 0.5,

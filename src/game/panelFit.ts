@@ -11,7 +11,7 @@
 //
 // Any fit seats; which one is where the panel goes is ranked apart (rankFits).
 
-import { areCompatible, isFastenerEnd } from '../../tools/validate/lib/vocabulary.js';
+import { areCompatible, canPassInto } from '../../tools/validate/lib/vocabulary.js';
 import { multiplyQuaternions, normalizeQuaternion, rotateVector } from '../../tools/validate/lib/geometry.js';
 import { applyTransform, findSnap } from './snapMath.js';
 import type { Pose, Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
@@ -58,7 +58,7 @@ const SAME = 1e-6;
 
 /** A part type a fit seats: it has connectors, every one a hole — no fastener end, so not hardware or a tool. */
 export const isPanelType = ({ connectors }: { connectors: readonly { type: ConnectorType }[] }) =>
-  connectors.length > 0 && !connectors.some((c) => isFastenerEnd(c.type));
+  connectors.length > 0 && canPassInto(connectors);
 
 /** Angle (radians) between axis `a` and the reverse of `b` (0 = seated head-on). */
 const misalignment = (a: Vec3, b: Vec3) => Math.acos(Math.min(1, Math.max(-1, -dot(a, b))));

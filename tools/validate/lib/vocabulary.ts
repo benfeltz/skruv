@@ -25,6 +25,8 @@ export const CONNECTOR = Object.freeze({
   STUD_HOLE: 'studHole',
   SCREW_THREAD: 'screwThread',
   SCREW_HOLE: 'screwHole',
+  // A hole in the part a wood screw's tip lands in: it takes no fastener end of its own.
+  SCREW_PILOT: 'screwPilot',
 });
 
 /** A connector type the format knows (the schema's `connectorType`). */
@@ -86,6 +88,13 @@ export const kindOf = (endType: ConnectorType) => KIND_FOR_END[endType] ?? null;
 export const passesThrough = (kind: FastenerKind) => kind === KIND.FITTING || kind === KIND.SCREW;
 
 /**
+ * True for a part type a fastener's tip can pass into: anything that is not hardware or a
+ * tool — a panel with holes, or a plain block with no connectors at all (a drawer bottom, a
+ * knob). The one rule `passThrough` here and the game's router both ask.
+ */
+export const canPassInto = (connectors: readonly { type: ConnectorType }[]) => !connectors.some((c) => isFastenerEnd(c.type));
+
+/**
  * The geometric contract every engine honours, in metres. A pack's assembled poses are
  * checked against it, and joints are derived from them by it.
  *   sinkDepth     — how deep each fastener sits in its hole once fully home, along its axis
@@ -93,10 +102,15 @@ export const passesThrough = (kind: FastenerKind) => kind === KIND.FITTING || ki
  *   mateReach     — a fastener end this near its seated spot in a compatible hole is paired
  *                   with it when joints are derived
  *   mateTolerance — how exactly a derived pair must then sit (the validator's coincidence rule)
+ *   pilotRadius, pilotDepth — where a screw's tip may lie in a pilot hole: off its axis, down it
  */
 export const CONTRACT = Object.freeze({
   sinkDepth: Object.freeze<Partial<Record<FastenerKind, number>>>({ dowel: 0.015, pin: 0.008, fitting: 0.012, bolt: 0.011, cam: 0.012, stud: 0.02, screw: 0.025 }),
   captureRadius: 0.015,
   mateReach: 0.005,
   mateTolerance: 1e-6,
+  // A screw's tip lands in a pilot hole when it is this near the hole's axis (a hair wider
+  // than the thread) and no deeper than the hole runs.
+  pilotRadius: 0.002,
+  pilotDepth: 0.015,
 });

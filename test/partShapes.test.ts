@@ -156,8 +156,11 @@ describe('the wood screw (1.9.3.1)', () => {
   it('is a thin metal thread under a head the box width, a dark slot across the head', () => {
     const [thread, head, slot] = shapeOf(screw)!;
     expect(thread.tone).toBe('metal');
-    // The head is solid for its whole named share, the slot on top of it.
-    expect(head.length).toBeCloseTo(screw.size[1] * MODELS.screwHead, 9);
+    // The head runs its whole named share to the box's end; the slot is a mark laid just
+    // proud of its top face, not a block standing on it.
+    expect(head.length + slot.length).toBeCloseTo(screw.size[1] * MODELS.screwHead, 9);
+    expect(slot.length).toBeCloseTo(screw.size[1] * MODELS.screwSlotProud, 9);
+    expect(head.position[1] + head.length / 2).toBeCloseTo(slot.position[1] - slot.length / 2, 9);
     expect(head.shape === 'cylinder' && head.radius).toBeCloseTo(screw.size[0] / 2, 9);
     expect(thread.shape === 'cylinder' && head.shape === 'cylinder' && thread.radius < head.radius).toBe(true);
     expect(faceUnder([thread], screw.connectors[0])).toBe(thread);

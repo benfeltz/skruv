@@ -9,7 +9,7 @@
 import { connectorInWorld, contains } from './geometry.js';
 import type { Frame, Vec3 } from './geometry.js';
 import type { AssembledPart, InstanceId, Pack, PartType } from './pack.js';
-import { COMPATIBLE, CONNECTOR, CONTRACT, isFastenerEnd, KIND, kindOf, passesThrough } from './vocabulary.js';
+import { canPassInto, COMPATIBLE, CONNECTOR, CONTRACT, isFastenerEnd, KIND, kindOf, passesThrough } from './vocabulary.js';
 import type { FastenerKind } from './vocabulary.js';
 
 /** One derived joint: a fastener end seated in a hole, connectors as part-list indices. */
@@ -129,7 +129,7 @@ export function captureBolts({ partTypes, assembled }: PosedItem, joints: Joint[
  */
 export function passThrough({ partTypes, assembled }: PosedItem, joints: Joint[]): Joint[] {
   const byId = new Map(assembled.map((inst) => [inst.id, inst]));
-  const panels = assembled.filter((inst) => !isHardwareType(partTypes[inst.type]));
+  const panels = assembled.filter((inst) => canPassInto(partTypes[inst.type].connectors));
   return joints.map((j) => {
     if (!passesThrough(j.kind)) return j;
     const fastener = byId.get(j.hardware)!;

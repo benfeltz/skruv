@@ -31,6 +31,10 @@ const MUTATIONS: [Rule, string, (p: FlatpackFile) => unknown][] = [
   ['hole-once', 'two shelf pins in one hole', (p) => Object.assign(posed(p, 'shelfPin-2'), structuredClone({ position: posed(p, 'shelfPin-1').position, rotation: posed(p, 'shelfPin-1').rotation }))],
   ['cam-capture', 'a cam with no bolt to catch', (p) => (p.assembled = p.assembled.filter((a) => a.id !== 'camLockBolt-1'))],
   ['fitting-through', 'side panels too shallow for the back fittings to reach', (p) => (p.parts.sidePanel.box[2] = 0.26)],
+  ['pilot-hole', 'a pilot hole no screw tip reaches', (p) => {
+    p.vocabulary.connectors.push('screwPilot');
+    p.parts.sidePanel.connectors.push({ id: 'screwPilot-1', type: 'screwPilot', position: [0.008, 0, 0], axis: [1, 0, 0] });
+  }],
   ['step-coverage', 'a step missing a joint', (p) => step(p, 1).fasten.pop()],
   ['step-order', 'the back panel brought in after its fittings', (p) => {
     delete step(p, 8).parts;

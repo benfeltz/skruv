@@ -164,16 +164,17 @@ const studEnd: Builder = (size, end) => {
   return [plug(0, depth), rod(depth, length - depth, 1), plug(length - depth, length)];
 };
 
-// A wood screw: a thin metal thread from its tip, the head the box's full width, and a dark
-// slot across the head's top face where the screwdriver goes in.
+// A wood screw: a thin metal thread from its tip, and the head the box's full width running to
+// the box's end. The slot is a dark mark across the head's top face, laid just proud of it
+// (no CSG), so it reads as cut into the head rather than a fin standing above it.
 const woodScrew: Builder = (size, thread) => {
   const { length, radius, place, rod } = straight(size, thread);
-  const slot = length * (1 - MODELS.driveSlotDepth);
-  const head = slot - length * MODELS.screwHead;
+  const head = length * (1 - MODELS.screwHead);
+  const face = length * (1 - MODELS.screwSlotProud);
   return [
     rod(0, head, MODELS.screwShaft, 'metal'),
-    rod(head, slot, 1),
-    place(slot, length, { shape: 'box', width: 2 * radius * MODELS.driveSlotLength, depth: 2 * radius * MODELS.driveSlotWidth }, 'dark'),
+    rod(head, face, 1),
+    place(face, length, { shape: 'box', width: 2 * radius * MODELS.driveSlotLength, depth: 2 * radius * MODELS.driveSlotWidth }, 'dark'),
   ];
 };
 

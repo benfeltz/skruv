@@ -1,0 +1,3697 @@
+{
+  "$schema": "../../tools/validate/flatpack.schema.json",
+  "format": 1,
+  "identity": {
+    "product": "ÖVERKÄLL",
+    "maker": "SKRUV",
+    "documentCode": "SK-0000453-1",
+    "description": "Nightstand with one drawer, about 40 × 45 × 35 cm"
+  },
+  "vocabulary": {
+    "connectors": [
+      "dowelHole",
+      "camBoltHole",
+      "camLockRecess",
+      "backFittingHole",
+      "screwHole",
+      "screwPilot",
+      "dowelEnd",
+      "boltThread",
+      "hexSocket",
+      "camLockBody",
+      "backFittingTip",
+      "screwThread",
+      "wrenchTip",
+      "driveSlot",
+      "screwdriverTip"
+    ],
+    "fasteners": [
+      "dowel",
+      "fitting",
+      "bolt",
+      "cam",
+      "screw",
+      "tool"
+    ]
+  },
+  "parts": {
+    "sidePanel": {
+      "partNumber": "30101",
+      "box": [
+        0.016,
+        0.45,
+        0.35
+      ],
+      "mass": 1.7,
+      "color": "partPanel",
+      "quantity": 2,
+      "connectors": [
+        {
+          "id": "dowelHole-1",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            -0.167,
+            -0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-2",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            -0.167,
+            0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "camBoltHole-1",
+          "type": "camBoltHole",
+          "position": [
+            0.008,
+            -0.167,
+            0.0
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-3",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            0.217,
+            -0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-4",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            0.217,
+            0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "camBoltHole-2",
+          "type": "camBoltHole",
+          "position": [
+            0.008,
+            0.217,
+            0.0
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    "topBottomPanel": {
+      "partNumber": "30102",
+      "box": [
+        0.368,
+        0.016,
+        0.35
+      ],
+      "mass": 1.4,
+      "color": "partPanel",
+      "quantity": 2,
+      "connectors": [
+        {
+          "id": "dowelHole-1",
+          "type": "dowelHole",
+          "position": [
+            -0.184,
+            0.0,
+            -0.09
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-2",
+          "type": "dowelHole",
+          "position": [
+            -0.184,
+            0.0,
+            0.09
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "camLockRecess-1",
+          "type": "camLockRecess",
+          "position": [
+            -0.15,
+            -0.008,
+            0.0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-3",
+          "type": "dowelHole",
+          "position": [
+            0.184,
+            0.0,
+            -0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-4",
+          "type": "dowelHole",
+          "position": [
+            0.184,
+            0.0,
+            0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "camLockRecess-2",
+          "type": "camLockRecess",
+          "position": [
+            0.15,
+            -0.008,
+            0.0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        }
+      ]
+    },
+    "backPanel": {
+      "partNumber": "30103",
+      "box": [
+        0.39,
+        0.4,
+        0.003
+      ],
+      "mass": 0.43,
+      "color": "partHardboard",
+      "quantity": 1,
+      "connectors": [
+        {
+          "id": "backFittingHole-1",
+          "type": "backFittingHole",
+          "position": [
+            -0.187,
+            -0.192,
+            -0.0015
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "backFittingHole-2",
+          "type": "backFittingHole",
+          "position": [
+            0.187,
+            -0.192,
+            -0.0015
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "backFittingHole-3",
+          "type": "backFittingHole",
+          "position": [
+            0.0,
+            -0.192,
+            -0.0015
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "backFittingHole-4",
+          "type": "backFittingHole",
+          "position": [
+            -0.187,
+            0.192,
+            -0.0015
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "backFittingHole-5",
+          "type": "backFittingHole",
+          "position": [
+            0.187,
+            0.192,
+            -0.0015
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "backFittingHole-6",
+          "type": "backFittingHole",
+          "position": [
+            0.0,
+            0.192,
+            -0.0015
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        }
+      ]
+    },
+    "drawerFront": {
+      "partNumber": "30201",
+      "box": [
+        0.36,
+        0.16,
+        0.016
+      ],
+      "mass": 0.6,
+      "color": "partPanel",
+      "quantity": 1,
+      "connectors": [
+        {
+          "id": "screwHole-1",
+          "type": "screwHole",
+          "position": [
+            -0.172,
+            0.05,
+            0.004
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "id": "screwHole-2",
+          "type": "screwHole",
+          "position": [
+            0.172,
+            0.05,
+            0.004
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "id": "screwHole-3",
+          "type": "screwHole",
+          "position": [
+            -0.172,
+            -0.05,
+            0.004
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "id": "screwHole-4",
+          "type": "screwHole",
+          "position": [
+            0.172,
+            -0.05,
+            0.004
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "id": "dowelHole-1",
+          "type": "dowelHole",
+          "position": [
+            -0.172,
+            0.025,
+            -0.008
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "dowelHole-2",
+          "type": "dowelHole",
+          "position": [
+            0.172,
+            0.025,
+            -0.008
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "dowelHole-3",
+          "type": "dowelHole",
+          "position": [
+            -0.172,
+            -0.025,
+            -0.008
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "dowelHole-4",
+          "type": "dowelHole",
+          "position": [
+            0.172,
+            -0.025,
+            -0.008
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "screwPilot-1",
+          "type": "screwPilot",
+          "position": [
+            0.0,
+            0.0,
+            0.008
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        }
+      ]
+    },
+    "drawerSide": {
+      "partNumber": "30202",
+      "box": [
+        0.016,
+        0.16,
+        0.3
+      ],
+      "mass": 0.5,
+      "color": "partPanel",
+      "quantity": 2,
+      "connectors": [
+        {
+          "id": "screwHole-1",
+          "type": "screwHole",
+          "position": [
+            0.008,
+            -0.074,
+            -0.1
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "screwHole-2",
+          "type": "screwHole",
+          "position": [
+            0.008,
+            -0.074,
+            0.1
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-1",
+          "type": "dowelHole",
+          "position": [
+            -0.008,
+            -0.074,
+            -0.05
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-2",
+          "type": "dowelHole",
+          "position": [
+            -0.008,
+            -0.074,
+            0.05
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-3",
+          "type": "dowelHole",
+          "position": [
+            0.0,
+            0.025,
+            0.15
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "id": "dowelHole-4",
+          "type": "dowelHole",
+          "position": [
+            0.0,
+            -0.025,
+            0.15
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "id": "dowelHole-5",
+          "type": "dowelHole",
+          "position": [
+            0.0,
+            0.025,
+            -0.15
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "dowelHole-6",
+          "type": "dowelHole",
+          "position": [
+            0.0,
+            -0.025,
+            -0.15
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "screwPilot-1",
+          "type": "screwPilot",
+          "position": [
+            0.0,
+            0.05,
+            0.15
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "id": "screwPilot-2",
+          "type": "screwPilot",
+          "position": [
+            0.0,
+            -0.05,
+            0.15
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "id": "screwPilot-3",
+          "type": "screwPilot",
+          "position": [
+            0.0,
+            0.05,
+            -0.15
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "screwPilot-4",
+          "type": "screwPilot",
+          "position": [
+            0.0,
+            -0.05,
+            -0.15
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        }
+      ]
+    },
+    "drawerBack": {
+      "partNumber": "30203",
+      "box": [
+        0.36,
+        0.16,
+        0.016
+      ],
+      "mass": 0.55,
+      "color": "partPanel",
+      "quantity": 1,
+      "connectors": [
+        {
+          "id": "screwHole-1",
+          "type": "screwHole",
+          "position": [
+            -0.172,
+            0.05,
+            -0.008
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "screwHole-2",
+          "type": "screwHole",
+          "position": [
+            0.172,
+            0.05,
+            -0.008
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "screwHole-3",
+          "type": "screwHole",
+          "position": [
+            -0.172,
+            -0.05,
+            -0.008
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "screwHole-4",
+          "type": "screwHole",
+          "position": [
+            0.172,
+            -0.05,
+            -0.008
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "screwHole-5",
+          "type": "screwHole",
+          "position": [
+            -0.1,
+            -0.074,
+            -0.008
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "screwHole-6",
+          "type": "screwHole",
+          "position": [
+            0.1,
+            -0.074,
+            -0.008
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "dowelHole-1",
+          "type": "dowelHole",
+          "position": [
+            -0.172,
+            0.025,
+            0.008
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "id": "dowelHole-2",
+          "type": "dowelHole",
+          "position": [
+            0.172,
+            0.025,
+            0.008
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "id": "dowelHole-3",
+          "type": "dowelHole",
+          "position": [
+            -0.172,
+            -0.025,
+            0.008
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "id": "dowelHole-4",
+          "type": "dowelHole",
+          "position": [
+            0.172,
+            -0.025,
+            0.008
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "id": "dowelHole-5",
+          "type": "dowelHole",
+          "position": [
+            -0.05,
+            -0.074,
+            0.008
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "id": "dowelHole-6",
+          "type": "dowelHole",
+          "position": [
+            0.05,
+            -0.074,
+            0.008
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        }
+      ]
+    },
+    "drawerBottom": {
+      "partNumber": "30204",
+      "box": [
+        0.328,
+        0.012,
+        0.3
+      ],
+      "mass": 0.8,
+      "color": "partPanel",
+      "quantity": 1,
+      "connectors": [
+        {
+          "id": "dowelHole-1",
+          "type": "dowelHole",
+          "position": [
+            -0.164,
+            0.0,
+            -0.05
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-2",
+          "type": "dowelHole",
+          "position": [
+            -0.164,
+            0.0,
+            0.05
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-3",
+          "type": "dowelHole",
+          "position": [
+            0.164,
+            0.0,
+            -0.05
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-4",
+          "type": "dowelHole",
+          "position": [
+            0.164,
+            0.0,
+            0.05
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-5",
+          "type": "dowelHole",
+          "position": [
+            -0.05,
+            0.0,
+            -0.15
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "dowelHole-6",
+          "type": "dowelHole",
+          "position": [
+            0.05,
+            0.0,
+            -0.15
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "screwPilot-1",
+          "type": "screwPilot",
+          "position": [
+            -0.164,
+            0.0,
+            -0.1
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "screwPilot-2",
+          "type": "screwPilot",
+          "position": [
+            -0.164,
+            0.0,
+            0.1
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "screwPilot-3",
+          "type": "screwPilot",
+          "position": [
+            0.164,
+            0.0,
+            -0.1
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "screwPilot-4",
+          "type": "screwPilot",
+          "position": [
+            0.164,
+            0.0,
+            0.1
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "screwPilot-5",
+          "type": "screwPilot",
+          "position": [
+            -0.1,
+            0.0,
+            -0.15
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "screwPilot-6",
+          "type": "screwPilot",
+          "position": [
+            0.1,
+            0.0,
+            -0.15
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        }
+      ]
+    },
+    "knob": {
+      "partNumber": "30205",
+      "box": [
+        0.03,
+        0.03,
+        0.02
+      ],
+      "mass": 0.03,
+      "color": "partDowel",
+      "quantity": 1,
+      "connectors": [
+        {
+          "id": "screwHole-1",
+          "type": "screwHole",
+          "position": [
+            0.0,
+            0.0,
+            0.01
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        }
+      ]
+    },
+    "dowel": {
+      "partNumber": "30301",
+      "box": [
+        0.008,
+        0.03,
+        0.008
+      ],
+      "mass": 0.0015,
+      "color": "partDowel",
+      "quantity": 22,
+      "spares": 2,
+      "connectors": [
+        {
+          "id": "dowelEnd-1",
+          "type": "dowelEnd",
+          "position": [
+            0.0,
+            -0.015,
+            0.0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "dowelEnd-2",
+          "type": "dowelEnd",
+          "position": [
+            0.0,
+            0.015,
+            0.0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ]
+        }
+      ]
+    },
+    "camLockBolt": {
+      "partNumber": "30302",
+      "box": [
+        0.007,
+        0.035,
+        0.007
+      ],
+      "mass": 0.004,
+      "color": "partMetal",
+      "quantity": 4,
+      "connectors": [
+        {
+          "id": "boltThread-1",
+          "type": "boltThread",
+          "position": [
+            0.0,
+            -0.0175,
+            0.0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "hexSocket-1",
+          "type": "hexSocket",
+          "position": [
+            0.0,
+            0.0175,
+            0.0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ]
+        }
+      ]
+    },
+    "camLock": {
+      "partNumber": "30303",
+      "box": [
+        0.015,
+        0.012,
+        0.015
+      ],
+      "mass": 0.005,
+      "color": "partMetal",
+      "quantity": 4,
+      "spares": 1,
+      "connectors": [
+        {
+          "id": "camLockBody-1",
+          "type": "camLockBody",
+          "position": [
+            0.0,
+            -0.006,
+            0.0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "driveSlot-1",
+          "type": "driveSlot",
+          "position": [
+            0.0,
+            0.006,
+            0.0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ]
+        }
+      ]
+    },
+    "backFitting": {
+      "partNumber": "30304",
+      "box": [
+        0.008,
+        0.016,
+        0.008
+      ],
+      "mass": 0.001,
+      "color": "partFitting",
+      "quantity": 6,
+      "connectors": [
+        {
+          "id": "backFittingTip-1",
+          "type": "backFittingTip",
+          "position": [
+            0.0,
+            -0.008,
+            0.0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        }
+      ]
+    },
+    "screw": {
+      "partNumber": "30305",
+      "box": [
+        0.005,
+        0.028,
+        0.005
+      ],
+      "mass": 0.003,
+      "color": "partMetal",
+      "quantity": 15,
+      "spares": 2,
+      "connectors": [
+        {
+          "id": "screwThread-1",
+          "type": "screwThread",
+          "position": [
+            0.0,
+            -0.014,
+            0.0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "driveSlot-1",
+          "type": "driveSlot",
+          "position": [
+            0.0,
+            0.014,
+            0.0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ]
+        }
+      ]
+    },
+    "allenWrench": {
+      "partNumber": "10067",
+      "box": [
+        0.07,
+        0.004,
+        0.025
+      ],
+      "mass": 0.015,
+      "color": "partWrench",
+      "quantity": 1,
+      "connectors": [
+        {
+          "id": "wrenchTip-1",
+          "type": "wrenchTip",
+          "position": [
+            0.035,
+            0.0,
+            0.0125
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        }
+      ]
+    },
+    "screwdriver": {
+      "partNumber": "10093",
+      "box": [
+        0.022,
+        0.2,
+        0.022
+      ],
+      "mass": 0.08,
+      "color": "partScrewdriver",
+      "quantity": 1,
+      "connectors": [
+        {
+          "id": "screwdriverTip-1",
+          "type": "screwdriverTip",
+          "position": [
+            0.0,
+            -0.1,
+            0.0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        }
+      ]
+    }
+  },
+  "assembled": [
+    {
+      "id": "sidePanel-1",
+      "role": "leftSide",
+      "position": [
+        -0.192,
+        0.225,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1
+      ]
+    },
+    {
+      "id": "sidePanel-2",
+      "role": "rightSide",
+      "position": [
+        0.192,
+        0.225,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        1,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "topBottomPanel-1",
+      "role": "bottom",
+      "position": [
+        0.0,
+        0.058,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        1,
+        0.0
+      ]
+    },
+    {
+      "id": "topBottomPanel-2",
+      "role": "top",
+      "position": [
+        0.0,
+        0.442,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1
+      ]
+    },
+    {
+      "id": "backPanel-1",
+      "role": "back",
+      "position": [
+        0.0,
+        0.25,
+        -0.1765
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1
+      ]
+    },
+    {
+      "id": "drawerFront-1",
+      "role": "drawerFront",
+      "position": [
+        0.0,
+        0.146,
+        0.167
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1
+      ]
+    },
+    {
+      "id": "drawerSide-1",
+      "role": "drawerSide",
+      "position": [
+        -0.172,
+        0.146,
+        0.009
+      ],
+      "rotation": [
+        0.0,
+        1,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "drawerSide-2",
+      "role": "drawerSide",
+      "position": [
+        0.172,
+        0.146,
+        0.009
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1
+      ]
+    },
+    {
+      "id": "drawerBack-1",
+      "role": "drawerBack",
+      "position": [
+        0.0,
+        0.146,
+        -0.149
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1
+      ]
+    },
+    {
+      "id": "drawerBottom-1",
+      "role": "drawerBottom",
+      "position": [
+        0.0,
+        0.072,
+        0.009
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1
+      ]
+    },
+    {
+      "id": "knob-1",
+      "role": "knob",
+      "position": [
+        0.0,
+        0.146,
+        0.185
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1
+      ]
+    },
+    {
+      "id": "dowel-1",
+      "role": "hardware",
+      "position": [
+        0.184,
+        0.058,
+        -0.09
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-2",
+      "role": "hardware",
+      "position": [
+        0.184,
+        0.058,
+        0.09
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-3",
+      "role": "hardware",
+      "position": [
+        -0.184,
+        0.058,
+        -0.09
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-4",
+      "role": "hardware",
+      "position": [
+        -0.184,
+        0.058,
+        0.09
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-5",
+      "role": "hardware",
+      "position": [
+        -0.184,
+        0.442,
+        -0.09
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-6",
+      "role": "hardware",
+      "position": [
+        -0.184,
+        0.442,
+        0.09
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-7",
+      "role": "hardware",
+      "position": [
+        0.184,
+        0.442,
+        -0.09
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-8",
+      "role": "hardware",
+      "position": [
+        0.184,
+        0.442,
+        0.09
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-9",
+      "role": "hardware",
+      "position": [
+        -0.164,
+        0.072,
+        -0.041
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-10",
+      "role": "hardware",
+      "position": [
+        -0.164,
+        0.072,
+        0.059
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-11",
+      "role": "hardware",
+      "position": [
+        0.164,
+        0.072,
+        -0.041
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-12",
+      "role": "hardware",
+      "position": [
+        0.164,
+        0.072,
+        0.059
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-13",
+      "role": "hardware",
+      "position": [
+        -0.05,
+        0.072,
+        -0.141
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-14",
+      "role": "hardware",
+      "position": [
+        0.05,
+        0.072,
+        -0.141
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-15",
+      "role": "hardware",
+      "position": [
+        -0.172,
+        0.171,
+        -0.141
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-16",
+      "role": "hardware",
+      "position": [
+        -0.172,
+        0.121,
+        -0.141
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-17",
+      "role": "hardware",
+      "position": [
+        0.172,
+        0.171,
+        -0.141
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-18",
+      "role": "hardware",
+      "position": [
+        0.172,
+        0.121,
+        -0.141
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-19",
+      "role": "hardware",
+      "position": [
+        -0.172,
+        0.171,
+        0.159
+      ],
+      "rotation": [
+        0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-20",
+      "role": "hardware",
+      "position": [
+        -0.172,
+        0.121,
+        0.159
+      ],
+      "rotation": [
+        0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-21",
+      "role": "hardware",
+      "position": [
+        0.172,
+        0.171,
+        0.159
+      ],
+      "rotation": [
+        0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-22",
+      "role": "hardware",
+      "position": [
+        0.172,
+        0.121,
+        0.159
+      ],
+      "rotation": [
+        0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "camLockBolt-1",
+      "role": "hardware",
+      "position": [
+        -0.1775,
+        0.058,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "camLockBolt-2",
+      "role": "hardware",
+      "position": [
+        -0.1775,
+        0.442,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "camLockBolt-3",
+      "role": "hardware",
+      "position": [
+        0.1775,
+        0.058,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "camLockBolt-4",
+      "role": "hardware",
+      "position": [
+        0.1775,
+        0.442,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "camLock-1",
+      "role": "hardware",
+      "position": [
+        0.15,
+        0.06,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "id": "camLock-2",
+      "role": "hardware",
+      "position": [
+        -0.15,
+        0.06,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "id": "camLock-3",
+      "role": "hardware",
+      "position": [
+        -0.15,
+        0.44,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "id": "camLock-4",
+      "role": "hardware",
+      "position": [
+        0.15,
+        0.44,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "id": "backFitting-1",
+      "role": "hardware",
+      "position": [
+        -0.187,
+        0.058,
+        -0.174
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "backFitting-2",
+      "role": "hardware",
+      "position": [
+        0.187,
+        0.058,
+        -0.174
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "backFitting-3",
+      "role": "hardware",
+      "position": [
+        0.0,
+        0.058,
+        -0.174
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "backFitting-4",
+      "role": "hardware",
+      "position": [
+        -0.187,
+        0.442,
+        -0.174
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "backFitting-5",
+      "role": "hardware",
+      "position": [
+        0.187,
+        0.442,
+        -0.174
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "backFitting-6",
+      "role": "hardware",
+      "position": [
+        0.0,
+        0.442,
+        -0.174
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-1",
+      "role": "hardware",
+      "position": [
+        -0.172,
+        0.196,
+        -0.146
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-2",
+      "role": "hardware",
+      "position": [
+        0.172,
+        0.196,
+        -0.146
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-3",
+      "role": "hardware",
+      "position": [
+        -0.172,
+        0.096,
+        -0.146
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-4",
+      "role": "hardware",
+      "position": [
+        0.172,
+        0.096,
+        -0.146
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-5",
+      "role": "hardware",
+      "position": [
+        -0.169,
+        0.072,
+        0.109
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-6",
+      "role": "hardware",
+      "position": [
+        -0.169,
+        0.072,
+        -0.091
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-7",
+      "role": "hardware",
+      "position": [
+        0.169,
+        0.072,
+        -0.091
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-8",
+      "role": "hardware",
+      "position": [
+        0.169,
+        0.072,
+        0.109
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-9",
+      "role": "hardware",
+      "position": [
+        -0.1,
+        0.072,
+        -0.146
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-10",
+      "role": "hardware",
+      "position": [
+        0.1,
+        0.072,
+        -0.146
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-11",
+      "role": "hardware",
+      "position": [
+        -0.172,
+        0.196,
+        0.16
+      ],
+      "rotation": [
+        0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-12",
+      "role": "hardware",
+      "position": [
+        0.172,
+        0.196,
+        0.16
+      ],
+      "rotation": [
+        0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-13",
+      "role": "hardware",
+      "position": [
+        -0.172,
+        0.096,
+        0.16
+      ],
+      "rotation": [
+        0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-14",
+      "role": "hardware",
+      "position": [
+        0.172,
+        0.096,
+        0.16
+      ],
+      "rotation": [
+        0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-15",
+      "role": "hardware",
+      "position": [
+        0.0,
+        0.146,
+        0.184
+      ],
+      "rotation": [
+        0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    }
+  ],
+  "manual": {
+    "pages": [
+      {
+        "kind": "cover"
+      },
+      {
+        "kind": "warning",
+        "subject": "twoPeople"
+      },
+      {
+        "kind": "doDont",
+        "subject": "protectFloor"
+      },
+      {
+        "kind": "inventory"
+      },
+      {
+        "kind": "step",
+        "number": 1,
+        "pose": "upright",
+        "parts": [
+          "drawerBottom-1"
+        ],
+        "fasten": [
+          [
+            "dowel-9/dowelEnd-1",
+            "drawerBottom-1/dowelHole-1"
+          ],
+          [
+            "dowel-10/dowelEnd-1",
+            "drawerBottom-1/dowelHole-2"
+          ],
+          [
+            "dowel-11/dowelEnd-1",
+            "drawerBottom-1/dowelHole-3"
+          ],
+          [
+            "dowel-12/dowelEnd-1",
+            "drawerBottom-1/dowelHole-4"
+          ]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 2,
+        "pose": "upright",
+        "parts": [
+          "drawerSide-1",
+          "drawerSide-2"
+        ],
+        "fasten": [
+          [
+            "dowel-9/dowelEnd-2",
+            "drawerSide-1/dowelHole-2"
+          ],
+          [
+            "dowel-10/dowelEnd-2",
+            "drawerSide-1/dowelHole-1"
+          ],
+          [
+            "dowel-11/dowelEnd-2",
+            "drawerSide-2/dowelHole-1"
+          ],
+          [
+            "dowel-12/dowelEnd-2",
+            "drawerSide-2/dowelHole-2"
+          ]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 3,
+        "pose": "upright",
+        "fasten": [
+          [
+            "dowel-13/dowelEnd-1",
+            "drawerBottom-1/dowelHole-5"
+          ],
+          [
+            "dowel-14/dowelEnd-1",
+            "drawerBottom-1/dowelHole-6"
+          ],
+          [
+            "dowel-15/dowelEnd-1",
+            "drawerSide-1/dowelHole-3"
+          ],
+          [
+            "dowel-16/dowelEnd-1",
+            "drawerSide-1/dowelHole-4"
+          ],
+          [
+            "dowel-17/dowelEnd-1",
+            "drawerSide-2/dowelHole-5"
+          ],
+          [
+            "dowel-18/dowelEnd-1",
+            "drawerSide-2/dowelHole-6"
+          ]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 4,
+        "pose": "upright",
+        "parts": [
+          "drawerBack-1"
+        ],
+        "fasten": [
+          [
+            "dowel-13/dowelEnd-2",
+            "drawerBack-1/dowelHole-5"
+          ],
+          [
+            "dowel-14/dowelEnd-2",
+            "drawerBack-1/dowelHole-6"
+          ],
+          [
+            "dowel-15/dowelEnd-2",
+            "drawerBack-1/dowelHole-1"
+          ],
+          [
+            "dowel-16/dowelEnd-2",
+            "drawerBack-1/dowelHole-3"
+          ],
+          [
+            "dowel-17/dowelEnd-2",
+            "drawerBack-1/dowelHole-2"
+          ],
+          [
+            "dowel-18/dowelEnd-2",
+            "drawerBack-1/dowelHole-4"
+          ]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 5,
+        "pose": "upright",
+        "fasten": [
+          [
+            "screw-5/screwThread-1",
+            "drawerSide-1/screwHole-1"
+          ],
+          [
+            "screw-6/screwThread-1",
+            "drawerSide-1/screwHole-2"
+          ],
+          [
+            "screw-7/screwThread-1",
+            "drawerSide-2/screwHole-1"
+          ],
+          [
+            "screw-8/screwThread-1",
+            "drawerSide-2/screwHole-2"
+          ],
+          [
+            "screw-9/screwThread-1",
+            "drawerBack-1/screwHole-5"
+          ],
+          [
+            "screw-10/screwThread-1",
+            "drawerBack-1/screwHole-6"
+          ],
+          [
+            "screw-1/screwThread-1",
+            "drawerBack-1/screwHole-1"
+          ],
+          [
+            "screw-2/screwThread-1",
+            "drawerBack-1/screwHole-2"
+          ],
+          [
+            "screw-3/screwThread-1",
+            "drawerBack-1/screwHole-3"
+          ],
+          [
+            "screw-4/screwThread-1",
+            "drawerBack-1/screwHole-4"
+          ]
+        ],
+        "tool": "screwdriver"
+      },
+      {
+        "kind": "step",
+        "number": 6,
+        "pose": "upright",
+        "fasten": [
+          [
+            "dowel-19/dowelEnd-1",
+            "drawerSide-1/dowelHole-5"
+          ],
+          [
+            "dowel-20/dowelEnd-1",
+            "drawerSide-1/dowelHole-6"
+          ],
+          [
+            "dowel-21/dowelEnd-1",
+            "drawerSide-2/dowelHole-3"
+          ],
+          [
+            "dowel-22/dowelEnd-1",
+            "drawerSide-2/dowelHole-4"
+          ]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 7,
+        "pose": "upright",
+        "parts": [
+          "drawerFront-1"
+        ],
+        "fasten": [
+          [
+            "dowel-19/dowelEnd-2",
+            "drawerFront-1/dowelHole-1"
+          ],
+          [
+            "dowel-20/dowelEnd-2",
+            "drawerFront-1/dowelHole-3"
+          ],
+          [
+            "dowel-21/dowelEnd-2",
+            "drawerFront-1/dowelHole-2"
+          ],
+          [
+            "dowel-22/dowelEnd-2",
+            "drawerFront-1/dowelHole-4"
+          ]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 8,
+        "pose": "upright",
+        "fasten": [
+          [
+            "screw-11/screwThread-1",
+            "drawerFront-1/screwHole-1"
+          ],
+          [
+            "screw-12/screwThread-1",
+            "drawerFront-1/screwHole-2"
+          ],
+          [
+            "screw-13/screwThread-1",
+            "drawerFront-1/screwHole-3"
+          ],
+          [
+            "screw-14/screwThread-1",
+            "drawerFront-1/screwHole-4"
+          ]
+        ],
+        "tool": "screwdriver"
+      },
+      {
+        "kind": "step",
+        "number": 9,
+        "pose": "upright",
+        "parts": [
+          "knob-1"
+        ],
+        "fasten": [
+          [
+            "screw-15/screwThread-1",
+            "knob-1/screwHole-1"
+          ]
+        ],
+        "tool": "screwdriver"
+      },
+      {
+        "kind": "step",
+        "number": 10,
+        "pose": "parts",
+        "parts": [
+          "topBottomPanel-1",
+          "topBottomPanel-2"
+        ],
+        "fasten": [
+          [
+            "dowel-1/dowelEnd-1",
+            "topBottomPanel-1/dowelHole-1"
+          ],
+          [
+            "dowel-2/dowelEnd-1",
+            "topBottomPanel-1/dowelHole-2"
+          ],
+          [
+            "dowel-3/dowelEnd-1",
+            "topBottomPanel-1/dowelHole-3"
+          ],
+          [
+            "dowel-4/dowelEnd-1",
+            "topBottomPanel-1/dowelHole-4"
+          ],
+          [
+            "dowel-5/dowelEnd-1",
+            "topBottomPanel-2/dowelHole-1"
+          ],
+          [
+            "dowel-6/dowelEnd-1",
+            "topBottomPanel-2/dowelHole-2"
+          ],
+          [
+            "dowel-7/dowelEnd-1",
+            "topBottomPanel-2/dowelHole-3"
+          ],
+          [
+            "dowel-8/dowelEnd-1",
+            "topBottomPanel-2/dowelHole-4"
+          ]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 11,
+        "pose": "parts",
+        "parts": [
+          "sidePanel-1",
+          "sidePanel-2"
+        ],
+        "fasten": [
+          [
+            "camLockBolt-1/boltThread-1",
+            "sidePanel-1/camBoltHole-1"
+          ],
+          [
+            "camLockBolt-2/boltThread-1",
+            "sidePanel-1/camBoltHole-2"
+          ],
+          [
+            "camLockBolt-3/boltThread-1",
+            "sidePanel-2/camBoltHole-1"
+          ],
+          [
+            "camLockBolt-4/boltThread-1",
+            "sidePanel-2/camBoltHole-2"
+          ]
+        ],
+        "tool": "allenWrench"
+      },
+      {
+        "kind": "step",
+        "number": 12,
+        "pose": "lying",
+        "fasten": [
+          [
+            "dowel-3/dowelEnd-2",
+            "sidePanel-1/dowelHole-1"
+          ],
+          [
+            "dowel-4/dowelEnd-2",
+            "sidePanel-1/dowelHole-2"
+          ],
+          [
+            "dowel-5/dowelEnd-2",
+            "sidePanel-1/dowelHole-3"
+          ],
+          [
+            "dowel-6/dowelEnd-2",
+            "sidePanel-1/dowelHole-4"
+          ]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 13,
+        "pose": "lying",
+        "fasten": [
+          [
+            "camLock-2/camLockBody-1",
+            "topBottomPanel-1/camLockRecess-2"
+          ],
+          [
+            "camLock-3/camLockBody-1",
+            "topBottomPanel-2/camLockRecess-1"
+          ]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 14,
+        "pose": "lying",
+        "turn": [
+          [
+            "camLock-2/camLockBody-1",
+            "topBottomPanel-1/camLockRecess-2"
+          ],
+          [
+            "camLock-3/camLockBody-1",
+            "topBottomPanel-2/camLockRecess-1"
+          ]
+        ],
+        "tool": "screwdriver"
+      },
+      {
+        "kind": "step",
+        "number": 15,
+        "pose": "lying",
+        "fasten": [
+          [
+            "dowel-1/dowelEnd-2",
+            "sidePanel-2/dowelHole-2"
+          ],
+          [
+            "dowel-2/dowelEnd-2",
+            "sidePanel-2/dowelHole-1"
+          ],
+          [
+            "dowel-7/dowelEnd-2",
+            "sidePanel-2/dowelHole-4"
+          ],
+          [
+            "dowel-8/dowelEnd-2",
+            "sidePanel-2/dowelHole-3"
+          ]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 16,
+        "pose": "lying",
+        "fasten": [
+          [
+            "camLock-1/camLockBody-1",
+            "topBottomPanel-1/camLockRecess-1"
+          ],
+          [
+            "camLock-4/camLockBody-1",
+            "topBottomPanel-2/camLockRecess-2"
+          ]
+        ],
+        "turn": [
+          [
+            "camLock-1/camLockBody-1",
+            "topBottomPanel-1/camLockRecess-1"
+          ],
+          [
+            "camLock-4/camLockBody-1",
+            "topBottomPanel-2/camLockRecess-2"
+          ]
+        ],
+        "tool": "screwdriver"
+      },
+      {
+        "kind": "step",
+        "number": 17,
+        "pose": "faceDown",
+        "parts": [
+          "backPanel-1"
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 18,
+        "pose": "faceDown",
+        "fasten": [
+          [
+            "backFitting-1/backFittingTip-1",
+            "backPanel-1/backFittingHole-1"
+          ],
+          [
+            "backFitting-2/backFittingTip-1",
+            "backPanel-1/backFittingHole-2"
+          ],
+          [
+            "backFitting-3/backFittingTip-1",
+            "backPanel-1/backFittingHole-3"
+          ],
+          [
+            "backFitting-4/backFittingTip-1",
+            "backPanel-1/backFittingHole-4"
+          ],
+          [
+            "backFitting-5/backFittingTip-1",
+            "backPanel-1/backFittingHole-5"
+          ],
+          [
+            "backFitting-6/backFittingTip-1",
+            "backPanel-1/backFittingHole-6"
+          ]
+        ]
+      },
+      {
+        "kind": "special",
+        "number": 19,
+        "pose": "upright",
+        "special": "tipUpright"
+      },
+      {
+        "kind": "back"
+      }
+    ]
+  },
+  "packing": {
+    "boxInner": [
+      0.42,
+      0.1,
+      0.8
+    ],
+    "wall": 0.01,
+    "floor": 0.01,
+    "lid": {
+      "thickness": 0.008,
+      "partNumber": "10001",
+      "mass": 0.9,
+      "color": "cardboard"
+    },
+    "placements": [
+      {
+        "id": "sidePanel-1",
+        "position": [
+          0.0,
+          0.018,
+          -0.175
+        ],
+        "rotation": [
+          0.5,
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "id": "sidePanel-2",
+        "position": [
+          0.0,
+          0.034,
+          -0.175
+        ],
+        "rotation": [
+          0.5,
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "id": "topBottomPanel-1",
+        "position": [
+          0.0,
+          0.018,
+          0.225
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1
+        ]
+      },
+      {
+        "id": "topBottomPanel-2",
+        "position": [
+          0.0,
+          0.034,
+          0.225
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1
+        ]
+      },
+      {
+        "id": "backPanel-1",
+        "position": [
+          0.0,
+          0.0435,
+          -0.175
+        ],
+        "rotation": [
+          0.7071067812,
+          0.0,
+          0.0,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "drawerFront-1",
+        "position": [
+          0.0,
+          0.053,
+          -0.255
+        ],
+        "rotation": [
+          0.7071067812,
+          0.0,
+          0.0,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "drawerSide-1",
+        "position": [
+          0.0,
+          0.05,
+          0.145
+        ],
+        "rotation": [
+          0.5,
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "id": "drawerSide-2",
+        "position": [
+          0.0,
+          0.05,
+          0.305
+        ],
+        "rotation": [
+          0.5,
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "id": "drawerBack-1",
+        "position": [
+          0.0,
+          0.053,
+          -0.095
+        ],
+        "rotation": [
+          0.7071067812,
+          0.0,
+          0.0,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "drawerBottom-1",
+        "position": [
+          0.0,
+          0.064,
+          0.225
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1
+        ]
+      },
+      {
+        "id": "knob-1",
+        "position": [
+          0.1,
+          0.076,
+          -0.239
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1
+        ]
+      },
+      {
+        "id": "dowel-1",
+        "position": [
+          -0.119,
+          0.065,
+          -0.327
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-2",
+        "position": [
+          -0.085,
+          0.065,
+          -0.327
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-3",
+        "position": [
+          -0.051,
+          0.065,
+          -0.327
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-4",
+        "position": [
+          -0.017,
+          0.065,
+          -0.327
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-5",
+        "position": [
+          0.017,
+          0.065,
+          -0.327
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-6",
+        "position": [
+          0.051,
+          0.065,
+          -0.327
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-7",
+        "position": [
+          0.085,
+          0.065,
+          -0.327
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-8",
+        "position": [
+          0.119,
+          0.065,
+          -0.327
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-9",
+        "position": [
+          -0.119,
+          0.065,
+          -0.315
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-10",
+        "position": [
+          -0.085,
+          0.065,
+          -0.315
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-11",
+        "position": [
+          -0.051,
+          0.065,
+          -0.315
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-12",
+        "position": [
+          -0.017,
+          0.065,
+          -0.315
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-13",
+        "position": [
+          0.017,
+          0.065,
+          -0.315
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-14",
+        "position": [
+          0.051,
+          0.065,
+          -0.315
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-15",
+        "position": [
+          0.085,
+          0.065,
+          -0.315
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-16",
+        "position": [
+          0.119,
+          0.065,
+          -0.315
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-17",
+        "position": [
+          -0.119,
+          0.065,
+          -0.303
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-18",
+        "position": [
+          -0.085,
+          0.065,
+          -0.303
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-19",
+        "position": [
+          -0.051,
+          0.065,
+          -0.303
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-20",
+        "position": [
+          -0.017,
+          0.065,
+          -0.303
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-21",
+        "position": [
+          0.017,
+          0.065,
+          -0.303
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-22",
+        "position": [
+          0.051,
+          0.065,
+          -0.303
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-23",
+        "position": [
+          0.085,
+          0.065,
+          -0.303
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-24",
+        "position": [
+          0.119,
+          0.065,
+          -0.303
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "camLockBolt-1",
+        "position": [
+          -0.0585,
+          0.0645,
+          -0.2915
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "camLockBolt-2",
+        "position": [
+          -0.0195,
+          0.0645,
+          -0.2915
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "camLockBolt-3",
+        "position": [
+          0.0195,
+          0.0645,
+          -0.2915
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "camLockBolt-4",
+        "position": [
+          0.0585,
+          0.0645,
+          -0.2915
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "camLock-1",
+        "position": [
+          -0.1,
+          0.067,
+          -0.239
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1
+        ]
+      },
+      {
+        "id": "camLock-2",
+        "position": [
+          -0.06,
+          0.067,
+          -0.239
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1
+        ]
+      },
+      {
+        "id": "camLock-3",
+        "position": [
+          -0.02,
+          0.067,
+          -0.239
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1
+        ]
+      },
+      {
+        "id": "camLock-4",
+        "position": [
+          0.02,
+          0.067,
+          -0.239
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1
+        ]
+      },
+      {
+        "id": "camLock-5",
+        "position": [
+          0.06,
+          0.067,
+          -0.239
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1
+        ]
+      },
+      {
+        "id": "backFitting-1",
+        "position": [
+          -0.05,
+          0.065,
+          -0.28
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "backFitting-2",
+        "position": [
+          -0.03,
+          0.065,
+          -0.28
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "backFitting-3",
+        "position": [
+          -0.01,
+          0.065,
+          -0.28
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "backFitting-4",
+        "position": [
+          0.01,
+          0.065,
+          -0.28
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "backFitting-5",
+        "position": [
+          0.03,
+          0.065,
+          -0.28
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "backFitting-6",
+        "position": [
+          0.05,
+          0.065,
+          -0.28
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-1",
+        "position": [
+          -0.128,
+          0.0635,
+          -0.2695
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-2",
+        "position": [
+          -0.096,
+          0.0635,
+          -0.2695
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-3",
+        "position": [
+          -0.064,
+          0.0635,
+          -0.2695
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-4",
+        "position": [
+          -0.032,
+          0.0635,
+          -0.2695
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-5",
+        "position": [
+          0.0,
+          0.0635,
+          -0.2695
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-6",
+        "position": [
+          0.032,
+          0.0635,
+          -0.2695
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-7",
+        "position": [
+          0.064,
+          0.0635,
+          -0.2695
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-8",
+        "position": [
+          0.096,
+          0.0635,
+          -0.2695
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-9",
+        "position": [
+          0.128,
+          0.0635,
+          -0.2695
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-10",
+        "position": [
+          -0.112,
+          0.0635,
+          -0.2605
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-11",
+        "position": [
+          -0.08,
+          0.0635,
+          -0.2605
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-12",
+        "position": [
+          -0.048,
+          0.0635,
+          -0.2605
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-13",
+        "position": [
+          -0.016,
+          0.0635,
+          -0.2605
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-14",
+        "position": [
+          0.016,
+          0.0635,
+          -0.2605
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-15",
+        "position": [
+          0.048,
+          0.0635,
+          -0.2605
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-16",
+        "position": [
+          0.08,
+          0.0635,
+          -0.2605
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-17",
+        "position": [
+          0.112,
+          0.0635,
+          -0.2605
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "allenWrench-1",
+        "position": [
+          -0.12,
+          0.063,
+          -0.2075
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1
+        ]
+      },
+      {
+        "id": "screwdriver-1",
+        "position": [
+          0.06,
+          0.072,
+          -0.209
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      }
+    ]
+  },
+  "tuning": {}
+}
