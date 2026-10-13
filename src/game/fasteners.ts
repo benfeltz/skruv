@@ -6,6 +6,7 @@
 //   dowel, pin,  seated ⇄ pressed          tap / pull
 //   back fitting
 //   bolt         seated ⇄ screwed          signed crank progress (wrench)
+//   stud         seated ⇄ screwed          signed crank progress (hand or key), either end
 //   cam          seated ⇄ locked           signed quarter turn (screwdriver), lock needs a
 //                                          captured bolt head
 //   tool         always seated             a tool on a head or slot fastens nothing
@@ -49,8 +50,26 @@ interface TurnLimits {
 /** Kinds pushed home by a tap and pulled back out along their axis. */
 export const isTapKind = (kind: FastenerKind) => kind === KIND.DOWEL || kind === KIND.PIN || kind === KIND.FITTING;
 
-/** Kinds turned by a tool. */
-export const isCrankKind = (kind: FastenerKind) => kind === KIND.BOLT || kind === KIND.CAM;
+/** Kinds turned by a tool (a stud, also by hand). */
+export const isCrankKind = (kind: FastenerKind) => kind === KIND.BOLT || kind === KIND.CAM || kind === KIND.STUD;
+
+/**
+ * The turn that takes a crank kind from seated to home, in radians — the one place a kind
+ * names its span. Read from FASTENER at call time, so a ?tune of `fastener.studRadians`
+ * applies at once.
+ */
+export const spanOf = (kind: FastenerKind) => {
+  if (kind === KIND.BOLT) return FASTENER.screwRadians;
+  return kind === KIND.STUD ? FASTENER.studRadians : FASTENER.quarterTurn;
+};
+
+/**
+ * A joint circled by hand: a stud seated by dragging something onto it rather than the stud
+ * into something — a leg set onto its stud, a top dropped on studs, a leg already carrying
+ * its stud carried onto the top. The part dragged into place (`mover`) is what the finger
+ * circles, with no tool; it need not be the hole side.
+ */
+export const isHandTurned = (joint: { kind: FastenerKind; hardware: string; mover: string }) => joint.kind === KIND.STUD && joint.mover !== joint.hardware;
 
 export const createFastener = (kind: FastenerKind): Fastener => ({ kind, state: STATE.SEATED, progress: 0 });
 
@@ -59,6 +78,9 @@ export const isFastened = (f: Fastener) => f.state !== STATE.SEATED;
 
 /** Fastened, or partway in (a half-turned bolt grips its threads): the part is stuck. */
 export const isEngaged = (f: Fastener) => isFastened(f) || f.progress > 0;
+
+/** All the way home: fastened and fully turned — a screwed bolt backed off partway is not. */
+export const isHome = (f: Fastener) => isFastened(f) && f.progress >= 1;
 
 /** A part pulls free only when every fastener on it is back to plain seated. */
 export const canRelease = (fasteners: Fastener[]) => fasteners.every((f) => !isEngaged(f));
@@ -96,12 +118,14 @@ export function transition(f: Fastener, event: FastenerEvent, ctx: FastenerConte
     case KIND.PIN:
     case KIND.FITTING:
       return tapPull(f, event.type);
+    // Nothing holds a stud in (`held` is a locked cam's, set only on bolts), so it backs out freely.
     case KIND.BOLT:
+    case KIND.STUD:
       if (event.type !== 'crank') return f;
-      return turned(f, event.radians, FASTENER.screwRadians, { canFasten: true, canLoosen: !ctx.held }, STATE.SCREWED);
+      return turned(f, event.radians, spanOf(f.kind), { canFasten: true, canLoosen: !ctx.held }, STATE.SCREWED);
     case KIND.CAM:
       if (event.type !== 'crank') return f;
-      return turned(f, event.radians, FASTENER.quarterTurn, { canFasten: !!ctx.captured, canLoosen: true }, STATE.LOCKED);
+      return turned(f, event.radians, spanOf(f.kind), { canFasten: !!ctx.captured, canLoosen: true }, STATE.LOCKED);
     default:
       return f;
   }

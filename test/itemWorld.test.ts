@@ -335,4 +335,33 @@ describe('the swap: picking from the catalog (1.9.1)', () => {
     world.dispose();
     expect(census()).toEqual(baseline);
   });
+
+  // BLANK's world (1.9.2): nine parts in a box, a display table built by the same events a
+  // player sends, and the swap both ways leaving the room as JOHNNY alone left it.
+  it('swaps JOHNNY → BLANK → JOHNNY, each world built and the room back at baseline at the end', async () => {
+    const { deps, census } = await engine();
+    const baseline = census();
+    const items = createItemSlot({ door: { knows: (id) => ITEM_IDS.includes(id), selected: () => ITEM_ID, select: setItem }, report: (error) => { throw error; }, build: () => createItemWorld(deps) });
+    try {
+      const johnny = items.pick('johnny');
+      run(johnny, 0.2);
+      const johnnyBuilt = census().physics.registered;
+      const blank = items.pick('blank');
+      expect(ITEM_ID).toBe('blank');
+      expect(blank).not.toBe(johnny);
+      const blankBuilt = census();
+      // Its own ten parts in the box and the display table (ten more) are bodies, with their joints.
+      expect(blankBuilt.physics.registered).toBeGreaterThan(MANIFEST.length);
+      expect(blankBuilt.physics.registered).toBeLessThan(johnnyBuilt);
+      expect(blankBuilt.physics.joints).toBeGreaterThan(0);
+      run(blank, 0.5);
+      const again = items.pick('johnny');
+      expect(ITEM_ID).toBe('johnny');
+      expect(census().physics.registered).toBe(johnnyBuilt);
+      again.dispose();
+      expect(census()).toEqual(baseline);
+    } finally {
+      setItem('johnny');
+    }
+  });
 });

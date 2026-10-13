@@ -1,0 +1,594 @@
+{
+  "$schema": "../../tools/validate/flatpack.schema.json",
+  "format": 1,
+  "identity": {
+    "product": "BLANK",
+    "maker": "SKRUV",
+    "documentCode": "SK-0000452-1",
+    "description": "Side table, about 55 × 55 × 45 cm"
+  },
+  "vocabulary": {
+    "connectors": [
+      "studEnd",
+      "studHole",
+      "boltHead",
+      "wrenchTip"
+    ],
+    "fasteners": [
+      "stud",
+      "tool"
+    ]
+  },
+  "parts": {
+    "top": {
+      "partNumber": "20101",
+      "box": [
+        0.55,
+        0.05,
+        0.55
+      ],
+      "mass": 3.2,
+      "color": "partPanel",
+      "quantity": 1,
+      "connectors": [
+        {
+          "id": "studHole-1",
+          "type": "studHole",
+          "position": [
+            -0.2,
+            -0.025,
+            -0.2
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "studHole-2",
+          "type": "studHole",
+          "position": [
+            0.2,
+            -0.025,
+            -0.2
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "studHole-3",
+          "type": "studHole",
+          "position": [
+            -0.2,
+            -0.025,
+            0.2
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "studHole-4",
+          "type": "studHole",
+          "position": [
+            0.2,
+            -0.025,
+            0.2
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        }
+      ]
+    },
+    "leg": {
+      "partNumber": "20102",
+      "box": [
+        0.05,
+        0.4,
+        0.05
+      ],
+      "mass": 0.5,
+      "color": "partPanel",
+      "quantity": 4,
+      "connectors": [
+        {
+          "id": "studHole-1",
+          "type": "studHole",
+          "position": [
+            0,
+            0.2,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ]
+        }
+      ]
+    },
+    "doubleEndedStud": {
+      "partNumber": "20103",
+      "box": [
+        0.006,
+        0.04,
+        0.006
+      ],
+      "mass": 0.004,
+      "color": "partMetal",
+      "quantity": 4,
+      "connectors": [
+        {
+          "id": "studEnd-1",
+          "type": "studEnd",
+          "position": [
+            0,
+            0.02,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "id": "studEnd-2",
+          "type": "studEnd",
+          "position": [
+            0,
+            -0.02,
+            0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "boltHead-1",
+          "type": "boltHead",
+          "position": [
+            0,
+            0.02,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "id": "boltHead-2",
+          "type": "boltHead",
+          "position": [
+            0,
+            -0.02,
+            0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        }
+      ]
+    },
+    "allenWrench": {
+      "partNumber": "10067",
+      "box": [
+        0.07,
+        0.004,
+        0.025
+      ],
+      "mass": 0.015,
+      "color": "partWrench",
+      "quantity": 1,
+      "connectors": [
+        {
+          "id": "wrenchTip-1",
+          "type": "wrenchTip",
+          "position": [
+            0.035,
+            0,
+            0.0125
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        }
+      ]
+    }
+  },
+  "assembled": [
+    {
+      "id": "top-1",
+      "role": "top",
+      "position": [
+        0,
+        0.425,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "leg-1",
+      "role": "leg",
+      "position": [
+        -0.2,
+        0.2,
+        -0.2
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "leg-2",
+      "role": "leg",
+      "position": [
+        0.2,
+        0.2,
+        -0.2
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "leg-3",
+      "role": "leg",
+      "position": [
+        -0.2,
+        0.2,
+        0.2
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "leg-4",
+      "role": "leg",
+      "position": [
+        0.2,
+        0.2,
+        0.2
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "doubleEndedStud-1",
+      "role": "hardware",
+      "position": [
+        -0.2,
+        0.4,
+        -0.2
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "doubleEndedStud-2",
+      "role": "hardware",
+      "position": [
+        0.2,
+        0.4,
+        -0.2
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "doubleEndedStud-3",
+      "role": "hardware",
+      "position": [
+        -0.2,
+        0.4,
+        0.2
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "doubleEndedStud-4",
+      "role": "hardware",
+      "position": [
+        0.2,
+        0.4,
+        0.2
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  ],
+  "manual": {
+    "pages": [
+      {
+        "kind": "cover"
+      },
+      {
+        "kind": "warning",
+        "subject": "twoPeople"
+      },
+      {
+        "kind": "doDont",
+        "subject": "protectFloor"
+      },
+      {
+        "kind": "inventory"
+      },
+      {
+        "kind": "step",
+        "number": 1,
+        "pose": "upsideDown",
+        "parts": [
+          "top-1"
+        ],
+        "fasten": [
+          [
+            "doubleEndedStud-1/studEnd-1",
+            "top-1/studHole-1"
+          ],
+          [
+            "doubleEndedStud-2/studEnd-1",
+            "top-1/studHole-2"
+          ],
+          [
+            "doubleEndedStud-3/studEnd-1",
+            "top-1/studHole-3"
+          ],
+          [
+            "doubleEndedStud-4/studEnd-1",
+            "top-1/studHole-4"
+          ]
+        ],
+        "tool": "allenWrench"
+      },
+      {
+        "kind": "step",
+        "number": 2,
+        "pose": "upsideDown",
+        "parts": [
+          "leg-1",
+          "leg-2",
+          "leg-3",
+          "leg-4"
+        ],
+        "fasten": [
+          [
+            "doubleEndedStud-1/studEnd-2",
+            "leg-1/studHole-1"
+          ],
+          [
+            "doubleEndedStud-2/studEnd-2",
+            "leg-2/studHole-1"
+          ],
+          [
+            "doubleEndedStud-3/studEnd-2",
+            "leg-3/studHole-1"
+          ],
+          [
+            "doubleEndedStud-4/studEnd-2",
+            "leg-4/studHole-1"
+          ]
+        ]
+      },
+      {
+        "kind": "special",
+        "number": 3,
+        "pose": "upright",
+        "special": "tipUpright"
+      },
+      {
+        "kind": "back"
+      }
+    ]
+  },
+  "packing": {
+    "boxInner": [
+      0.58,
+      0.12,
+      0.6
+    ],
+    "wall": 0.01,
+    "floor": 0.01,
+    "lid": {
+      "thickness": 0.008,
+      "partNumber": "10001",
+      "mass": 0.9,
+      "color": "cardboard"
+    },
+    "placements": [
+      {
+        "id": "top-1",
+        "position": [
+          0,
+          0.035,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "id": "leg-1",
+        "position": [
+          0,
+          0.085,
+          -0.15
+        ],
+        "rotation": [
+          0,
+          0,
+          0.7071067811865476,
+          0.7071067811865476
+        ]
+      },
+      {
+        "id": "leg-2",
+        "position": [
+          0,
+          0.085,
+          -0.05
+        ],
+        "rotation": [
+          0,
+          0,
+          0.7071067811865476,
+          0.7071067811865476
+        ]
+      },
+      {
+        "id": "leg-3",
+        "position": [
+          0,
+          0.085,
+          0.05
+        ],
+        "rotation": [
+          0,
+          0,
+          0.7071067811865476,
+          0.7071067811865476
+        ]
+      },
+      {
+        "id": "leg-4",
+        "position": [
+          0,
+          0.085,
+          0.15
+        ],
+        "rotation": [
+          0,
+          0,
+          0.7071067811865476,
+          0.7071067811865476
+        ]
+      },
+      {
+        "id": "doubleEndedStud-1",
+        "position": [
+          0.25,
+          0.063,
+          -0.15
+        ],
+        "rotation": [
+          0,
+          0,
+          0.7071067811865476,
+          0.7071067811865476
+        ]
+      },
+      {
+        "id": "doubleEndedStud-2",
+        "position": [
+          0.25,
+          0.063,
+          -0.05
+        ],
+        "rotation": [
+          0,
+          0,
+          0.7071067811865476,
+          0.7071067811865476
+        ]
+      },
+      {
+        "id": "doubleEndedStud-3",
+        "position": [
+          0.25,
+          0.063,
+          0.05
+        ],
+        "rotation": [
+          0,
+          0,
+          0.7071067811865476,
+          0.7071067811865476
+        ]
+      },
+      {
+        "id": "doubleEndedStud-4",
+        "position": [
+          0.25,
+          0.063,
+          0.15
+        ],
+        "rotation": [
+          0,
+          0,
+          0.7071067811865476,
+          0.7071067811865476
+        ]
+      },
+      {
+        "id": "allenWrench-1",
+        "position": [
+          -0.25,
+          0.062,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      }
+    ]
+  },
+  "tuning": {}
+}

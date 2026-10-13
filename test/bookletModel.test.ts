@@ -1,8 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
-import { createBooklet, createBuildSteps } from '../src/game/bookletModel.js';
-import { ASSEMBLED, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../src/game/item.js';
+import { createBooklet, createBuildSteps, gamePagesFor } from '../src/game/bookletModel.js';
+import { ASSEMBLED, ITEM_ID, itemById, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../src/game/item.js';
+
+// The current item's fastener kinds, as the booklet reads them (itemById).
+const KINDS = itemById(ITEM_ID).kinds;
 
 // Page coverage: the booklet tells the whole build — every joint on exactly one page, every
 // panel brought in once, hardware counts that add up to the box. A stale page (a fastener
@@ -194,21 +197,21 @@ describe('createBooklet with the game\'s own pages', () => {
   const booklet = createBooklet(MANUAL.pages, model);
 
   it.each(['touch', 'desktop'] as const)('puts the %s controls second to last, one page more', (scheme) => {
-    const withControls = createBooklet(MANUAL.pages, { ...model, gamePages: [{ kind: 'controls', scheme }] });
+    const withControls = createBooklet(MANUAL.pages, { ...model, gamePages: gamePagesFor(scheme, KINDS) });
     expect(withControls).toHaveLength(booklet.length + 1);
-    expect(withControls.at(-2)).toEqual({ kind: 'controls', scheme });
+    expect(withControls.at(-2)).toEqual({ kind: 'controls', scheme, kinds: [...KINDS] });
     expect(withControls.at(-1)).toEqual({ kind: 'backCover' });
   });
 
   it('leaves the build pages as they were, so the per-page highlight still finds each step', () => {
-    const withControls = createBooklet(MANUAL.pages, { ...model, gamePages: [{ kind: 'controls', scheme: 'touch' }] });
+    const withControls = createBooklet(MANUAL.pages, { ...model, gamePages: gamePagesFor('touch', KINDS) });
     const stepsOf = (pages: typeof booklet) => pages.flatMap((p, index) => (p.kind === 'step' ? [{ index, number: p.number, types: p.types }] : []));
     expect(stepsOf(withControls)).toEqual(stepsOf(booklet));
     expect(withControls.slice(0, -2)).toEqual(booklet.slice(0, -1));
   });
 
   it('keeps several game pages in order, and appends them to a manual with no back cover', () => {
-    const gamePages = [{ kind: 'controls', scheme: 'touch' }, { kind: 'controls', scheme: 'desktop' }] as const;
+    const gamePages = [...gamePagesFor('touch', KINDS), ...gamePagesFor('desktop', KINDS)];
     expect(createBooklet(MANUAL.pages, { ...model, gamePages }).slice(-3)).toEqual([...gamePages, { kind: 'backCover' }]);
     const noBack = MANUAL.pages.filter((page) => page.kind !== 'back');
     expect(createBooklet(noBack, { ...model, gamePages }).slice(-2)).toEqual([...gamePages]);

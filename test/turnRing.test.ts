@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
-import { TURN_RING } from '../src/constants.js';
+import { FASTENER, TURN_RING } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
-import { arcLength, dialEngagements, dialHit, isHome, isStalled, pickDial, tightensClockwise } from '../src/game/turnRing.js';
-import { createFastener, STATE } from '../src/game/fasteners.js';
+import { arcLength, dialHit, gripOf, isDrawn, isTurnHome, turnProgress, isStalled, pickDial, tightensClockwise } from '../src/game/turnRing.js';
+import { createFastener, isHome, STATE } from '../src/game/fasteners.js';
+import { setItem } from '../src/game/item.js';
 
 // The turn ring's maths (1.8.2.2 step 1): headless, plain points and joints.
 
@@ -57,35 +58,81 @@ describe('tightensClockwise', () => {
   });
 });
 
-describe('dialEngagements', () => {
-  // A bolt and a cam lock seated in a panel, each with its tool on it.
-  function bench() {
-    const types: Record<string, string> = { panel: 'sidePanel', bolt: 'camLockBolt', key: 'allenWrench', shelf: 'topBottomPanel', cam: 'camLock', driver: 'screwdriver' };
+// One dial per turn (the graph's `Turn` record, test/turnOf.test.ts): which turns are drawn,
+// how full, and whose press they are.
+describe('dials of turns', () => {
+  // A bolt seated in a panel, the key on it.
+  function johnny() {
+    const types: Record<string, string> = { panel: 'sidePanel', bolt: 'camLockBolt', key: 'allenWrench' };
     const assembly = createAssembly((id) => types[id]);
     const bolt = assembly.seat({ partA: 'bolt', connectorA: 0, partB: 'panel', connectorB: 2, mover: 'bolt' });
-    const key = assembly.seat({ partA: 'key', connectorA: 0, partB: 'bolt', connectorB: 1, mover: 'key' });
-    return { assembly, bolt, key };
+    assembly.seat({ partA: 'key', connectorA: 0, partB: 'bolt', connectorB: 1, mover: 'key' });
+    return { assembly, bolt };
   }
 
-  it('gives a tool on a fastener not yet home a dial', () => {
-    const { assembly, bolt, key } = bench();
-    expect(key.kind).toBe(KIND.TOOL);
-    expect(dialEngagements(assembly.all())).toEqual([{ tool: key, target: bolt }]);
-  });
-
-  it('keeps the dial of a tool on a fastener that is home, for as long as the tool is on', () => {
-    const { assembly, bolt, key } = bench();
+  it("draws a tool's dial for as long as the tool is on, home or not, as the key's press", () => {
+    const { assembly, bolt } = johnny();
+    const [turn] = assembly.turns();
+    expect(gripOf(turn)).toBe('key');
+    expect([turnProgress(turn), isTurnHome(turn), isDrawn(turn, false)]).toEqual([0, false, true]);
     assembly.drive(bolt.id);
-    expect(dialEngagements(assembly.all())).toEqual([{ tool: key, target: assembly.get(bolt.id) }]);
-    assembly.unseat(key.id);
-    expect(dialEngagements(assembly.all())).toEqual([]);
+    const [home] = assembly.turns();
+    expect([turnProgress(home), isTurnHome(home), isDrawn(home, false)]).toEqual([1, true, true]);
   });
 
-  it('gives none with no tool seated', () => {
+  it('draws nothing for a part with no tool and no turn', () => {
     const types: Record<string, string> = { panel: 'sidePanel', bolt: 'camLockBolt' };
     const assembly = createAssembly((id) => types[id]);
     assembly.seat({ partA: 'bolt', connectorA: 0, partB: 'panel', connectorB: 2, mover: 'bolt' });
-    expect(dialEngagements(assembly.all())).toEqual([]);
+    expect(assembly.turns()).toEqual([]);
+  });
+
+  describe('turned by hand (1.9.2)', () => {
+    beforeAll(() => setItem('blank'));
+    afterAll(() => setItem('johnny'));
+
+    // A stud in the top's first hole, a leg set onto its other end.
+    function blank() {
+      const types: Record<string, string> = { top: 'top', stud: 'doubleEndedStud', leg: 'leg' };
+      const assembly = createAssembly((id) => types[id]);
+      assembly.seat({ partA: 'stud', connectorA: 0, partB: 'top', connectorB: 0, mover: 'stud' });
+      const inLeg = assembly.seat({ partA: 'stud', connectorA: 1, partB: 'leg', connectorB: 0, mover: 'leg' });
+      return { assembly, inLeg };
+    }
+    const legTurn = (assembly: ReturnType<typeof blank>['assembly']) => assembly.turnOf('leg')!;
+
+    it("is the leg's press, drawn while the leg is pressed — whatever its progress — and not otherwise", () => {
+      const { assembly, inLeg } = blank();
+      expect(gripOf(legTurn(assembly))).toBe('leg');
+      expect(isDrawn(legTurn(assembly), true)).toBe(true);
+      expect(isDrawn(legTurn(assembly), false)).toBe(false);
+      assembly.apply(inLeg.id, { type: 'crank', radians: FASTENER.studRadians / 2 });
+      expect(turnProgress(legTurn(assembly))).toBeCloseTo(0.5, 9);
+      assembly.drive(inLeg.id);
+      // Home on a stud that is not yet home in the top: the turn goes on into the top.
+      expect(isDrawn(legTurn(assembly), true)).toBe(true);
+      expect(turnProgress(legTurn(assembly))).toBe(0);
+    });
+
+    it('is drawn home too while pressed: the leg is circled to loosen it', () => {
+      const { assembly, inLeg } = blank();
+      for (const j of assembly.all()) assembly.drive(j.id);
+      expect(assembly.get(inLeg.id)!.fastener.progress).toBe(1);
+      const turn = legTurn(assembly);
+      expect(isTurnHome(turn)).toBe(true);
+      expect(isDrawn(turn, true)).toBe(true);
+      expect(isDrawn(turn, false)).toBe(false);
+    });
+
+    it('draws no dial for a turn with nothing to turn: a key on a buried hex', () => {
+      const types: Record<string, string> = { top: 'top', stud: 'doubleEndedStud', key: 'allenWrench' };
+      const assembly = createAssembly((id) => types[id]);
+      assembly.seat({ partA: 'stud', connectorA: 0, partB: 'top', connectorB: 0, mover: 'stud' });
+      assembly.seat({ partA: 'key', connectorA: 0, partB: 'stud', connectorB: 2, mover: 'key' });
+      const [turn] = assembly.turns();
+      expect(turn.joints).toEqual([]);
+      expect(isDrawn(turn, true)).toBe(false);
+    });
   });
 });
 

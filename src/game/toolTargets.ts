@@ -14,7 +14,7 @@
 //                distance (what looks close is close, on a phone), capped by a 3D distance
 //                from the carried part's ends so nothing across the room lights.
 
-import { CONNECTOR, KIND } from '../../tools/validate/lib/vocabulary.js';
+import { CONNECTOR } from '../../tools/validate/lib/vocabulary.js';
 import { isCrankKind, isFastened, STATE } from './fasteners.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 import type { ConnectorType } from '../../tools/validate/lib/vocabulary.js';
@@ -27,10 +27,24 @@ export const TOOL_TIPS: readonly ConnectorType[] = Object.freeze([CONNECTOR.WREN
 /** What a tool's tip seats on. */
 export const TOOL_TARGETS: readonly ConnectorType[] = Object.freeze([CONNECTOR.BOLT_HEAD, CONNECTOR.CAM_SLOT]);
 
-/** A connector as these rules read it: its type and the part it is on. */
+/** A connector as these rules read it: its type, the part it is on and its index there. */
 export interface TargetConnector {
   type: ConnectorType;
   part: { id: PartId };
+  index: number;
+}
+
+/**
+ * The crank joint a tool put on this hex would turn (`assembly.turnedFrom`), or null: for
+ * a stud, the end the hex is *not* at. Injected because the connectors' positions are the
+ * graph's, not these rules'.
+ */
+export type TurnedBy = (hex: TargetConnector) => AssemblyJoint | null;
+
+/** What `isWorkable` asks of the world's geometry: the bolt a cam would catch, the joint a hex's key would turn. */
+export interface Probe {
+  captured: Captured;
+  turnedBy: TurnedBy;
 }
 
 /** The bolt a cam lock would catch (`capture` over screwed bolt heads), or null. */
@@ -52,20 +66,13 @@ export const isSeatTarget = (connector: TargetConnector, seated: ReadonlySet<Par
   !isToolTarget(connector.type) || seated.has(connector.part.id);
 
 /** A seat target worth lighting — any hole; a bolt head or cam slot only when its tool can turn it now (see the header). */
-export function isWorkable(connector: TargetConnector, joints: Iterable<AssemblyJoint>, captured: Captured) {
+export function isWorkable(connector: TargetConnector, { captured, turnedBy }: Probe) {
   if (!isToolTarget(connector.type)) return true;
-  const seat = seatOf(connector, joints);
+  // What a tool put here would turn: a bolt, a cam, a stud's far end — the graph's answer.
+  const seat = turnedBy(connector);
   if (!seat) return false;
   if (connector.type === CONNECTOR.BOLT_HEAD) return !isFastened(seat.fastener);
   return seat.fastener.state !== STATE.LOCKED && captured(seat.hardware) !== null;
-}
-
-// The bolt or cam seat joint a target connector's part sits in, or null (loose, or not a target).
-function seatOf({ type, part }: TargetConnector, joints: Iterable<AssemblyJoint>) {
-  const kind = type === CONNECTOR.BOLT_HEAD ? KIND.BOLT : type === CONNECTOR.CAM_SLOT ? KIND.CAM : null;
-  if (!kind) return null;
-  for (const j of joints) if (j.hardware === part.id && j.kind === kind) return j;
-  return null;
 }
 
 /** A target ring: its target, how brightly it lights (0..1) and how far it is from the finger (CSS px). */
