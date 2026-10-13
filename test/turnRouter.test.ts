@@ -616,11 +616,12 @@ describe('7. a wood screw under the screwdriver (1.9.3.1)', () => {
   beforeAll(() => setItem('johnny'));
   afterAll(() => setItem('blank'));
 
-  it('drives the screw home on a hold of the screwdriver, into the panel behind its hole', () => {
+  // The side panel's top face at y 0.016; the rail `gap` above it.
+  function driven(gap = 0) {
     const panelPose = { position: [0, 0.008, 0] as Vec3, rotation: [0, 0, Math.SQRT1_2, Math.SQRT1_2] as Quat };
     const railHalf = PART_TYPES.rail.size[1] / 2;
     const screwHalf = PART_TYPES.woodScrew.size[1] / 2;
-    const railAt: Vec3 = [0, 0.016 + railHalf, 0];
+    const railAt: Vec3 = [0, 0.016 + gap + railHalf, 0];
     const hole = connectorInWorld(PART_TYPES.rail.connectors[RAIL_HOLE], { position: railAt, rotation: [0, 0, 0, 1] }).position;
     const driver = makePart('screwdriver-1', 'screwdriver', [hole[0] + 0.03, hole[1] + 2 * screwHalf + 0.05, hole[2]]);
     const m = mount([
@@ -635,7 +636,19 @@ describe('7. a wood screw under the screwdriver (1.9.3.1)', () => {
     m.canvas.fire('pointerdown', at);
     m.hold(TAP_FRAMES + DRIVE_FRAMES);
     m.canvas.fire('pointerup', at);
-    expect(m.assembly.get(screw.id)).toMatchObject({ through: 'sidePanel-1', fastener: { state: STATE.SCREWED, progress: 1 } });
+    return { ...m, screw };
+  }
+
+  it('drives the screw home on a hold of the screwdriver, into the panel behind its hole', () => {
+    const m = driven();
+    expect(m.assembly.get(m.screw.id)).toMatchObject({ through: 'sidePanel-1', fastener: { state: STATE.SCREWED, progress: 1 } });
     expect(m.fastens()).toHaveLength(1);
+  });
+
+  // PR #51 review: in play as in the validator, the part behind is the one holding the tip
+  // its sink depth down the hole — not anything within the screw's length.
+  it('takes no part behind when the panel lies past the tip, though within the screw\'s length', () => {
+    const m = driven(FASTENER.sinkDepth.screw! - PART_TYPES.rail.size[1] + 0.002);
+    expect(m.assembly.get(m.screw.id)).toMatchObject({ through: null, fastener: { state: STATE.SCREWED, progress: 1 } });
   });
 });

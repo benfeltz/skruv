@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { AIM, COLORS, DROP, FASTENER, GESTURE, PANEL, PICK, RING, ROOM, SNAP, TURN_RING } from '../constants.js';
-import { areCompatible, COMPATIBLE, CONNECTOR, isFastenerEnd, KIND, passesThrough } from '../../tools/validate/lib/vocabulary.js';
-import { connectorInWorld, rotateVector } from '../../tools/validate/lib/geometry.js';
+import { areCompatible, CONNECTOR, isFastenerEnd, KIND, passesThrough } from '../../tools/validate/lib/vocabulary.js';
+import { connectorInWorld, contains, rotateVector } from '../../tools/validate/lib/geometry.js';
 import { advancing, capture, carryPose, layersOf } from '../game/assembly.js';
 import { PART_TYPES } from '../game/item.js';
 import { socketUnder } from '../game/decals.js';
@@ -179,9 +179,6 @@ export interface GestureRouterOptions {
 // A hole marking on a part's mesh (src/game/partMesh.ts).
 type Decal = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
 
-// Hardware (fastener or tool) has a fastener end; panels have only holes, or nothing.
-const isHardware = (type: string) => PART_TYPES[type].connectors.some((c) => c.type in COMPATIBLE);
-
 // A part that seats by a whole fit of its holes (src/game/panelFit.ts) — never hardware, the lid or the base.
 const isPanel = (type: string) => isPanelType(PART_TYPES[type]);
 
@@ -279,7 +276,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const meshes = parts.map((part) => part.mesh);
-  const panelMeshes = parts.filter((part) => !isHardware(part.type)).map((part) => part.mesh);
+  const panels = parts.filter((part) => isPanel(part.type));
   const partByMesh = new Map<THREE.Object3D, Part>(parts.map((part) => [part.mesh, part]));
   const partById = new Map<PartId, Part>(parts.map((part) => [part.id, part]));
   const proxies = parts.filter((part) => isSmall(part.type)).map(addHitProxy);
@@ -1688,17 +1685,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       .map((j) => j.id);
   }
 
-  // A back fitting pressed home, or a screw driven in, lands in whichever panel lies behind
-  // its hole.
+  // A back fitting pressed home, or a screw driven in, lands in whichever panel holds its tip
+  // once home — its sink depth down the hole, the validator's test (tools/validate/lib/joints.ts).
   function behind(joint: AssemblyJoint): ApplyContext {
     if (!passesThrough(joint.kind)) return {};
     const hole = connectorWorld(joint.host, joint.hostConnector);
-    raycaster.set(scratch.fromArray(hole.position), offset.fromArray(hole.axis).negate());
-    raycaster.far = PART_TYPES[partById.get(joint.hardware)!.type].size[1];
-    const host = partById.get(joint.host)!.mesh;
-    const hit = raycaster.intersectObjects(panelMeshes, false).find(({ object }) => object !== host);
-    raycaster.far = Infinity;
-    return { through: hit ? partByMesh.get(hit.object)!.id : null };
+    const sink = FASTENER.sinkDepth[joint.kind]!;
+    const tip = hole.position.map((v, i) => v - hole.axis[i] * sink) as Vec3;
+    const panel = panels.find((part) => part.id !== joint.host && contains(PART_TYPES[part.type].size, poseOf(part.id), tip));
+    return { through: panel?.id ?? null };
   }
 
   // --- per frame: fastener progress drawn on top of the simulated poses ---
