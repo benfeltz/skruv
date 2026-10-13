@@ -8,7 +8,7 @@ import { STATE } from '../src/game/fasteners.js';
 import type { Pose, Quat, Vec3 } from '../tools/validate/lib/geometry.js';
 import type { FastenerKind } from '../tools/validate/lib/vocabulary.js';
 import type { Assembly, AssemblyJoint, Bond, Head, JointFrame } from '../src/game/assembly.js';
-import { RAIL_HOLE, SCREW_THREAD } from './support/screwParts.js';
+import { RAIL_DOWEL_HOLE, RAIL_HOLE, SCREW_THREAD } from './support/screwParts.js';
 
 vi.mock('../src/game/item.js', async (original) => (await import('./support/screwParts.js')).withScrews(await original()));
 
@@ -414,6 +414,18 @@ describe('a wood screw: driven into what lies behind its hole, held there solid'
     assembly.apply(screw.id, { type: 'crank', radians: -FASTENER.screwRadians });
     expect(assembly.get(screw.id)).toMatchObject({ through: null, fastener: { state: STATE.SEATED, progress: 0 } });
     expect(bridges(assembly)).toEqual([]);
+  });
+
+  // PR #51 review: a screw driven into the panel a rail is doweled onto holds the rail there.
+  it('binds the rail to the part behind: its dowels cannot be pulled while the screw is home', () => {
+    const { assembly, screw } = screwed();
+    assembly.seat({ partA: 'dowel-1', connectorA: END_LOW, partB: 'sidePanel-1', connectorB: SIDE_BOTTOM_DOWEL, mover: 'dowel-1' });
+    const onDowel = assembly.seat({ partA: 'rail-1', connectorA: RAIL_DOWEL_HOLE, partB: 'dowel-1', connectorB: END_HIGH, mover: 'rail-1' });
+    assembly.tap('dowel-1');
+    expect(assembly.get(onDowel.id).fastener.state).toBe(STATE.PRESSED);
+    expect(assembly.pullable('rail-1')).toEqual([]);
+    assembly.apply(screw.id, { type: 'crank', radians: -FASTENER.screwRadians });
+    expect(assembly.pullable('rail-1').map((j) => j.id)).toEqual([onDowel.id]);
   });
 
   it('unscrews to seated when the part behind is taken away', () => {

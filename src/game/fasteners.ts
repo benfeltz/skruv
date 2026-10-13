@@ -83,6 +83,9 @@ export const spanOf = (kind: FastenerKind) => {
  */
 export const isHandTurned = (joint: { kind: FastenerKind; hardware: string; mover: string }) => joint.kind === KIND.STUD && joint.mover !== joint.hardware;
 
+/** Fastened so it ties its two hosts solid: a locked cam onto its bolt, a screw into what lies behind. */
+export const bindsRigidly = (f: Fastener) => isFastened(f) && (f.kind === KIND.CAM || f.kind === KIND.SCREW);
+
 export const createFastener = (kind: FastenerKind): Fastener => ({ kind, state: STATE.SEATED, progress: 0 });
 
 /** Past seated: the joint holds and physics should bond it. */

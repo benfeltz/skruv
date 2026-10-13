@@ -23,6 +23,7 @@ import {
   canRelease as fastenersRelease,
   createFastener,
   isFastened,
+  bindsRigidly,
   isCrankKind,
   isHandTurned,
   isHome,
@@ -423,23 +424,26 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     return hosts;
   }
 
-  /** True when a locked cam ties hosts `a` and `b` together. */
-  function lockedBetween(a: PartId, b: PartId) {
+  /**
+   * True when a joint that binds rigidly ties hosts `a` and `b` together: a locked cam, its
+   * host to its bolt's; a screwed screw, its host to the part behind its hole.
+   */
+  function boundBetween(a: PartId, b: PartId) {
     return all().some((j) => {
-      if (j.kind !== KIND.CAM || j.fastener.state !== STATE.LOCKED) return false;
-      const other = screwedHost(j.captured);
+      if (!bindsRigidly(j.fastener)) return false;
+      const other = j.kind === KIND.CAM ? screwedHost(j.captured) : j.through;
       return (j.host === a && other === b) || (j.host === b && other === a);
     });
   }
 
   /**
    * Fastened tap-kind joints `part` can be pulled out of: it was the part pushed into the
-   * seat, and no locked cam binds the connection.
+   * seat, and no locked cam or screwed screw binds the connection.
    */
   function pullable(part: PartId) {
     return all().filter((j) => {
       if (j.mover !== part || !isTapKind(j.kind) || !isFastened(j.fastener)) return false;
-      return !hostsOf(j.hardware).some((other) => other !== j.host && lockedBetween(j.host, other));
+      return !hostsOf(j.hardware).some((other) => other !== j.host && boundBetween(j.host, other));
     });
   }
 
@@ -725,7 +729,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
           addBridge({
             a: first.host,
             b: other,
-            rigid: first.kind === KIND.CAM || first.kind === KIND.SCREW,
+            rigid: bindsRigidly(first.fastener),
             via: null,
             frame: () => currentFrame(first.host, other, pivot, poseOf),
           });

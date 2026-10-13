@@ -4,13 +4,16 @@ import type { GamePartType } from '../../src/game/item.js';
 // Wood-screw part types for engine specs. No shipped pack carries a screw yet, so a spec
 // lays these over the current item's PART_TYPES with
 //   vi.mock('../src/game/item.js', async (original) => (await import('./support/screwParts.js')).withScrews(await original()));
-// A thin rail with a screw hole on its top face, and a wood screw: thread end down, its
-// drive slot on the head end up.
+// A thin rail with a screw hole on its top face and a dowel hole in its underside, and a wood
+// screw: thread end down, its drive slot on the head end up.
 export const SCREW_PARTS = Object.freeze({
   rail: {
     size: [0.1, 0.01, 0.02],
     color: 'partPanel',
-    connectors: [{ id: 'screwHole-1', type: 'screwHole', position: [0, 0.005, 0], axis: [0, 1, 0] }],
+    connectors: [
+      { id: 'screwHole-1', type: 'screwHole', position: [0, 0.005, 0], axis: [0, 1, 0] },
+      { id: 'dowelHole-1', type: 'dowelHole', position: [0.03, -0.005, 0], axis: [0, -1, 0] },
+    ],
   },
   woodScrew: {
     size: [0.004, 0.03, 0.004],
@@ -25,6 +28,7 @@ export const SCREW_PARTS = Object.freeze({
 export const SCREW_THREAD = 0;
 export const SCREW_SLOT = 1;
 export const RAIL_HOLE = 0;
+export const RAIL_DOWEL_HOLE = 1;
 
 /**
  * `item` with SCREW_PARTS added to its PART_TYPES — live: a `setItem` on the real module
