@@ -40,8 +40,10 @@ describe('type compatibility', () => {
     expect(areCompatible(CONNECTOR.WRENCH_TIP, CONNECTOR.DRIVE_SLOT)).toBe(false);
   });
 
-  it('covers every catalog connector type exactly once', () => {
-    const covered = [...Object.keys(COMPATIBLE), ...Object.values(COMPATIBLE)].sort();
+  it('covers every catalog connector type exactly once, the screw pilot apart', () => {
+    // The pilot a screw's tip lands in pairs with no end of its own: the validator's
+    // `pilot-hole` rule reads it, never the snap.
+    const covered = [...Object.keys(COMPATIBLE), ...Object.values(COMPATIBLE), CONNECTOR.SCREW_PILOT].sort();
     expect(covered).toEqual(Object.values(CONNECTOR).sort());
   });
 });

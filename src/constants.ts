@@ -535,6 +535,8 @@ export const DECAL = {
     studHole: 0.0035,
     // A pilot hole through the part a wood screw attaches: a hair wider than its thread.
     screwHole: 0.002,
+    // The pilot a wood screw's tip lands in, in the part behind the one it attaches.
+    screwPilot: 0.002,
   },
   // A recess is drawn as a ring: inner radius as a fraction of the outer.
   recessInner: 0.55,
