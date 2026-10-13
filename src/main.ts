@@ -6,6 +6,7 @@ import { createHaptics, cueFor, patternFor } from './game/haptics.js';
 import { ITEM_ID, ITEM_IDS, setItem } from './game/item.js';
 import { createItemSlot } from './game/itemSlot.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
+import { spikeMode } from './game/spikeAssembled.js';
 import { createTunables, LIVE_KNOBS } from './game/tunables.js';
 import { createPhysicsWorld } from './physics/world.js';
 import { createCameraControls } from './scene/cameraControls.js';
@@ -136,7 +137,23 @@ document.body.append(createResetButton({ onReset: () => items.current?.repack() 
 // Under sustained load the room renders every other frame; everything else runs every frame.
 const fps = createFpsGuard();
 
+// Engine spike 1.2 (branch-local): the shell (or ?spike) boots this same game with the
+// metrics overlay and haptic tick; null on every other URL. The overlay watches frames and
+// bridge round trips only: since the catalog merge an item world owns its parts, so the
+// drift watch (and the ?spike=assembled stress boot that fed it) is retired on this branch.
+const mode = spikeMode(location.search, location.protocol);
+const metrics = mode
+  ? await import('./spike/metricsOverlay.js').then(({ createMetricsOverlay }) => {
+      const overlay = createMetricsOverlay({ bodies: [] });
+      document.body.append(overlay.element);
+      return overlay;
+    })
+  : null;
+// …and the haptic tick on grab, in the native shell only.
+if (metrics) import('./spike/haptics.js').then(({ connectSpikeHaptics }) => connectSpikeHaptics({ events, onRoundTrip: metrics.haptic }));
+
 createLoop((delta, rawDelta) => {
+  metrics?.frame(rawDelta);
   cameraControls.update(delta);
   items.current?.update(delta);
   // Measured on the true delta: the clamped one would floor every slow device at 15 fps.

@@ -1,0 +1,25 @@
+{
+  "name": "skruv-spike-capacitor",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Engine spike 1.2 (branch-local, never merges): the root Vite build in a Capacitor iOS shell.",
+  "scripts": {
+    "web": "npm --prefix ../.. run build",
+    "sync": "npm run web && cap sync ios",
+    "ios:build": "scripts/ios.sh build",
+    "ios:install": "scripts/ios.sh install",
+    "ios:launch": "scripts/ios.sh launch",
+    "ios:all": "scripts/ios.sh all",
+    "ios:sim": "scripts/ios.sh sim",
+    "ios:testflight": "scripts/ios.sh testflight"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.5.2",
+    "@capacitor/haptics": "8.0.2",
+    "@capacitor/ios": "8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  }
+}

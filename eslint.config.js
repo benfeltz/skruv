@@ -6,7 +6,10 @@ import tseslint from 'typescript-eslint';
 // The recommended sets only, flat config. A rule the tree genuinely fights is turned off
 // here with a one-line reason — never with an inline disable.
 export default defineConfig(
-  { ignores: ['dist/', '**/node_modules/'] },
+  // Engine spike 1.2 (branch-local): the shell's generated iOS project carries a copy of
+  // dist/ (gitignored), and xcodebuild's products land in build/ — built output, not source.
+  // Its capacitor.config.ts stays linted.
+  { ignores: ['dist/', '**/node_modules/', 'spikes/capacitor/ios/', 'spikes/capacitor/build/'] },
   js.configs.recommended,
   tseslint.configs.recommended,
   // The game runs in the browser.
