@@ -86,6 +86,13 @@ export const kindOf = (endType: ConnectorType) => KIND_FOR_END[endType] ?? null;
 export const passesThrough = (kind: FastenerKind) => kind === KIND.FITTING || kind === KIND.SCREW;
 
 /**
+ * True for a part type a fastener's tip can pass into: anything that is not hardware or a
+ * tool — a panel with holes, or a plain block with no connectors at all (a drawer bottom, a
+ * knob). The one rule `passThrough` here and the game's router both ask.
+ */
+export const canPassInto = (connectors: readonly { type: ConnectorType }[]) => !connectors.some((c) => isFastenerEnd(c.type));
+
+/**
  * The geometric contract every engine honours, in metres. A pack's assembled poses are
  * checked against it, and joints are derived from them by it.
  *   sinkDepth     — how deep each fastener sits in its hole once fully home, along its axis
