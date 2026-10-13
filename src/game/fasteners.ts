@@ -79,6 +79,9 @@ export const isFastened = (f: Fastener) => f.state !== STATE.SEATED;
 /** Fastened, or partway in (a half-turned bolt grips its threads): the part is stuck. */
 export const isEngaged = (f: Fastener) => isFastened(f) || f.progress > 0;
 
+/** All the way home: fastened and fully turned — a screwed bolt backed off partway is not. */
+export const isHome = (f: Fastener) => isFastened(f) && f.progress >= 1;
+
 /** A part pulls free only when every fastener on it is back to plain seated. */
 export const canRelease = (fasteners: Fastener[]) => fasteners.every((f) => !isEngaged(f));
 

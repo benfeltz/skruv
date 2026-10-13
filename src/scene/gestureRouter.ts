@@ -2,13 +2,13 @@ import * as THREE from 'three';
 import { AIM, COLORS, DROP, FASTENER, GESTURE, PANEL, PICK, RING, ROOM, SNAP, TURN_RING } from '../constants.js';
 import { areCompatible, COMPATIBLE, CONNECTOR, isFastenerEnd, KIND } from '../../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, rotateVector } from '../../tools/validate/lib/geometry.js';
-import { capture, carryPose } from '../game/assembly.js';
+import { advancing, capture, carryPose, layersOf } from '../game/assembly.js';
 import { PART_TYPES } from '../game/item.js';
 import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
 import { driveRadians, ratchetTicks } from '../game/driveMath.js';
 import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rebaseDragOffset, rotatedHalfExtents } from '../game/dragMath.js';
-import { isFastened, isHandTurned, isTapKind, spanOf } from '../game/fasteners.js';
+import { isCrankKind, isFastened, isHome, isTapKind, spanOf } from '../game/fasteners.js';
 import {
   fastenEvent,
   grabEvent,
@@ -26,11 +26,11 @@ import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
 import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
 import type { Probe } from '../game/toolTargets.js';
-import { dialEngagements, engagedPart, isDrawn, isHome, isStalled, pickDial, tightensClockwise } from '../game/turnRing.js';
+import { gripOf, isDrawn, isTurnHome, isTurnStalled, pickDial, tightensClockwise, turnProgress } from '../game/turnRing.js';
 import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { FitPair, Relatives } from '../game/panelFit.js';
 import type { Snap } from '../game/snapMath.js';
-import type { Assembly, AssemblyJoint, Head, PartId } from '../game/assembly.js';
+import type { Assembly, AssemblyJoint, Head, PartId, Turn } from '../game/assembly.js';
 import type { Bus } from '../game/events.js';
 import type { ApplyContext } from '../game/assembly.js';
 import type { GestureEffect } from '../game/gestureState.js';
@@ -41,7 +41,6 @@ import type { RingHit } from './gizmo.js';
 import type { HandleHit } from './sprue.js';
 import type { TargetRing } from './targetRings.js';
 import type { VerticalReach } from './liftHold.js';
-import type { Engagement } from '../game/turnRing.js';
 import type { Dial } from '../ui/turnRing.js';
 import type { Pose, Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
 import type { ConnectorType } from '../../tools/validate/lib/vocabulary.js';
@@ -53,9 +52,9 @@ interface PartHit {
   distance: number;
 }
 
-// A press on a turn ring is its tool's, carrying the engagement it turns: the state machine
-// owns it as any part press, but it never taps.
-type PartPress = { kind: 'part'; dial?: Engagement } & PartHit;
+// A press on a turn ring is its grip's — the seated tool, or the part circled by hand —
+// carrying the turn it turns: the state machine owns it as any part press, but it never taps.
+type PartPress = { kind: 'part'; dial?: Turn } & PartHit;
 type RingPress = { kind: 'ring' } & RingHit;
 /** What a press landed on, as the state machine carries it. */
 type Press = PartPress | RingPress;
@@ -100,7 +99,7 @@ interface ClientPoint {
 
 // The drag in progress. One record for every mode; each sets only its own fields —
 // 'move'/'compound' the plane drag's (beginMove), 'pull' start and joints (beginPull),
-// 'crank' engagement and crank (beginCrank).
+// 'crank' the crank (beginCrank) — what it turns is read from the graph's turn each move.
 interface Drag {
   mode: 'move' | 'compound' | 'pull' | 'crank';
   part: Part;
@@ -119,7 +118,6 @@ interface Drag {
   pointer: ClientPoint | null;
   start: ScreenPoint;
   joints: { id: number; axis: ScreenPoint }[];
-  engagement: Engagement;
   crank: ReturnType<typeof createCrank>;
   carry: Carry | null;
 }
@@ -244,16 +242,22 @@ const PULL_AXIS_PROBE = 0.05;
  *            gone; a lift (second finger, wheel) moves the line with it, and Shift + scroll
  *            moves the line, with or without a drag. A part the
  *            line holds is never a seat for another: it drops when the line lets go.
- *   turnRing — `{ show(dials), hide() }` (src/ui/turnRing.ts): a dial round the head of
- *            each fastener a seated tool is on, for as long as it is on, its arc at the
- *            fastener's progress (full at home) and flashing as it goes home. A press on its band is the tool's crank — a drag there turns
- *            the fastener as circling does, a tap does nothing; only a tap on the tool
- *            itself takes it off. Which tools get a dial, and where it is grabbed, is
- *            src/game/turnRing.ts's call.
- * Hold-to-drive: a press on a seated tool or its ring held still past a tap
- * (GESTURE.tapMaxMs) drives its fastener home in FASTENER.driveSeconds, tightening only,
- * and stops there; letting go after it is never a tap, so the tool stays on. A press that
- * moves becomes the crank as before.
+ *   turnRing — `{ show(dials), hide() }` (src/ui/turnRing.ts): a dial for each turn the
+ *            graph has (`assembly.turns`) — round the head a seated tool is on, for as long
+ *            as it is on; round the hole of a part circled by hand (a leg on its stud) until
+ *            it is home — its arc at the turn's progress (full at home) and flashing as it
+ *            goes home. A press on its band is its grip's crank — a drag there turns it as
+ *            circling does, a tap does nothing; only a tap on a tool itself takes it off.
+ *            Which turns get a dial, and where it is grabbed, is src/game/turnRing.ts's call.
+ * Turns: what a gesture on a part turns — its joints, what visibly turns and about what,
+ * what rides along, what is loose — is the graph's record (`assembly.turnOf`, `Turn`), read
+ * by the crank, the drive, the draw, the dials, the tap and the hold alike. A seated tool
+ * cranks on any drag; a part circled by hand turns on a drag once its turn is under way,
+ * and at nothing is carried like any part, its ring the way to start it.
+ * Hold-to-drive: a press on a turn's grip or its ring held still past a tap
+ * (GESTURE.tapMaxMs) drives the turn home in FASTENER.driveSeconds, tightening only, and
+ * stops there; letting go after it is never a tap, so a tool stays on. A press that moves
+ * becomes the crank as before.
  *   onRatchet — called with how many ratchet clicks (one per FASTENER.ratchetRadians of
  *            turn, either way) a crank or drive step crossed, when it crossed any. A haptic
  *            cue, not telemetry: nothing goes on the bus.
@@ -288,15 +292,17 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const twist = new THREE.Quaternion();
   const other = new THREE.Quaternion();
   const pivot = new THREE.Vector3();
-  // The parts whose turn the update loop has drawn this frame (a top on four studs once).
-  const turnedNow = new Set<Part>();
-  // The ids of the joints a seated tool is turning this frame (update loop).
-  const toolDriven = new Set<number>();
-  // Parts screwed onto a part being turned, with the move the turn made — see the update
-  // loop; `riding` is the pool, `ridingCount` how many are live this frame.
+  // The parts the update loop has drawn turning this frame, and the riders it has moved —
+  // each once, the first writer winning.
+  const drawnTurning = new Set<PartId>();
+  const drawnRiding = new Set<PartId>();
+  // Riders of a turn, with the move the turn made — see the update loop; `riding` is the
+  // pool, `ridingCount` how many are live this frame.
   const riding: { part: Part | null; delta: THREE.Matrix4 }[] = [];
   let ridingCount = 0;
   const ridingPose = new THREE.Matrix4();
+  const drawDelta = new THREE.Matrix4();
+  const drawAxis = new THREE.Vector3();
   const toolPose = new THREE.Matrix4();
   const hardwarePose = new THREE.Matrix4();
   const unitScale = new THREE.Vector3(1, 1, 1);
@@ -321,12 +327,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const down = new THREE.Vector3(0, -1, 0);
   // A carried part's end in the world, rewritten every frame (endAt).
   const endPoint: Vec3 = [0, 0, 0];
-  // Tool id → whether its fastener was home last frame, and → ms of home flash left on its dial.
+  // Grip id (the tool, or the part turned by hand) → whether its turn was home last frame,
+  // and → ms of home flash left on its dial.
   let dialed = new Map<PartId, boolean>();
   const dialFlashes = new Map<PartId, number>();
-  // A press on a seated tool (or its turn ring) not yet a drag: how long it has been held
+  // A press on a turn's grip (or its turn ring) not yet a drag: how long it has been held
   // still (ms), and whether it has been held past a tap and so drives (hold-to-drive).
-  let press: { id: number; tool: Part; ms: number; held: boolean } | null = null;
+  let press: { id: number; grip: Part; ms: number; held: boolean } | null = null;
   // The part the elevation line held at the last frame, so a new hold is seen once (carryHeld).
   let lifted: Part | null = null;
   // The part whose assembly is held still under a panel's fit on offer (holdStill), if any.
@@ -358,23 +365,27 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return resolveHit(ring, picked);
   }
 
-  // A press on a turn ring's band: nearer than anything under it, but never over a seated
-  // tool — its own or a neighbour's (JOHNNY's cam ring all but covers the bolt's): a press on
-  // a tool is that tool's, so a tap there still takes it off and a hold drives its fastener —
-  // and likewise a part turned by hand (a leg on its stud): a press on it is its own circle,
-  // whichever neighbour's ring it lies in. Where bands overlap, the fastener still to go home takes it (pickDial).
+  // A press on a turn ring's band: nearer than anything under it, but never another turn's
+  // over a part that has a turn of its own — a seated tool (JOHNNY's cam ring all but covers
+  // the bolt's), a part circled by hand: a press on it is its own, whatever neighbour's ring
+  // it lies in and however far its turn has gone, so a tap there still takes a tool off and
+  // a hold drives. A part circled by hand lies under its own ring (a top under a ring round
+  // one of its holes): there the band is its ring, to crank it. Where bands overlap, the
+  // turn still to go home takes it (pickDial).
   function dialUnder({ clientX, clientY }: ClientPoint, picked: Part | null): PartPress | null {
-    if (picked && (assembly.crankTarget(picked.id) || turnTarget(picked))) return null;
+    const own = picked && assembly.turnOf(picked.id);
+    if (own && own.grip.kind === 'tool') return null;
     const rect = domElement.getBoundingClientRect();
-    const dials = engagements()
-      .filter((engagement) => isDrawn(engagement, dialFlashes.has(engagedPart(engagement))))
-      .map((engagement) => {
-        const head = headOf(engagement);
-        return { engagement, head, centre: screenPoint(head, rect), home: isHome(engagement.target.fastener) };
+    const dials = assembly
+      .turns()
+      .filter((turn) => isDrawn(turn, dialFlashes.has(gripOf(turn))))
+      .map((turn) => {
+        const head = centreOf(turn);
+        return { turn, head, centre: screenPoint(head, rect), home: isTurnHome(turn) };
       });
     const hit = pickDial([clientX, clientY], dials);
-    if (!hit) return null;
-    return { kind: 'part', part: partById.get(engagedPart(hit.engagement))!, point: hit.head, distance: 0, dial: hit.engagement };
+    if (!hit || (own && gripOf(hit.turn) !== picked!.id)) return null;
+    return { kind: 'part', part: partById.get(gripOf(hit.turn))!, point: hit.head, distance: 0, dial: hit.turn };
   }
 
   // The nearest proxy hit per small part, with how far the ray passes from the real part
@@ -641,27 +652,44 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   // Hardware let go by its joints without being pulled free — a bolt backed all the way
-  // out, a cam turned open, a leg circled off its stud — sits back at its hole's mouth, held
-  // as when first seated.
+  // out, a cam turned open, a leg circled off its stud, a leg and its stud circled out of
+  // the top — sits back at its hole's mouth, held as when first seated. What a turn turns,
+  // its record says (`loose`: the unit and the seat it rests at); a joint no turn has (a cam
+  // opened by a teardown) holds its hardware, pushed in, fastened to nothing.
   function holdLooseHardware() {
-    for (const joint of assembly.all()) {
-      // The part to put back: the hardware pushed into its hole — or the hole side set onto
-      // its stud by hand (a leg backed out to nothing sits back on its stud, not dropped).
-      const byHand = isHandTurned(joint);
-      const part = partById.get(byHand ? joint.mover : joint.hardware)!;
-      if ((!byHand && joint.mover !== part.id) || joint.kind === KIND.TOOL || isFastened(joint.fastener)) continue;
-      if (placed.has(part) || drag?.part === part) continue;
-      if (byHand) {
-        // A part carrying its stud is bonded to it, and that is the unit that is loose: it is
-        // held unless something of it is already held or in hand.
-        const unit = assembly.compoundOf(part.id);
-        if ([...unit].some((id) => placed.has(partById.get(id)!) || drag?.part.id === id)) continue;
-      } else if (isBonded(part) || assembly.jointsOf(part.id).some((j) => isFastened(j.fastener))) continue;
-      const rest = assembly.restPose(joint.id, poseOf);
-      physics.grab(part.body);
-      physics.move(part.body, rest.position, rest.rotation);
-      placed.add(part);
+    const joints = assembly.all();
+    const world = assembly.turns(joints);
+    for (const { loose } of world) if (loose) holdUnit(loose);
+    const turned = new Set(world.flatMap((turn) => turn.joints.map((j) => j.id)));
+    for (const joint of joints) {
+      if (turned.has(joint.id)) continue;
+      const part = partById.get(joint.hardware)!;
+      if (joint.mover !== part.id || joint.kind === KIND.TOOL || isFastened(joint.fastener)) continue;
+      if (placed.has(part) || isBonded(part) || drag?.part === part) continue;
+      if (assembly.jointsOf(part.id).some((j) => isFastened(j.fastener))) continue;
+      holdUnit({ parts: [part.id], restFrom: joint });
     }
+  }
+
+  // A loose unit held kinematic at its seat's mouth, every part of it where the seat puts
+  // it — unless any of it is already held, or in hand.
+  function holdUnit({ parts: ids, restFrom }: NonNullable<Turn['loose']>) {
+    const unit = ids.map((id) => partById.get(id)!);
+    if (unit.some((part) => placed.has(part) || drag?.part === part)) return;
+    const rests = unit.map((part) => assembly.restPose(restFrom.id, poseOf, part.id));
+    unit.forEach((part, i) => {
+      physics.grab(part.body);
+      physics.move(part.body, rests[i].position, rests[i].rotation);
+      placed.add(part);
+    });
+  }
+
+  // A part held for a seat goes back to the simulation.
+  function release(part: Part) {
+    if (!placed.has(part)) return;
+    placed.delete(part);
+    physics.release(part.body);
+    letGoUnder(part);
   }
 
   // A seat whose parts have drifted apart (a held part knocked off, a host moved away)
@@ -683,24 +711,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (joint.kind === KIND.TOOL) toolGrips.delete(joint.hardware);
     // A part held only for this seat goes back to the simulation — a dowel whose panel
     // was carried off, a wrench whose bolt was.
-    for (const id of [joint.hardware, joint.host]) {
-      const part = partById.get(id)!;
-      if (!placed.has(part) || assembly.jointsOf(id).length > 0) continue;
-      placed.delete(part);
-      physics.release(part.body);
-      letGoUnder(part);
-    }
-    // A part carried onto the seat with its stud already in it was held for this seat though
-    // it is neither end of the joint: it goes back with its stud unless a seat of its own is
-    // still waiting.
-    if (isHandTurned(joint) && joint.mover !== joint.host) {
-      const carried = partById.get(joint.mover)!;
-      if (placed.has(carried) && assembly.jointsOf(carried.id).every((j) => isFastened(j.fastener))) {
-        placed.delete(carried);
-        physics.release(carried.body);
-        letGoUnder(carried);
-      }
-    }
+    for (const id of [joint.hardware, joint.host]) if (assembly.jointsOf(id).length === 0) release(partById.get(id)!);
   }
 
   // The assembly held still under a seated panel goes back to the simulation with it.
@@ -738,16 +749,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function beginDrag(part: Part, point: Vec3, event: ClientPoint) {
     pruneStale();
     letGoOf(part);
-    const engagement = assembly.crankTarget(part.id);
-    const hand = assembly.handTarget(part.id);
+    // Carry or turn: a seated tool with something to turn cranks it; a part with a turn by
+    // hand turns once any of the turn is under way, and at nothing it is carried, as any part.
+    const turn = assembly.turnOf(part.id);
+    const turns = turn !== null && turn.joints.length > 0 && (turn.grip.kind === 'tool' || turn.joints.some((j) => j.fastener.progress > 0));
     // A panel pushed home onto another pulls back off it, as before; a cam locked across the
     // seam stops the pull (pullable), and the panel carries its assembly instead.
     const pulls = assembly.pullable(part.id).length > 0;
     const carried = pulls ? null : carryOf(part);
-    // Its target is set: checked just here.
-    if (engagement?.target) beginCrank(part, engagement as Engagement, event);
-    // A part set onto its stud is circled by the hand, in place of being dragged off.
-    else if (hand) beginCrank(part, { tool: null, target: hand }, event);
+    if (turns) beginCrank(part, event);
     else if (pulls) beginPull(part, event);
     else if (carried) beginCarry(part, carried, point, event);
     else if (assembly.canRelease(part.id)) {
@@ -1478,46 +1488,52 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     events?.emit(grabEvent(part.id, 'move'));
   }
 
-  // --- crank: an engaged tool's drag turns its fastener ---
+  // --- crank: a drag turns what the grip's turn turns ---
+  //
+  // Every site below reads the graph's record of the turn (`assembly.turnOf`, `Turn`) — what
+  // it turns, what visibly turns and about what, what rides along, what is loose — and none
+  // works any of it out again. A drag re-reads it each move: the joints in it change as they
+  // turn (a stud joins a leg's turn once the leg is home on it).
 
-  function beginCrank(part: Part, engagement: Engagement, event: ClientPoint) {
+  function beginCrank(part: Part, event: ClientPoint) {
     // The crank's fields only.
-    drag = { mode: 'crank', part, engagement, crank: createCrank() } as Drag;
+    drag = { mode: 'crank', part, crank: createCrank() } as Drag;
     crankTo(event);
   }
 
   function crankTo(event: ClientPoint) {
-    const { engagement } = drag!;
-    const { target } = engagement;
-    const head = headOf(engagement);
-    const delta = drag!.crank.move(screenPoint(head), [event.clientX, event.clientY]);
+    const turn = assembly.turnOf(drag!.part.id);
+    if (!turn || turn.joints.length === 0) return;
+    const centre = centreOf(turn);
+    const delta = drag!.crank.move(screenPoint(centre), [event.clientX, event.clientY]);
     if (!delta) return;
-    const view = scratch.fromArray(head).sub(camera.position).toArray();
-    const radians = tightenSign(tightenAxis(engagement), view) * delta;
-    // A part set onto several studs turns them all, and a stud screwed home in it its far end
-    // too; a tool turns its one.
-    const joints = engagement.tool ? [target] : assembly.handTurn(target.mover, radians > 0 ? 1 : -1);
-    joints.forEach((joint, i) => turnFastener(joint, radians, i === 0));
+    const view = scratch.fromArray(centre).sub(camera.position).toArray();
+    const radians = tightenSign(axisOf(turn), view) * delta;
+    turnJoints(advancing(turn, radians > 0 ? 1 : -1), () => radians);
   }
 
-  // A bolt or cam seat turned by `radians` (positive tightens) — cranked or driven — and
-  // whatever that changed reported and reconciled; the ratchet clicks it crossed come first,
-  // so the last click lands before the fastener reports home — by a FASTEN event, or, for one
-  // only backed off partway, by onRehome.
-  function turnFastener(target: AssemblyJoint, radians: number, ratchet = true) {
-    const before = assembly.get(target.id)!.fastener;
-    if (!assembly.apply(target.id, { type: 'crank', radians }, crankContext(target))) return;
-    const after = assembly.get(target.id)!.fastener;
-    const span = spanOf(target.kind);
-    const clicks = ratchetTicks(before.progress * span, after.progress * span, FASTENER.ratchetRadians);
-    // Joints turned together click and buzz once, on the first.
-    if (ratchet && clicks > 0) onRatchet?.(clicks);
-    reportFastening(target.id, isFastened(before));
-    if (ratchet && isFastened(before) && !isHome(before) && isHome(after)) onRehome?.(target.kind);
-    reconcile();
+  // Joints turned together — cranked or driven, each by `radiansOf(joint)` (positive
+  // tightens) — and whatever that changed reported, then reconciled once for the batch. The
+  // ratchet clicks the first crossed come first, so the last click lands before it reports
+  // home — by a FASTEN event, or, for one only backed off partway, by onRehome; joints turned
+  // together (a top's four studs) click and buzz once, on the first.
+  function turnJoints(joints: AssemblyJoint[], radiansOf: (joint: AssemblyJoint) => number) {
+    let changed = false;
+    joints.forEach((joint, i) => {
+      const before = assembly.get(joint.id)!.fastener;
+      if (!assembly.apply(joint.id, { type: 'crank', radians: radiansOf(joint) }, crankContext(joint))) return;
+      changed = true;
+      const after = assembly.get(joint.id)!.fastener;
+      const span = spanOf(joint.kind);
+      const clicks = ratchetTicks(before.progress * span, after.progress * span, FASTENER.ratchetRadians);
+      if (i === 0 && clicks > 0) onRatchet?.(clicks);
+      reportFastening(joint.id, isFastened(before));
+      if (i === 0 && isFastened(before) && !isHome(before) && isHome(after)) onRehome?.(joint.kind);
+    });
+    if (changed) reconcile();
   }
 
-  // --- hold-to-drive: a still press on a seated tool drives its fastener home ---
+  // --- hold-to-drive: a still press on a turn's grip drives it home ---
 
   // Every frame while the press is still pending: past a tap it drives, until home. A press
   // that became a drag is the crank's from then on.
@@ -1530,69 +1546,49 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     press.ms += delta * 1000;
     if (press.ms <= GESTURE.tapMaxMs) return;
     press.held = true;
-    // Fully turned: home, or a cam turned onto nothing. A screwed bolt backed off partway
-    // still drives — and of several studs turned together, those still short of home do.
-    const live = turnJoints(press.tool).filter((joint) => joint.fastener.progress < 1);
-    live.forEach((joint, i) => turnFastener(joint, driveRadians(spanOf(joint.kind), FASTENER.driveSeconds, delta), i === 0));
+    // Tightening only, every joint of the turn still short of home: a screwed bolt backed off
+    // partway drives back; a cam turned onto nothing, full, does not.
+    const turn = assembly.turnOf(press.grip.id);
+    if (turn) turnJoints(advancing(turn, 1), (joint) => driveRadians(spanOf(joint.kind), FASTENER.driveSeconds, delta));
   }
 
-  // --- turn ring: a dial round each fastener a seated tool is on ---
+  // --- turn ring: a dial round what each turn turns ---
 
-  // What a press on `part` turns: the fastener its seated tool is on, or the stud (or studs,
-  // for a part set onto several at once) it was set onto, all driven together.
-  const turnJoints = (part: Part) => {
-    const target = assembly.crankTarget(part.id)?.target;
-    return target ? [target] : assembly.handTurn(part.id, 1);
-  };
-  const turnTarget = (part: Part) => turnJoints(part)[0] ?? null;
+  // Where a turn turns, in the world: its turned connector's position — the head a tool sits
+  // on, the hole a part circled by hand sits on its stud by — which the crank sweeps about
+  // and the dial is centred on.
+  const centreOf = ({ turned }: Turn) => connectorWorld(turned.part, turned.connector).position;
 
-  // Every dial's engagement: each seated tool with its far end, then the hand-turned parts.
-  function engagements() {
-    const joints = assembly.all();
-    return dialEngagements(joints, (tool) => assembly.turnedFrom(tool.host, tool.hostConnector, joints));
-  }
-
-  // The axis a turn tightens about, in the world. A tool turns a screw: the hardware's
-  // into-hole axis, clockwise seen along it. A part circled by hand is the nut — or carries
-  // the screw — and turns about the axis of the hole it sits on (handSeat), which the drawn
-  // twist is about too: clockwise seen along it, whichever way round the part is.
-  function tightenAxis({ tool, target }: Engagement) {
-    const hand = tool ? null : assembly.handSeat(target);
-    return (hand ? connectorWorld(hand.part, hand.connector) : connectorWorld(target.hardware, target.hardwareConnector)).axis;
-  }
-
-  // The head a tool sits on — or, circled by hand, the hole the part sits in — where the
-  // crank measures its sweep about.
-  const headOf = ({ tool, target }: Engagement) => {
-    if (tool) return connectorWorld(tool.host, tool.hostConnector).position;
-    const hand = assembly.handSeat(target);
-    return (hand ? connectorWorld(hand.part, hand.connector) : connectorWorld(target.host, target.hostConnector)).position;
+  // Which way a turn tightens, in the world: clockwise seen along this (the turned
+  // connector's axis, by the turn's sense) — what the crank, the arrows and the draw share.
+  const axisOf = ({ turned }: Turn): Vec3 => {
+    const [x, y, z] = connectorWorld(turned.part, turned.connector).axis;
+    return [x * turned.sense, y * turned.sense, z * turned.sense];
   };
 
-  function dialOf(engagement: Engagement, flashing: boolean, rect: DOMRect): Dial {
-    const head = headOf(engagement);
-    const { target } = engagement;
-    const view = scratch.fromArray(head).sub(camera.position).toArray();
-    const { fastener } = target;
-    return { centre: screenPoint(head, rect), progress: fastener.progress, clockwise: tightensClockwise(tightenAxis(engagement), view), flashing, stalled: isStalled(fastener) };
+  function dialOf(turn: Turn, flashing: boolean, rect: DOMRect): Dial {
+    const centre = centreOf(turn);
+    const view = scratch.fromArray(centre).sub(camera.position).toArray();
+    return { centre: screenPoint(centre, rect), progress: turnProgress(turn), clockwise: tightensClockwise(axisOf(turn), view), flashing, stalled: isTurnStalled(turn) };
   }
 
-  // Every frame: a dial on each seated tool with a fastener to turn. One whose fastener went
-  // home since last frame flashes for TURN_RING.flashMs — again after being backed off and
-  // driven back — while a tool put on a fastener already home shows it full, without a flash.
-  function showDials(delta: number) {
+  // Every frame: a dial for each turn with something to turn — one per turn, however many
+  // joints it turns. One that went home since last frame flashes for TURN_RING.flashMs —
+  // again after being backed off and driven back — while a tool put on a fastener already
+  // home shows it full, without a flash; a part circled by hand loses its dial after the flash.
+  function showDials(delta: number, world: readonly Turn[]) {
     if (!turnRing) return;
     const rect = domElement.getBoundingClientRect();
     const seen = new Map<PartId, boolean>();
     const dials: Dial[] = [];
-    for (const engagement of engagements()) {
-      const id = engagedPart(engagement);
-      const home = isHome(engagement.target.fastener);
+    for (const turn of world) {
+      if (turn.joints.length === 0) continue;
+      const id = gripOf(turn);
+      const home = isTurnHome(turn);
       if (home && dialed.get(id) === false) dialFlashes.set(id, TURN_RING.flashMs);
       else if (!home) dialFlashes.delete(id);
       seen.set(id, home);
-      // A hand-turned part's dial is drawn until its home flash is over, then no more.
-      if (isDrawn(engagement, dialFlashes.has(id))) dials.push(dialOf(engagement, dialFlashes.has(id), rect));
+      if (isDrawn(turn, dialFlashes.has(id))) dials.push(dialOf(turn, dialFlashes.has(id), rect));
     }
     for (const [id, left] of dialFlashes) {
       const remaining = left - delta * 1000;
@@ -1639,13 +1635,16 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   function tapPart(part: Part) {
     pruneStale();
-    const engagement = assembly.crankTarget(part.id);
-    if (engagement) return unseat(engagement.tool);
-    // A part set onto its stud and not yet turned lifts off on a tap; once turned it only
-    // comes off by backing out — and the tap is whatever else it is on the part (a dowel
-    // pushed home), never swallowed by the studs.
-    const hand = assembly.handTargets(part.id);
-    if (hand.length > 0 && hand.every((joint) => joint.fastener.progress === 0)) return hand.forEach(unseat);
+    const turn = assembly.turnOf(part.id);
+    if (turn?.grip.kind === 'tool') return unseat(turn.grip.tool);
+    // A part with a turn by hand lifts off on a tap while nothing of it is turned: off every
+    // stud of the turn, the unit it made let go. Once turned it comes off only by backing
+    // out — and the tap is whatever else it is on the part (a dowel pushed home).
+    if (turn && turn.joints.every((joint) => joint.fastener.progress === 0)) {
+      turn.joints.forEach(unseat);
+      for (const id of turn.loose?.parts ?? []) release(partById.get(id)!);
+      return reconcile();
+    }
     const pressed = [...assembly.tap(part.id, behindFitting), ...pressCarried(part)];
     for (const id of pressed) reportFastening(id, false);
     if (pressed.length > 0) return reconcile();
@@ -1694,76 +1693,85 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     guideDrop();
     showRings(ends);
     showPanelRings(goal);
-    showDials(delta);
-    turnedNow.clear();
-    ridingCount = 0;
+    // Every turn the graph has, once per frame: the dials and the draw read the same records.
     const joints = assembly.all();
-    // The joints a seated tool is turning this frame: drawn as the tool turns them — the
-    // hardware — however the seat was made (a top dropped on a stud, a key then put on it).
-    toolDriven.clear();
-    for (const tool of joints) {
-      if (tool.kind !== KIND.TOOL) continue;
-      const target = assembly.turnedFrom(tool.host, tool.hostConnector, joints);
-      if (target) toolDriven.add(target.id);
-    }
-    for (const joint of joints) {
-      if (joint.kind !== KIND.BOLT && joint.kind !== KIND.CAM && joint.kind !== KIND.STUD) continue;
-      // What turns on screen is the side that was dragged into the seat: a bolt, cam or stud
-      // driven by its tool, or the part circled by hand — a leg set onto its stud, a leg
-      // carried onto the top with its stud in it — turning and advancing about the axis of
-      // its own hole instead of the hardware's (handSeat).
-      const hand = toolDriven.has(joint.id) ? null : assembly.handSeat(joint, joints);
-      const turned = partById.get(hand ? hand.part : joint.hardware)!;
-      // A part set onto several studs is drawn once, by its first: the hole its dial is on.
-      if (hand && turnedNow.has(turned)) continue;
-      turnedNow.add(turned);
-      const { mesh, body } = turned;
-      const { progress } = joint.fastener;
-      const seat = hand ? assembly.connectorAt(hand.part, hand.connector) : assembly.hardwareConnector(joint);
-      const axis = scratch.fromArray(seat.axis);
-      const turns = spanOf(joint.kind);
-      // A bolt or stud partway in is still held at the mouth; draw it as far in as it has turned.
-      const sink = (joint.kind === KIND.BOLT || joint.kind === KIND.STUD) && !isFastened(joint.fastener) ? FASTENER.sinkDepth[joint.kind]! * progress : 0;
-      const r = body.rotation();
-      const t = body.translation();
-      mesh.quaternion.set(r.x, r.y, r.z, r.w);
-      mesh.position.set(t.x, t.y, t.z).add(offset.copy(axis).multiplyScalar(sink).applyQuaternion(mesh.quaternion));
-      // Tightening turns clockwise seen from the head: positive about the into-hole axis.
-      twist.setFromAxisAngle(axis, progress * turns);
-      // About the seat's own line — a hole off the part's origin (a top's) stays on its stud
-      // — which for hardware, whose seat is on its axis, is the origin's line too.
-      pivot.fromArray(seat.position);
-      offset.copy(pivot).sub(scratch.copy(pivot).applyQuaternion(twist)).applyQuaternion(mesh.quaternion);
-      mesh.position.add(offset);
-      mesh.quaternion.multiply(twist);
-      // What is screwed home onto the turned part goes with it: a stud in a leg that is
-      // carried onto the top, a leg on the stud that is being turned into it. What the turn
-      // did to the part (its drawn pose over its body's) is done to each, below.
-      for (const other of joints) {
-        if (other === joint || other.kind !== KIND.STUD || !isFastened(other.fastener)) continue;
-        const rider = other.hardware === turned.id ? other.host : other.host === turned.id ? other.hardware : null;
-        if (rider === null) continue;
-        const entry = (riding[ridingCount] ??= { part: null, delta: new THREE.Matrix4() });
-        entry.part = partById.get(rider)!;
-        entry.delta.compose(mesh.position, mesh.quaternion, unitScale);
-        entry.delta.multiply(toolPose.compose(scratch.set(t.x, t.y, t.z), twist.set(r.x, r.y, r.z, r.w), unitScale).invert());
-        ridingCount++;
-      }
-    }
-    for (let i = 0; i < ridingCount; i++) {
-      const { part, delta } = riding[i];
-      const { body, mesh } = part!;
-      const r = body.rotation();
-      const t = body.translation();
-      ridingPose.compose(scratch.set(t.x, t.y, t.z), twist.set(r.x, r.y, r.z, r.w), unitScale).premultiply(delta);
-      ridingPose.decompose(mesh.position, mesh.quaternion, scratch);
-    }
+    const world = assembly.turns(joints);
+    showDials(delta, world);
+    drawTurns(joints, world);
     followRiders();
     for (const [id, { fastener, grip }] of toolGrips) {
       hardwarePose.compose(fastener.mesh.position, fastener.mesh.quaternion, unitScale).multiply(grip);
       hardwarePose.decompose(scratch, twist, offset);
       physics.move(partById.get(id)!.body, scratch.toArray(), twist.toArray());
     }
+  }
+
+  // Fastener progress, drawn on top of the simulated poses. Each turn moves its turned part
+  // (`Turn.turned`) — a turn's riders going with it, each once — and a crank joint no turn
+  // has (a bolt left half in, a stud keyed partway with the key taken off) moves its hardware.
+  function drawTurns(joints: readonly AssemblyJoint[], world: readonly Turn[]) {
+    drawnTurning.clear();
+    drawnRiding.clear();
+    ridingCount = 0;
+    const turned = new Set<number>();
+    for (const turn of world) {
+      for (const joint of turn.joints) turned.add(joint.id);
+      // A part turns once a frame: the first turn of it drawn — a tool's before a hand's.
+      if (turn.joints.length === 0 || drawnTurning.has(turn.turned.part)) continue;
+      drawnTurning.add(turn.turned.part);
+      const delta = drawTurned(turn.turned, layersOf(turn));
+      for (const rider of turn.riders) {
+        const entry = (riding[ridingCount++] ??= { part: null, delta: new THREE.Matrix4() });
+        entry.part = partById.get(rider)!;
+        entry.delta.copy(delta);
+      }
+    }
+    for (const joint of joints) {
+      if (!isCrankKind(joint.kind) || turned.has(joint.id)) continue;
+      drawTurned({ part: joint.hardware, connector: joint.hardwareConnector, sense: 1 }, [[joint]]);
+    }
+    for (let i = 0; i < ridingCount; i++) {
+      const { part, delta } = riding[i];
+      const { id, body, mesh } = part!;
+      if (drawnTurning.has(id) || drawnRiding.has(id)) continue;
+      drawnRiding.add(id);
+      const r = body.rotation();
+      const t = body.translation();
+      ridingPose.compose(scratch.set(t.x, t.y, t.z), twist.set(r.x, r.y, r.z, r.w), unitScale).premultiply(delta);
+      ridingPose.decompose(mesh.position, mesh.quaternion, scratch);
+    }
+  }
+
+  // Draws `turned.part` as far as `layers` have turned it, on top of where its body is: each
+  // layer (a tool's one joint; a hand's near joints, then its far ones) by its least-advanced
+  // joint — sunk along the turned connector's axis (by the turn's sense: into the hole) while
+  // unfastened, a bolt's or stud's depth, and twisted by its turn about that connector's line
+  // (a hole off the part's origin, a top's, stays on its stud). Returns the move made — its
+  // drawn pose over its body's — in a reused matrix, for its riders.
+  function drawTurned({ part, connector, sense }: Turn['turned'], layers: AssemblyJoint[][]) {
+    const { mesh, body } = partById.get(part)!;
+    const seat = assembly.connectorAt(part, connector);
+    let sink = 0;
+    let angle = 0;
+    for (const layer of layers) {
+      if (layer.length === 0) continue;
+      const least = layer.reduce((a, b) => (b.fastener.progress < a.fastener.progress ? b : a));
+      const { kind, fastener } = least;
+      if ((kind === KIND.BOLT || kind === KIND.STUD) && !isFastened(fastener)) sink += FASTENER.sinkDepth[kind]! * fastener.progress;
+      angle += fastener.progress * spanOf(kind);
+    }
+    const axis = drawAxis.fromArray(seat.axis).multiplyScalar(sense);
+    const r = body.rotation();
+    const t = body.translation();
+    mesh.quaternion.set(r.x, r.y, r.z, r.w);
+    mesh.position.set(t.x, t.y, t.z).add(offset.copy(axis).multiplyScalar(sink).applyQuaternion(mesh.quaternion));
+    twist.setFromAxisAngle(axis, angle);
+    pivot.fromArray(seat.position);
+    offset.copy(pivot).sub(scratch.copy(pivot).applyQuaternion(twist)).applyQuaternion(mesh.quaternion);
+    mesh.position.add(offset);
+    mesh.quaternion.multiply(twist);
+    drawDelta.compose(mesh.position, mesh.quaternion, unitScale);
+    return drawDelta.multiply(toolPose.compose(scratch.set(t.x, t.y, t.z), twist.set(r.x, r.y, r.z, r.w), unitScale).invert());
   }
 
   // Hardware riding in a panel it was carried in goes where the panel goes — the drag's pose
@@ -1819,7 +1827,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
         // The part's own gesture: its press is on a part, and came with a pointer event. A
         // turn ring's is its tool's crank.
         const { part, point, dial } = effect.hit as PartPress;
-        if (dial) beginCrank(part, dial, event!);
+        if (dial) beginCrank(part, event!);
         else beginDrag(part, point, event!);
         if (drag) events?.emit(grabEvent(drag.part.id, drag.mode));
       }
@@ -1863,8 +1871,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     syncCamera();
     if (wasCamera && !state.cameraEnabled) domElement.setPointerCapture(event.pointerId);
     // A press on a seated tool, or on its ring, may turn out a hold.
-    if (hit?.kind === 'part' && state.owner === OWNER.DRAG_PART && (hit.dial || turnTarget(hit.part))) {
-      press = { id: event.pointerId, tool: hit.part, ms: 0, held: false };
+    if (hit?.kind === 'part' && state.owner === OWNER.DRAG_PART && (hit.dial || assembly.turnOf(hit.part.id)?.joints.length)) {
+      press = { id: event.pointerId, grip: hit.part, ms: 0, held: false };
     }
   }
 

@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { FASTENER, TURN_RING } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
-import { arcLength, dialEngagements, dialHit, isDrawn, isHome, isStalled, pickDial, tightensClockwise } from '../src/game/turnRing.js';
+import { arcLength, dialHit, gripOf, isDrawn, isHome, isTurnHome, turnProgress, isStalled, pickDial, tightensClockwise } from '../src/game/turnRing.js';
 import { createFastener, STATE } from '../src/game/fasteners.js';
 import { setItem } from '../src/game/item.js';
 
@@ -58,104 +58,80 @@ describe('tightensClockwise', () => {
   });
 });
 
-// What the router passes: the graph's own answer for what a seated tool turns.
-const turnedBy = (assembly: ReturnType<typeof createAssembly>) => (tool: { hardware: string }) => assembly.crankTarget(tool.hardware)?.target ?? null;
-
-describe('dialEngagements', () => {
-  // A bolt and a cam lock seated in a panel, each with its tool on it.
-  function bench() {
-    const types: Record<string, string> = { panel: 'sidePanel', bolt: 'camLockBolt', key: 'allenWrench', shelf: 'topBottomPanel', cam: 'camLock', driver: 'screwdriver' };
+// One dial per turn (the graph's `Turn` record, test/turnOf.test.ts): which turns are drawn,
+// how full, and whose press they are.
+describe('dials of turns', () => {
+  // A bolt seated in a panel, the key on it.
+  function johnny() {
+    const types: Record<string, string> = { panel: 'sidePanel', bolt: 'camLockBolt', key: 'allenWrench' };
     const assembly = createAssembly((id) => types[id]);
     const bolt = assembly.seat({ partA: 'bolt', connectorA: 0, partB: 'panel', connectorB: 2, mover: 'bolt' });
-    const key = assembly.seat({ partA: 'key', connectorA: 0, partB: 'bolt', connectorB: 1, mover: 'key' });
-    return { assembly, bolt, key };
+    assembly.seat({ partA: 'key', connectorA: 0, partB: 'bolt', connectorB: 1, mover: 'key' });
+    return { assembly, bolt };
   }
 
-  it('gives a tool on a fastener not yet home a dial', () => {
-    const { assembly, bolt, key } = bench();
-    expect(key.kind).toBe(KIND.TOOL);
-    expect(dialEngagements(assembly.all(), turnedBy(assembly))).toEqual([{ tool: key, target: bolt }]);
-  });
-
-  it('keeps the dial of a tool on a fastener that is home, for as long as the tool is on', () => {
-    const { assembly, bolt, key } = bench();
+  it("draws a tool's dial for as long as the tool is on, home or not, as the key's press", () => {
+    const { assembly, bolt } = johnny();
+    const [turn] = assembly.turns();
+    expect(gripOf(turn)).toBe('key');
+    expect([turnProgress(turn), isTurnHome(turn), isDrawn(turn, false)]).toEqual([0, false, true]);
     assembly.drive(bolt.id);
-    expect(dialEngagements(assembly.all(), turnedBy(assembly))).toEqual([{ tool: key, target: assembly.get(bolt.id) }]);
-    assembly.unseat(key.id);
-    expect(dialEngagements(assembly.all(), turnedBy(assembly))).toEqual([]);
+    const [home] = assembly.turns();
+    expect([turnProgress(home), isTurnHome(home), isDrawn(home, false)]).toEqual([1, true, true]);
   });
 
-  it('gives none with no tool seated', () => {
+  it('draws nothing for a part with no tool and no turn', () => {
     const types: Record<string, string> = { panel: 'sidePanel', bolt: 'camLockBolt' };
     const assembly = createAssembly((id) => types[id]);
     assembly.seat({ partA: 'bolt', connectorA: 0, partB: 'panel', connectorB: 2, mover: 'bolt' });
-    expect(dialEngagements(assembly.all(), turnedBy(assembly))).toEqual([]);
-  });
-});
-
-describe('dialEngagements: a part turned by hand (1.9.2)', () => {
-  beforeAll(() => setItem('blank'));
-  afterAll(() => setItem('johnny'));
-
-  // A stud in the top's first hole, a leg set onto its other end (the leg the part dragged), and a key.
-  function bench() {
-    const types: Record<string, string> = { top: 'top', stud: 'doubleEndedStud', leg: 'leg', key: 'allenWrench' };
-    const assembly = createAssembly((id) => types[id]);
-    const inTop = assembly.seat({ partA: 'stud', connectorA: 0, partB: 'top', connectorB: 0, mover: 'stud' });
-    const inLeg = assembly.seat({ partA: 'stud', connectorA: 1, partB: 'leg', connectorB: 0, mover: 'leg' });
-    return { assembly, inTop, inLeg };
-  }
-
-  it('gives a leg set onto its stud a toolless dial centred on its own hole — and the stud none', () => {
-    const { assembly, inLeg } = bench();
-    expect(dialEngagements(assembly.all(), turnedBy(assembly))).toEqual([{ tool: null, target: inLeg }]);
-    // The dial's centre is the target's host connector: the leg's hole.
-    expect(assembly.hostConnector(inLeg).type).toBe('studHole');
-    expect(assembly.get(inLeg.id)!.host).toBe('leg');
+    expect(assembly.turns()).toEqual([]);
   });
 
-  it('gives a top set onto several studs one dial, on its first joint', () => {
-    const types: Record<string, string> = { top: 'top', 'stud-1': 'doubleEndedStud', 'stud-2': 'doubleEndedStud' };
-    const assembly = createAssembly((id) => types[id]);
-    const first = assembly.seat({ partA: 'stud-1', connectorA: 0, partB: 'top', connectorB: 0, mover: 'top' });
-    assembly.seat({ partA: 'stud-2', connectorA: 0, partB: 'top', connectorB: 1, mover: 'top' });
-    expect(dialEngagements(assembly.all(), () => null)).toEqual([{ tool: null, target: first }]);
-  });
+  describe('turned by hand (1.9.2)', () => {
+    beforeAll(() => setItem('blank'));
+    afterAll(() => setItem('johnny'));
 
-  it('keeps the hand engagement once the leg is home — it is the renderer that stops drawing it', () => {
-    const { assembly, inLeg } = bench();
-    assembly.drive(inLeg.id);
-    const [engagement] = dialEngagements(assembly.all(), turnedBy(assembly));
-    expect(engagement).toMatchObject({ tool: null, target: { id: inLeg.id } });
-    // Drawn while its flash plays, gone after; a tool's dial is drawn home or not.
-    expect(isDrawn(engagement, true)).toBe(true);
-    expect(isDrawn(engagement, false)).toBe(false);
-    expect(isDrawn({ ...engagement, target: assembly.get(inLeg.id)! }, false)).toBe(false);
-  });
+    // A stud in the top's first hole, a leg set onto its other end.
+    function blank() {
+      const types: Record<string, string> = { top: 'top', stud: 'doubleEndedStud', leg: 'leg' };
+      const assembly = createAssembly((id) => types[id]);
+      assembly.seat({ partA: 'stud', connectorA: 0, partB: 'top', connectorB: 0, mover: 'stud' });
+      const inLeg = assembly.seat({ partA: 'stud', connectorA: 1, partB: 'leg', connectorB: 0, mover: 'leg' });
+      return { assembly, inLeg };
+    }
+    const legTurn = (assembly: ReturnType<typeof blank>['assembly']) => assembly.turnOf('leg')!;
 
-  it('draws a hand engagement until it is home, and a tool engagement always', () => {
-    const { assembly, inLeg } = bench();
-    const [hand] = dialEngagements(assembly.all(), turnedBy(assembly));
-    expect(isDrawn(hand, false)).toBe(true);
-    assembly.apply(inLeg.id, { type: 'crank', radians: FASTENER.studRadians / 2 });
-    expect(isDrawn({ tool: null, target: assembly.get(inLeg.id)! }, false)).toBe(true);
-    const tooled = { tool: assembly.get(inLeg.id)!, target: assembly.get(inLeg.id)! };
-    assembly.drive(inLeg.id);
-    expect(isDrawn({ ...tooled, target: assembly.get(inLeg.id)! }, false)).toBe(true);
-  });
+    it("is the leg's press, drawn until home — and while its home flash plays", () => {
+      const { assembly, inLeg } = blank();
+      expect(gripOf(legTurn(assembly))).toBe('leg');
+      expect(isDrawn(legTurn(assembly), false)).toBe(true);
+      assembly.apply(inLeg.id, { type: 'crank', radians: FASTENER.studRadians / 2 });
+      expect(turnProgress(legTurn(assembly))).toBeCloseTo(0.5, 9);
+      assembly.drive(inLeg.id);
+      // Home on a stud that is not yet home in the top: the turn goes on into the top.
+      expect(isDrawn(legTurn(assembly), false)).toBe(true);
+      expect(turnProgress(legTurn(assembly))).toBe(0);
+    });
 
-  it('gives a part both a tool and a hand joint one dial: the key\'s, not a second for the hand', () => {
-    // A top set onto a stud (the top the mover, so hand-turned), the key on the stud's free
-    // hex: the key turns that very joint.
-    const types: Record<string, string> = { top: 'top', stud: 'doubleEndedStud', key: 'allenWrench' };
-    const assembly = createAssembly((id) => types[id]);
-    const joint = assembly.seat({ partA: 'stud', connectorA: 0, partB: 'top', connectorB: 0, mover: 'top' });
-    assembly.seat({ partA: 'key', connectorA: 0, partB: 'stud', connectorB: 3, mover: 'key' });
-    expect(assembly.crankTarget('key')!.target!.id).toBe(joint.id);
-    const dials = dialEngagements(assembly.all(), turnedBy(assembly));
-    expect(dials).toHaveLength(1);
-    expect(dials[0].tool).not.toBeNull();
-    expect(dials[0].target.id).toBe(joint.id);
+    it('is drawn once home everywhere only while it flashes', () => {
+      const { assembly, inLeg } = blank();
+      for (const j of assembly.all()) assembly.drive(j.id);
+      expect(assembly.get(inLeg.id)!.fastener.progress).toBe(1);
+      const turn = legTurn(assembly);
+      expect(isTurnHome(turn)).toBe(true);
+      expect(isDrawn(turn, true)).toBe(true);
+      expect(isDrawn(turn, false)).toBe(false);
+    });
+
+    it('draws no dial for a turn with nothing to turn: a key on a buried hex', () => {
+      const types: Record<string, string> = { top: 'top', stud: 'doubleEndedStud', key: 'allenWrench' };
+      const assembly = createAssembly((id) => types[id]);
+      assembly.seat({ partA: 'stud', connectorA: 0, partB: 'top', connectorB: 0, mover: 'stud' });
+      assembly.seat({ partA: 'key', connectorA: 0, partB: 'stud', connectorB: 2, mover: 'key' });
+      const [turn] = assembly.turns();
+      expect(turn.joints).toEqual([]);
+      expect(isDrawn(turn, true)).toBe(false);
+    });
   });
 });
 

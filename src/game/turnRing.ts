@@ -1,24 +1,30 @@
-// Turn ring: the dial a seated tool shows round the head of the fastener it drives — which
-// tools get one, where a finger grabs it, which way its arrows point and how full its arc
-// is. Pure — screen points [x, y] in CSS px (y down), world directions [x, y, z]; the router
-// projects, src/ui/turnRing.ts draws.
+// Turn ring: the dial a turn shows round what it turns — a seated tool's round the head it
+// sits on, a hand-turned part's round its hole — which turns get one, where a finger grabs
+// it, which way its arrows point and how full its arc is. One dial per `Turn` (the graph's
+// record, src/game/assembly.ts); nothing here re-derives what a turn turns. Pure — screen
+// points [x, y] in CSS px (y down), world directions [x, y, z]; the router projects,
+// src/ui/turnRing.ts draws.
 
 import { TURN_RING } from '../constants.js';
-import { isFastened, isHandTurned } from './fasteners.js';
+import { isFastened, isHome } from './fasteners.js';
 import { tightenSign } from './crankMath.js';
-import { KIND } from '../../tools/validate/lib/vocabulary.js';
-import type { AssemblyJoint } from './assembly.js';
+import type { PartId, Turn } from './assembly.js';
 import type { Fastener } from './fasteners.js';
 import type { ScreenPoint } from './dragMath.js';
 
-/** A fastener seat being turned, and by what: a seated tool, or (null) the finger on the part itself. */
-export interface Engagement {
-  tool: AssemblyJoint | null;
-  target: AssemblyJoint;
-}
+export { isHome };
 
-/** The part whose press this engagement is: the tool, or the hand-turned part itself. */
-export const engagedPart = ({ tool, target }: Engagement) => (tool ? tool.hardware : target.mover);
+/** The part a turn's press and dial belong to: the seated tool, or the part circled by hand. */
+export const gripOf = ({ grip }: Turn): PartId => (grip.kind === 'tool' ? grip.tool.hardware : grip.part);
+
+/** How far a turn's dial is filled: its least-advanced joint's progress, 0..1. */
+export const turnProgress = ({ joints }: Turn) => Math.min(...joints.map((j) => j.fastener.progress));
+
+/** Every joint of the turn home — the dial flashes on arriving here. */
+export const isTurnHome = ({ joints }: Turn) => joints.length > 0 && joints.every((j) => isHome(j.fastener));
+
+/** Turned all the way yet not home — a cam with no screwed bolt to catch: full, but not done. */
+export const isTurnStalled = ({ joints }: Turn) => joints.some((j) => isStalled(j.fastener));
 
 /**
  * Whether a screen point is on the ring's grab band round `centre`: within `band` px either
@@ -42,44 +48,12 @@ export function arcLength(progress: number, radius: number = TURN_RING.radius) {
 export const tightensClockwise = (intoHole: number[], viewDirection: number[]) => tightenSign(intoHole, viewDirection) > 0;
 
 /**
- * The seated tools that get a dial: each tool joint whose host has a bolt, stud or cam seat,
- * as `crankTarget` pairs them — for as long as the tool is seated, home or not, so a tool put
- * on a fastener already partly or fully in shows where it stands. Then every hand-turned
- * part (a leg on its stud), one each, tool null — a part set onto several studs at once (a
- * top on four) turns them together and has one, on its first. Which of them are drawn is
- * `isDrawn`'s: a hand-turned part's dial goes once it is home, after its flash.
+ * Whether a turn's dial is drawn. A turn with nothing to turn (a key on a buried hex) has
+ * none. A tool's stays for as long as the tool is on, home or not; a hand-turned part's goes
+ * once the turn is home — four rings forever on a built table would be noise — but is kept
+ * while `flashing`, to flash its arrival.
  */
-export function dialEngagements(
-  joints: readonly AssemblyJoint[],
-  // What a tool turns: the graph's `crankTarget` — the far end of a stud — never re-derived here.
-  targetOf: (tool: AssemblyJoint) => AssemblyJoint | null,
-): Engagement[] {
-  const tooled = joints.flatMap((tool) => {
-    if (tool.kind !== KIND.TOOL) return [];
-    const target = targetOf(tool);
-    return target ? [{ tool, target }] : [];
-  });
-  const driven = new Set(tooled.map(({ target }) => target));
-  const byHand: Engagement[] = [];
-  const turned = new Set<string>();
-  for (const target of joints) {
-    if (!isHandTurned(target) || driven.has(target) || turned.has(target.mover)) continue;
-    turned.add(target.mover);
-    byHand.push({ tool: null, target });
-  }
-  return [...tooled, ...byHand];
-}
-
-/**
- * Whether an engagement's dial is drawn. A tool's stays for as long as the tool is on, home
- * or not; a hand-turned part's goes once it is home — four rings forever on a built table
- * would be noise — but is kept `flashing` long enough to flash its arrival.
- */
-export const isDrawn = (engagement: Engagement, flashing: boolean) =>
-  engagement.tool !== null || !isHome(engagement.target.fastener) || flashing;
-
-/** All the way home: fastened and fully turned — a screwed bolt backed off partway is not. */
-export const isHome = (fastener: Fastener) => isFastened(fastener) && fastener.progress >= 1;
+export const isDrawn = (turn: Turn, flashing: boolean) => turn.joints.length > 0 && (turn.grip.kind === 'tool' || !isTurnHome(turn) || flashing);
 
 /**
  * Of the dials whose grab band takes `point`, the one a press there means: one whose

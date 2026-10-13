@@ -24,6 +24,7 @@ import {
   isFastened,
   isCrankKind,
   isHandTurned,
+  isHome,
   isTapKind,
   spanOf,
   STATE,
@@ -97,6 +98,58 @@ interface Bridge {
   rigid: boolean;
   via: string | null;
   frame: () => JointFrame;
+}
+
+/**
+ * Everything a turn is, resolved once from the graph (`assembly.turnOf`, `assembly.turns`):
+ * every site that turns, draws, dials, holds or taps reads this, and none re-derives it.
+ */
+export interface Turn {
+  /** What the gesture is applied to: a seated tool, or a part circled by hand. */
+  grip: { kind: 'tool'; tool: AssemblyJoint } | { kind: 'hand'; part: PartId };
+  /**
+   * The joints it turns, nearest first: a tool's one; a hand's near joints (the part turning
+   * as a nut on each stud) then far ones (a stud home in the part, turning on into the top).
+   */
+  joints: AssemblyJoint[];
+  /**
+   * The part that visibly turns, the connector on it whose line it turns about, and which
+   * way along that connector's axis a tightening turn is clockwise seen: a key's hardware
+   * looking into the head it sits on (−1), a hand-turned part along its hole's axis (+1).
+   */
+  turned: { part: PartId; connector: number; sense: 1 | -1 };
+  /** Parts home in `turned.part` that go with it (a stud in a circled leg), each once. */
+  riders: PartId[];
+  /**
+   * The unit the turn's joints leave fastened to nothing outside it, and the seat it rests
+   * at, at that seat's mouth (`restPose`) — what is held so it does not fall — or null while
+   * something fastened holds it.
+   */
+  loose: { parts: PartId[]; restFrom: AssemblyJoint } | null;
+}
+
+/**
+ * The joints a turn moves now, tightening (`direction` 1) or loosening (−1): of a tool's,
+ * its one while it has turn left; of a hand's, the near joints with turn left, and only
+ * when none has, the far ones — the part comes onto its stud before the two go on into the
+ * top, and comes off its stud before the stud would come out.
+ */
+export function advancing(turn: Turn, direction: 1 | -1): AssemblyJoint[] {
+  const left = (j: AssemblyJoint) => (direction > 0 ? j.fastener.progress < 1 : j.fastener.progress > 0);
+  for (const layer of layersOf(turn)) {
+    const live = layer.filter(left);
+    if (live.length > 0) return live;
+  }
+  return [];
+}
+
+/**
+ * A turn's joints by layer, nearest first: a tool's one; a hand's near joints (the part on
+ * its studs, its hole their host) then its far ones. Each layer moves together.
+ */
+export function layersOf({ grip, joints }: Turn): AssemblyJoint[][] {
+  if (grip.kind === 'tool') return [joints];
+  return [joints.filter((j) => j.host === grip.part), joints.filter((j) => j.host !== grip.part)];
 }
 
 /** A part's live world pose. */
@@ -391,62 +444,110 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     return PART_TYPES[typeOf(part)].connectors.flatMap((c, i) => (i !== index && distance(c.position, at) <= CONTRACT.mateTolerance ? [i] : []));
   }
 
-  /** For a tool seated on a head or slot: `{ tool, target }` joints, target null if none. */
-  function crankTarget(tool: PartId) {
-    const engagement = all().find((j) => j.hardware === tool && j.kind === KIND.TOOL);
-    if (!engagement) return null;
-    return { tool: engagement, target: turnedFrom(engagement.host, engagement.hostConnector) };
+  // --- turns: one record for everything a turn is ---
+
+  // A seated tool's turn: the joint at the far end of what it sits on, the hardware turning
+  // about the head it sits on (tightening looking into the head), and — pushed into its
+  // hole and fastened to nothing — the hardware loose at its mouth.
+  function toolTurn(tool: AssemblyJoint, among: readonly AssemblyJoint[]): Turn {
+    const target = turnedFrom(tool.host, tool.hostConnector, among);
+    const loose =
+      target && !isFastened(target.fastener) && target.mover === target.hardware && compoundIn(target.hardware, among).size === 1
+        ? { parts: [target.hardware], restFrom: target }
+        : null;
+    return {
+      grip: { kind: 'tool', tool },
+      joints: target ? [target] : [],
+      turned: { part: tool.host, connector: tool.hostConnector, sense: -1 },
+      riders: [],
+      loose,
+    };
   }
 
-  /**
-   * Every stud joint `part` is turned through by hand, in seating order: a leg set onto its
-   * stud has one, a top dropped onto four standing studs four — circling it screws them all
-   * together. The part itself is what the finger circles, no tool; the stud and anything
-   * seated by being pushed into a hole have none.
-   */
-  const handTargets = (part: PartId) => all().filter((j) => isHandTurned(j) && j.mover === part);
-
-  /**
-   * The joints circling `part` turns, tightening (`direction` 1) or loosening (−1): its own
-   * hand joints and, once those are home, the stud ends beyond them. A stud screwed home in
-   * `part` is one piece with it, so its other end, in the top, is turned through `part` too
-   * — tightening takes the part's own first, loosening the far end first — and each is turned
-   * only while it has turn left that way. A stud merely seated in the top and a leg then
-   * screwed on, in either order, can be finished by circling the leg. `among` as for `handSeat`.
-   */
-  function handTurn(part: PartId, direction: 1 | -1, among: readonly AssemblyJoint[] = all()) {
-    const own = among.filter((j) => isHandTurned(j) && j.mover === part);
-    const homeOn = new Set(own.filter((j) => isFastened(j.fastener)).map((j) => j.hardware));
-    const beyond = among.filter((j) => j.kind === KIND.STUD && homeOn.has(j.hardware) && !own.includes(j));
-    const left = (j: AssemblyJoint) => (direction > 0 ? j.fastener.progress < 1 : j.fastener.progress > 0);
-    for (const stage of direction > 0 ? [own, beyond] : [beyond, own]) {
-      const live = stage.filter(left);
-      if (live.length > 0) return live;
+  // A part's turn by hand, `driven` (the joints a seated tool is turning) left to the tools.
+  //
+  // The part is the grip for each stud it was set onto (the stud's joint into it, its *near*
+  // joint, has it as mover: a leg on its stud, a top on four) or carried onto something with
+  // (a stud joint beyond it has it as mover: a leg carrying its keyed stud onto the top).
+  //   near  its own near joints — the part turning as a nut on each stud
+  //   far   once a stud's near joint is home, the stud is one piece with the part, and its
+  //         joint beyond (pushed or keyed in, or carried in by this part) turns through it
+  // A near joint home on a stud with nothing beyond is done: there is nothing left to turn
+  // into, so it is no joint of the turn, and the part and its stud carry as one.
+  function handTurn(part: PartId, among: readonly AssemblyJoint[], driven: ReadonlySet<number>): Turn | null {
+    const stud = (j: AssemblyJoint) => j.kind === KIND.STUD && !driven.has(j.id);
+    const studs = [...new Set(among.filter((j) => stud(j) && isHandTurned(j) && j.mover === part).map((j) => j.hardware))];
+    const near: AssemblyJoint[] = [];
+    const far: AssemblyJoint[] = [];
+    const riders: PartId[] = [];
+    let turned: Turn['turned'] | null = null;
+    for (const id of studs) {
+      const own = among.filter((j) => stud(j) && j.hardware === id);
+      const nearJoint = own.find((j) => j.host === part) ?? null;
+      const beyond = own.filter((j) => j !== nearJoint && (j.mover === id || j.mover === part));
+      const nearHome = nearJoint !== null && isHome(nearJoint.fastener);
+      if (nearJoint && nearJoint.mover === part && !(nearHome && beyond.length === 0)) near.push(nearJoint);
+      if (nearHome) {
+        far.push(...beyond);
+        riders.push(id);
+      } else if (!nearJoint) far.push(...beyond.filter((j) => j.mover === part));
+      turned ??= nearJoint ? { part, connector: nearJoint.hostConnector, sense: 1 } : null;
     }
-    return [];
+    const joints = [...near, ...far];
+    if (joints.length === 0) return null;
+    // The unit the part makes with what is home in it, and the seat that ties it to the rest
+    // — the first of the turn's joints crossing out of the unit — if nothing fastened does.
+    const unit = compoundIn(part, among);
+    const restFrom = joints.find((j) => !isFastened(j.fastener) && unit.has(j.hardware) !== unit.has(j.host)) ?? null;
+    return {
+      grip: { kind: 'hand', part },
+      joints,
+      turned: turned ?? { part: joints[0].hardware, connector: joints[0].hardwareConnector, sense: 1 },
+      riders,
+      loose: restFrom ? { parts: [...unit], restFrom } : null,
+    };
   }
 
-  /** The first of `handTargets`, or null: whether a press on `part` is a turn at all. */
-  const handTarget = (part: PartId) => handTargets(part)[0] ?? null;
+  // The joints the seated tools are turning: theirs, never a hand's.
+  function toolDriven(among: readonly AssemblyJoint[]) {
+    const driven = new Set<number>();
+    for (const j of among) {
+      const target = j.kind === KIND.TOOL ? turnedFrom(j.host, j.hostConnector, among) : null;
+      if (target) driven.add(target.id);
+    }
+    return driven;
+  }
 
   /**
-   * Where a hand-turned joint turns about, on the part the finger circles: `{ part, connector }`
-   * — the hole it was set onto its stud by (it is the host), or, a part carried onto the top
-   * with its stud already in it, the hole that stud is in. Null for a joint nobody circles.
-   * `among` is a joint snapshot (`all()`) for a caller that asks per joint per frame.
+   * The turn a gesture on `part` makes — see `Turn` — or null if a gesture on it turns
+   * nothing. A seated tool always has one (its `joints` empty when what it sits on has
+   * nothing to turn); a part has one by hand while it has studs to turn. `among` is a joint
+   * snapshot (`all()`).
    */
-  function handSeat(joint: AssemblyJoint, among: Iterable<AssemblyJoint> = joints.values()) {
-    if (!isHandTurned(joint)) return null;
-    if (joint.mover === joint.host) return { part: joint.host, connector: joint.hostConnector };
-    for (const j of among) if (j.hardware === joint.hardware && j.host === joint.mover) return { part: joint.mover, connector: j.hostConnector };
-    return null;
+  function turnOf(part: PartId, among: readonly AssemblyJoint[] = all()): Turn | null {
+    const tool = among.find((j) => j.hardware === part && j.kind === KIND.TOOL);
+    return tool ? toolTurn(tool, among) : handTurn(part, among, toolDriven(among));
+  }
+
+  /**
+   * Every turn the graph has right now, each joint in at most one: every seated tool's,
+   * then every hand grip's (what a tool is turning is the tool's). What the frame draws,
+   * dials and holds.
+   */
+  function turns(among: readonly AssemblyJoint[] = all()): Turn[] {
+    const driven = toolDriven(among);
+    const tools = among.filter((j) => j.kind === KIND.TOOL).map((tool) => toolTurn(tool, among));
+    const grips = [...new Set(among.filter((j) => j.kind === KIND.STUD && isHandTurned(j) && !driven.has(j.id)).map((j) => j.mover))];
+    return [...tools, ...grips.flatMap((part) => handTurn(part, among, driven) ?? [])];
   }
 
   /** Screwed bolts — the only heads a cam can catch. */
   const screwedBolts = () => all().filter((j) => j.kind === KIND.BOLT && isFastened(j.fastener));
 
   /** Every part reachable from `part` through fastened joints (itself included). */
-  function compoundOf(part: PartId) {
+  const compoundOf = (part: PartId) => compoundIn(part, all());
+
+  function compoundIn(part: PartId, among: readonly AssemblyJoint[]) {
     const edges = new Map<PartId, PartId[]>();
     const link = (a: PartId, b: PartId) => {
       if (!edges.has(a)) edges.set(a, []);
@@ -454,7 +555,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
       edges.get(a)!.push(b);
       edges.get(b)!.push(a);
     };
-    for (const j of all()) {
+    for (const j of among) {
       if (!isFastened(j.fastener)) continue;
       link(j.hardware, j.host);
       if (j.through) link(j.hardware, j.through);
@@ -483,39 +584,23 @@ export function createAssembly(typeOf: (part: PartId) => string) {
   }
 
   /**
-   * World pose of the part a joint puts back at the hole's mouth: its hardware, its host
-   * where it is now — or, for a part set onto its stud by hand (the host the mover), that
-   * host, the hardware where it is now.
+   * World pose `part` takes when joint `id` is put back at its hole's mouth: the side of the
+   * joint `part` is on moves — hardware or host, with whatever it carries — and the other
+   * stays where it is. `part` defaults to the hardware (a bolt backed out, sitting back at
+   * its mouth).
    */
-  function restPose(id: number, poseOf: PoseOf): Pose {
+  function restPose(id: number, poseOf: PoseOf, part: PartId = joints.get(id)!.hardware): Pose {
     const joint = joints.get(id)!;
-    const host = poseOf(joint.host);
     const rel = seatedPose(joint, poseOf, 0);
-    if (isHandTurned(joint) && joint.mover === joint.host) {
-      const hardware = poseOf(joint.hardware);
-      const back = invert(rel);
-      return {
-        position: add(hardware.position, rotateVector(hardware.rotation, back.anchor)),
-        rotation: normalize(multiplyQuaternions(hardware.rotation, back.rotation)),
-      };
-    }
-    // A part carrying its stud onto the top: the stud's own rest at the top's mouth, and the
-    // part where it was relative to the stud it carries.
-    if (isHandTurned(joint)) {
-      const stud = {
-        position: add(host.position, rotateVector(host.rotation, rel.anchor)),
-        rotation: normalize(multiplyQuaternions(host.rotation, rel.rotation)),
-      };
-      const carried = relativePose(poseOf(joint.hardware), poseOf(joint.mover));
-      return {
-        position: add(stud.position, rotateVector(stud.rotation, carried.anchor)),
-        rotation: normalize(multiplyQuaternions(stud.rotation, carried.rotation)),
-      };
-    }
-    return {
-      position: add(host.position, rotateVector(host.rotation, rel.anchor)),
-      rotation: normalize(multiplyQuaternions(host.rotation, rel.rotation)),
+    const hardwareMoves = compoundOf(joint.hardware).has(part);
+    const fixed = poseOf(hardwareMoves ? joint.host : joint.hardware);
+    // The moving side's own rest: the hardware in the host's frame, or the host in the hardware's.
+    const side = hardwareMoves ? rel : invert(rel);
+    const anchor = {
+      position: add(fixed.position, rotateVector(fixed.rotation, side.anchor)),
+      rotation: normalize(multiplyQuaternions(fixed.rotation, side.rotation)),
     };
+    return carryPose(poseOf(hardwareMoves ? joint.hardware : joint.host), anchor, poseOf(part));
   }
 
   // World-joint frame: the same physical point in each body's frame, plus b's rest rotation
@@ -616,13 +701,10 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     tap,
     pullable,
     canRelease,
-    crankTarget,
+    turnOf,
+    turns,
     turnedFrom,
     coincident,
-    handTarget,
-    handTargets,
-    handTurn,
-    handSeat,
     connectorAt: connectorOf,
     screwedBolts,
     compoundOf,

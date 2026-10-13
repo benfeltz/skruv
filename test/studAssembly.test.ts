@@ -55,36 +55,37 @@ describe('a stud joint', () => {
   });
 });
 
-describe('crankTarget on a two-ended stud', () => {
+describe('what a key on a stud turns (the turn record: test/turnOf.test.ts)', () => {
   const STUD_IN_TOP = 0;
   const STUD_IN_LEG = 1;
   const HEX_AT_TOP_END = 2;
   const HEX_AT_LEG_END = 3;
-  function bench() {
+  const keyOn = (assembly: ReturnType<typeof createAssembly>, hex: number) =>
+    assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'doubleEndedStud-1', connectorB: hex, mover: 'allenWrench-1' });
+  const bench = () => {
     const types = typeById();
-    const assembly = createAssembly((id) => types.get(id) ?? id.replace(/-\d+$/, ''));
-    const inTop = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: STUD_IN_TOP, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
-    return { assembly, inTop };
-  }
+    return createAssembly((id) => types.get(id) ?? id.replace(/-\d+$/, ''));
+  };
 
   it("turns the end the key is not in: the key on the free end's hex drives the end in the top", () => {
-    const { assembly, inTop } = bench();
-    assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'doubleEndedStud-1', connectorB: HEX_AT_LEG_END, mover: 'allenWrench-1' });
-    expect(assembly.crankTarget('allenWrench-1')!.target!.id).toBe(inTop.id);
+    const assembly = bench();
+    const inTop = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: STUD_IN_TOP, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
+    keyOn(assembly, HEX_AT_LEG_END);
+    expect(assembly.turnOf('allenWrench-1')!.joints.map((j) => j.id)).toEqual([inTop.id]);
   });
 
   it('turns the other end when only that one is seated — whichever end is the free one', () => {
-    const types = typeById();
-    const assembly = createAssembly((id) => types.get(id) ?? id.replace(/-\d+$/, ''));
+    const assembly = bench();
     const inLeg = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: STUD_IN_LEG, partB: 'leg-1', connectorB: 0, mover: 'doubleEndedStud-1' });
-    assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'doubleEndedStud-1', connectorB: HEX_AT_TOP_END, mover: 'allenWrench-1' });
-    expect(assembly.crankTarget('allenWrench-1')!.target!.id).toBe(inLeg.id);
+    keyOn(assembly, HEX_AT_TOP_END);
+    expect(assembly.turnOf('allenWrench-1')!.joints.map((j) => j.id)).toEqual([inLeg.id]);
   });
 
-  it('has nothing to turn with the key in the hex of the only seated end — it is buried', () => {
-    const { assembly } = bench();
-    assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'doubleEndedStud-1', connectorB: HEX_AT_TOP_END, mover: 'allenWrench-1' });
-    expect(assembly.crankTarget('allenWrench-1')).toMatchObject({ target: null });
+  it('turns nothing with the key in the hex of the only seated end — it is buried', () => {
+    const assembly = bench();
+    assembly.seat({ partA: 'doubleEndedStud-1', connectorA: STUD_IN_TOP, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
+    keyOn(assembly, HEX_AT_TOP_END);
+    expect(assembly.turnOf('allenWrench-1')!.joints).toEqual([]);
   });
 });
 
@@ -138,52 +139,5 @@ describe("a stud's hex as a tool target", () => {
     expect(assembly.coincident('doubleEndedStud-1', 1)).toEqual([HEX_AT_LEG_END]);
     // JOHNNY's bolt has none: its head is the far end of its thread.
     expect(assembly.coincident('top-1', 0)).toEqual([]);
-  });
-});
-
-describe('a stud screwed into the leg first (review: unturnable joint)', () => {
-  // The stud goes into the leg by the key (the stud the mover), then the leg is carried onto
-  // the top: the joint into the top has the leg as its mover — neither hardware nor host.
-  function bench() {
-    const types = typeById();
-    const assembly = createAssembly((id) => types.get(id)!);
-    const inLeg = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 1, partB: 'leg-1', connectorB: 0, mover: 'doubleEndedStud-1' });
-    assembly.drive(inLeg.id);
-    const inTop = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 0, partB: 'top-1', connectorB: 0, mover: 'leg-1' });
-    return { assembly, inLeg, inTop };
-  }
-
-  it('is turned by hand through the carried leg, which is the mover — not the stud, not the top', () => {
-    const { assembly, inTop, inLeg } = bench();
-    expect(assembly.handTarget('leg-1')).toMatchObject({ id: inTop.id });
-    expect(assembly.handTarget('top-1')).toBeNull();
-    expect(assembly.handTarget('doubleEndedStud-1')).toBeNull();
-    // The key-turned joint into the leg is nobody's hand joint.
-    expect(inLeg.mover).toBe('doubleEndedStud-1');
-  });
-
-  it('can be screwed home through the hand joint', () => {
-    const { assembly, inTop } = bench();
-    expect(assembly.apply(inTop.id, { type: 'crank', radians: FASTENER.studRadians })).toBe(true);
-    expect(assembly.get(inTop.id)!.fastener.state).toBe(STATE.SCREWED);
-  });
-});
-
-describe('restPose of a part set onto its stud by hand (review)', () => {
-  it("puts the leg, not the stud, back at the stud's end: the leg's hole mouth where the screwed stud's end is", () => {
-    const types = typeById();
-    const assembly = createAssembly((id) => types.get(id)!);
-    const joints = seatHome(assembly, ASSEMBLED.joints.map(pairOf));
-    const legJoint = joints.find((j) => j.host === 'leg-1')!;
-    const poseOf = (id: string) => ASSEMBLED.parts.find((p) => p.id === id)!;
-    const rest = assembly.restPose(legJoint.id, poseOf);
-    const home = poseOf('leg-1');
-    // As built the leg touches the top; at the stud's mouth it stands one sink further off.
-    expect(rest.position[0]).toBeCloseTo(home.position[0], 9);
-    expect(rest.position[1]).toBeCloseTo(home.position[1] - FASTENER.sinkDepth.stud!, 9);
-    expect(rest.position[2]).toBeCloseTo(home.position[2], 9);
-    // And the stud's own joint still rests the stud, at the top's mouth: untouched by the hand rule.
-    const studJoint = joints.find((j) => j.host === 'top-1' && j.hardware === 'doubleEndedStud-1')!;
-    expect(assembly.restPose(studJoint.id, poseOf).position[1]).toBeCloseTo(poseOf('doubleEndedStud-1').position[1] - FASTENER.sinkDepth.stud!, 9);
   });
 });
