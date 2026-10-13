@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, BOOKLET_UI, CATALOG, COLORS } from '../src/constants.js';
 import { catalogEntries, createCatalog } from '../src/game/catalogModel.js';
@@ -59,6 +59,12 @@ describe('pre-splash: the catalog cover (1.6.1, 1.9.1)', () => {
     const config = read('vite.config.ts');
     expect(config).toMatch(/transformIndexHtml: \(html\) => stampCount\(html, packIds\('items'\)\.length\)/);
     expect(config).toMatch(/plugins: \[[^\]]*splashCount\(\)/);
+    // The stamp counts the item folders, the catalog the registry: the same items (pinned in
+    // test/catalogModel.test.ts), so the stand-in and the sheet it hands to agree.
+    const root = new URL('../items/', import.meta.url);
+    const folders = readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory() && existsSync(new URL(`${e.name}/flatpack.json`, root)));
+    expect(folders.length).toBe(ITEM_IDS.length);
+    expect(stampCount(html, folders.length)).toContain(`<span class="pre-splash-count">${splashCount(ITEM_IDS.length)}</span>`);
     const stamped = stampCount(html, 4);
     expect(stamped).toContain('<span class="pre-splash-count">1 / 5</span>');
     expect(stamped.replace('1 / 5', '').length).toBe(html.replace(/1 \/ \d+/, '').length);
