@@ -1574,14 +1574,14 @@
       "id": "dowel-9",
       "role": "hardware",
       "position": [
-        -0.172,
-        0.171,
-        -0.141
+        -0.164,
+        0.072,
+        -0.041
       ],
       "rotation": [
-        -0.7071067812,
         0.0,
         0.0,
+        0.7071067812,
         0.7071067812
       ]
     },
@@ -1589,6 +1589,96 @@
       "id": "dowel-10",
       "role": "hardware",
       "position": [
+        -0.164,
+        0.072,
+        0.059
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-11",
+      "role": "hardware",
+      "position": [
+        0.164,
+        0.072,
+        -0.041
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-12",
+      "role": "hardware",
+      "position": [
+        0.164,
+        0.072,
+        0.059
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-13",
+      "role": "hardware",
+      "position": [
+        -0.05,
+        0.072,
+        -0.141
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-14",
+      "role": "hardware",
+      "position": [
+        0.05,
+        0.072,
+        -0.141
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-15",
+      "role": "hardware",
+      "position": [
+        -0.172,
+        0.171,
+        -0.141
+      ],
+      "rotation": [
+        -0.7071067812,
+        0.0,
+        0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-16",
+      "role": "hardware",
+      "position": [
         -0.172,
         0.121,
         -0.141
@@ -1601,7 +1691,7 @@
       ]
     },
     {
-      "id": "dowel-11",
+      "id": "dowel-17",
       "role": "hardware",
       "position": [
         0.172,
@@ -1610,96 +1700,6 @@
       ],
       "rotation": [
         -0.7071067812,
-        0.0,
-        0.0,
-        0.7071067812
-      ]
-    },
-    {
-      "id": "dowel-12",
-      "role": "hardware",
-      "position": [
-        0.172,
-        0.121,
-        -0.141
-      ],
-      "rotation": [
-        -0.7071067812,
-        0.0,
-        0.0,
-        0.7071067812
-      ]
-    },
-    {
-      "id": "dowel-13",
-      "role": "hardware",
-      "position": [
-        -0.164,
-        0.072,
-        0.059
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        -0.7071067812,
-        0.7071067812
-      ]
-    },
-    {
-      "id": "dowel-14",
-      "role": "hardware",
-      "position": [
-        -0.164,
-        0.072,
-        -0.041
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        -0.7071067812,
-        0.7071067812
-      ]
-    },
-    {
-      "id": "dowel-15",
-      "role": "hardware",
-      "position": [
-        0.164,
-        0.072,
-        -0.041
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.7071067812,
-        0.7071067812
-      ]
-    },
-    {
-      "id": "dowel-16",
-      "role": "hardware",
-      "position": [
-        0.164,
-        0.072,
-        0.059
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.7071067812,
-        0.7071067812
-      ]
-    },
-    {
-      "id": "dowel-17",
-      "role": "hardware",
-      "position": [
-        -0.05,
-        0.072,
-        -0.141
-      ],
-      "rotation": [
-        0.7071067812,
         0.0,
         0.0,
         0.7071067812
@@ -1709,12 +1709,12 @@
       "id": "dowel-18",
       "role": "hardware",
       "position": [
-        0.05,
-        0.072,
+        0.172,
+        0.121,
         -0.141
       ],
       "rotation": [
-        0.7071067812,
+        -0.7071067812,
         0.0,
         0.0,
         0.7071067812
@@ -2237,25 +2237,24 @@
         "number": 1,
         "pose": "upright",
         "parts": [
-          "drawerSide-1",
-          "drawerSide-2"
+          "drawerBottom-1"
         ],
         "fasten": [
           [
             "dowel-9/dowelEnd-1",
-            "drawerSide-1/dowelHole-3"
+            "drawerBottom-1/dowelHole-1"
           ],
           [
             "dowel-10/dowelEnd-1",
-            "drawerSide-1/dowelHole-4"
+            "drawerBottom-1/dowelHole-2"
           ],
           [
             "dowel-11/dowelEnd-1",
-            "drawerSide-2/dowelHole-5"
+            "drawerBottom-1/dowelHole-3"
           ],
           [
             "dowel-12/dowelEnd-1",
-            "drawerSide-2/dowelHole-6"
+            "drawerBottom-1/dowelHole-4"
           ]
         ]
       },
@@ -2264,24 +2263,25 @@
         "number": 2,
         "pose": "upright",
         "parts": [
-          "drawerBack-1"
+          "drawerSide-1",
+          "drawerSide-2"
         ],
         "fasten": [
           [
             "dowel-9/dowelEnd-2",
-            "drawerBack-1/dowelHole-1"
+            "drawerSide-1/dowelHole-2"
           ],
           [
             "dowel-10/dowelEnd-2",
-            "drawerBack-1/dowelHole-3"
+            "drawerSide-1/dowelHole-1"
           ],
           [
             "dowel-11/dowelEnd-2",
-            "drawerBack-1/dowelHole-2"
+            "drawerSide-2/dowelHole-1"
           ],
           [
             "dowel-12/dowelEnd-2",
-            "drawerBack-1/dowelHole-4"
+            "drawerSide-2/dowelHole-2"
           ]
         ]
       },
@@ -2291,92 +2291,68 @@
         "pose": "upright",
         "fasten": [
           [
-            "screw-1/screwThread-1",
-            "drawerBack-1/screwHole-1"
+            "dowel-13/dowelEnd-1",
+            "drawerBottom-1/dowelHole-5"
           ],
           [
-            "screw-2/screwThread-1",
-            "drawerBack-1/screwHole-2"
+            "dowel-14/dowelEnd-1",
+            "drawerBottom-1/dowelHole-6"
           ],
           [
-            "screw-3/screwThread-1",
-            "drawerBack-1/screwHole-3"
+            "dowel-15/dowelEnd-1",
+            "drawerSide-1/dowelHole-3"
           ],
           [
-            "screw-4/screwThread-1",
-            "drawerBack-1/screwHole-4"
+            "dowel-16/dowelEnd-1",
+            "drawerSide-1/dowelHole-4"
+          ],
+          [
+            "dowel-17/dowelEnd-1",
+            "drawerSide-2/dowelHole-5"
+          ],
+          [
+            "dowel-18/dowelEnd-1",
+            "drawerSide-2/dowelHole-6"
           ]
-        ],
-        "tool": "screwdriver"
+        ]
       },
       {
         "kind": "step",
         "number": 4,
         "pose": "upright",
+        "parts": [
+          "drawerBack-1"
+        ],
         "fasten": [
           [
-            "dowel-13/dowelEnd-1",
-            "drawerSide-1/dowelHole-1"
-          ],
-          [
-            "dowel-14/dowelEnd-1",
-            "drawerSide-1/dowelHole-2"
-          ],
-          [
-            "dowel-15/dowelEnd-1",
-            "drawerSide-2/dowelHole-1"
-          ],
-          [
-            "dowel-16/dowelEnd-1",
-            "drawerSide-2/dowelHole-2"
-          ],
-          [
-            "dowel-17/dowelEnd-1",
+            "dowel-13/dowelEnd-2",
             "drawerBack-1/dowelHole-5"
           ],
           [
-            "dowel-18/dowelEnd-1",
+            "dowel-14/dowelEnd-2",
             "drawerBack-1/dowelHole-6"
+          ],
+          [
+            "dowel-15/dowelEnd-2",
+            "drawerBack-1/dowelHole-1"
+          ],
+          [
+            "dowel-16/dowelEnd-2",
+            "drawerBack-1/dowelHole-3"
+          ],
+          [
+            "dowel-17/dowelEnd-2",
+            "drawerBack-1/dowelHole-2"
+          ],
+          [
+            "dowel-18/dowelEnd-2",
+            "drawerBack-1/dowelHole-4"
           ]
         ]
       },
       {
         "kind": "step",
         "number": 5,
-        "pose": "upright",
-        "parts": [
-          "drawerBottom-1"
-        ],
-        "fasten": [
-          [
-            "dowel-13/dowelEnd-2",
-            "drawerBottom-1/dowelHole-2"
-          ],
-          [
-            "dowel-14/dowelEnd-2",
-            "drawerBottom-1/dowelHole-1"
-          ],
-          [
-            "dowel-15/dowelEnd-2",
-            "drawerBottom-1/dowelHole-3"
-          ],
-          [
-            "dowel-16/dowelEnd-2",
-            "drawerBottom-1/dowelHole-4"
-          ],
-          [
-            "dowel-17/dowelEnd-2",
-            "drawerBottom-1/dowelHole-5"
-          ],
-          [
-            "dowel-18/dowelEnd-2",
-            "drawerBottom-1/dowelHole-6"
-          ]
-        ]
-      },
-      {
-        "kind": "step",
-        "number": 6,
         "pose": "upright",
         "fasten": [
           [
@@ -2402,13 +2378,29 @@
           [
             "screw-10/screwThread-1",
             "drawerBack-1/screwHole-6"
+          ],
+          [
+            "screw-1/screwThread-1",
+            "drawerBack-1/screwHole-1"
+          ],
+          [
+            "screw-2/screwThread-1",
+            "drawerBack-1/screwHole-2"
+          ],
+          [
+            "screw-3/screwThread-1",
+            "drawerBack-1/screwHole-3"
+          ],
+          [
+            "screw-4/screwThread-1",
+            "drawerBack-1/screwHole-4"
           ]
         ],
         "tool": "screwdriver"
       },
       {
         "kind": "step",
-        "number": 7,
+        "number": 6,
         "pose": "upright",
         "fasten": [
           [
@@ -2431,7 +2423,7 @@
       },
       {
         "kind": "step",
-        "number": 8,
+        "number": 7,
         "pose": "upright",
         "parts": [
           "drawerFront-1"
@@ -2457,7 +2449,7 @@
       },
       {
         "kind": "step",
-        "number": 9,
+        "number": 8,
         "pose": "upright",
         "fasten": [
           [
@@ -2481,7 +2473,7 @@
       },
       {
         "kind": "step",
-        "number": 10,
+        "number": 9,
         "pose": "upright",
         "parts": [
           "knob-1"
@@ -2496,7 +2488,7 @@
       },
       {
         "kind": "step",
-        "number": 11,
+        "number": 10,
         "pose": "parts",
         "parts": [
           "topBottomPanel-1",
@@ -2539,7 +2531,7 @@
       },
       {
         "kind": "step",
-        "number": 12,
+        "number": 11,
         "pose": "parts",
         "parts": [
           "sidePanel-1",
@@ -2567,7 +2559,7 @@
       },
       {
         "kind": "step",
-        "number": 13,
+        "number": 12,
         "pose": "lying",
         "fasten": [
           [
@@ -2590,7 +2582,7 @@
       },
       {
         "kind": "step",
-        "number": 14,
+        "number": 13,
         "pose": "lying",
         "fasten": [
           [
@@ -2605,7 +2597,7 @@
       },
       {
         "kind": "step",
-        "number": 15,
+        "number": 14,
         "pose": "lying",
         "turn": [
           [
@@ -2621,7 +2613,7 @@
       },
       {
         "kind": "step",
-        "number": 16,
+        "number": 15,
         "pose": "lying",
         "fasten": [
           [
@@ -2644,7 +2636,7 @@
       },
       {
         "kind": "step",
-        "number": 17,
+        "number": 16,
         "pose": "lying",
         "fasten": [
           [
@@ -2670,7 +2662,7 @@
       },
       {
         "kind": "step",
-        "number": 18,
+        "number": 17,
         "pose": "faceDown",
         "parts": [
           "backPanel-1"
@@ -2678,7 +2670,7 @@
       },
       {
         "kind": "step",
-        "number": 19,
+        "number": 18,
         "pose": "faceDown",
         "fasten": [
           [
@@ -2709,7 +2701,7 @@
       },
       {
         "kind": "special",
-        "number": 20,
+        "number": 19,
         "pose": "upright",
         "special": "tipUpright"
       },
