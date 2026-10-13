@@ -8,13 +8,14 @@
 //                loose hardware is a dead end (nothing turns)
 //   workable     a seat target worth lighting: any free hole for a fastener; for a tool,
 //                only what it can turn right now — an unscrewed seated bolt for the Allen
-//                key, an unlocked seated cam lock with a screwed bolt in reach for the
-//                screwdriver, which also teaches the build order
+//                key, an unlocked seated cam lock with a screwed bolt in reach or a seated
+//                screw not yet driven home for the screwdriver, which also teaches the
+//                build order
 //   ring         how brightly a workable target lights for the finger: by on-screen
 //                distance (what looks close is close, on a phone), capped by a 3D distance
 //                from the carried part's ends so nothing across the room lights.
 
-import { CONNECTOR } from '../../tools/validate/lib/vocabulary.js';
+import { CONNECTOR, KIND } from '../../tools/validate/lib/vocabulary.js';
 import { isCrankKind, isFastened, STATE } from './fasteners.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 import type { ConnectorType } from '../../tools/validate/lib/vocabulary.js';
@@ -71,8 +72,8 @@ export function isWorkable(connector: TargetConnector, { captured, turnedBy }: P
   // What a tool put here would turn: a bolt, a cam, a stud's far end — the graph's answer.
   const seat = turnedBy(connector);
   if (!seat) return false;
-  if (connector.type === CONNECTOR.HEX_SOCKET) return !isFastened(seat.fastener);
-  return seat.fastener.state !== STATE.LOCKED && captured(seat.hardware) !== null;
+  if (seat.kind === KIND.CAM) return seat.fastener.state !== STATE.LOCKED && captured(seat.hardware) !== null;
+  return !isFastened(seat.fastener);
 }
 
 /** A target ring: its target, how brightly it lights (0..1) and how far it is from the finger (CSS px). */

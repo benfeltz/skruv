@@ -54,6 +54,9 @@ export const isTapKind = (kind: FastenerKind) => kind === KIND.DOWEL || kind ===
 /** Kinds turned by a tool (a stud, also by hand). */
 export const isCrankKind = (kind: FastenerKind) => kind === KIND.BOLT || kind === KIND.CAM || kind === KIND.STUD || kind === KIND.SCREW;
 
+/** Turned kinds that travel into their hole as they go; a cam turns in place. */
+export const sinksAsTurned = (kind: FastenerKind) => kind === KIND.BOLT || kind === KIND.STUD || kind === KIND.SCREW;
+
 /**
  * The turn that takes a crank kind from seated to home, in radians — the one place a kind
  * names its span. Read from FASTENER at call time, so a ?tune of `fastener.studRadians` or

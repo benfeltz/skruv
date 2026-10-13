@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { AIM, COLORS, DROP, FASTENER, GESTURE, PANEL, PICK, RING, ROOM, SNAP, TURN_RING } from '../constants.js';
-import { areCompatible, COMPATIBLE, CONNECTOR, isFastenerEnd, KIND } from '../../tools/validate/lib/vocabulary.js';
+import { areCompatible, COMPATIBLE, CONNECTOR, isFastenerEnd, KIND, passesThrough } from '../../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, rotateVector } from '../../tools/validate/lib/geometry.js';
 import { advancing, capture, carryPose, layersOf } from '../game/assembly.js';
 import { PART_TYPES } from '../game/item.js';
@@ -8,7 +8,7 @@ import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
 import { driveRadians, ratchetTicks } from '../game/driveMath.js';
 import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rebaseDragOffset, rotatedHalfExtents } from '../game/dragMath.js';
-import { isCrankKind, isFastened, isHome, isTapKind, spanOf } from '../game/fasteners.js';
+import { isCrankKind, isFastened, isHome, isTapKind, sinksAsTurned, spanOf } from '../game/fasteners.js';
 import {
   fastenEvent,
   grabEvent,
@@ -1618,8 +1618,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     else turnRing.hide();
   }
 
-  // A cam catches the nearest screwed bolt head within reach of its recess, any bolt.
+  // A screw drives into whatever lies behind its hole; a cam catches the nearest screwed
+  // bolt head within reach of its recess, any bolt.
   function crankContext(joint: AssemblyJoint): ApplyContext {
+    if (passesThrough(joint.kind)) return behind(joint);
     if (joint.kind !== KIND.CAM) return {};
     const recess = connectorWorld(joint.host, joint.hostConnector);
     return { captured: capture(recess, screwedHeads())?.id ?? null };
@@ -1664,7 +1666,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       for (const id of turn.loose?.parts ?? []) release(partById.get(id)!);
       return reconcile();
     }
-    const pressed = [...assembly.tap(part.id, behindFitting), ...pressCarried(part)];
+    const pressed = [...assembly.tap(part.id, behind), ...pressCarried(part)];
     for (const id of pressed) reportFastening(id, false);
     if (pressed.length > 0) return reconcile();
     // A part held at its seat is the router's: turning it would drop it off the seat.
@@ -1682,13 +1684,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return assembly
       .all()
       .filter((j) => members.has(j.mover) && j.hardware !== part.id && j.host !== part.id && isTapKind(j.kind) && !(members.has(j.hardware) && members.has(j.host)))
-      .filter((j) => assembly.apply(j.id, { type: 'tap' }, behindFitting(j)))
+      .filter((j) => assembly.apply(j.id, { type: 'tap' }, behind(j)))
       .map((j) => j.id);
   }
 
-  // A back fitting pressed home lands in whichever panel lies behind its hole.
-  function behindFitting(joint: AssemblyJoint): ApplyContext {
-    if (joint.kind !== KIND.FITTING) return {};
+  // A back fitting pressed home, or a screw driven in, lands in whichever panel lies behind
+  // its hole.
+  function behind(joint: AssemblyJoint): ApplyContext {
+    if (!passesThrough(joint.kind)) return {};
     const hole = connectorWorld(joint.host, joint.hostConnector);
     raycaster.set(scratch.fromArray(hole.position), offset.fromArray(hole.axis).negate());
     raycaster.far = PART_TYPES[partById.get(joint.hardware)!.type].size[1];
@@ -1779,9 +1782,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // Draws `turned.part` as far as `layers` have turned it, on top of where its body is: each
   // layer (a tool's one joint; a hand's near joints, then its far ones) by its least-advanced
   // joint — sunk along the turned connector's axis (by the turn's sense: into the hole) while
-  // unfastened, a bolt's or stud's depth, and, if it spins, twisted by its turn about that
-  // connector's line (a hole off the part's origin stays on its stud). Returns the move made
-  // — its drawn pose over its body's — in a reused matrix, for its riders.
+  // unfastened, its kind's depth if it sinks as it turns, and, if it spins, twisted by its
+  // turn about that connector's line (a hole off the part's origin stays on its stud).
+  // Returns the move made — its drawn pose over its body's — in a reused matrix, for its riders.
   function drawTurned({ part, connector, sense, spins }: Turn['turned'], layers: AssemblyJoint[][]) {
     const { mesh, body } = partById.get(part)!;
     const seat = assembly.connectorAt(part, connector);
@@ -1791,7 +1794,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       if (layer.length === 0) continue;
       const least = layer.reduce((a, b) => (b.fastener.progress < a.fastener.progress ? b : a));
       const { kind, fastener } = least;
-      if ((kind === KIND.BOLT || kind === KIND.STUD) && !isFastened(fastener)) sink += FASTENER.sinkDepth[kind]! * fastener.progress;
+      if (sinksAsTurned(kind) && !isFastened(fastener)) sink += FASTENER.sinkDepth[kind]! * fastener.progress;
       if (spins) angle += fastener.progress * spanOf(kind);
     }
     const axis = drawAxis.fromArray(seat.axis).multiplyScalar(sense);
