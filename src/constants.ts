@@ -616,10 +616,13 @@ export const FASTENER = {
   driveSeconds: 1.5,
   // The ratchet ticks once every this much turn (an eighth), cranked or driven.
   ratchetRadians: Math.PI / 4,
-  // Dowel-stage connections: rigid in translation, this much angular play, and damped so
-  // the carcass slumps to the limit and stays (no spring, no bounce). Cam-locked = rigid.
-  angularPlayDegrees: 4,
-  // Torque per rad/s resisting the slump (N·m·s/rad), so it reads as a sag, not a drop.
+  // Dowel-stage connections: rigid in translation, this much angular play about the pivot.
+  // Zero: a dowelled carcass holds square until its cams lock or its screws drive home.
+  // Ben's playtest of ÖVERKÄLL's drawer (2026-10-13) showed any sag knocks the next part's
+  // dowels out of line, so the slump ships off; the ?tune knob (joint.angularPlay) puts it
+  // back for a feel pass. Cam-locked = rigid.
+  angularPlayDegrees: 0,
+  // Torque per rad/s resisting the slump (N·m·s/rad) when there is play: a sag, not a drop.
   playDamping: 1000,
 };
 

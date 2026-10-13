@@ -168,7 +168,7 @@ export async function createPhysicsWorld() {
     body.setAngvel(ZERO, true);
   }
 
-  const joints = new Map<PhysicsJoint, { mode: BondMode; bodyB: Body }>(); // handle → { mode, bodyB }
+  const joints = new Map<PhysicsJoint, { mode: BondMode; bodyB: Body; play: boolean }>(); // handle → { mode, bodyB, play }
   const embedded = new Map<Body, number>(); // body → embedding joints holding it
 
   function setCollisions(body: Body, groups: number) {
@@ -182,10 +182,12 @@ export async function createPhysicsWorld() {
    *   'rigid'  fixed joint
    *   'embed'  fixed joint, and b (hardware sunk into a) collides with nothing while held
    *   'play'   rigid in translation, FASTENER.angularPlayDegrees of angular play about the
-   *            pivot, heavily damped: it slumps to the limit and stays — no spring, no bounce
+   *            pivot, heavily damped: it slumps to the limit and stays — no spring, no bounce.
+   *            At zero play (the shipped default) it is a fixed joint: a zero-width limit
+   *            on a spherical joint lets a carcass creep where a fixed joint holds it square.
    */
   function join(bodyA: Body, bodyB: Body, { anchorA, anchorB, rotation }: JointFrame, mode: BondMode) {
-    const play = mode === 'play';
+    const play = mode === 'play' && FASTENER.angularPlayDegrees > 0;
     const data = play
       ? RAPIER.JointData.spherical(toVector(anchorA), toVector(anchorB))
       : RAPIER.JointData.fixed(toVector(anchorA), toRotation(rotation), toVector(anchorB), IDENTITY);
@@ -200,7 +202,7 @@ export async function createPhysicsWorld() {
       embedded.set(bodyB, (embedded.get(bodyB) ?? 0) + 1);
       setCollisions(bodyB, NO_COLLISIONS);
     }
-    joints.set(joint, { mode, bodyB });
+    joints.set(joint, { mode, bodyB, play });
     return joint;
   }
 
@@ -220,7 +222,8 @@ export async function createPhysicsWorld() {
   /**
    * Re-applies the live-tunable values made into bodies, colliders and joints when they
    * were created: PHYSICS damping and friction (a body's own friction stays), FASTENER play. Play joints wake, so a
-   * carcass re-slumps to a changed limit at once. Additive — creation is unchanged.
+   * carcass re-slumps to a changed limit at once. Additive — creation is unchanged: a joint
+   * built fixed at zero play stays fixed until the next sync rebuilds it with play.
    */
   function retune() {
     world.forEachCollider((collider) => collider.setFriction(PHYSICS.friction));
@@ -230,8 +233,8 @@ export async function createPhysicsWorld() {
       if (friction === undefined) continue;
       for (let i = 0; i < body.numColliders(); i++) body.collider(i).setFriction(friction);
     }
-    for (const [joint, { mode }] of joints) {
-      if (mode !== 'play') continue;
+    for (const [joint, { play }] of joints) {
+      if (!play) continue;
       setPlay(joint);
       joint.body1().wakeUp();
       joint.body2().wakeUp();
