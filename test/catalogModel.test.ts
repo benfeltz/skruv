@@ -8,7 +8,7 @@ import { ITEM_IDS, itemById } from '../src/game/item.js';
 // The catalog as data (1.9.1): a cover, then a page per item, each buildable or sold out by
 // the build's pickable flag. Pure — drawn by src/scene/catalogPages.ts.
 
-// Three items, as the epic will carry them; the registry carries all three.
+// A fixture of three items: the counts are the fixture's own, not the registry's (those are pinned below).
 const three = [
   { id: 'johnny', name: 'JOHNNY', partCount: 60 },
   { id: 'blank', name: 'BLANK', partCount: 9 },
