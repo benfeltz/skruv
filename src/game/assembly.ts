@@ -129,12 +129,12 @@ export interface Turn {
    */
   loose: { parts: PartId[]; restFrom: AssemblyJoint } | null;
   /**
-   * Where the turn stands, the one answer to carry, turn and lift:
-   *   loose    nothing partway and something loose (`loose`): a drag carries the part, a
-   *            tap lifts it off its unfastened seats, a still press on it is a tap
-   *   partway  some joint strictly between seated and home: a drag on the part turns it
-   *   home     every joint fastened, nothing loose: a drag carries the whole assembly, as
-   *            any fastened compound — loosening starts only from the ring, as under a key
+   * Where the turn stands, the one answer to tapping and holding its grip (a drag on a grip
+   * always turns it — the part itself is what is circled):
+   *   loose    nothing partway and something loose (`loose`): a tap lifts it off its
+   *            unfastened seats, and a still press on it, however long, is that tap
+   *   partway  some joint strictly between seated and home: a still press drives it home
+   *   home     every joint fastened, nothing loose: a tap is the ordinary one
    */
   state: TurnState;
 }

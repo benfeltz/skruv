@@ -74,10 +74,10 @@ describe('dials of turns', () => {
     const { assembly, bolt } = johnny();
     const [turn] = assembly.turns();
     expect(gripOf(turn)).toBe('key');
-    expect([turnProgress(turn), isTurnHome(turn), isDrawn(turn)]).toEqual([0, false, true]);
+    expect([turnProgress(turn), isTurnHome(turn), isDrawn(turn, false)]).toEqual([0, false, true]);
     assembly.drive(bolt.id);
     const [home] = assembly.turns();
-    expect([turnProgress(home), isTurnHome(home), isDrawn(home)]).toEqual([1, true, true]);
+    expect([turnProgress(home), isTurnHome(home), isDrawn(home, false)]).toEqual([1, true, true]);
   });
 
   it('draws nothing for a part with no tool and no turn', () => {
@@ -101,25 +101,27 @@ describe('dials of turns', () => {
     }
     const legTurn = (assembly: ReturnType<typeof blank>['assembly']) => assembly.turnOf('leg')!;
 
-    it("is the leg's press, drawn whatever its progress", () => {
+    it("is the leg's press, drawn while the leg is pressed — whatever its progress — and not otherwise", () => {
       const { assembly, inLeg } = blank();
       expect(gripOf(legTurn(assembly))).toBe('leg');
-      expect(isDrawn(legTurn(assembly))).toBe(true);
+      expect(isDrawn(legTurn(assembly), true)).toBe(true);
+      expect(isDrawn(legTurn(assembly), false)).toBe(false);
       assembly.apply(inLeg.id, { type: 'crank', radians: FASTENER.studRadians / 2 });
       expect(turnProgress(legTurn(assembly))).toBeCloseTo(0.5, 9);
       assembly.drive(inLeg.id);
       // Home on a stud that is not yet home in the top: the turn goes on into the top.
-      expect(isDrawn(legTurn(assembly))).toBe(true);
+      expect(isDrawn(legTurn(assembly), true)).toBe(true);
       expect(turnProgress(legTurn(assembly))).toBe(0);
     });
 
-    it('is drawn home too: its ring is where loosening starts', () => {
+    it('is drawn home too while pressed: the leg is circled to loosen it', () => {
       const { assembly, inLeg } = blank();
       for (const j of assembly.all()) assembly.drive(j.id);
       expect(assembly.get(inLeg.id)!.fastener.progress).toBe(1);
       const turn = legTurn(assembly);
       expect(isTurnHome(turn)).toBe(true);
-      expect(isDrawn(turn)).toBe(true);
+      expect(isDrawn(turn, true)).toBe(true);
+      expect(isDrawn(turn, false)).toBe(false);
     });
 
     it('draws no dial for a turn with nothing to turn: a key on a buried hex', () => {
@@ -129,7 +131,7 @@ describe('dials of turns', () => {
       assembly.seat({ partA: 'key', connectorA: 0, partB: 'stud', connectorB: 2, mover: 'key' });
       const [turn] = assembly.turns();
       expect(turn.joints).toEqual([]);
-      expect(isDrawn(turn)).toBe(false);
+      expect(isDrawn(turn, true)).toBe(false);
     });
   });
 });

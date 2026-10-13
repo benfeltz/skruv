@@ -21,6 +21,8 @@ type FakeListener = (event: object) => void;
 
 export class FakeCanvas {
   listeners = new Map<string, FakeListener>();
+  // The bench's clock (ms): every event is stamped with it, and every frame moves it on.
+  time = 0;
   addEventListener(type: string, fn: FakeListener) {
     this.listeners.set(type, fn);
   }
@@ -32,7 +34,7 @@ export class FakeCanvas {
   }
   setPointerCapture() {}
   fire(type: string, init: object) {
-    this.listeners.get(type)?.({ type, pointerId: 1, button: 0, timeStamp: 0, ...init });
+    this.listeners.get(type)?.({ type, pointerId: 1, button: 0, timeStamp: this.time, ...init });
   }
 }
 
@@ -100,6 +102,15 @@ export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8]) {
   const dials: (Dial[] | null)[] = [];
   const turnRing = { show: (shown: readonly Dial[]) => dials.push([...shown]), hide: () => dials.push(null) };
   const taps: (Part | null)[] = [];
+  // The rotate gizmo, as the item world wires it: a tap selects the part, null deselects.
+  const rings = {
+    selected: null as Part | null,
+    hitTest: () => null,
+    start() {},
+    move() {},
+    end() {},
+    cancel() {},
+  };
   const ratchet: number[] = [];
   const rehomes: string[] = [];
 
@@ -113,7 +124,11 @@ export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8]) {
     assembly,
     events,
     turnRing,
-    onTap: (part) => taps.push(part),
+    rings,
+    onTap: (part) => {
+      taps.push(part);
+      rings.selected = part;
+    },
     onRatchet: (count) => ratchet.push(count),
     onRehome: (kind) => rehomes.push(kind),
   });
@@ -121,8 +136,13 @@ export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8]) {
     const v = (Array.isArray(point) ? new THREE.Vector3(...point) : point.clone()).project(camera);
     return { clientX: ((v.x + 1) / 2) * SIZE, clientY: ((1 - v.y) / 2) * SIZE };
   };
+  // One frame: the clock moves on, the router updates.
+  const tick = () => {
+    canvas.time += FRAME * 1000;
+    router.update(FRAME);
+  };
   const hold = (frames: number) => {
-    for (let i = 0; i < frames; i++) router.update(FRAME);
+    for (let i = 0; i < frames; i++) tick();
   };
   const tap = (at: ClientPoint) => {
     canvas.fire('pointerdown', at);
@@ -142,9 +162,9 @@ export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8]) {
     canvas.fire('pointermove', at(0));
     for (let d = 10; d <= Math.abs(degrees); d += 10) {
       canvas.fire('pointermove', at(Math.sign(degrees) * d));
-      router.update(FRAME);
+      tick();
     }
     canvas.fire('pointerup', at(degrees));
   }
-  return { router, canvas, assembly, log, dials, taps, ratchet, rehomes, screen, hold, tap, fastens, clicks, circle, camera, grabbed, released };
+  return { router, canvas, assembly, log, dials, taps, ratchet, rehomes, screen, hold, tap, fastens, clicks, circle, camera, grabbed, released, rings };
 }

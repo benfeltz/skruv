@@ -244,16 +244,18 @@ const PULL_AXIS_PROBE = 0.05;
  *            line holds is never a seat for another: it drops when the line lets go.
  *   turnRing — `{ show(dials), hide() }` (src/ui/turnRing.ts): a dial for each turn the
  *            graph has (`assembly.turns`) — round the head a seated tool is on, for as long
- *            as it is on; round the hole of a part circled by hand (a leg on its stud) until
- *            it is home — its arc at the turn's progress (full at home) and flashing as it
+ *            as it is on; round the hole of a part circled by hand (a leg on its stud) while
+ *            the finger is on that part — its arc at the turn's progress (full at home) and flashing as it
  *            goes home. A press on its band is its grip's crank — a drag there turns it as
  *            circling does, a tap does nothing; only a tap on a tool itself takes it off.
  *            Which turns get a dial, and where it is grabbed, is src/game/turnRing.ts's call.
  * Turns: what a gesture on a part turns — its joints, what visibly turns and about what,
  * what rides along, what is loose — is the graph's record (`assembly.turnOf`, `Turn`), read
  * by the crank, the drive, the draw, the dials, the tap and the hold alike. A seated tool
- * cranks on any drag; a part circled by hand turns on a drag once its turn is under way,
- * and at nothing is carried like any part, its ring the way to start it.
+ * cranks on any drag; so does a part circled by hand (a leg on its stud) — the part itself
+ * is what is circled, its ring shown round its hole only while the finger is on it, and it
+ * takes no gizmo. A table moves by a part with no turn of its own (the top its studs were
+ * keyed into); a loose leg comes off its stud with a tap.
  * Hold-to-drive: a press on a turn's grip or its ring held still past a tap
  * (GESTURE.tapMaxMs) drives the turn home in FASTENER.driveSeconds, tightening only, and
  * stops there; letting go after it is never a tap, so a tool stays on. A press that moves
@@ -334,6 +336,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // A press on a turn's grip (or its turn ring) not yet a drag: how long it has been held
   // still (ms), and whether it has been held past a tap and so drives (hold-to-drive).
   let press: { id: number; grip: Part; ms: number; held: boolean } | null = null;
+  // The part the primary finger went down on, until it lifts: whose hand ring is shown.
+  let touching: Part | null = null;
   // The part the elevation line held at the last frame, so a new hold is seen once (carryHeld).
   let lifted: Part | null = null;
   // The part whose assembly is held still under a panel's fit on offer (holdStill), if any.
@@ -378,7 +382,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const rect = domElement.getBoundingClientRect();
     const dials = assembly
       .turns()
-      .filter(isDrawn)
+      .filter((turn) => isDrawn(turn, isPressed(turn)))
       .map((turn) => {
         const head = centreOf(turn);
         return { turn, head, centre: screenPoint(head, rect), home: isTurnHome(turn) };
@@ -753,11 +757,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function beginDrag(part: Part, point: Vec3, event: ClientPoint) {
     pruneStale();
     letGoOf(part);
-    // Carry or turn: a seated tool with something to turn cranks it; a part with a turn by
-    // hand turns while it is partway — loose it is carried, as any part, and home it is
-    // carried with its whole assembly, loosening starting from its ring as under a key.
+    // Carry or turn: a seated tool with something to turn cranks it, and so does a part with
+    // a turn by hand — the part itself is what is circled, whatever its state. A table moves
+    // by a part with no turn of its own: the top its studs were keyed into, a keyed leg.
     const turn = assembly.turnOf(part.id);
-    const turns = turn !== null && turn.joints.length > 0 && (turn.grip.kind === 'tool' || turn.state === 'partway');
+    const turns = turn !== null && turn.joints.length > 0;
     // A panel pushed home onto another pulls back off it, as before; a cam locked across the
     // seam stops the pull (pullable), and the panel carries its assembly instead.
     const pulls = assembly.pullable(part.id).length > 0;
@@ -1560,6 +1564,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // --- turn ring: a dial round what each turn turns ---
 
+  // Whether the finger is on a turn's grip — the part's own press, cranking or still.
+  const isPressed = (turn: Turn) => touching !== null && touching.id === gripOf(turn);
+
   // Where a turn turns, in the world: its turned connector's position — the head a tool sits
   // on, the hole a part circled by hand sits on its stud by — which the crank sweeps about
   // and the dial is centred on.
@@ -1581,7 +1588,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // Every frame: a dial for each turn with something to turn — one per turn, however many
   // joints it turns. One that went home since last frame flashes for TURN_RING.flashMs —
   // again after being backed off and driven back — while a tool put on a fastener already
-  // home shows it full, without a flash. Home or not, a dial stays: it is where loosening starts.
+  // home shows it full, without a flash. A tool's dial stays while it is on; a part circled by
+  // hand shows its own only while the finger is on it (isDrawn).
   function showDials(delta: number, world: readonly Turn[]) {
     if (!turnRing) return;
     const rect = domElement.getBoundingClientRect();
@@ -1594,7 +1602,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       if (home && dialed.get(id) === false) dialFlashes.set(id, TURN_RING.flashMs);
       else if (!home) dialFlashes.delete(id);
       seen.set(id, home);
-      if (isDrawn(turn)) dials.push(dialOf(turn, dialFlashes.has(id), rect));
+      if (isDrawn(turn, isPressed(turn))) dials.push(dialOf(turn, dialFlashes.has(id), rect));
     }
     for (const [id, left] of dialFlashes) {
       const remaining = left - delta * 1000;
@@ -1656,7 +1664,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     for (const id of pressed) reportFastening(id, false);
     if (pressed.length > 0) return reconcile();
     // A part held at its seat is the router's: turning it would drop it off the seat.
-    if (!placed.has(part)) onTap?.(part);
+    // A part with a turn by hand gets no gizmo: it sits on its studs, and turns by its circle.
+    if (!placed.has(part) && turn?.grip.kind !== 'hand') onTap?.(part);
   }
 
   // A panel carried in on its hardware, or with its assembly, sits in seats it touches only
@@ -1703,6 +1712,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     // Every turn the graph has, once per frame: the dials and the draw read the same records.
     const joints = assembly.all();
     const world = assembly.turns();
+    // A part circled by hand has no gizmo — selected and then set onto its stud, it sheds it:
+    // it turns by its circle, and the gizmo cannot turn a seated part anyway.
+    const selected = rings?.selected;
+    if (selected && world.some((turn) => turn.grip.kind === 'hand' && turn.grip.part === selected.id)) onTap?.(null);
     showDials(delta, world);
     drawTurns(joints, world);
     followRiders();
@@ -1886,10 +1899,12 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     state.down(pointer(event, hit));
     syncCamera();
     if (wasCamera && !state.cameraEnabled) domElement.setPointerCapture(event.pointerId);
+    if (hit?.kind !== 'part' || state.owner !== OWNER.DRAG_PART) return;
+    // The part under the finger: a part circled by hand shows its ring while it is held.
+    touching = hit.part;
+    const turn = assembly.turnOf(hit.part.id);
     // A press on a seated tool, or on its ring, may turn out a hold.
-    if (hit?.kind === 'part' && state.owner === OWNER.DRAG_PART && (hit.dial || armsPress(assembly.turnOf(hit.part.id)))) {
-      press = { id: event.pointerId, grip: hit.part, ms: 0, held: false };
-    }
+    if (hit.dial || armsPress(turn)) press = { id: event.pointerId, grip: hit.part, ms: 0, held: false };
   }
 
   // Whether a still press on a part may drive its turn: a seated tool's with something to
@@ -1910,9 +1925,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   function onPointerUp(event: PointerEvent) {
+    const part = touching;
     const effect = state.up(pointer(event));
     const held = endPress(event.pointerId);
+    if (!state.owner) touching = null;
     apply(held && effect?.type === 'tap' ? null : effect, event);
+    // A still press on a loose part circled by hand, held past a tap and armed for nothing,
+    // is still a tap: it lifts the part off — never a dead gesture.
+    if (!effect && !held && part && assembly.turnOf(part.id)?.state === 'loose') tapPart(part);
     syncCamera();
   }
 
@@ -1920,6 +1940,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // without a drop target; the state machine ignores ids it has already let go of.
   function onPointerCancel(event: PointerEvent) {
     endPress(event.pointerId);
+    touching = null;
     apply(state.cancel(pointer(event)), event);
     syncCamera();
   }
