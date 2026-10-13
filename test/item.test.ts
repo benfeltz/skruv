@@ -85,5 +85,6 @@ describe('src/game/item.ts — the fastener kinds (1.9.2)', () => {
   it("lists each item's kinds, read off its part types", () => {
     expect([...itemById('johnny').kinds].sort()).toEqual(['bolt', 'cam', 'dowel', 'fitting', 'pin', 'tool']);
     expect([...itemById('blank').kinds].sort()).toEqual(['stud', 'tool']);
+    expect([...itemById('overkall').kinds].sort()).toEqual(['bolt', 'cam', 'dowel', 'fitting', 'screw', 'tool']);
   });
 });
