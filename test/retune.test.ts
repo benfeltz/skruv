@@ -23,6 +23,8 @@ describe('world.retune', () => {
     const physics = await createPhysicsWorld();
     const a = box(physics, 0);
     const b = box(physics, 0.3);
+    // Play ships at zero, which builds a fixed joint; a spherical one needs play at creation.
+    tunables.set('joint.angularPlay', 4);
     const joint = physics.join(a, b, { anchorA: [0.15, 0, 0], anchorB: [-0.15, 0, 0], rotation: [0, 0, 0, 1] }, 'play');
     const limit = () =>
       (joint as unknown as { rawSet: RawJointSet }).rawSet.jointLimitsMax(joint.handle, RAPIER.JointAxis.AngX as unknown as RawJointAxis);

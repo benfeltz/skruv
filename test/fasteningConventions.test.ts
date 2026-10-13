@@ -60,9 +60,8 @@ describe('every fastener is bidirectional (decision 2)', () => {
 });
 
 describe('joint fidelity tunables (decision 8)', () => {
-  it('keeps the dowel-stage angular play in the 3–5° band, damped, in constants', () => {
-    expect(FASTENER.angularPlayDegrees).toBeGreaterThanOrEqual(3);
-    expect(FASTENER.angularPlayDegrees).toBeLessThanOrEqual(5);
+  it('ships the dowel-stage angular play at zero (1.9.5: a slump knocks the next dowels out of line), damped, in constants', () => {
+    expect(FASTENER.angularPlayDegrees).toBe(0);
     expect(FASTENER.playDamping).toBeGreaterThan(0);
   });
 
