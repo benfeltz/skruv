@@ -166,7 +166,7 @@ function harness({ engaged = true, progress: start = 0 } = {}) {
   const { router, canvas, assembly, log, dials, screen, hold } = m;
   const boltSeat = assembly.seat({ partA: bolt.id, connectorA: 0, partB: panel.id, connectorB: CAM_BOLT_HOLE, mover: bolt.id });
   if (start >= 1) assembly.drive(boltSeat.id);
-  else if (start > 0) assembly.apply(boltSeat.id, { type: 'crank', radians: start * FASTENER.screwRadians });
+  else if (start > 0) assembly.apply(boltSeat.id, { type: 'crank', radians: start * FASTENER.boltRadians });
   const toolJoint = () => assembly.all().find((j) => j.kind === KIND.TOOL) ?? null;
   const progress = () => assembly.get(boltSeat.id)!.fastener.progress;
   const centre = () => screen(HEAD);
@@ -301,7 +301,7 @@ describe('the turn ring takes presses (1.8.2.2 step 5)', () => {
     // Each turns the bolt by exactly the sweep its crank saw, over the bolt's two turns: from
     // the key, all 180°; from the ring, whose press is already on the circle, 170° — its
     // first 10° step is what takes it past the tap distance.
-    const span = (FASTENER.screwRadians * 180) / Math.PI;
+    const span = (FASTENER.boltRadians * 180) / Math.PI;
     expect(viaKey.progress()).toBeCloseTo(180 / span, 9);
     expect(ring.progress()).toBeCloseTo(170 / span, 9);
   });
@@ -414,7 +414,7 @@ describe('a still hold drives the fastener home (1.8.2.2 step 6)', () => {
 
   it('only ever tightens', () => {
     const h = harness();
-    h.assembly.apply(h.boltSeat.id, { type: 'crank', radians: FASTENER.screwRadians / 2 });
+    h.assembly.apply(h.boltSeat.id, { type: 'crank', radians: FASTENER.boltRadians / 2 });
     h.canvas.fire('pointerdown', h.screen(h.key.mesh.position));
     let last = h.progress();
     for (let i = 0; i < TAP_FRAMES + DRIVE_FRAMES; i++) {
@@ -476,10 +476,10 @@ describe('the ratchet ticks every eighth of a turn (1.8.2.2 step 7)', () => {
 
   it('clicks loosening too, once per eighth crossed', () => {
     const h = harness();
-    h.assembly.apply(h.boltSeat.id, { type: 'crank', radians: FASTENER.screwRadians / 2 });
-    const before = h.progress() * FASTENER.screwRadians;
+    h.assembly.apply(h.boltSeat.id, { type: 'crank', radians: FASTENER.boltRadians / 2 });
+    const before = h.progress() * FASTENER.boltRadians;
     h.circle(h.ringAt(h.awayFromKey()), HEAD, -120, h.awayFromKey());
-    const after = h.progress() * FASTENER.screwRadians;
+    const after = h.progress() * FASTENER.boltRadians;
     expect(after).toBeLessThan(before);
     expect(h.clicks()).toBeGreaterThan(0);
     expect(h.clicks()).toBe(Math.floor(before / FASTENER.ratchetRadians) - Math.floor(after / FASTENER.ratchetRadians));

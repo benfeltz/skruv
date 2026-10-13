@@ -63,7 +63,7 @@ describe('back fitting: a push-pin on the press/pull machine (1.5)', () => {
 });
 
 describe('bolt: seated ⇄ screwed by signed crank', () => {
-  const span = FASTENER.screwRadians;
+  const span = FASTENER.boltRadians;
 
   it('screws in on reaching full progress, and stays seated partway', () => {
     const half = transition(createFastener(KIND.BOLT), crank(span / 2));
@@ -96,7 +96,7 @@ describe('bolt: seated ⇄ screwed by signed crank', () => {
 
 describe('spanOf', () => {
   it('names each crank kind\'s turn, once', () => {
-    expect(spanOf(KIND.BOLT)).toBe(FASTENER.screwRadians);
+    expect(spanOf(KIND.BOLT)).toBe(FASTENER.boltRadians);
     expect(spanOf(KIND.STUD)).toBe(FASTENER.studRadians);
     expect(spanOf(KIND.CAM)).toBe(FASTENER.quarterTurn);
   });

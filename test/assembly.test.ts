@@ -156,7 +156,7 @@ describe('cam lock', () => {
     assembly.tap('sidePanel-1');
     const bolt = assembly.seat({ partA: 'camLockBolt-1', connectorA: END_LOW, partB: 'sidePanel-1', connectorB: SIDE_BOTTOM_CAM_BOLT, mover: 'camLockBolt-1' });
     const cam = assembly.seat({ partA: 'camLock-1', connectorA: END_LOW, partB: 'topBottomPanel-1', connectorB: SHELF_LEFT_RECESS, mover: 'camLock-1' });
-    assembly.apply(bolt.id, { type: 'crank', radians: FASTENER.screwRadians });
+    assembly.apply(bolt.id, { type: 'crank', radians: FASTENER.boltRadians });
     return { assembly, bolt, cam };
   }
 
@@ -167,7 +167,7 @@ describe('cam lock', () => {
     expect(assembly.get(cam.id).fastener.state).toBe(STATE.SEATED);
     assembly.apply(cam.id, { type: 'crank', radians: 0.1 }, { captured: 'camLockBolt-1' });
     expect(assembly.get(cam.id)).toMatchObject({ captured: 'camLockBolt-1', fastener: { state: STATE.LOCKED } });
-    expect(assembly.apply(bolt.id, { type: 'crank', radians: -FASTENER.screwRadians })).toBe(false);
+    expect(assembly.apply(bolt.id, { type: 'crank', radians: -FASTENER.boltRadians })).toBe(false);
   });
 
   it('turns the dowel connection rigid and refuses to pull it apart', () => {
@@ -374,9 +374,9 @@ describe('drive and seatHome: a part set put in already fastened (1.5 display sh
     const { assembly, joints } = build();
     const by = (kind: FastenerKind) => joints.filter((j) => j.kind === kind);
     // Bolts are held while their cams are locked.
-    for (const bolt of by(KIND.BOLT)) expect(assembly.apply(bolt.id, { type: 'crank', radians: -FASTENER.screwRadians })).toBe(false);
+    for (const bolt of by(KIND.BOLT)) expect(assembly.apply(bolt.id, { type: 'crank', radians: -FASTENER.boltRadians })).toBe(false);
     for (const cam of by(KIND.CAM)) expect(assembly.apply(cam.id, { type: 'crank', radians: -FASTENER.quarterTurn })).toBe(true);
-    for (const bolt of by(KIND.BOLT)) expect(assembly.apply(bolt.id, { type: 'crank', radians: -FASTENER.screwRadians })).toBe(true);
+    for (const bolt of by(KIND.BOLT)) expect(assembly.apply(bolt.id, { type: 'crank', radians: -FASTENER.boltRadians })).toBe(true);
     // Every pressed fastener is pullable by the part that was pushed into it.
     for (const kind of [KIND.DOWEL, KIND.PIN, KIND.FITTING]) {
       for (const j of by(kind)) {
@@ -407,7 +407,7 @@ describe('letGoOf: a teardown leaves nothing fastened to the parts it takes away
     expect(assembly.letGoOf(['camLockBolt-1'])).toEqual([cam.id]);
     expect(assembly.get(cam.id)).toMatchObject({ captured: null, fastener: { state: STATE.SEATED, progress: 0 } });
     // The bolt is no longer held: it can be backed out, and once unseated it is on its own.
-    expect(assembly.apply(bolt.id, { type: 'crank', radians: -FASTENER.screwRadians })).toBe(true);
+    expect(assembly.apply(bolt.id, { type: 'crank', radians: -FASTENER.boltRadians })).toBe(true);
     assembly.unseat(bolt.id);
     expect([...assembly.compoundOf('camLockBolt-1')]).toEqual(['camLockBolt-1']);
   });

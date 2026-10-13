@@ -59,7 +59,7 @@ export const isCrankKind = (kind: FastenerKind) => kind === KIND.BOLT || kind ==
  * applies at once.
  */
 export const spanOf = (kind: FastenerKind) => {
-  if (kind === KIND.BOLT) return FASTENER.screwRadians;
+  if (kind === KIND.BOLT) return FASTENER.boltRadians;
   return kind === KIND.STUD ? FASTENER.studRadians : FASTENER.quarterTurn;
 };
 

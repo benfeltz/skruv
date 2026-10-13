@@ -21,8 +21,8 @@ function drive(span: number, seconds: number) {
 
 describe('driveRadians', () => {
   it("drives a bolt's two turns home over driveSeconds of frames", () => {
-    const { turned, frames } = drive(FASTENER.screwRadians, FASTENER.driveSeconds);
-    expect(turned).toBeCloseTo(FASTENER.screwRadians, 9);
+    const { turned, frames } = drive(FASTENER.boltRadians, FASTENER.driveSeconds);
+    expect(turned).toBeCloseTo(FASTENER.boltRadians, 9);
     expect(frames).toBe(Math.round(FASTENER.driveSeconds / FRAME));
   });
 
@@ -49,7 +49,7 @@ describe('ratchetTicks', () => {
   it('counts the same however the turn is sliced into frames', () => {
     let ticks = 0;
     let at = 0;
-    const span = FASTENER.screwRadians;
+    const span = FASTENER.boltRadians;
     while (at < span) {
       const next = Math.min(span, at + driveRadians(span, FASTENER.driveSeconds, FRAME));
       ticks += ratchetTicks(at, next, step);
