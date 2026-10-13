@@ -457,15 +457,21 @@ export function createAssembly(typeOf: (part: PartId) => string) {
 
   // --- turns: one record for everything a turn is ---
 
+  // What a turn leaves loose: the unit `part` (the side that moved into the seat) makes with
+  // what is fastened to it, and the seat that ties it to the rest — the first of `joints`
+  // crossing out of the unit unfastened — or null while something fastened holds it.
+  function looseOf(part: PartId, joints: readonly AssemblyJoint[], among: readonly AssemblyJoint[]): Turn['loose'] {
+    const unit = compoundIn(part, among);
+    const restFrom = joints.find((j) => !isFastened(j.fastener) && unit.has(j.hardware) !== unit.has(j.host)) ?? null;
+    return restFrom ? { parts: [...unit], restFrom } : null;
+  }
+
   // A seated tool's turn: the joint at the far end of what it sits on, the hardware turning
-  // about the head it sits on (tightening looking into the head), and — pushed into its
-  // hole and fastened to nothing — the hardware loose at its mouth.
+  // about the head it sits on (tightening looking into the head), and loose — as any turn —
+  // the unit that moved into that seat: a bolt at its mouth, a leg at its stud's end.
   function toolTurn(tool: AssemblyJoint, among: readonly AssemblyJoint[]): Turn {
     const target = turnedFrom(tool.host, tool.hostConnector, among);
-    const loose =
-      target && !isFastened(target.fastener) && target.mover === target.hardware && compoundIn(target.hardware, among).size === 1
-        ? { parts: [target.hardware], restFrom: target }
-        : null;
+    const loose = target && looseOf(target.mover, [target], among);
     return {
       grip: { kind: 'tool', tool },
       joints: target ? [target] : [],
@@ -506,16 +512,12 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     }
     const joints = [...near, ...far];
     if (joints.length === 0) return null;
-    // The unit the part makes with what is home in it, and the seat that ties it to the rest
-    // — the first of the turn's joints crossing out of the unit — if nothing fastened does.
-    const unit = compoundIn(part, among);
-    const restFrom = joints.find((j) => !isFastened(j.fastener) && unit.has(j.hardware) !== unit.has(j.host)) ?? null;
     return {
       grip: { kind: 'hand', part },
       joints,
       turned: turned ?? { part: joints[0].hardware, connector: joints[0].hardwareConnector, sense: 1, spins: studs.length === 1 },
       riders,
-      loose: restFrom ? { parts: [...unit], restFrom } : null,
+      loose: looseOf(part, joints, among),
     };
   }
 

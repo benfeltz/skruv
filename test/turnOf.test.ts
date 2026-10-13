@@ -267,12 +267,26 @@ describe('5. a key on a hand-seated stud', () => {
       joints: [assembly.get(joint.id)!],
       turned: { part: 'doubleEndedStud-1', connector: HEX_AT_END_2, sense: -1, spins: true },
       riders: [],
-      // Seated by the top coming onto it, the stud is no hardware pushed home: not held.
-      loose: null,
+      // Loose, it is the top that moved into the seat: held at the stud's end, as by hand.
+      loose: { parts: ['top-1'], restFrom: assembly.get(joint.id)! },
     });
     expect(assembly.turnOf('top-1')).toBeNull();
     expect(assembly.turns().map((t) => t.grip.kind)).toEqual(['tool']);
     expectOnce(assembly);
+  });
+
+  // Review round 5: a key backing out a joint a part was set onto holds that part, as the
+  // hand would — not the tool path dropping it.
+  it('leaves a leg the key backs off its stud loose at the stud\'s end, as the hand would', () => {
+    const assembly = createAssembly(typeOf);
+    const inLeg = legOntoStud(assembly);
+    home(assembly, inLeg);
+    // The stud loose, its first end free: the key on that end's hex turns the leg's joint.
+    assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'doubleEndedStud-1', connectorB: 2, mover: 'allenWrench-1' });
+    expect(ids(turn(assembly, 'allenWrench-1').joints)).toEqual([inLeg.id]);
+    expect(turn(assembly, 'allenWrench-1').loose).toBeNull();
+    set(assembly, inLeg, 0);
+    expect(turn(assembly, 'allenWrench-1').loose).toEqual({ parts: ['leg-1'], restFrom: assembly.get(inLeg.id)! });
   });
 
   it('hands the joint back to the top once the key is off', () => {
