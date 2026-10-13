@@ -60,7 +60,7 @@ describe('1. a leg set onto a standing stud: circled home, loosened, tapped off'
     expect(turn(assembly, 'leg-1')).toEqual<Turn>({
       grip: { kind: 'hand', part: 'leg-1' },
       joints: [assembly.get(inLeg.id)!],
-      turned: { part: 'leg-1', connector: LEG_HOLE, sense: 1 },
+      turned: { part: 'leg-1', connector: LEG_HOLE, sense: 1, spins: true },
       riders: [],
       loose: { parts: ['leg-1'], restFrom: assembly.get(inLeg.id)! },
     });
@@ -132,7 +132,7 @@ describe('2. a leg screwed home onto a loose stud, carried onto the top', () => 
     expect(t).toEqual<Turn>({
       grip: { kind: 'hand', part: 'leg-1' },
       joints: [assembly.get(inLeg.id)!, assembly.get(inTop.id)!],
-      turned: { part: 'leg-1', connector: LEG_HOLE, sense: 1 },
+      turned: { part: 'leg-1', connector: LEG_HOLE, sense: 1, spins: true },
       riders: ['doubleEndedStud-1'],
       loose: { parts: ['leg-1', 'doubleEndedStud-1'], restFrom: assembly.get(inTop.id)! },
     });
@@ -184,7 +184,8 @@ describe('3. a top dropped onto four standing studs', () => {
     const t = turn(assembly, 'top-1');
     expect(t.grip).toEqual({ kind: 'hand', part: 'top-1' });
     expect(ids(t.joints)).toEqual(ids(onTop));
-    expect(t.turned).toEqual({ part: 'top-1', connector: 0, sense: 1 });
+    // On four parallel studs the top cannot spin about any one: it only sinks.
+    expect(t.turned).toEqual({ part: 'top-1', connector: 0, sense: 1, spins: false });
     expect(t.riders).toEqual([]);
     expect(t.loose).toEqual({ parts: ['top-1'], restFrom: assembly.get(onTop[0].id)! });
     expect(assembly.turns().filter((x) => x.grip.kind === 'hand')).toHaveLength(1);
@@ -227,7 +228,7 @@ describe('4. a stud half into the top with a leg screwed home on it', () => {
     const { assembly, inTop, inLeg } = bench();
     const t = turn(assembly, 'leg-1');
     expect(ids(t.joints)).toEqual([inLeg.id, inTop.id]);
-    expect(t.turned).toEqual({ part: 'leg-1', connector: LEG_HOLE, sense: 1 });
+    expect(t.turned).toEqual({ part: 'leg-1', connector: LEG_HOLE, sense: 1, spins: true });
     expect(t.riders).toEqual(['doubleEndedStud-1']);
     expect(turnProgress(t)).toBeCloseTo(0.5, 9);
     expect(isTurnHome(t)).toBe(false);
@@ -264,7 +265,7 @@ describe('5. a key on a hand-seated stud', () => {
     expect(turn(assembly, 'allenWrench-1')).toEqual<Turn>({
       grip: { kind: 'tool', tool: assembly.get(key.id)! },
       joints: [assembly.get(joint.id)!],
-      turned: { part: 'doubleEndedStud-1', connector: HEX_AT_END_2, sense: -1 },
+      turned: { part: 'doubleEndedStud-1', connector: HEX_AT_END_2, sense: -1, spins: true },
       riders: [],
       // Seated by the top coming onto it, the stud is no hardware pushed home: not held.
       loose: null,
@@ -310,7 +311,7 @@ describe('6. JOHNNY: a bolt under the key, a cam under the screwdriver — as be
     expect(turn(assembly, 'allenWrench-1')).toEqual<Turn>({
       grip: { kind: 'tool', tool: assembly.get(key.id)! },
       joints: [assembly.get(bolt.id)!],
-      turned: { part: 'camLockBolt-1', connector: BOLT_HEAD, sense: -1 },
+      turned: { part: 'camLockBolt-1', connector: BOLT_HEAD, sense: -1, spins: true },
       riders: [],
       loose: { parts: ['camLockBolt-1'], restFrom: assembly.get(bolt.id)! },
     });
@@ -323,7 +324,7 @@ describe('6. JOHNNY: a bolt under the key, a cam under the screwdriver — as be
     expect(turn(assembly, 'screwdriver-1')).toEqual<Turn>({
       grip: { kind: 'tool', tool: assembly.get(driver.id)! },
       joints: [assembly.get(cam.id)!],
-      turned: { part: 'camLock-1', connector: CAM_SLOT, sense: -1 },
+      turned: { part: 'camLock-1', connector: CAM_SLOT, sense: -1, spins: true },
       riders: [],
       loose: { parts: ['camLock-1'], restFrom: assembly.get(cam.id)! },
     });

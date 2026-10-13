@@ -1729,7 +1729,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     }
     for (const joint of joints) {
       if (!isCrankKind(joint.kind) || turned.has(joint.id)) continue;
-      drawTurned({ part: joint.hardware, connector: joint.hardwareConnector, sense: 1 }, [[joint]]);
+      drawTurned({ part: joint.hardware, connector: joint.hardwareConnector, sense: 1, spins: true }, [[joint]]);
     }
     for (let i = 0; i < ridingCount; i++) {
       const { part, delta } = riding[i];
@@ -1746,10 +1746,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // Draws `turned.part` as far as `layers` have turned it, on top of where its body is: each
   // layer (a tool's one joint; a hand's near joints, then its far ones) by its least-advanced
   // joint — sunk along the turned connector's axis (by the turn's sense: into the hole) while
-  // unfastened, a bolt's or stud's depth, and twisted by its turn about that connector's line
-  // (a hole off the part's origin, a top's, stays on its stud). Returns the move made — its
-  // drawn pose over its body's — in a reused matrix, for its riders.
-  function drawTurned({ part, connector, sense }: Turn['turned'], layers: AssemblyJoint[][]) {
+  // unfastened, a bolt's or stud's depth, and, if it spins, twisted by its turn about that
+  // connector's line (a hole off the part's origin stays on its stud). Returns the move made
+  // — its drawn pose over its body's — in a reused matrix, for its riders.
+  function drawTurned({ part, connector, sense, spins }: Turn['turned'], layers: AssemblyJoint[][]) {
     const { mesh, body } = partById.get(part)!;
     const seat = assembly.connectorAt(part, connector);
     let sink = 0;
@@ -1759,7 +1759,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       const least = layer.reduce((a, b) => (b.fastener.progress < a.fastener.progress ? b : a));
       const { kind, fastener } = least;
       if ((kind === KIND.BOLT || kind === KIND.STUD) && !isFastened(fastener)) sink += FASTENER.sinkDepth[kind]! * fastener.progress;
-      angle += fastener.progress * spanOf(kind);
+      if (spins) angle += fastener.progress * spanOf(kind);
     }
     const axis = drawAxis.fromArray(seat.axis).multiplyScalar(sense);
     const r = body.rotation();

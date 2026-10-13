@@ -113,11 +113,13 @@ export interface Turn {
    */
   joints: AssemblyJoint[];
   /**
-   * The part that visibly turns, the connector on it whose line it turns about, and which
-   * way along that connector's axis a tightening turn is clockwise seen: a key's hardware
-   * looking into the head it sits on (−1), a hand-turned part along its hole's axis (+1).
+   * The part that visibly turns, the connector on it whose line it turns about, which way
+   * along that connector's axis a tightening turn is clockwise seen — a key's hardware
+   * looking into the head it sits on (−1), a hand-turned part along its hole's axis (+1) —
+   * and whether it spins at all: a part on several parallel studs at once (a top on four)
+   * cannot turn about any one of them, and only sinks as they go in.
    */
-  turned: { part: PartId; connector: number; sense: 1 | -1 };
+  turned: { part: PartId; connector: number; sense: 1 | -1; spins: boolean };
   /** Parts home in `turned.part` that go with it (a stud in a circled leg), each once. */
   riders: PartId[];
   /**
@@ -467,7 +469,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     return {
       grip: { kind: 'tool', tool },
       joints: target ? [target] : [],
-      turned: { part: tool.host, connector: tool.hostConnector, sense: -1 },
+      turned: { part: tool.host, connector: tool.hostConnector, sense: -1, spins: true },
       riders: [],
       loose,
     };
@@ -500,7 +502,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
         far.push(...beyond);
         riders.push(id);
       } else if (!nearJoint) far.push(...beyond.filter((j) => j.mover === part));
-      turned ??= nearJoint ? { part, connector: nearJoint.hostConnector, sense: 1 } : null;
+      turned ??= nearJoint ? { part, connector: nearJoint.hostConnector, sense: 1, spins: studs.length === 1 } : null;
     }
     const joints = [...near, ...far];
     if (joints.length === 0) return null;
@@ -511,7 +513,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     return {
       grip: { kind: 'hand', part },
       joints,
-      turned: turned ?? { part: joints[0].hardware, connector: joints[0].hardwareConnector, sense: 1 },
+      turned: turned ?? { part: joints[0].hardware, connector: joints[0].hardwareConnector, sense: 1, spins: studs.length === 1 },
       riders,
       loose: restFrom ? { parts: [...unit], restFrom } : null,
     };

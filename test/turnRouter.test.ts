@@ -299,17 +299,23 @@ describe('3. a top dropped onto four standing studs', () => {
     expect(b.clicks()).toBe(Math.floor((first * FASTENER.studRadians) / FASTENER.ratchetRadians + 1e-9));
   });
 
-  it('draws the top turned once, about its first hole, which stays on its stud', () => {
+  it('draws the top sinking onto its four studs without spinning — every hole stays over its stud', () => {
     const b = bench();
-    const hole = () => connectorInWorld(PART_TYPES.top.connectors[0], { position: b.top.mesh.position.toArray() as Vec3, rotation: b.top.mesh.quaternion.toArray() as Quat }).position;
-    const before = hole();
-    for (const j of b.onTop) b.assembly.apply(j.id, { type: 'crank', radians: FASTENER.studRadians / 8 });
+    const holes = () =>
+      [0, 1, 2, 3].map((i) => connectorInWorld(PART_TYPES.top.connectors[i], { position: b.top.mesh.position.toArray() as Vec3, rotation: b.top.mesh.quaternion.toArray() as Quat }).position);
+    const before = holes();
+    // A quarter of the span: half a turn, which on one stud would swing the top round.
+    for (const j of b.onTop) b.assembly.apply(j.id, { type: 'crank', radians: FASTENER.studRadians / 4 });
     b.hold(1);
-    expect(hole()[0]).toBeCloseTo(before[0], 9);
-    expect(hole()[2]).toBeCloseTo(before[2], 9);
-    // Once, not four times: a quarter turn and an eighth of a sink, from where its body is.
-    expect(b.top.mesh.quaternion.angleTo(new THREE.Quaternion())).toBeCloseTo(Math.PI / 2, 9);
-    expect(b.top.mesh.position.y).toBeCloseTo(0.445 - SINK() / 8, 9);
+    expect(b.top.mesh.quaternion.angleTo(new THREE.Quaternion())).toBeCloseTo(0, 9);
+    holes().forEach((hole, i) => {
+      expect(hole[0]).toBeCloseTo(before[i][0], 9);
+      expect(hole[2]).toBeCloseTo(before[i][2], 9);
+    });
+    // Down a quarter of a sink, once — not four times.
+    expect(b.top.mesh.position.y).toBeCloseTo(0.445 - SINK() / 4, 9);
+    // The dial still shows the turn.
+    expect(b.dials.at(-1)).toMatchObject([{ progress: 0.25 }]);
   });
 
   it('drives the rest home when one is home early, and draws the riding studs each once', () => {
