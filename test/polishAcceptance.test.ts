@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAssembly } from '../src/game/assembly.js';
 import { createBooklet, gamePagesFor } from '../src/game/bookletModel.js';
-import { ASSEMBLED, KINDS, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../src/game/item.js';
+import { ASSEMBLED, ITEM_ID, itemById, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../src/game/item.js';
 import { acrossOf, shapeOf } from '../src/game/partShapes.js';
 import { createGestureRouter } from '../src/scene/gestureRouter.js';
 import { createLiftHold, liftRangeOf } from '../src/scene/liftHold.js';
@@ -16,6 +16,9 @@ import type { Part } from '../src/game/partMesh.js';
 import type { Primitive } from '../src/game/partShapes.js';
 import type { Body, PhysicsJoint, PhysicsWorld } from '../src/physics/world.js';
 import type { Quat, Vec3 } from '../tools/validate/lib/geometry.js';
+
+// The current item's fastener kinds, as the booklet reads them (itemById).
+const KINDS = itemById(ITEM_ID).kinds;
 
 const EPS = 1e-9;
 const radiusOf = (p: Primitive) => (p.shape === 'cylinder' ? p.radius : Math.hypot(p.width, p.depth) / 2);

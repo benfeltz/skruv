@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { createBooklet, createBuildSteps, gamePagesFor } from '../src/game/bookletModel.js';
-import { ASSEMBLED, KINDS, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../src/game/item.js';
+import { ASSEMBLED, ITEM_ID, itemById, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../src/game/item.js';
+
+// The current item's fastener kinds, as the booklet reads them (itemById).
+const KINDS = itemById(ITEM_ID).kinds;
 
 // Page coverage: the booklet tells the whole build — every joint on exactly one page, every
 // panel brought in once, hardware counts that add up to the box. A stale page (a fastener

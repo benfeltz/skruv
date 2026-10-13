@@ -117,8 +117,6 @@ export let SPARES: Item['spares'];
 export let IDENTITY: Item['identity'];
 /** The current item, built: `{ parts, joints }` — `Item['assembled']`. */
 export let ASSEMBLED: Item['assembled'];
-/** The current item's fastener kinds — `Item['kinds']`. */
-export let KINDS: Item['kinds'];
 /** The current item's booklet — `Item['manual']`. */
 export let MANUAL: Item['manual'];
 /** `resolveConnector('dowel-1/dowelEnd-2') → { part: 'dowel-1', connector: 1 }`, for the current item. */
@@ -128,7 +126,7 @@ export let resolveConnector: Item['resolve'];
 export function setItem(id: string) {
   const item = itemById(id);
   ITEM_ID = id;
-  ({ packing: PACKING, partTypes: PART_TYPES, manifest: MANIFEST, spares: SPARES, identity: IDENTITY, assembled: ASSEMBLED, kinds: KINDS, manual: MANUAL, resolve: resolveConnector } = item);
+  ({ packing: PACKING, partTypes: PART_TYPES, manifest: MANIFEST, spares: SPARES, identity: IDENTITY, assembled: ASSEMBLED, manual: MANUAL, resolve: resolveConnector } = item);
 }
 
 // JOHNNY until something picks another.
