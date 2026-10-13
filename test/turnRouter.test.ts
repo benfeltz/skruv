@@ -226,6 +226,20 @@ describe('2. a leg screwed home onto a loose stud, carried onto the top', () => 
     expect(b.joint(inTop.id).fastener).toMatchObject({ state: STATE.SCREWED, progress: 1 });
   });
 
+  // Review round 5: circled home onto its stud by hand, then carried on, the pair at the
+  // top's mouth carries and taps off just as the keyed build order does.
+  it('hand-screwed and carried on, carries back off the top on a drag, and lifts off with its stud on a tap', () => {
+    const b = bench();
+    carryOn(b);
+    expect(b.dragOff(b.leg)).toBe('move');
+    const c = bench();
+    const inTop = carryOn(c);
+    c.tap(c.screen(c.leg.mesh.position));
+    expect(c.assembly.get(inTop.id)).toBeNull();
+    // Still home on its stud: only the seat in the top went.
+    expect(c.joint(c.inLeg.id).fastener).toMatchObject({ state: STATE.SCREWED, progress: 1 });
+  });
+
   it('keyed into the leg and carried on, circles out of the top to nothing and is held there as a pair; a tap hands both back', () => {
     const b = bench({ keyed: true });
     const inTop = carryOn(b);

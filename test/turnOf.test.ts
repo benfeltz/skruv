@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { FASTENER } from '../src/constants.js';
-import { advancing, createAssembly } from '../src/game/assembly.js';
+import { advancing, createAssembly, isUnderWay } from '../src/game/assembly.js';
 import { STATE } from '../src/game/fasteners.js';
 import { ASSEMBLED, setItem } from '../src/game/item.js';
 import { isTurnHome, turnProgress } from '../src/game/turnRing.js';
@@ -56,6 +56,7 @@ describe('1. a leg set onto a standing stud: circled home, loosened, tapped off'
 
   it('is the leg\'s turn by hand: its own joint, about its hole, nothing riding, the leg loose at the stud\'s end', () => {
     const { assembly, inLeg } = bench();
+    expect(isUnderWay(turn(assembly, 'leg-1'))).toBe(false);
     expect(turn(assembly, 'leg-1')).toEqual<Turn>({
       grip: { kind: 'hand', part: 'leg-1' },
       joints: [assembly.get(inLeg.id)!],
@@ -78,6 +79,8 @@ describe('1. a leg set onto a standing stud: circled home, loosened, tapped off'
     expect(t.riders).toEqual(['doubleEndedStud-1']);
     expect(t.loose).toBeNull();
     expect(isTurnHome(t)).toBe(true);
+    // Fastened in place: under way — a drag loosens it.
+    expect(isUnderWay(t)).toBe(true);
     expect(advancing(t, 1)).toEqual([]);
     expectOnce(assembly);
   });
@@ -133,8 +136,10 @@ describe('2. a leg screwed home onto a loose stud, carried onto the top', () => 
       riders: ['doubleEndedStud-1'],
       loose: { parts: ['leg-1', 'doubleEndedStud-1'], restFrom: assembly.get(inTop.id)! },
     });
-    // The leg is already home on its stud: tightening goes on into the top.
+    // The leg is already home on its stud: tightening goes on into the top. Nothing is
+    // partway and the pair is loose: not under way — a drag carries it, a tap lifts it off.
     expect(ids(advancing(t, 1))).toEqual([inTop.id]);
+    expect(isUnderWay(t)).toBe(false);
     expectOnce(assembly);
   });
 

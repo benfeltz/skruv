@@ -144,6 +144,15 @@ export function advancing(turn: Turn, direction: 1 | -1): AssemblyJoint[] {
 }
 
 /**
+ * Whether a turn by hand is under way — a drag on its part turns it rather than carrying it,
+ * a tap is no lift-off: some joint is partway, or the unit it turns is fastened in place
+ * (nothing loose). At nothing, or home on a stud that is still at nothing in the top (a leg
+ * screwed onto its stud and carried on), the unit is loose: a drag carries it, a tap lifts
+ * it off its unfastened seats.
+ */
+export const isUnderWay = (turn: Turn) => turn.loose === null || turn.joints.some((j) => j.fastener.progress > 0 && j.fastener.progress < 1);
+
+/**
  * A turn's joints by layer, nearest first: a tool's one; a hand's near joints (the part on
  * its studs, its hole their host) then its far ones. Each layer moves together.
  */

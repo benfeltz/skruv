@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { AIM, COLORS, DROP, FASTENER, GESTURE, PANEL, PICK, RING, ROOM, SNAP, TURN_RING } from '../constants.js';
 import { areCompatible, COMPATIBLE, CONNECTOR, isFastenerEnd, KIND } from '../../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, rotateVector } from '../../tools/validate/lib/geometry.js';
-import { advancing, capture, carryPose, layersOf } from '../game/assembly.js';
+import { advancing, capture, carryPose, isUnderWay, layersOf } from '../game/assembly.js';
 import { PART_TYPES } from '../game/item.js';
 import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
@@ -750,9 +750,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     pruneStale();
     letGoOf(part);
     // Carry or turn: a seated tool with something to turn cranks it; a part with a turn by
-    // hand turns once any of the turn is under way, and at nothing it is carried, as any part.
+    // hand turns while the turn is under way, and loose it is carried, as any part.
     const turn = assembly.turnOf(part.id);
-    const turns = turn !== null && turn.joints.length > 0 && (turn.grip.kind === 'tool' || turn.joints.some((j) => j.fastener.progress > 0));
+    const turns = turn !== null && turn.joints.length > 0 && (turn.grip.kind === 'tool' || isUnderWay(turn));
     // A panel pushed home onto another pulls back off it, as before; a cam locked across the
     // seam stops the pull (pullable), and the panel carries its assembly instead.
     const pulls = assembly.pullable(part.id).length > 0;
@@ -1637,11 +1637,12 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     pruneStale();
     const turn = assembly.turnOf(part.id);
     if (turn?.grip.kind === 'tool') return unseat(turn.grip.tool);
-    // A part with a turn by hand lifts off on a tap while nothing of it is turned: off every
-    // stud of the turn, the unit it made let go. Once turned it comes off only by backing
-    // out — and the tap is whatever else it is on the part (a dowel pushed home).
-    if (turn && turn.joints.every((joint) => joint.fastener.progress === 0)) {
-      turn.joints.forEach(unseat);
+    // A part with a turn by hand lifts off on a tap while the turn is not under way: off its
+    // unfastened seats (a leg home on its stud lifts off the top with it), the unit it made
+    // let go. Under way it comes off only by backing out — and the tap is whatever else it
+    // is on the part (a dowel pushed home).
+    if (turn && !isUnderWay(turn)) {
+      turn.joints.filter((joint) => !isFastened(joint.fastener)).forEach(unseat);
       for (const id of turn.loose?.parts ?? []) release(partById.get(id)!);
       return reconcile();
     }
