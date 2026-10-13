@@ -1728,7 +1728,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       }
     }
     for (const joint of joints) {
-      if (!isCrankKind(joint.kind) || turned.has(joint.id)) continue;
+      // A part a turn has drawn keeps that draw: a joint of it no turn owns never resets it.
+      if (!isCrankKind(joint.kind) || turned.has(joint.id) || drawnTurning.has(joint.hardware)) continue;
       drawTurned({ part: joint.hardware, connector: joint.hardwareConnector, sense: 1, spins: true }, [[joint]]);
     }
     for (let i = 0; i < ridingCount; i++) {
