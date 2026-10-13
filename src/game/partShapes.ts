@@ -125,17 +125,17 @@ const dowel: Builder = (size, end) => {
 // A cam bolt: a threaded shaft from its thread end, and the head the box's full width.
 const camBolt: Builder = (size, thread) => {
   const { length, rod } = straight(size, thread);
-  const head = length * (1 - MODELS.boltHead);
+  const head = length * (1 - MODELS.boltCap);
   return [rod(0, head, MODELS.boltShaft), rod(head, length, 1)];
 };
 
 // A cam lock: a disc the box's diameter, and a dark slot across its top face.
 const camLock: Builder = (size, body) => {
   const { length, radius, place, rod } = straight(size, body);
-  const top = length * (1 - MODELS.camSlotDepth);
+  const top = length * (1 - MODELS.driveSlotDepth);
   return [
     rod(0, top, 1),
-    place(top, length, { shape: 'box', width: 2 * radius * MODELS.camSlotLength, depth: 2 * radius * MODELS.camSlotWidth }, 'dark'),
+    place(top, length, { shape: 'box', width: 2 * radius * MODELS.driveSlotLength, depth: 2 * radius * MODELS.driveSlotWidth }, 'dark'),
   ];
 };
 

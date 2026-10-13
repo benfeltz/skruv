@@ -98,7 +98,7 @@ describe('part types', () => {
   it('gives every cam lock a screwdriver slot opposite its body end', () => {
     const [body, slot] = PART_TYPES.camLock.connectors;
     expect(body.type).toBe(CONNECTOR.CAM_LOCK_BODY);
-    expect(slot.type).toBe(CONNECTOR.CAM_SLOT);
+    expect(slot.type).toBe(CONNECTOR.DRIVE_SLOT);
     body.axis.forEach((v, i) => expect(slot.axis[i] + v).toBe(0));
   });
 
@@ -200,7 +200,7 @@ describe('the built JOHNNY', () => {
   it('seats every bolt in a side, and catches one bolt per cam within reach', () => {
     const bolts = layout.joints.filter((j) => j.kind === KIND.BOLT);
     for (const b of bolts) expect(['leftSide', 'rightSide']).toContain(poseOf.get(b.host).role);
-    const headIndex = PART_TYPES.camLockBolt.connectors.findIndex((c) => c.type === CONNECTOR.BOLT_HEAD);
+    const headIndex = PART_TYPES.camLockBolt.connectors.findIndex((c) => c.type === CONNECTOR.HEX_SOCKET);
     const cams = layout.joints.filter((j) => j.kind === KIND.CAM);
     expect(cams).toHaveLength(DESIGN_MANIFEST.camLock - SPARE_COUNTS.camLock);
     for (const cam of cams) {

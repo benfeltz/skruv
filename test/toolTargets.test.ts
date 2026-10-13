@@ -15,10 +15,10 @@ const SIDE_CAM_BOLT_HOLE = 2;
 const CAM_BODY = 0;
 const SHELF_RECESS = 2;
 
-const BOLT_HEAD_INDEX = 1;
-const CAM_SLOT_INDEX = 1;
-const head = (id: string): TargetConnector => ({ type: CONNECTOR.BOLT_HEAD, part: { id }, index: BOLT_HEAD_INDEX });
-const slot = (id: string): TargetConnector => ({ type: CONNECTOR.CAM_SLOT, part: { id }, index: CAM_SLOT_INDEX });
+const HEX_SOCKET_INDEX = 1;
+const DRIVE_SLOT_INDEX = 1;
+const head = (id: string): TargetConnector => ({ type: CONNECTOR.HEX_SOCKET, part: { id }, index: HEX_SOCKET_INDEX });
+const slot = (id: string): TargetConnector => ({ type: CONNECTOR.DRIVE_SLOT, part: { id }, index: DRIVE_SLOT_INDEX });
 // What a key put on a hex would turn, from the graph: `assembly.turnedFrom`, as the router resolves it.
 const turned = (assembly: ReturnType<typeof createAssembly>) => (hex: TargetConnector) => assembly.turnedFrom(hex.part.id, hex.index);
 

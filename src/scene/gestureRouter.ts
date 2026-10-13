@@ -1629,7 +1629,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   const screwedHeads = (): Head[] =>
     assembly.screwedBolts().map(({ hardware }) => ({ id: hardware, position: connectorWorld(hardware, headIndex(hardware)).position }));
 
-  const headIndex = (id: PartId) => PART_TYPES[partById.get(id)!.type].connectors.findIndex((c) => c.type === CONNECTOR.BOLT_HEAD);
+  const headIndex = (id: PartId) => PART_TYPES[partById.get(id)!.type].connectors.findIndex((c) => c.type === CONNECTOR.HEX_SOCKET);
 
   // The tool keeps its seated pose relative to what it turns. Either side may have been
   // the one dragged into the seat (a bolt head onto a wrench on the floor): the dragged

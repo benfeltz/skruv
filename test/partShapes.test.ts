@@ -59,16 +59,16 @@ describe('shapeOf', () => {
 
   it('gives the cam bolt a thinner thread under a head the box width', () => {
     const [thread, head] = shapeOf(PART_TYPES.camLockBolt)!;
-    const [boltThread, boltHead] = PART_TYPES.camLockBolt.connectors;
+    const [boltThread, hexSocket] = PART_TYPES.camLockBolt.connectors;
     expect(faceUnder([thread], boltThread)).toBe(thread);
-    expect(faceUnder([head], boltHead)).toBe(head);
+    expect(faceUnder([head], hexSocket)).toBe(head);
     expect(head.shape === 'cylinder' && head.radius).toBeCloseTo(PART_TYPES.camLockBolt.size[0] / 2, 9);
     expect(thread.shape === 'cylinder' && head.shape === 'cylinder' && thread.radius < head.radius).toBe(true);
   });
 
   it('cuts a dark slot across the cam lock top, where the screwdriver goes in', () => {
     const primitives = shapeOf(PART_TYPES.camLock)!;
-    const slot = PART_TYPES.camLock.connectors.find((c) => c.type === 'camSlot')!;
+    const slot = PART_TYPES.camLock.connectors.find((c) => c.type === 'driveSlot')!;
     expect(faceUnder(primitives, slot)?.tone).toBe('dark');
   });
 
@@ -117,8 +117,8 @@ describe('the double-ended stud (1.9.2)', () => {
     connectors: [
       { id: 'studEnd-1', type: 'studEnd', position: [0, 0.02, 0], axis: [0, 1, 0] },
       { id: 'studEnd-2', type: 'studEnd', position: [0, -0.02, 0], axis: [0, -1, 0] },
-      { id: 'boltHead-1', type: 'boltHead', position: [0, 0.02, 0], axis: [0, 1, 0] },
-      { id: 'boltHead-2', type: 'boltHead', position: [0, -0.02, 0], axis: [0, -1, 0] },
+      { id: 'hexSocket-1', type: 'hexSocket', position: [0, 0.02, 0], axis: [0, 1, 0] },
+      { id: 'hexSocket-2', type: 'hexSocket', position: [0, -0.02, 0], axis: [0, -1, 0] },
     ] as Connector[],
   };
 

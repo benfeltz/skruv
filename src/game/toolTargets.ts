@@ -25,7 +25,7 @@ import type { ScreenPoint } from './dragMath.js';
 export const TOOL_TIPS: readonly ConnectorType[] = Object.freeze([CONNECTOR.WRENCH_TIP, CONNECTOR.SCREWDRIVER_TIP]);
 
 /** What a tool's tip seats on. */
-export const TOOL_TARGETS: readonly ConnectorType[] = Object.freeze([CONNECTOR.BOLT_HEAD, CONNECTOR.CAM_SLOT]);
+export const TOOL_TARGETS: readonly ConnectorType[] = Object.freeze([CONNECTOR.HEX_SOCKET, CONNECTOR.DRIVE_SLOT]);
 
 /** A connector as these rules read it: its type, the part it is on and its index there. */
 export interface TargetConnector {
@@ -71,7 +71,7 @@ export function isWorkable(connector: TargetConnector, { captured, turnedBy }: P
   // What a tool put here would turn: a bolt, a cam, a stud's far end — the graph's answer.
   const seat = turnedBy(connector);
   if (!seat) return false;
-  if (connector.type === CONNECTOR.BOLT_HEAD) return !isFastened(seat.fastener);
+  if (connector.type === CONNECTOR.HEX_SOCKET) return !isFastened(seat.fastener);
   return seat.fastener.state !== STATE.LOCKED && captured(seat.hardware) !== null;
 }
 

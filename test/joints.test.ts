@@ -22,8 +22,8 @@ const partTypes = {
     ],
   },
   dowel: { size: [0.008, 0.03, 0.008], connectors: [c('dowelEnd', [0, -0.015, 0], [0, -1, 0]), c('dowelEnd', [0, 0.015, 0], [0, 1, 0])] },
-  bolt: { size: [0.007, 0.02, 0.007], connectors: [c('boltThread', [0, -0.01, 0], [0, -1, 0]), c('boltHead', [0, 0.01, 0], [0, 1, 0])] },
-  cam: { size: [0.015, 0.012, 0.015], connectors: [c('camLockBody', [0, -0.006, 0], [0, -1, 0]), c('camSlot', [0, 0.006, 0], [0, 1, 0])] },
+  bolt: { size: [0.007, 0.02, 0.007], connectors: [c('boltThread', [0, -0.01, 0], [0, -1, 0]), c('hexSocket', [0, 0.01, 0], [0, 1, 0])] },
+  cam: { size: [0.015, 0.012, 0.015], connectors: [c('camLockBody', [0, -0.006, 0], [0, -1, 0]), c('driveSlot', [0, 0.006, 0], [0, 1, 0])] },
 } as unknown as Record<string, PartType>;
 // Dowel along x: its first end (local -y) turned to point at -x into board-1's +x hole.
 const ALONG_X: Quat = [0, 0, -Math.SQRT1_2, Math.SQRT1_2];

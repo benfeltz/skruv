@@ -94,7 +94,7 @@ describe('the threaded insert (1.9.2)', () => {
   it('marks nothing on the stud itself: its ends and hex sockets ride on hardware', () => {
     const connectors = [
       { type: CONNECTOR.STUD_END, position: [0, 0.02, 0] as [number, number, number], axis: [0, 1, 0] as [number, number, number] },
-      { type: CONNECTOR.BOLT_HEAD, position: [0, 0.02, 0] as [number, number, number], axis: [0, 1, 0] as [number, number, number] },
+      { type: CONNECTOR.HEX_SOCKET, position: [0, 0.02, 0] as [number, number, number], axis: [0, 1, 0] as [number, number, number] },
     ];
     expect(decalPlacements(connectors)).toEqual([]);
   });

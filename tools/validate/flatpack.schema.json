@@ -93,8 +93,8 @@
     "connectorType": {
       "enum": [
         "dowelHole", "camBoltHole", "camLockRecess", "shelfPinHole", "backFittingHole",
-        "dowelEnd", "boltThread", "boltHead", "camLockBody", "pinTip", "backFittingTip",
-        "wrenchTip", "camSlot", "screwdriverTip", "studEnd", "studHole"
+        "dowelEnd", "boltThread", "hexSocket", "camLockBody", "pinTip", "backFittingTip",
+        "wrenchTip", "driveSlot", "screwdriverTip", "studEnd", "studHole"
       ]
     },
     "fastenerKind": { "enum": ["dowel", "pin", "fitting", "bolt", "cam", "tool", "stud"] },

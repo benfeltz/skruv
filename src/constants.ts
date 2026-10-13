@@ -560,12 +560,12 @@ export const MODELS = {
   screwdriverBladeThickness: 0.35,
   // Cam bolt: the thread's radius, and the head's share of the length.
   boltShaft: 0.55,
-  boltHead: 0.14,
+  boltCap: 0.14,
   // Cam lock: the slot's depth (share of the height), and its width and length across the
   // top face (shares of the disc's diameter).
-  camSlotDepth: 0.1,
-  camSlotWidth: 0.16,
-  camSlotLength: 0.8,
+  driveSlotDepth: 0.1,
+  driveSlotWidth: 0.16,
+  driveSlotLength: 0.8,
   // Shelf pin: the rod's radius, and its collar (where it starts, how thick).
   pinRod: 0.6,
   pinCollarAt: 0.5,

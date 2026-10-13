@@ -104,7 +104,7 @@ export function captureBolts({ partTypes, assembled }: PosedItem, joints: Joint[
   const heads = joints
     .filter((j) => j.kind === KIND.BOLT)
     .flatMap((j) => {
-      const headIndex = partTypes[byId.get(j.hardware)!.type].connectors.findIndex((c) => c.type === CONNECTOR.BOLT_HEAD);
+      const headIndex = partTypes[byId.get(j.hardware)!.type].connectors.findIndex((c) => c.type === CONNECTOR.HEX_SOCKET);
       return headIndex < 0 ? [] : [{ id: j.hardware, position: world(j.hardware, headIndex).position }];
     });
   return joints.map((j) => {
