@@ -140,3 +140,33 @@ describe('the double-ended stud (1.9.2)', () => {
     for (const connector of stud.connectors) expect(faceUnder(primitives, connector), connector.id).toBeDefined();
   });
 });
+
+describe('the wood screw (1.9.3.1)', () => {
+  // No shipped pack carries a screw yet: sized as a pack would size one, thread end down and
+  // its drive slot on the head end, run through the builder its thread connector names.
+  const screw = {
+    size: [0.004, 0.03, 0.004] as [number, number, number],
+    connectors: [
+      { id: 'screwThread-1', type: 'screwThread', position: [0, -0.015, 0], axis: [0, -1, 0] },
+      { id: 'driveSlot-1', type: 'driveSlot', position: [0, 0.015, 0], axis: [0, 1, 0] },
+    ] as Connector[],
+  };
+
+  it('is a thin metal thread under a head the box width, a dark slot across the head', () => {
+    const [thread, head, slot] = shapeOf(screw)!;
+    expect(thread.tone).toBe('metal');
+    expect(head.shape === 'cylinder' && head.radius).toBeCloseTo(screw.size[0] / 2, 9);
+    expect(thread.shape === 'cylinder' && head.shape === 'cylinder' && thread.radius < head.radius).toBe(true);
+    expect(faceUnder([thread], screw.connectors[0])).toBe(thread);
+    expect(faceUnder([head, slot], screw.connectors[1])?.tone).toBe('dark');
+  });
+
+  it('draws inside its box, with every connector on a primitive end face', () => {
+    const primitives = shapeOf(screw)!;
+    for (const primitive of primitives) {
+      const half = halfExtents(primitive);
+      for (const i of [0, 1, 2]) expect(Math.abs(primitive.position[i]) + half[i]).toBeLessThanOrEqual(screw.size[i] / 2 + EPS);
+    }
+    for (const connector of screw.connectors) expect(faceUnder(primitives, connector), connector.id).toBeDefined();
+  });
+});

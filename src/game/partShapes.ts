@@ -164,6 +164,19 @@ const studEnd: Builder = (size, end) => {
   return [plug(0, depth), rod(depth, length - depth, 1), plug(length - depth, length)];
 };
 
+// A wood screw: a thin metal thread from its tip, the head the box's full width, and a dark
+// slot across the head's top face where the screwdriver goes in.
+const woodScrew: Builder = (size, thread) => {
+  const { length, radius, place, rod } = straight(size, thread);
+  const head = length * (1 - MODELS.screwHead);
+  const slot = length * (1 - MODELS.driveSlotDepth);
+  return [
+    rod(0, head, MODELS.screwShaft, 'metal'),
+    rod(head, slot, 1),
+    place(slot, length, { shape: 'box', width: 2 * radius * MODELS.driveSlotLength, depth: 2 * radius * MODELS.driveSlotWidth }, 'dark'),
+  ];
+};
+
 const BUILDERS: Readonly<Partial<Record<ConnectorType, Builder>>> = Object.freeze({
   [CONNECTOR.WRENCH_TIP]: allenKey,
   [CONNECTOR.SCREWDRIVER_TIP]: screwdriver,
@@ -173,6 +186,7 @@ const BUILDERS: Readonly<Partial<Record<ConnectorType, Builder>>> = Object.freez
   [CONNECTOR.PIN_TIP]: shelfPin,
   [CONNECTOR.BACK_FITTING_TIP]: backFitting,
   [CONNECTOR.STUD_END]: studEnd,
+  [CONNECTOR.SCREW_THREAD]: woodScrew,
 });
 
 /**

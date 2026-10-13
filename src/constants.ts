@@ -533,6 +533,8 @@ export const DECAL = {
     camLockRecess: 0.009,
     // A threaded insert in a table top or leg: a hole a hair wider than the stud it takes.
     studHole: 0.0035,
+    // A pilot hole through the part a wood screw attaches: a hair wider than its thread.
+    screwHole: 0.002,
   },
   // A recess is drawn as a ring: inner radius as a fraction of the outer.
   recessInner: 0.55,
@@ -561,11 +563,14 @@ export const MODELS = {
   // Cam bolt: the thread's radius, and the head's share of the length.
   boltShaft: 0.55,
   boltCap: 0.14,
-  // Cam lock: the slot's depth (share of the height), and its width and length across the
-  // top face (shares of the disc's diameter).
+  // A drive slot (a cam lock's top, a wood screw's head): its depth (share of the piece's
+  // length), and its width and length across the end face (shares of the piece's diameter).
   driveSlotDepth: 0.1,
   driveSlotWidth: 0.16,
   driveSlotLength: 0.8,
+  // Wood screw: the thread's radius (share of the head's), and the head's share of the length.
+  screwShaft: 0.45,
+  screwHead: 0.15,
   // Shelf pin: the rod's radius, and its collar (where it starts, how thick).
   pinRod: 0.6,
   pinCollarAt: 0.5,

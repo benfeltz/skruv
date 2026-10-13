@@ -99,3 +99,21 @@ describe('the threaded insert (1.9.2)', () => {
     expect(decalPlacements(connectors)).toEqual([]);
   });
 });
+
+describe('the screw hole (1.9.3.1)', () => {
+  it('marks a screw hole as a hole decal of its own named radius, facing along its axis', () => {
+    const connectors = [{ type: CONNECTOR.SCREW_HOLE, position: [0, 0.005, 0] as [number, number, number], axis: [0, 1, 0] as [number, number, number] }];
+    const [decal] = decalPlacements(connectors);
+    expect(decal).toMatchObject({ index: 0, kind: 'hole', radius: DECAL.radius.screwHole });
+    expect(decal.position[1]).toBeCloseTo(0.005 + DECAL.surfaceOffset, 9);
+    rotateVector(decal.rotation, [0, 0, 1]).forEach((v, i) => expect(v).toBeCloseTo(connectors[0].axis[i], 9));
+  });
+
+  it('marks nothing on the screw itself: its thread and drive slot ride on hardware', () => {
+    const connectors = [
+      { type: CONNECTOR.SCREW_THREAD, position: [0, -0.015, 0] as [number, number, number], axis: [0, -1, 0] as [number, number, number] },
+      { type: CONNECTOR.DRIVE_SLOT, position: [0, 0.015, 0] as [number, number, number], axis: [0, 1, 0] as [number, number, number] },
+    ];
+    expect(decalPlacements(connectors)).toEqual([]);
+  });
+});
