@@ -129,14 +129,15 @@ describe("ÖVERKÄLL's booklet", () => {
     }
   });
 
-  it('fastens every screw once, on the drawer steps, with the screwdriver', () => {
+  it('builds the drawer first, before the carcass closes around it, every screw with the screwdriver', () => {
     const steps = pages.flatMap((p) => (p.kind === 'step' ? [p] : []));
-    const drawerSteps = steps.filter((s) => s.number >= 11);
-    expect(drawerSteps.map((s) => [s.number, s.parts.length, s.joints.length, s.tool])).toEqual([
-      [11, 3, 4, 'screwdriver'],
-      [12, 1, 6, 'screwdriver'],
-      [13, 1, 4, 'screwdriver'],
-      [14, 1, 1, 'screwdriver'],
+    expect(steps.slice(0, 4).map((s) => [s.number, s.pose, s.parts.length, s.joints.length, s.tool])).toEqual([
+      [1, 'upright', 3, 4, 'screwdriver'],
+      [2, 'upright', 1, 6, 'screwdriver'],
+      [3, 'upright', 1, 4, 'screwdriver'],
+      [4, 'upright', 1, 1, 'screwdriver'],
     ]);
+    const firstCarcass = steps.findIndex((s) => s.parts.some((id) => CARCASS.includes(typeOf.get(id)!)));
+    expect(firstCarcass).toBe(4);
   });
 });

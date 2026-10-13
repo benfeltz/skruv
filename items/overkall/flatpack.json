@@ -1560,6 +1560,112 @@
       {
         "kind": "step",
         "number": 1,
+        "pose": "upright",
+        "parts": [
+          "drawerSide-1",
+          "drawerSide-2",
+          "drawerBack-1"
+        ],
+        "fasten": [
+          [
+            "screw-1/screwThread-1",
+            "drawerBack-1/screwHole-1"
+          ],
+          [
+            "screw-2/screwThread-1",
+            "drawerBack-1/screwHole-2"
+          ],
+          [
+            "screw-3/screwThread-1",
+            "drawerBack-1/screwHole-3"
+          ],
+          [
+            "screw-4/screwThread-1",
+            "drawerBack-1/screwHole-4"
+          ]
+        ],
+        "tool": "screwdriver"
+      },
+      {
+        "kind": "step",
+        "number": 2,
+        "pose": "upright",
+        "parts": [
+          "drawerBottom-1"
+        ],
+        "fasten": [
+          [
+            "screw-5/screwThread-1",
+            "drawerSide-1/screwHole-1"
+          ],
+          [
+            "screw-6/screwThread-1",
+            "drawerSide-1/screwHole-2"
+          ],
+          [
+            "screw-7/screwThread-1",
+            "drawerSide-2/screwHole-1"
+          ],
+          [
+            "screw-8/screwThread-1",
+            "drawerSide-2/screwHole-2"
+          ],
+          [
+            "screw-9/screwThread-1",
+            "drawerBack-1/screwHole-5"
+          ],
+          [
+            "screw-10/screwThread-1",
+            "drawerBack-1/screwHole-6"
+          ]
+        ],
+        "tool": "screwdriver"
+      },
+      {
+        "kind": "step",
+        "number": 3,
+        "pose": "upright",
+        "parts": [
+          "drawerFront-1"
+        ],
+        "fasten": [
+          [
+            "screw-11/screwThread-1",
+            "drawerFront-1/screwHole-1"
+          ],
+          [
+            "screw-12/screwThread-1",
+            "drawerFront-1/screwHole-2"
+          ],
+          [
+            "screw-13/screwThread-1",
+            "drawerFront-1/screwHole-3"
+          ],
+          [
+            "screw-14/screwThread-1",
+            "drawerFront-1/screwHole-4"
+          ]
+        ],
+        "tool": "screwdriver"
+      },
+      {
+        "kind": "step",
+        "number": 4,
+        "pose": "upright",
+        "parts": [
+          "knob-1"
+        ],
+        "fasten": [
+          [
+            "screw-15/screwThread-1",
+            "drawerFront-1/screwHole-5"
+          ]
+        ],
+        "tool": "screwdriver"
+      },
+      {
+        "kind": "step",
+        "number": 5,
         "pose": "parts",
         "parts": [
           "topBottomPanel-1",
@@ -1602,7 +1708,7 @@
       },
       {
         "kind": "step",
-        "number": 2,
+        "number": 6,
         "pose": "parts",
         "parts": [
           "sidePanel-1",
@@ -1630,7 +1736,7 @@
       },
       {
         "kind": "step",
-        "number": 3,
+        "number": 7,
         "pose": "lying",
         "fasten": [
           [
@@ -1653,7 +1759,7 @@
       },
       {
         "kind": "step",
-        "number": 4,
+        "number": 8,
         "pose": "lying",
         "fasten": [
           [
@@ -1668,7 +1774,7 @@
       },
       {
         "kind": "step",
-        "number": 5,
+        "number": 9,
         "pose": "lying",
         "turn": [
           [
@@ -1684,7 +1790,7 @@
       },
       {
         "kind": "step",
-        "number": 6,
+        "number": 10,
         "pose": "lying",
         "fasten": [
           [
@@ -1707,7 +1813,7 @@
       },
       {
         "kind": "step",
-        "number": 7,
+        "number": 11,
         "pose": "lying",
         "fasten": [
           [
@@ -1733,7 +1839,7 @@
       },
       {
         "kind": "step",
-        "number": 8,
+        "number": 12,
         "pose": "faceDown",
         "parts": [
           "backPanel-1"
@@ -1741,7 +1847,7 @@
       },
       {
         "kind": "step",
-        "number": 9,
+        "number": 13,
         "pose": "faceDown",
         "fasten": [
           [
@@ -1772,115 +1878,9 @@
       },
       {
         "kind": "special",
-        "number": 10,
-        "pose": "upright",
-        "special": "tipUpright"
-      },
-      {
-        "kind": "step",
-        "number": 11,
-        "pose": "upright",
-        "parts": [
-          "drawerSide-1",
-          "drawerSide-2",
-          "drawerBack-1"
-        ],
-        "fasten": [
-          [
-            "screw-1/screwThread-1",
-            "drawerBack-1/screwHole-1"
-          ],
-          [
-            "screw-2/screwThread-1",
-            "drawerBack-1/screwHole-2"
-          ],
-          [
-            "screw-3/screwThread-1",
-            "drawerBack-1/screwHole-3"
-          ],
-          [
-            "screw-4/screwThread-1",
-            "drawerBack-1/screwHole-4"
-          ]
-        ],
-        "tool": "screwdriver"
-      },
-      {
-        "kind": "step",
-        "number": 12,
-        "pose": "upright",
-        "parts": [
-          "drawerBottom-1"
-        ],
-        "fasten": [
-          [
-            "screw-5/screwThread-1",
-            "drawerSide-1/screwHole-1"
-          ],
-          [
-            "screw-6/screwThread-1",
-            "drawerSide-1/screwHole-2"
-          ],
-          [
-            "screw-7/screwThread-1",
-            "drawerSide-2/screwHole-1"
-          ],
-          [
-            "screw-8/screwThread-1",
-            "drawerSide-2/screwHole-2"
-          ],
-          [
-            "screw-9/screwThread-1",
-            "drawerBack-1/screwHole-5"
-          ],
-          [
-            "screw-10/screwThread-1",
-            "drawerBack-1/screwHole-6"
-          ]
-        ],
-        "tool": "screwdriver"
-      },
-      {
-        "kind": "step",
-        "number": 13,
-        "pose": "upright",
-        "parts": [
-          "drawerFront-1"
-        ],
-        "fasten": [
-          [
-            "screw-11/screwThread-1",
-            "drawerFront-1/screwHole-1"
-          ],
-          [
-            "screw-12/screwThread-1",
-            "drawerFront-1/screwHole-2"
-          ],
-          [
-            "screw-13/screwThread-1",
-            "drawerFront-1/screwHole-3"
-          ],
-          [
-            "screw-14/screwThread-1",
-            "drawerFront-1/screwHole-4"
-          ]
-        ],
-        "tool": "screwdriver"
-      },
-      {
-        "kind": "step",
         "number": 14,
         "pose": "upright",
-        "parts": [
-          "knob-1"
-        ],
-        "fasten": [
-          [
-            "screw-15/screwThread-1",
-            "drawerFront-1/screwHole-5"
-          ]
-        ],
-        "tool": "screwdriver"
+        "special": "tipUpright"
       },
       {
         "kind": "back"
