@@ -75,7 +75,7 @@ describe('the box moved across the room, then reset (1.7.1 #13)', () => {
     flatpack.parts.forEach(({ body }, i) => physics.place(body, spots[i].position, spots[i].rotation));
     physics.place(flatpack.lid, spots.at(-1)!.position, spots.at(-1)!.rotation);
     run(physics, 3);
-    const target: Pose = { position: [-1, 0, -0.5], rotation: yawed(0.6) };
+    const target: Pose = { position: [-1.5, 0, -0.5], rotation: yawed(0.6) };
     drag(physics, flatpack.base, { position: baseRest(target).position.map((v, k) => v + (k === 1 ? 0.03 : 0)) as Vec3, rotation: target.rotation });
     run(physics, 3);
 
