@@ -117,7 +117,8 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
     ctx.fillText(page.name, at.left, at.nameBaseline);
     const nameW = ctx.measureText(`${page.name} `).width;
     ctx.font = font(layout.nameLineSize, 500);
-    ctx.fillText(`${page.category} ${page.size.join('×')} ${words.cm}`, at.left + nameW, at.nameBaseline);
+    // Squeezed to the margin if a longer name or category would run past it.
+    ctx.fillText(`${page.category} ${page.size.join('×')} ${words.cm}`, at.left + nameW, at.nameBaseline, at.right - at.left - nameW);
   }
 
   // A row per variant: its name left, its article number right, a thin rule under it.
@@ -170,8 +171,9 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
     ctx.font = font(layout.actionTextSize, 800);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Centred on the tag right of the hole's square, [x + h, x + w], squeezed to fit it.
-    ctx.fillText(text, x + (w + h) / 2, y + h / 2, w - h);
+    // Centred on the tag right of the hole's square, [x + h, x + w], squeezed to fit it less
+    // an inset each side, clear of the tag's rounded corners.
+    ctx.fillText(text, x + (w + h) / 2, y + h / 2, w - h - 2 * layout.tagInset);
     ctx.textAlign = 'start';
     ctx.textBaseline = 'alphabetic';
   }

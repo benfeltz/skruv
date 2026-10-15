@@ -195,6 +195,8 @@ export const CATALOG = {
     actionTextSize: 36,
     // The tag's corners and punched hole; the stamp's outline and tilt (radians).
     tagRadius: 18,
+    // Clear space kept each side of the tag's words when they are squeezed to fit.
+    tagInset: 18,
     tagHole: 12,
     stampLine: 6,
     stampTurn: -0.08,
