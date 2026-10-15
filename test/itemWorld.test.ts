@@ -8,6 +8,7 @@ import { createItemSlot } from '../src/game/itemSlot.js';
 import { createPhysicsWorld } from '../src/physics/world.js';
 import { createCameraControls } from '../src/scene/cameraControls.js';
 import { createItemWorld } from '../src/scene/itemWorld.js';
+import type { Body } from '../src/physics/world.js';
 import type { BookletPages, ItemWorldDeps } from '../src/scene/itemWorld.js';
 
 // The swap's honesty gate (1.9.1): an item world built and disposed leaves the room as it
@@ -165,10 +166,25 @@ const run = (world: { update(delta: number): void }, seconds: number) => {
 
 describe('the item world comes and goes without a trace', () => {
   it('create → dispose → create → dispose leaves the room at its baseline both times', async () => {
-    const { deps, census } = await engine();
+    const { deps: engineDeps, census } = await engine();
     const baseline = census();
+    // The world's own bodies, so a joint can be put between two of them: a fresh world has no
+    // joints, and dispose must still take back the ones a build leaves in it.
+    const made: Body[] = [];
+    const deps: ItemWorldDeps = {
+      ...engineDeps,
+      physics: {
+        ...engineDeps.physics,
+        register(...args) {
+          const body = engineDeps.physics.register(...args);
+          made.push(body);
+          return body;
+        },
+      },
+    };
 
     for (let round = 0; round < 2; round++) {
+      made.length = 0;
       const world = createItemWorld(deps);
       const built = census();
       // It really built something: every packed part, the box and the lid as
@@ -181,6 +197,8 @@ describe('the item world comes and goes without a trace', () => {
       expect(built.documentListeners, `round ${round}`).toBeGreaterThan(baseline.documentListeners);
       // A moment of play first, so teardown meets a settled, stepping world.
       run(world, 0.5);
+      engineDeps.physics.join(made[0], made[1], { anchorA: [0, 0, 0], anchorB: [0, 0, 0], rotation: [0, 0, 0, 1] }, 'rigid');
+      expect(census().physics.joints, `round ${round}`).toBeGreaterThan(baseline.physics.joints);
       world.dispose();
       expect(census(), `round ${round}`).toEqual(baseline);
     }
@@ -348,7 +366,7 @@ describe('the swap: picking from the catalog (1.9.1)', () => {
       expect(ITEM_ID).toBe('blank');
       expect(blank).not.toBe(johnny);
       const blankBuilt = census();
-      // Its own ten parts in the box are bodies, with their joints.
+      // Its own parts in the box are bodies.
       expect(blankBuilt.physics.registered).toBeGreaterThan(MANIFEST.length);
       expect(blankBuilt.physics.registered).toBeLessThan(johnnyBuilt);
       run(blank, 0.5);
