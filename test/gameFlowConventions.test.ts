@@ -21,7 +21,7 @@ describe('repack reset (decision 9)', () => {
     expect(unseatAll).not.toMatch(/physics\.unjoin|assembly\.unseat/);
   });
 
-  it("puts back only the player's parts and the lid, never the box", () => {
+  it("puts back the player's parts and the lid; the box is only stood upright in place", () => {
     expect(world).toMatch(/const playerParts = parts\.filter\(\(part\) => part !== flatpack\.base && part !== flatpack\.lid\);/);
     expect(repack).toMatch(/physics\.place\(body, position, rotation\)/);
   });
