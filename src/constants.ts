@@ -160,11 +160,37 @@ export const CATALOG = {
     drawingDrop: 2.4,
     taglineIndent: 6,
     detailIndent: 4,
-    // The BUILD IT tag, or the SOLD OUT stamp in its place: [x, y, w, h], also the hit
+    // An item page's lines (src/game/catalogLayout.ts), top to bottom: the heavy rule's
+    // weight; the category heading's size, and the gap between the rule and its cap line;
+    // the thin rule's weight; the name line's size (name bold, category and size beside
+    // it); a variant row's type size and its height as a multiple of that size; the thin
+    // rule under each row. `lineGap` separates the blocks; the part count (detailSize) sits
+    // `tagGap` above the tag.
+    heavyRule: 8,
+    headingSize: 40,
+    headingGap: 12,
+    thinRule: 2,
+    nameLineSize: 34,
+    rowSize: 26,
+    rowHeight: 1.7,
+    lineGap: 14,
+    tagGap: 22,
+    // Type's cap-line and descender depth as fractions of its size, for stacking lines
+    // without measuring them.
+    capHeight: 0.75,
+    descender: 0.25,
+    // The swatches, one filled circle per variant right of the drawing's foot: radius, gap
+    // between them, and the ink ring's weight.
+    swatchRadius: 15,
+    swatchGap: 12,
+    swatchRing: 3,
+    // The OWN IT NOW! tag, or the SOLD OUT stamp in its place: [x, y, w, h], also the hit
     // target src/ui/booklet.ts lays over the page. Below it, down to the page margin, nothing
     // is drawn: the space held for a store link on a sold-out page, once there is a store.
     action: [180, 770, 360, 104] satisfies [number, number, number, number],
-    actionTextSize: 52,
+    // Sized so OWN IT NOW! fits the tag right of its hole; the scene squeezes it to the
+    // tag if a font runs wide.
+    actionTextSize: 36,
     // The tag's corners and punched hole; the stamp's outline and tilt (radians).
     tagRadius: 18,
     tagHole: 12,
@@ -193,9 +219,10 @@ export const CATALOG = {
     brand: 'SKRUV',
     tagline: 'Catalog',
     parts: 'parts',
-    build: 'BUILD IT',
+    cm: 'cm',
+    build: 'OWN IT NOW!',
     soldOut: 'SOLD OUT',
-    // On the sheet when BUILD IT's item could not be built (src/ui/catalogSheet.ts).
+    // On the sheet when the tag's item could not be built (src/ui/catalogSheet.ts).
     buildFailed: "That one couldn't be built. Try again, or pick another.",
   },
 };
