@@ -45,7 +45,7 @@ export function itemPageLayout(variantCount: number): ItemPageLayout {
   // Down from the margin.
   const heavyRule = m;
   const headingBaseline = heavyRule + p.heavyRule + p.headingGap + p.headingSize * p.capHeight;
-  const thinRule = headingBaseline + p.headingSize * p.descender + p.headingGap / 2;
+  const thinRule = headingBaseline + p.headingSize * p.descender + p.ruleGap;
   const drawingTop = thinRule + p.thinRule + p.lineGap;
 
   // Up from the tag.

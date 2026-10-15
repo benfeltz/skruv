@@ -169,6 +169,8 @@ export const CATALOG = {
     heavyRule: 8,
     headingSize: 40,
     headingGap: 12,
+    // ...and the gap between the heading's descender and the thin rule under it.
+    ruleGap: 6,
     thinRule: 2,
     nameLineSize: 34,
     rowSize: 26,
