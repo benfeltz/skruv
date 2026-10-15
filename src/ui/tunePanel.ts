@@ -1,7 +1,7 @@
 import { COLORS, TUNE } from '../constants.js';
 import type { Knob, Tunables } from '../game/tunables.js';
 
-// The tuning drawer, only on a ?tune URL: a gear tab top-left opens a bottom sheet of
+// The tuning drawer, only on a ?tune URL: a gear tab under the Repack button, upper right, opens a bottom sheet of
 // sliders over the running game, one per live knob, grouped as the registry groups them.
 // A slider moved is felt on the next frame. It also restores the defaults, saves and loads
 // feel profiles, and exports the session's events — the telemetry sink. The panel renders
@@ -19,8 +19,8 @@ function injectStyle() {
   style.textContent = `
     .tune-tab {
       position: fixed;
-      left: calc(16px + env(safe-area-inset-left));
-      top: calc(16px + env(safe-area-inset-top));
+      right: calc(${TUNE.tabInset}px + env(safe-area-inset-right));
+      top: calc(${TUNE.tabInset + TUNE.repackHeight + TUNE.tabGap}px + env(safe-area-inset-top));
       width: 44px;
       height: 44px;
       padding: 0;

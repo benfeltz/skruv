@@ -676,6 +676,12 @@ export const TUNE = {
   // The tuning drawer (src/ui/tunePanel.ts) exists only on a URL carrying this query flag
   // (…/skruv/?tune); the plain URL is the teaser, untouched.
   queryFlag: 'tune',
+  // The gear tab sits upper right, under the Repack button (src/ui/resetButton.ts), so the
+  // catalog's thumb has the upper left alone: Repack's inset from the corner and its height,
+  // and the gap left between the two (CSS pixels).
+  tabInset: 16,
+  repackHeight: 44,
+  tabGap: 8,
   // The drawer, in CSS pixels: never wider than this, nor taller than this share of the
   // screen, so the build stays in view above it.
   panelMaxWidth: 520,
