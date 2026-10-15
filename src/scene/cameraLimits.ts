@@ -2,9 +2,9 @@
 //
 // The orbit target may go anywhere over the floor — down to the parts lying on it, out to
 // `targetMargin` inside the walls — so a pinch can bring the camera right up to any dowel
-// and its hole. The camera itself is clamped every frame: `wallMargin` inside the walls
-// horizontally, `floorClearance` above the floor, unbounded above (zoomed out it rises over
-// the wall tops — the dollhouse view).
+// and its hole. The camera itself is clamped every frame to `floorClearance` above the
+// floor and nothing else: the room is a diorama, so it orbits freely outside it, and a wall
+// the eye is behind is cut away (stageCutaway.ts) rather than blocking the view.
 //
 // Where along the line of sight the target sits is the pivot: `pivotAlongView` stops it at
 // the first part in the middle of the screen as a gesture starts (else the floor), and
@@ -32,11 +32,9 @@ export function clampTarget([x, y, z]: Vec3, room: Room, limits: Pick<Limits, 't
   return [clamp(x, -reachX, reachX), clamp(y, low, high), clamp(z, -reachZ, reachZ)];
 }
 
-/** The camera, held inside the walls horizontally and above the floor. */
-export function clampCamera([x, y, z]: Vec3, room: Room, limits: Pick<Limits, 'wallMargin' | 'floorClearance'>): Vec3 {
-  const reachX = room.width / 2 - limits.wallMargin;
-  const reachZ = room.depth / 2 - limits.wallMargin;
-  return [clamp(x, -reachX, reachX), Math.max(limits.floorClearance, y), clamp(z, -reachZ, reachZ)];
+/** The camera, held above the floor; outside the room it is free, the walls cut away instead. */
+export function clampCamera([x, y, z]: Vec3, limits: Pick<Limits, 'floorClearance'>): Vec3 {
+  return [x, Math.max(limits.floorClearance, y), z];
 }
 
 /**

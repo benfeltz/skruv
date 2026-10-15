@@ -263,15 +263,14 @@ export const CAMERA = {
 // Orbit limits (src/scene/cameraLimits.ts, applied by src/scene/cameraControls.ts). The
 // orbit target roams the whole floor so the camera can get right up to any part; as a
 // gesture starts it moves along the view to the first part in the middle of the screen,
-// else the floor (CAMERA.pivotOnParts), and holds there. The camera is clamped inside the
-// walls and above the floor every frame, and may rise over the wall tops when zoomed out
-// (dollhouse view).
+// else the floor (CAMERA.pivotOnParts), and holds there. The camera is clamped above the
+// floor every frame and is otherwise free, inside the room or out (a wall it is behind is
+// cut away).
 export const CAMERA_LIMITS = {
   // The target stays this far inside the walls, between these heights: down to the parts
   // lying on the floor, up to just over the standing bookcase.
   targetMargin: 0.6,
   targetHeight: [0, 2.2],
-  wallMargin: 0.4,
   // The camera never dips nearer the floor than this.
   floorClearance: 0.05,
   // Close enough that a dowel and the hole it goes in fill much of a phone screen.
