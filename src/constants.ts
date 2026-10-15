@@ -339,11 +339,17 @@ export const BOX = {
   friction: 1,
 };
 
+// The control cluster (src/ui/controlCluster.ts): the column of buttons in the upper right —
+// Repack, Snap rotate, and the ?tune gear — the one owner of that corner. Its inset from the
+// screen corner and the gap between its buttons (CSS pixels).
+export const CLUSTER = {
+  inset: 16,
+  gap: 8,
+};
+
 // Repack and recovery (src/ui/resetButton.ts, src/main.ts).
 export const RESET = {
-  // The button's inset from the screen corner and its height (CSS pixels): src/ui/
-  // resetButton.ts draws it so, and the ?tune gear (src/ui/tunePanel.ts) sits under it.
-  inset: 16,
+  // The button's height (CSS pixels); its place is the control cluster's (CLUSTER).
   height: 44,
   // The repack button arms on a first tap and repacks only on a second within this many
   // ms — cheap insurance against a fat finger wiping a build.
@@ -701,10 +707,6 @@ export const TUNE = {
   // The tuning drawer (src/ui/tunePanel.ts) exists only on a URL carrying this query flag
   // (…/skruv/?tune); the plain URL is the teaser, untouched.
   queryFlag: 'tune',
-  // The gear tab sits upper right, under the Repack button (src/ui/resetButton.ts), so the
-  // catalog's thumb has the upper left alone: the gap left between the two (CSS pixels);
-  // Repack's own inset and height are RESET's.
-  tabGap: 8,
   // The drawer, in CSS pixels: never wider than this, nor taller than this share of the
   // screen, so the build stays in view above it.
   panelMaxWidth: 520,

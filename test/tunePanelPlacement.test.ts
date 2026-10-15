@@ -1,24 +1,22 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-// 1.9.1.5: the ?tune gear leaves the upper left to the catalog's thumb and sits under the
-// Repack button, upper right. Its offset is named in TUNE from Repack's own box (src/ui/
-// resetButton.ts, RESET's) so the two cannot drift; these keep them reading it.
+// 1.9.1.2: Repack, Snap rotate and the ?tune gear stack in the control cluster, upper right
+// (src/ui/controlCluster.ts); none of them places itself.
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
-const reset = read('src/ui/resetButton.ts');
-const panel = read('src/ui/tunePanel.ts');
+// The style text a module injects for its own button.
+const buttonRule = (source: string, from: string, to: string) => source.slice(source.indexOf(from), source.indexOf(to));
 
-describe('the tune gear under Repack', () => {
-  it("is named from Repack's inset and height", () => {
-    expect(reset).toContain('top: calc(${RESET.inset}px + env(safe-area-inset-top));');
-    expect(reset).toContain('right: calc(${RESET.inset}px + env(safe-area-inset-right));');
-    expect(reset).toContain('min-height: ${RESET.height}px;');
-  });
-
-  it('sits at its right edge, a gap below it, and leaves the upper left alone', () => {
-    const tab = panel.slice(panel.indexOf('.tune-tab {'), panel.indexOf(".tune-tab[aria-expanded='true']"));
-    expect(tab).toContain('right: calc(${RESET.inset}px + env(safe-area-inset-right));');
-    expect(tab).toContain('top: calc(${RESET.inset + RESET.height + TUNE.tabGap}px + env(safe-area-inset-top));');
-    expect(tab).not.toMatch(/left:/);
-  });
+describe('the cluster buttons place nothing themselves', () => {
+  const rules = {
+    repack: buttonRule(read('src/ui/resetButton.ts'), '.reset-button {', ".reset-button[data-armed='true']"),
+    snapRotate: buttonRule(read('src/ui/toggleButton.ts'), '.toggle-button {', ".toggle-button[aria-pressed='true']"),
+    gear: buttonRule(read('src/ui/tunePanel.ts'), '.tune-tab {', ".tune-tab[aria-expanded='true']"),
+  };
+  for (const [name, rule] of Object.entries(rules)) {
+    it(`${name} has a rule, with no position of its own`, () => {
+      expect(rule).toContain('border-radius: 22px;');
+      expect(rule).not.toMatch(/position:|\b(left|right|top|bottom):/);
+    });
+  }
 });

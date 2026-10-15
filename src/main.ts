@@ -18,6 +18,7 @@ import { createScene } from './scene/scene.js';
 import { createBookletPages } from './scene/bookletPages.js';
 import { createCatalogPages } from './scene/catalogPages.js';
 import { createCatalogSheet } from './ui/catalogSheet.js';
+import { createControlCluster } from './ui/controlCluster.js';
 import { createResetButton } from './ui/resetButton.js';
 import { createToggleButton } from './ui/toggleButton.js';
 
@@ -61,9 +62,9 @@ const cameraControls = createCameraControls(camera, renderer.domElement, {
   pickDistance: (origin, direction) => items.current?.pickDistance(origin, direction) ?? null,
 });
 
-// Rotation is free by default; the toggle turns 90° detents on.
+// Rotation is free by default; the toggle turns 90° detents on. It is mounted in the control
+// cluster below, after Repack.
 const snapRotate = createToggleButton({ label: 'Snap rotate' });
-document.body.append(snapRotate.element);
 
 // Haptics: every moment buzzes a named cue through the buzzer slot. The web's buzzer plays
 // HAPTICS patterns through navigator.vibrate (absent on iOS Safari; a 0 ms knob is silent); a
@@ -127,7 +128,11 @@ catalogPages.prerender();
 // The real sheet now covers index.html's stand-in; it goes in the frame that first paints it.
 requestAnimationFrame(() => document.getElementById('pre-splash')?.remove());
 
-document.body.append(createResetButton({ onReset: () => items.current?.repack() }).element);
+// The upper-right column: Repack in the corner, Snap rotate under it, the ?tune gear last.
+const cluster = createControlCluster();
+cluster.add(createResetButton({ onReset: () => items.current?.repack() }).element);
+cluster.add(snapRotate.element);
+document.body.append(cluster.element);
 
 // Under sustained load the room renders every other frame; everything else runs every frame.
 const fps = createFpsGuard();
@@ -161,5 +166,6 @@ if (import.meta.env.DEV) {
 if (new URLSearchParams(location.search).has(TUNE.queryFlag)) {
   const { createTunePanel } = await import('./ui/tunePanel.js');
   const panel = createTunePanel({ tunables, exportSession: session.toExportJson });
-  document.body.append(panel.tab, panel.element);
+  cluster.add(panel.tab);
+  document.body.append(panel.element);
 }
