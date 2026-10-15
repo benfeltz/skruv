@@ -159,6 +159,15 @@ export const BOOKLET_UI = {
   // back; `radius` rounds the page's corners. index.html's pre-splash mirrors the fit,
   // the shadow and the radius.
   page: { shadow: '0 12px 40px #0008', gutter: 12, growMs: 220, radius: 6 },
+  // The manual's docked strip (src/ui/booklet.ts `docked: 'strip'`, laid out by
+  // src/game/carouselModel.ts): pages along the bottom centre, the centre one larger and
+  // current, an arrow button at each end. `narrow` pages show below `breakpoint` (CSS px of
+  // viewport width), `wide` at or above it. `centreWidth` and `sideWidth` are page widths,
+  // `gap` the space between slots, `arrow` an arrow button's side (a thumb-sized target),
+  // `inset` the strip's distance from the screen's bottom edge. `peekDelayMs` is how long a
+  // touch rests on the centre page before it pops open (a touch that moves past the tap
+  // distance first is a swipe, never a peek).
+  strip: { breakpoint: 600, narrow: 3, wide: 5, centreWidth: 120, sideWidth: 72, gap: 8, arrow: 44, inset: 12, peekDelayMs: 280 },
 };
 
 // The catalog (1.9.1): the game's front door, a second booklet of items to build
