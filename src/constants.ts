@@ -12,9 +12,25 @@ export const ROOM = {
   height: 3,
 };
 
+// The diorama stage (src/game/stageBoxes.ts, built by src/scene/room.ts and mirrored by
+// src/physics/world.ts): a base slab under the floor, two walls (back and left) and a low
+// lip on the open front and right edges — all standing outside the floor's footprint, so
+// every clamp that reads ROOM is unchanged. `ROOM.height` stays the lift ceiling.
+export const STAGE = {
+  wallThickness: 0.1,
+  wallHeight: 2.5,
+  slabThickness: 0.1,
+  lipHeight: 0.03,
+  lipThickness: 0.03,
+  // The ink edges' width, in device-independent pixels (LineMaterial linewidth).
+  inkWidth: 3,
+};
+
 export const COLORS = {
   background: 0x1b1d22,
   floor: 0xc9b79c,
+  // The stage's ink edges: the manual's ink, so the room and the booklet draw alike.
+  stageInk: 0x1c1c1c,
   wall: 0xe8e4dc,
   skyLight: 0xffffff,
   groundLight: 0x8a7a66,
