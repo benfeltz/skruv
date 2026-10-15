@@ -103,7 +103,8 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
       const cy = y + h - r - i * (2 * r + swatchGap);
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, 2 * Math.PI);
-      ctx.fillStyle = css(COLORS[color as keyof typeof COLORS]);
+      // A colour the table lacks (a pack typo; the pack tests catch it) draws faint, never throws.
+      ctx.fillStyle = color in COLORS ? css(COLORS[color as keyof typeof COLORS]) : FAINT;
       ctx.fill();
       ctx.strokeStyle = INK;
       ctx.lineWidth = swatchRing;
