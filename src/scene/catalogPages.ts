@@ -86,7 +86,7 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
   }
 
   // The category as the heading, a heavy rule over it and a thin one under.
-  function heading(ctx: Ctx, page: ItemPage, at: ReturnType<typeof itemPageLayout>) {
+  function heading(ctx: Ctx, page: ItemPage, at: ItemPageLayout) {
     rule(ctx, at.heavyRule, layout.heavyRule, at.left, at.right);
     ctx.fillStyle = INK;
     ctx.font = font(layout.headingSize, 800);
@@ -111,7 +111,7 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
   }
 
   // The bold name, then category and `W×D×H cm` in regular weight, on one line.
-  function nameLine(ctx: Ctx, page: ItemPage, at: ReturnType<typeof itemPageLayout>) {
+  function nameLine(ctx: Ctx, page: ItemPage, at: ItemPageLayout) {
     ctx.fillStyle = INK;
     ctx.font = font(layout.nameLineSize, 800);
     ctx.fillText(page.name, at.left, at.nameBaseline);
@@ -121,7 +121,7 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
   }
 
   // A row per variant: its name left, its article number right, a thin rule under it.
-  function variantRows(ctx: Ctx, page: ItemPage, at: ReturnType<typeof itemPageLayout>) {
+  function variantRows(ctx: Ctx, page: ItemPage, at: ItemPageLayout) {
     ctx.fillStyle = INK;
     ctx.font = font(layout.rowSize, 600);
     page.variants.forEach(({ name, article }, i) => {
@@ -136,7 +136,7 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
   }
 
   // Our own line, kept: how many parts are in the box.
-  function partCount(ctx: Ctx, page: ItemPage, at: ReturnType<typeof itemPageLayout>) {
+  function partCount(ctx: Ctx, page: ItemPage, at: ItemPageLayout) {
     ctx.fillStyle = INK;
     ctx.font = font(layout.detailSize, 600);
     ctx.fillText(`${page.partCount} ${words.parts}`, at.left, at.partCountBaseline);
