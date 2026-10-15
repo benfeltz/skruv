@@ -1,14 +1,14 @@
 import { CATALOG } from '../constants.js';
 import { buildTarget } from '../game/catalogModel.js';
-import { STACK_SLOT } from '../game/cornerStack.js';
 import { BuildFailed } from '../game/itemSlot.js';
 import { createBookletSheet } from './booklet.js';
 import type { CatalogPage } from '../game/catalogModel.js';
 
 /**
- * The catalog in hand: a second booklet sheet (src/ui/booklet.ts) over `pages`
- * (src/scene/catalogPages.ts), behind the manual in the corner stack, with BUILD IT laid over
- * every buildable item's tag — `onPick(id)` when tapped; a sold-out stamp is inert
+ * The catalog in hand: a booklet sheet (src/ui/booklet.ts) in its page look — the page alone
+ * over the room, its number and corner arrows printed on it, docked as a thumbnail in the
+ * upper left and growing out of it — over `pages` (src/scene/catalogPages.ts), with BUILD IT
+ * laid over every buildable item's tag — `onPick(id)` when tapped; a sold-out stamp is inert
  * (src/game/catalogModel.ts `buildTarget`). A pick whose item couldn't be built (a
  * BuildFailed, src/game/itemSlot.ts) leaves the catalog open with CATALOG.words.buildFailed
  * on it — the room behind is empty then, so the catalog is the only place left to try again.
@@ -31,7 +31,8 @@ export function createCatalogSheet({
     pages,
     name: 'catalog',
     open,
-    slot: STACK_SLOT.catalog,
+    look: 'page',
+    corner: 'topLeft',
     // Docked, it shows its cover — SKRUV — whatever page it was put down on (Ben, 1.9.1).
     thumbShows: 'cover',
     canClose,

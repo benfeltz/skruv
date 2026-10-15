@@ -51,11 +51,6 @@ tunables.subscribe((key, value) => {
   if (group === 'physics' || group === 'joint') physics.retune();
   if (key === 'render.maxPixelRatio') renderer.setPixelRatio(clampPixelRatio(window.devicePixelRatio, RENDER.maxPixelRatio));
   if (key === 'camera.mobileStartScale') cameraControls.frame(startPose());
-  // The corner fan moves the manual in front, the catalog behind turns: re-place both.
-  if (group === 'catalog') {
-    catalog.place();
-    items.current?.booklet.place();
-  }
 });
 
 // The camera pivots about the first part along the middle of the screen as a gesture
@@ -110,10 +105,10 @@ const items = createItemSlot({
 });
 
 // The catalog is the splash: the game boots with it open on its cover, and it outlives
-// item worlds, so it is the room's — mounted before any manual, behind it in the corner
-// stack. BUILD IT goes straight into the room: the item is built, the catalog put down,
-// and both wait in the corner (the new manual docked in front). Until the first pick there
-// is no room to go back to, so nothing puts it down.
+// item worlds, so it is the room's — mounted before any manual. BUILD IT goes straight into
+// the room: the item is built, the catalog put down into the upper-left corner and the new
+// manual docked in the lower left. Until the first pick there is no room to go back to, so
+// nothing puts it down.
 const catalogPages = createCatalogPages(renderer, createCatalog(catalogEntries(), pickableSet(CATALOG.pickable, ITEM_IDS)));
 const catalog = createCatalogSheet({
   pages: catalogPages,
@@ -122,7 +117,7 @@ const catalog = createCatalogSheet({
   onPick: (id) => {
     const world = items.pick(id);
     catalog.setOpen(false);
-    // Focus goes to the front of the stack, the item's manual — not the catalog thumb behind it.
+    // Focus goes to the item's manual, not back to the catalog thumb.
     world.booklet.thumb.focus({ preventScroll: true });
   },
 });

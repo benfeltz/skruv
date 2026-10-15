@@ -1,5 +1,4 @@
 import { BOOKLET, BOOKLET_UI, CATALOG, COLORS, GESTURE } from '../constants.js';
-import { fanOffset, STACK_SLOT } from '../game/cornerStack.js';
 import { pageMarks } from '../game/catalogLayout.js';
 
 // The booklet in hand: a bottom sheet over the room. Collapsed, it is a thumbnail of the
@@ -97,8 +96,7 @@ function injectStyle() {
       transition: width 160ms ease-out, z-index 0s;
     }
     /* A mouse resting on the docked thumbnail grows it from its corner to a readable page,
-       about a quarter of the screen, raised over the other thumb in the corner stack (the
-       catalog's would grow behind the manual's) — still under the scrim (2) and the sheet (3).
+       about a quarter of the screen, raised over its neighbours — still under the scrim (2) and the sheet (3).
        Grow and raise both wait thumbHoverDelayMs, so a pointer passing over on its way
        elsewhere changes nothing; leaving undoes them at once. Hover-capable pointers only: a
        touch never hovers. */
@@ -277,8 +275,6 @@ export interface BookletSheetOptions {
   name?: string;
   /** Whether it starts open, on its cover (default) — or docked as a thumb. */
   open?: boolean;
-  /** Its place in the corner stack (STACK_SLOT): the manual in front by default, fanned toward the room; the catalog behind, in the corner (src/game/cornerStack.ts). */
-  slot?: number;
   /** How it is shown open: 'sheet' (default, the manual) — a dark bottom sheet with a handle and a control bar — or 'page' (the catalog): the page alone, its number and arrows printed on it, growing out of its docked thumb. Every behaviour is the same in both. */
   look?: 'sheet' | 'page';
   /** Which screen corner its docked thumb sits in: 'bottomLeft' (default) or 'topLeft'. */
@@ -294,13 +290,13 @@ export interface BookletSheetOptions {
 /**
  * The booklet sheet for `pages` (`{ count, canvas(index) }`, src/scene/bookletPages.ts or
  * src/scene/catalogPages.ts). Returns `{ scrim, thumb, element, currentPage, expanded,
- * onChange(fn), setOpen(value), place(), dispose() }`: mount all three elements;
+ * onChange(fn), setOpen(value), dispose() }`: mount all three elements;
  * `onChange(fn)` calls `fn({ page, expanded })` whenever either changes; `setOpen` opens or
- * docks it from outside; `place()` re-applies its stack slot after a ?tune change;
+ * docks it from outside;
  * `dispose()` takes it all back off the page. Starts open on page 0, the cover, unless told
  * otherwise — or another sheet is open: one sheet is open at a time. State is the module's own and read-only outside it.
  */
-export function createBookletSheet({ pages, name = 'instructions', open: startsOpen = true, slot = STACK_SLOT.manual, canClose = () => true, action, thumbShows = 'page', look = 'sheet', corner = 'bottomLeft' }: BookletSheetOptions) {
+export function createBookletSheet({ pages, name = 'instructions', open: startsOpen = true, canClose = () => true, action, thumbShows = 'page', look = 'sheet', corner = 'bottomLeft' }: BookletSheetOptions) {
   injectStyle();
   // The look decides what is built and how it settles; every handler below is the same for both.
   const leaf = look === 'page';
@@ -515,14 +511,6 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
       : `translate(calc(${inset} + env(safe-area-inset-left) - 50vw), calc(${inset} + env(safe-area-inset-top) - 50vh)) scale(${scale})`;
   }
 
-  // Its place in the corner stack (src/game/cornerStack.ts): the front one fanned up and
-  // right toward the room, the ones behind it in the corner, turned — read at use time so
-  // ?tune moves it live. Paint order is mount order: mount the back ones first.
-  function place() {
-    const { x, y, turn } = fanOffset(slot, CATALOG.stack);
-    thumb.style.transform = `translate(${x}px, ${y}px) rotate(${turn}rad)`;
-  }
-
   const self: LiveSheet = { isOpen: () => open, thumb };
   sheets.add(self);
 
@@ -542,7 +530,6 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
   // sheet takes itself back out — registry entry and key listener — before the error goes on,
   // since the caller never got a sheet to dispose.
   try {
-    place();
     showScrim(open);
     render();
   } catch (error) {
@@ -564,7 +551,6 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
     setOpen(value: boolean) {
       setOpen(value);
     },
-    place,
     notify,
     onChange(fn: (state: { page: number; expanded: boolean }) => void) {
       listeners.add(fn);

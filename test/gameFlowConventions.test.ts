@@ -132,10 +132,9 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
     expect(main).toMatch(/catalog\.setOpen\(false\);\s*\/\/[^\n]*\n\s*world\.booklet\.thumb\.focus\(\{ preventScroll: true \}\);/);
   });
 
-  // A ?tune change to the corner fan moves the manual (the front thumb, fanned toward the
-  // room) as well as turning the catalog: main re-places both, live.
-  it('re-places both thumbs of the corner stack on a catalog knob change', () => {
-    expect(main).toMatch(/if \(group === 'catalog'\) \{\s*catalog\.place\(\);\s*items\.current\?\.booklet\.place\(\);\s*\}/);
+  // Each booklet has a corner of its own (1.9.1.5): no stack to fan, so no knob to re-place.
+  it('has no corner stack to re-place on a tune change', () => {
+    expect(main).not.toMatch(/\.place\(\)|group === 'catalog'/);
   });
 
   it('grows and raises a hovered thumb only after the pointer rests thumbHoverDelayMs, and undoes it at once', () => {
@@ -149,7 +148,7 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
     expect(booklet).toContain(`.booklet-thumb:hover { transition: width 0s ${delay}, z-index 0s ${delay}; }`);
   });
 
-  it('raises a hovered thumb over the other in the corner stack, never over the scrim or sheet', () => {
+  it('raises a hovered thumb over its neighbours, never over the scrim or sheet', () => {
     const hover = booklet.slice(booklet.indexOf('.booklet-thumb:hover {'), booklet.indexOf('.booklet-scrim {'));
     expect(hover).toMatch(/z-index: 1;/);
   });
