@@ -316,7 +316,7 @@ describe('relativePose', () => {
   });
 });
 
-describe('drive and seatHome: a part set put in already fastened (1.5 display shelf)', () => {
+describe('drive and seatHome: a part set put in already fastened (1.5 pre-fastened set)', () => {
   const layout = ASSEMBLED;
   const typeById = new Map(layout.parts.map((p) => [p.id, p.type]));
   const poseOf = (id: string) => layout.parts.find((p) => p.id === id)!;
@@ -445,13 +445,13 @@ describe('a wood screw: driven into what lies behind its hole, held there solid'
 });
 
 describe('letGoOf: a teardown leaves nothing fastened to the parts it takes away (PR #12 review)', () => {
-  // A display cam relocked on the player's own bolt, screwed into a display side.
+  // Another set's cam relocked on the player's own bolt, screwed into that set's side.
   function swapped() {
-    const typeOfAny = (id: string) => typeOf(id.replace(/^display\//, ''));
+    const typeOfAny = (id: string) => typeOf(id.replace(/^other\//, ''));
     const assembly = createAssembly(typeOfAny) as TestAssembly;
-    const bolt = assembly.seat({ partA: 'camLockBolt-1', connectorA: END_LOW, partB: 'display/sidePanel-1', connectorB: SIDE_BOTTOM_CAM_BOLT, mover: 'camLockBolt-1' });
+    const bolt = assembly.seat({ partA: 'camLockBolt-1', connectorA: END_LOW, partB: 'other/sidePanel-1', connectorB: SIDE_BOTTOM_CAM_BOLT, mover: 'camLockBolt-1' });
     assembly.drive(bolt.id);
-    const cam = assembly.seat({ partA: 'display/camLock-1', connectorA: END_LOW, partB: 'display/topBottomPanel-1', connectorB: SHELF_LEFT_RECESS, mover: 'display/camLock-1' });
+    const cam = assembly.seat({ partA: 'other/camLock-1', connectorA: END_LOW, partB: 'other/topBottomPanel-1', connectorB: SHELF_LEFT_RECESS, mover: 'other/camLock-1' });
     assembly.drive(cam.id, { captured: 'camLockBolt-1' });
     return { assembly, bolt, cam };
   }
@@ -473,12 +473,12 @@ describe('letGoOf: a teardown leaves nothing fastened to the parts it takes away
     expect(assembly.get(cam.id).fastener.state).toBe(STATE.LOCKED);
   });
 
-  it('pulls back a display fitting pressed through into a player panel, leaving it seated', () => {
-    const typeOfAny = (id: string) => typeOf(id.replace(/^display\//, ''));
+  it('pulls back a prefixed-id fitting pressed through into a player panel, leaving it seated', () => {
+    const typeOfAny = (id: string) => typeOf(id.replace(/^other\//, ''));
     const assembly = createAssembly(typeOfAny);
-    const fitting = assembly.seat({ partA: 'display/backFitting-1', connectorA: END_LOW, partB: 'display/backPanel-1', connectorB: BACK_FITTING, mover: 'display/backFitting-1' });
-    assembly.tap('display/backFitting-1', () => ({ through: 'sidePanel-1' }));
-    expect(assembly.compoundOf('sidePanel-1').has('display/backPanel-1')).toBe(true);
+    const fitting = assembly.seat({ partA: 'other/backFitting-1', connectorA: END_LOW, partB: 'other/backPanel-1', connectorB: BACK_FITTING, mover: 'other/backFitting-1' });
+    assembly.tap('other/backFitting-1', () => ({ through: 'sidePanel-1' }));
+    expect(assembly.compoundOf('sidePanel-1').has('other/backPanel-1')).toBe(true);
     expect(assembly.letGoOf(['sidePanel-1'])).toEqual([fitting.id]);
     expect(assembly.get(fitting.id)).toMatchObject({ through: null, fastener: { state: STATE.SEATED } });
     expect([...assembly.compoundOf('sidePanel-1')]).toEqual(['sidePanel-1']);
@@ -486,7 +486,7 @@ describe('letGoOf: a teardown leaves nothing fastened to the parts it takes away
   });
 
   it('leaves joints whose hardware or host is being taken away to the unseat', () => {
-    const typeOfAny = (id: string) => typeOf(id.replace(/^display\//, ''));
+    const typeOfAny = (id: string) => typeOf(id.replace(/^other\//, ''));
     const assembly = createAssembly(typeOfAny) as TestAssembly;
     const fitting = assembly.seat({ partA: 'backFitting-1', connectorA: END_LOW, partB: 'backPanel-1', connectorB: BACK_FITTING, mover: 'backFitting-1' });
     assembly.tap('backFitting-1', () => ({ through: 'sidePanel-1' }));

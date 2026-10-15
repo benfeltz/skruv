@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { placeLayout } from '../tools/validate/lib/geometry.js';
 import type { Pose, Vec3 } from '../tools/validate/lib/geometry.js';
-import { DISPLAY, PHYSICS } from '../src/constants.js';
+import { PHYSICS } from '../src/constants.js';
 import { createAssembly, seatHome } from '../src/game/assembly.js';
 import { ASSEMBLED, PART_TYPES } from '../src/game/item.js';
 import { baseRest, createPackedWorldLayout, lidRest, respawnSpots } from '../src/game/boxLayout.js';
@@ -55,12 +55,11 @@ describe('the packed flatpack under physics', () => {
   });
 });
 
-describe('the display shelf under physics', () => {
+describe('a built item under physics', () => {
   it('stands: every part within 2 mm of its assembled pose, shelves on their pins', async () => {
     const physics = await createPhysicsWorld();
     const layout = ASSEMBLED;
-    const half = DISPLAY.yaw / 2;
-    const posed = placeLayout(layout.parts, { position: DISPLAY.position, rotation: [0, Math.sin(half), 0, Math.cos(half)] });
+    const posed = placeLayout(layout.parts, { position: [0, 0, 0], rotation: [0, 0, 0, 1] });
     const parts = spawn(physics, posed);
     const assembly = createAssembly((id) => parts.get(id)!.type);
     seatHome(

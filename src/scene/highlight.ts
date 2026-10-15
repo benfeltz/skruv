@@ -4,7 +4,7 @@ import type { Part } from '../game/partMesh.js';
 /**
  * A slow glow on the parts the open booklet page is about — so a glance from page to room
  * finds them. An aid only: it checks nothing and blocks nothing. `parts` is the set it may
- * light (the player's own; main.ts leaves the display shelf out); `show(types)` lights every
+ * light (the player's own; src/scene/itemWorld.ts leaves the box and its lid out); `show(types)` lights every
  * one of those types, `show([])` turns it off. `update(delta)` once per frame.
  */
 export function createHighlight(parts: Part[]) {

@@ -83,7 +83,7 @@ events.on(ANY, (event) => {
   if (cue) haptics.cue(cue);
 });
 
-// The item in the room — its flatpack, display, booklet and everything that works them
+// The item in the room — its flatpack, booklet and everything that works them
 // (src/scene/itemWorld.ts) — none until the first pick. A pick swaps it in-scene as one
 // transaction (src/game/itemSlot.ts): the old world disposed while the door still names it,
 // the door turned, the new world built; a build that throws turns the door back and leaves

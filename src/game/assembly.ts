@@ -36,7 +36,7 @@ import type { Fastener, FastenerEvent } from './fasteners.js';
 import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { Pose, Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
 
-/** A part instance's id — the manifest's (`dowel-3`), or a display copy's. */
+/** A part instance's id — the manifest's (`dowel-3`), or a prefixed one (a part set kept apart from the player's). */
 export type PartId = string;
 
 /** One seated connector pair — see the header. */
@@ -363,8 +363,8 @@ export function createAssembly(typeOf: (part: PartId) => string) {
 
   /**
    * Drives a seated joint's fastener all the way home through the very events a player's
-   * hands send — one tap, or one full turn of the wrench or screwdriver — so a part can
-   * start out fastened (the display shelf) by the same path the build takes, and come
+   * hands send — one tap, or one full turn of the wrench or screwdriver — so a part set can
+   * be put in fastened by the same path the build takes (the tests and a persisted build), and come
    * apart by it too. `ctx` as for `apply`. True if the joint ended fastened.
    */
   function drive(id: number, ctx: ApplyContext = {}) {

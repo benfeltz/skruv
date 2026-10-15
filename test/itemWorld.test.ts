@@ -8,6 +8,7 @@ import { createItemSlot } from '../src/game/itemSlot.js';
 import { createPhysicsWorld } from '../src/physics/world.js';
 import { createCameraControls } from '../src/scene/cameraControls.js';
 import { createItemWorld } from '../src/scene/itemWorld.js';
+import type { Body } from '../src/physics/world.js';
 import type { BookletPages, ItemWorldDeps } from '../src/scene/itemWorld.js';
 
 // The swap's honesty gate (1.9.1): an item world built and disposed leaves the room as it
@@ -165,16 +166,30 @@ const run = (world: { update(delta: number): void }, seconds: number) => {
 
 describe('the item world comes and goes without a trace', () => {
   it('create → dispose → create → dispose leaves the room at its baseline both times', async () => {
-    const { deps, census } = await engine();
+    const { deps: engineDeps, census } = await engine();
     const baseline = census();
+    // The world's own bodies, so a joint can be put between two of them: a fresh world has no
+    // joints, and dispose must still take back the ones a build leaves in it.
+    const made: Body[] = [];
+    const deps: ItemWorldDeps = {
+      ...engineDeps,
+      physics: {
+        ...engineDeps.physics,
+        register(...args) {
+          const body = engineDeps.physics.register(...args);
+          made.push(body);
+          return body;
+        },
+      },
+    };
 
     for (let round = 0; round < 2; round++) {
+      made.length = 0;
       const world = createItemWorld(deps);
       const built = census();
-      // It really built something: every packed part, the display, the box and the lid as
-      // bodies (plus their joints), its meshes and overlays, its page furniture and listeners.
+      // It really built something: every packed part, the box and the lid as
+      // bodies, its meshes and overlays, its page furniture and listeners.
       expect(built.physics.registered, `round ${round}`).toBeGreaterThan(MANIFEST.length);
-      expect(built.physics.joints, `round ${round}`).toBeGreaterThan(0);
       expect(built.scene, `round ${round}`).toBeGreaterThan(baseline.scene);
       expect(built.body, `round ${round}`).toBeGreaterThan(baseline.body);
       expect(built.canvasListeners, `round ${round}`).toBeGreaterThan(baseline.canvasListeners);
@@ -182,6 +197,8 @@ describe('the item world comes and goes without a trace', () => {
       expect(built.documentListeners, `round ${round}`).toBeGreaterThan(baseline.documentListeners);
       // A moment of play first, so teardown meets a settled, stepping world.
       run(world, 0.5);
+      engineDeps.physics.join(made[0], made[1], { anchorA: [0, 0, 0], anchorB: [0, 0, 0], rotation: [0, 0, 0, 1] }, 'rigid');
+      expect(census().physics.joints, `round ${round}`).toBeGreaterThan(baseline.physics.joints);
       world.dispose();
       expect(census(), `round ${round}`).toEqual(baseline);
     }
@@ -289,13 +306,13 @@ describe('a factory that throws part-way (1.9.1 review)', () => {
     return { ...deps, physics };
   }
 
-  it('releases every body registered before the throw — inside the box, and inside the display shelf', async () => {
+  it('releases every body registered before the throw — inside the box, and after it', async () => {
     const { deps, census } = await engine();
     const baseline = census();
     const whole = createItemWorld(deps);
     const total = census().physics.registered - baseline.physics.registered;
     whole.dispose();
-    // 2: the lid, after the box's base, inside createFlatpack. total: the display shelf's last part.
+    // 2: the lid, after the box's base, inside createFlatpack. total: the last part registered.
     for (const n of [2, total]) {
       expect(() => createItemWorld(failingRegister(deps, n)), `register ${n}`).toThrow(`register ${n} broke`);
       expect(census(), `register ${n}`).toEqual(baseline);
@@ -307,7 +324,7 @@ describe('a build that fails part-way (1.9.1 review)', () => {
   it('takes back what it had built before rethrowing — bodies, meshes, nodes, listeners', async () => {
     const { deps, census } = await engine();
     const baseline = census();
-    // pages() runs after the box, the packed parts, the display and the gizmo are in.
+    // pages() runs after the box, the packed parts and the gizmo are in.
     const failing = { ...deps, pages: () => { throw new Error('pages broke'); } };
     expect(() => createItemWorld(failing)).toThrow('pages broke');
     expect(census()).toEqual(baseline);
@@ -336,8 +353,7 @@ describe('the swap: picking from the catalog (1.9.1)', () => {
     expect(census()).toEqual(baseline);
   });
 
-  // BLANK's world (1.9.2): nine parts in a box, a display table built by the same events a
-  // player sends, and the swap both ways leaving the room as JOHNNY alone left it.
+  // BLANK's world (1.9.2): nine parts in a box, and the swap both ways leaving the room as JOHNNY alone left it.
   it('swaps JOHNNY → BLANK → JOHNNY, each world built and the room back at baseline at the end', async () => {
     const { deps, census } = await engine();
     const baseline = census();
@@ -350,10 +366,9 @@ describe('the swap: picking from the catalog (1.9.1)', () => {
       expect(ITEM_ID).toBe('blank');
       expect(blank).not.toBe(johnny);
       const blankBuilt = census();
-      // Its own ten parts in the box and the display table (ten more) are bodies, with their joints.
+      // Its own parts in the box are bodies.
       expect(blankBuilt.physics.registered).toBeGreaterThan(MANIFEST.length);
       expect(blankBuilt.physics.registered).toBeLessThan(johnnyBuilt);
-      expect(blankBuilt.physics.joints).toBeGreaterThan(0);
       run(blank, 0.5);
       const again = items.pick('johnny');
       expect(ITEM_ID).toBe('johnny');

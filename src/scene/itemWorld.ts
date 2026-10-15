@@ -13,7 +13,6 @@ import { isSmallPart } from '../game/pickMath.js';
 import { createPivotPick } from './pivotPick.js';
 import { createGhost } from './ghost.js';
 import { createCompoundPhysics } from './compoundPhysics.js';
-import { createDisplayShelf } from './displayShelf.js';
 import { createDropGuide } from './dropGuide.js';
 import { createTargetRings } from './targetRings.js';
 import { createFlatpack } from './flatpack.js';
@@ -54,7 +53,7 @@ export interface ItemWorldDeps {
 
 /**
  * Everything one item brings into the room, built for the item src/game/item.ts serves
- * now: its flatpack and packed parts, the display one on the shelf, the assembly graph and
+ * now: its flatpack and packed parts, the assembly graph and
  * the compound seam, the gizmo, the gesture router, the elevation line and Shift hold, the
  * booklet and its highlight, repack and the recovery sweep. Returns `{ update(delta),
  * repack(), pickDistance, booklet, dispose() }`: the loop calls `update`, the reset button
@@ -112,7 +111,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
     });
   };
   // Every body this world registers goes on `undo` the moment it exists — out of the physics
-  // world, its joints with it — the factories' (box, display shelf) included, so a factory
+  // world, its joints with it — the factory's (the box) included, so a factory
   // that throws half-way strands nothing it had already registered.
   const owning: PhysicsWorld = {
     ...physics,
@@ -146,11 +145,6 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
     parts.push({ id, type, mesh, body });
   }
 
-  // The display item against the wall: already built, its parts ordinary parts.
-  const display = createDisplayShelf(owning);
-  for (const part of display.parts) add(part.mesh);
-  parts.push(...display.parts);
-
   // The camera pivots about the first of these along the middle of the screen as a gesture
   // starts: every part and the box, never the overlays.
   const pickDistance = createPivotPick(parts.map((part) => part.mesh));
@@ -158,8 +152,6 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   // What is seated on and fastened to what — every type-compatible pair, right or wrong.
   const typeById = new Map(parts.map(({ id, type }) => [id, type]));
   const assembly = createAssembly((id) => typeById.get(id)!);
-  // The display shelf goes in fastened, through the graph's own events.
-  display.fasten(assembly);
   // Manipulation goes through these seams: a fastened compound moves as one, and while a
   // finger is on the elevation line its part is held in mid-air at the line's height.
   const hold = createLiftHold(createCompoundPhysics(physics, parts, assembly));
@@ -185,8 +177,8 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   undo.push(() => booklet.dispose());
 
   // While the booklet is open, the open page's parts glow — the player's own set only, never
-  // the display shelf or the box and its lid.
-  const playerParts = parts.filter((part) => !display.parts.includes(part) && part !== flatpack.base && part !== flatpack.lid);
+  // the box and its lid.
+  const playerParts = parts.filter((part) => part !== flatpack.base && part !== flatpack.lid);
   const highlight = createHighlight(playerParts);
   booklet.onChange(({ page, expanded }) => {
     const shown = bookletPages.pages[page];
@@ -259,8 +251,6 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   undo.push(() => router.dispose());
   // The line keeps whatever a panel carries (its dowels, its assembly) off the floor too: the router knows what it carries.
   hold.measure(router.verticalReachOf);
-  // The display shelf's physics joints, made by the same reconcile every tap and turn runs.
-  router.sync();
 
   // Where the box sits now, as the level, in-room box frame the layout hangs off.
   function boxPose() {
@@ -271,7 +261,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
 
   // Repack: the player's parts come apart by the normal teardown and go back into the box
   // as packed, lid on — wherever the box has been dragged to, stood upright there first if
-  // it was left tilted. The display shelf is never touched.
+  // it was left tilted.
   function repack() {
     hold.end();
     events.emit(resetEvent());

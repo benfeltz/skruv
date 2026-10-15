@@ -2006,11 +2006,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     carries,
     update,
     // Brings the physics joints in line with the graph after a change made outside a
-    // gesture — the display shelf seated pre-fastened — through the same reconcile a tap
+    // gesture — a part set seated pre-fastened by a test or a persisted build, which the app does not yet do — through the same reconcile a tap
     // or turn runs.
     sync: reconcile,
     // The repack's teardown: lets go of any gesture in progress, has every joint elsewhere
-    // (the display shelf's too) let go of these parts by its own reverse move — a cam
+    // let go of these parts by its own reverse move — a cam
     // locked on one of their bolts, a back fitting pressed through into one — then takes apart every
     // joint touching `ids` through the same unseat and reconcile a part pulled free goes
     // through — fastened or not, so the physics joints go with them.

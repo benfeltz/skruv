@@ -66,7 +66,7 @@ function itemOf(file: FlatpackFile) {
     identity: pack.identity,
     /**
      * The complete upright item: `{ parts, joints }`, worked out once at boot and shared by
-     * the display shelf, the booklet and the catalog.
+     * the booklet, the catalog and panel fit.
      *   parts  — `{ id, type, role, position, rotation }`, one per instance built into it;
      *            frame on the floor under the carcass centre, front +z
      *   joints — derived from those poses (tools/validate/lib/joints.ts): `{ hardware,
