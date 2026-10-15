@@ -35,9 +35,22 @@ describe.each([1, 2])('the item page with %i variant row(s)', (count) => {
     expect(drawingH).toBeGreaterThanOrEqual(pageH / 2 - 2 * m);
   });
 
-  it('stays inside the side margins', () => {
+  it('stays inside the side margins, the drawing clear of the swatch column', () => {
     const [x, , w] = layout.drawing;
-    expect([layout.left, layout.right, x, x + w]).toEqual([m, pageW - m, m, pageW - m]);
+    const { swatchRadius } = CATALOG.page;
+    expect([layout.left, layout.right, x]).toEqual([m, pageW - m, m]);
+    expect(layout.swatches).toHaveLength(count);
+    for (const swatch of layout.swatches) {
+      expect(x + w).toBeLessThanOrEqual(swatch.x - swatchRadius);
+      expect(swatch.x + swatchRadius).toBeLessThanOrEqual(pageW - m);
+    }
+  });
+
+  it('stacks the swatches up from the drawing\'s foot without overlap', () => {
+    const [, y, , h] = layout.drawing;
+    const { swatchRadius } = CATALOG.page;
+    expect(layout.swatches[0].y + swatchRadius).toBeCloseTo(y + h);
+    layout.swatches.slice(1).forEach(({ y: above }, i) => expect(layout.swatches[i].y - above).toBeGreaterThan(2 * swatchRadius));
   });
 });
 

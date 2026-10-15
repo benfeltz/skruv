@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BOOKLET, CATALOG, COLORS } from '../constants.js';
 import { itemPageLayout } from '../game/catalogLayout.js';
+import type { ItemPageLayout } from '../game/catalogLayout.js';
 import { coverLayout, extentOf } from '../game/coverLayout.js';
 import { itemById } from '../game/item.js';
 import { createViewRenderer } from './bookletPages.js';
@@ -93,21 +94,18 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
     rule(ctx, at.thinRule, layout.thinRule, at.left, at.right);
   }
 
-  // One filled circle per variant in its colour, ink-ringed, stacked up from the drawing's
-  // foot at the right margin — beside the drawing, never over the item.
-  function swatches(ctx: Ctx, page: ItemPage, at: ReturnType<typeof itemPageLayout>) {
-    const [, y, , h] = at.drawing;
-    const { swatchRadius: r, swatchGap, swatchRing } = layout;
+  // One filled circle per variant in its colour, ink-ringed, in the column the layout
+  // keeps beside the drawing — never over the item.
+  function swatches(ctx: Ctx, page: ItemPage, at: ItemPageLayout) {
     page.variants.forEach(({ color }, i) => {
-      const cx = at.right - r;
-      const cy = y + h - r - i * (2 * r + swatchGap);
+      const { x, y } = at.swatches[i];
       ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+      ctx.arc(x, y, layout.swatchRadius, 0, 2 * Math.PI);
       // A colour the table lacks (a pack typo; the pack tests catch it) draws faint, never throws.
       ctx.fillStyle = color in COLORS ? css(COLORS[color as keyof typeof COLORS]) : FAINT;
       ctx.fill();
       ctx.strokeStyle = INK;
-      ctx.lineWidth = swatchRing;
+      ctx.lineWidth = layout.swatchRing;
       ctx.stroke();
     });
   }

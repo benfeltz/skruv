@@ -21,8 +21,10 @@ export interface ItemPageLayout {
   headingBaseline: number;
   /** The thin rule's top edge, under the heading. */
   thinRule: number;
-  /** The drawing's frame: `[x, y, w, h]`. */
+  /** The drawing's frame: `[x, y, w, h]`, clear of the swatch column at the right margin. */
   drawing: [number, number, number, number];
+  /** Each swatch's centre, the first at the drawing's foot and the rest above it. */
+  swatches: { x: number; y: number }[];
   nameBaseline: number;
   rows: RowLayout[];
   partCountBaseline: number;
@@ -31,7 +33,8 @@ export interface ItemPageLayout {
 /**
  * The item page for `variantCount` variant rows. The blocks are stacked from the tag up —
  * part count, rows, name line — and from the margin down — rule, heading, rule — and the
- * drawing is the gap between: more variants, a shorter drawing, the tag untouched.
+ * drawing is the gap between, beside the swatch column: more variants, a shorter drawing,
+ * the tag untouched.
  */
 export function itemPageLayout(variantCount: number): ItemPageLayout {
   const [pageW] = BOOKLET.pageSize;
@@ -57,13 +60,21 @@ export function itemPageLayout(variantCount: number): ItemPageLayout {
   const nameBaseline = rowsTop - p.lineGap - p.nameLineSize * p.descender;
   const drawingBottom = nameBaseline - p.nameLineSize * p.capHeight - p.lineGap;
 
+  // The swatch column takes the right margin's side of the frame, so the drawing is fitted
+  // beside it and never under it.
+  const swatchStep = 2 * p.swatchRadius + p.swatchGap;
+  const swatchX = pageW - m - p.swatchRadius;
+  const swatches = Array.from({ length: variantCount }, (_, i) => ({ x: swatchX, y: drawingBottom - p.swatchRadius - i * swatchStep }));
+  const drawingW = pageW - 2 * m - swatchStep;
+
   return {
     left: m,
     right: pageW - m,
     heavyRule,
     headingBaseline,
     thinRule,
-    drawing: [m, drawingTop, pageW - 2 * m, drawingBottom - drawingTop],
+    drawing: [m, drawingTop, drawingW, drawingBottom - drawingTop],
+    swatches,
     nameBaseline,
     rows,
     partCountBaseline,
