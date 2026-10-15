@@ -145,6 +145,8 @@ export const CATALOG = {
   // empty. Every build ships every pack; the rest show SOLD OUT. (vite.config.ts reads this
   // file in plain Node, where import.meta.env doesn't exist.)
   pickable: import.meta.env?.VITE_PICKABLE ?? '',
+  // An item's printed size is its built extent in metres times this, rounded.
+  cmPerMetre: 100,
   // Its pages (src/scene/catalogPages.ts), in page-canvas pixels on BOOKLET.pageSize paper.
   page: {
     wordmarkSize: 156,

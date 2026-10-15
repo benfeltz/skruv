@@ -4,6 +4,7 @@
 // Pure: the pages are drawn by src/scene/catalogPages.ts and shown by the booklet sheet.
 // Names and part counts come from each item's pack, never from here.
 
+import { CATALOG } from '../constants.js';
 import { extentOf } from './coverLayout.js';
 import { ITEM_IDS, itemById } from './item.js';
 import type { Variant } from './item.js';
@@ -25,15 +26,13 @@ export interface CatalogEntry {
   partCount: number;
 }
 
-const CM_PER_M = 100;
-
 /**
  * The built item's size in whole centimetres, worked out from its parts' boxes as posed:
  * `[width, depth, height]` — the extent's x, z and y (the room's up is y, an item's front +z).
  */
 export function itemSize(parts: Parameters<typeof extentOf>[0], sizeOf: (type: string) => Size): ItemSize {
   const { min, max } = extentOf(parts, sizeOf);
-  const cm = (axis: number) => Math.round((max[axis] - min[axis]) * CM_PER_M);
+  const cm = (axis: number) => Math.round((max[axis] - min[axis]) * CATALOG.cmPerMetre);
   return [cm(0), cm(2), cm(1)];
 }
 
