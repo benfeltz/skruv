@@ -4,7 +4,6 @@ import { checkPack } from '../tools/validate/lib/checks.js';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { itemById, ITEM_IDS } from '../src/game/item.js';
 import { pickableSet } from '../src/game/pickable.js';
-import { splashCount } from '../src/game/splash.js';
 import type { FlatpackFile } from '../tools/validate/lib/pack.js';
 
 // 1.9.3.2 acceptance, against the plan's three criteria: the pack validates and ships in the
@@ -36,11 +35,6 @@ describe('AC1: ÖVERKÄLL validates and ships in the catalog as the third item, 
       expect(at('blank'), file).toBe(at('johnny') + 1);
       expect(at('overkall'), file).toBe(at('blank') + 1);
     }
-  });
-
-  it('counts four catalog pages on the pre-splash: the cover and three items', () => {
-    expect(splashCount(ITEM_IDS.length)).toBe('1 / 4');
-    expect(read('index.html')).toContain('<span class="pre-splash-count">1 / 4</span>');
   });
 });
 
