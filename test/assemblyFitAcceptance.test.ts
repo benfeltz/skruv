@@ -3,7 +3,7 @@
 // line and the real compound seam over a recording physics stub. The carcass is the booklet's
 // state after its step 5 — dowels pushed home in the four horizontals, the horizontals pushed
 // home on side panel 1, its cam bolts screwed and the cams locked on them — put in through the
-// assembly's own events (seatHome), as the display shelf is. Side panel 2 lies flat, holes up;
+// assembly's own events (seatHome). Side panel 2 lies flat, holes up;
 // the carcass stands over it, side panel 1 on top, turned a little and held a little high. How
 // it feels on a phone, and the frame rate carrying it, are the PR's manual checks.
 
