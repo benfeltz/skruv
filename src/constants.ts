@@ -140,8 +140,9 @@ export const BOOKLET_UI = {
   // The page look (src/ui/booklet.ts `look: 'page'`, the catalog): the page alone over the
   // room, with a soft shadow, growing out of its docked thumb. `gutter` keeps its shadow
   // clear of a narrow screen's edges; `growMs` is the grow to the centre and the shrink
-  // back. index.html's pre-splash mirrors the fit and the shadow.
-  page: { shadow: '0 12px 40px #0008', gutter: 12, growMs: 220 },
+  // back; `radius` rounds the page's corners. index.html's pre-splash mirrors the fit,
+  // the shadow and the radius.
+  page: { shadow: '0 12px 40px #0008', gutter: 12, growMs: 220, radius: 6 },
 };
 
 // The catalog (1.9.1): the game's front door, a second booklet of items to build
@@ -198,12 +199,17 @@ export const CATALOG = {
     // target src/ui/booklet.ts lays over the page, its foot on the page margin (pageSize
     // height 1000 less margin 44 less its own 104). The item page's lines stack up from it.
     action: [160, 852, 400, 104] satisfies [number, number, number, number],
-    // The corner arrows, printed on the page and tapped through a clear button over each
-    // (src/ui/booklet.ts): [x, y, w, h], level with the tag, in the lower corners — ‹ at the
-    // left margin, › at the right — each 100 page pixels square (72 CSS px at the widest
-    // page, over the 44 a thumb needs), and clear of the tag's columns by 16.
+    // The corner arrows, printed on the page: [x, y, w, h], level with the tag, in the lower
+    // corners — ‹ at the left margin, › at the right — and clear of the tag's columns by 16.
     prev: [44, 852, 100, 104] satisfies [number, number, number, number],
     next: [576, 852, 100, 104] satisfies [number, number, number, number],
+    // The clear buttons over them (src/ui/booklet.ts): each printed arrow's rect grown out
+    // to the page's edge and down its foot, stopping 8 short of the tag's column. At the
+    // smallest page a phone shows (about 258 CSS px wide, held sideways) 152 page px is
+    // 54 CSS px — over the 44 a thumb needs — and a tap beside the arrow turns the page
+    // rather than putting the catalog down.
+    prevHit: [0, 836, 152, 164] satisfies [number, number, number, number],
+    nextHit: [568, 836, 152, 164] satisfies [number, number, number, number],
     // An arrow drawn as a chevron at its rect's centre: this far up and down from it, this
     // far across, in this stroke weight (page pixels).
     arrowHalfHeight: 22,
@@ -320,6 +326,10 @@ export const BOX = {
 
 // Repack and recovery (src/ui/resetButton.ts, src/main.ts).
 export const RESET = {
+  // The button's inset from the screen corner and its height (CSS pixels): src/ui/
+  // resetButton.ts draws it so, and the ?tune gear (src/ui/tunePanel.ts) sits under it.
+  inset: 16,
+  height: 44,
   // The repack button arms on a first tap and repacks only on a second within this many
   // ms — cheap insurance against a fat finger wiping a build.
   confirmMs: 2500,
@@ -677,10 +687,8 @@ export const TUNE = {
   // (…/skruv/?tune); the plain URL is the teaser, untouched.
   queryFlag: 'tune',
   // The gear tab sits upper right, under the Repack button (src/ui/resetButton.ts), so the
-  // catalog's thumb has the upper left alone: Repack's inset from the corner and its height,
-  // and the gap left between the two (CSS pixels).
-  tabInset: 16,
-  repackHeight: 44,
+  // catalog's thumb has the upper left alone: the gap left between the two (CSS pixels);
+  // Repack's own inset and height are RESET's.
   tabGap: 8,
   // The drawer, in CSS pixels: never wider than this, nor taller than this share of the
   // screen, so the build stays in view above it.

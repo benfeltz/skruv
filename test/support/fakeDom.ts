@@ -21,8 +21,15 @@ export class FakeElement {
   captured: number[] = [];
   style: Record<string, string> = {};
   inert = false;
-  /** Layout width a test can set, as the real element's `offsetWidth`. */
+  /** The layout box a test can set, as the real element's `offset*`. */
   offsetWidth = 0;
+  offsetLeft = 0;
+  offsetTop = 0;
+  /** The rect a test can set, as `getBoundingClientRect` returns it. */
+  rect = { left: 0, top: 0, width: 0, height: 0 };
+  getBoundingClientRect() {
+    return this.rect;
+  }
   declare id?: string;
 
   constructor(tag: string, private readonly dom: FakeDom) {

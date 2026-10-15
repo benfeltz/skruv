@@ -63,6 +63,10 @@ class FakeElement {
   setPointerCapture(id: number) {
     this.captured.push(id);
   }
+  // The catalog's page look measures its thumb; a fake has no layout.
+  getBoundingClientRect() {
+    return { left: 0, top: 0, width: 0, height: 0 };
+  }
   focus() {
     dom.focused = this;
   }
@@ -601,7 +605,7 @@ describe('boot with the catalog up (1.9.1)', () => {
     expect(notice.hidden).toBe(false);
     expect(notice.attributes.role).toBe('alert');
     // Laid over the page, never a row of its own: the sheet's rows are as before.
-    expect(catalog.element.children).toHaveLength(2);
+    expect(catalog.element.children).toHaveLength(3);
     expect(notice.textContent).toBe(CATALOG.words.buildFailed);
     expect(errors).toHaveBeenCalledOnce();
     // Flipping away clears it; the next try builds.

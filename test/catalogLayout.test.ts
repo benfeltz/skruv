@@ -156,6 +156,24 @@ describe('the corner arrows and page number', () => {
     expect(baseline).toBeLessThan(pageH);
   });
 
+  it('lays each button over its arrow, out to the page edge, and clear of the tag and the part count', () => {
+    const { prevHit, nextHit, prev, next } = CATALOG.page;
+    const inside = ([x, y, w, h]: readonly number[], [ix, iy, iw, ih]: readonly number[]) => ix >= x && iy >= y && ix + iw <= x + w && iy + ih <= y + h;
+    expect(inside(prevHit, prev)).toBe(true);
+    expect(inside(nextHit, next)).toBe(true);
+    for (const [x, y, w, h] of [prevHit, nextHit]) {
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x + w).toBeLessThanOrEqual(pageW);
+      expect(y + h).toBeLessThanOrEqual(pageH);
+      // 44 CSS px on the smallest page a phone shows (about 258 CSS px wide, held sideways).
+      expect((w / pageW) * 258).toBeGreaterThanOrEqual(44);
+      expect((h / pageW) * 258).toBeGreaterThanOrEqual(44);
+      expect(y).toBeGreaterThan(itemPageLayout(2).partCountBaseline);
+    }
+    expect(overlaps(prevHit, action)).toBe(false);
+    expect(overlaps(nextHit, action)).toBe(false);
+  });
+
   it('draws each chevron inside its rect, pointing away from the page it leaves', () => {
     for (const [rect, direction] of [[prev, 'prev'], [next, 'next']] as const) {
       const points = arrowChevron(rect, direction);

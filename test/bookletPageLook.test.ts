@@ -52,7 +52,9 @@ describe('the page look: the page alone', () => {
   it('builds no handle and no control bar — a page and a close the eye never sees', () => {
     const { sheet, close, view } = mount();
     expect(sheet.element.className).toBe('booklet-leaf');
-    expect(sheet.element.children).toEqual([close, view]);
+    expect(sheet.element.children.slice(0, 2)).toEqual([close, view]);
+    // ...and the live region that names the page: nothing visible beyond the page itself.
+    expect(sheet.element.children).toHaveLength(3);
     expect(close.className).toBe('booklet-close');
     expect(JSON.stringify(sheet.element.children.map((c) => c.className))).not.toMatch(/handle|controls/);
   });
@@ -60,10 +62,19 @@ describe('the page look: the page alone', () => {
   it('lays a clear button over each printed corner arrow, in page fractions', () => {
     const { prev, next } = mount();
     const share = ([x, y, w, h]: readonly number[]) => ({ left: `${(100 * x) / pageW}%`, top: `${(100 * y) / pageH}%`, width: `${(100 * w) / pageW}%`, height: `${(100 * h) / pageH}%` });
-    expect(prev.style).toMatchObject(share(CATALOG.page.prev));
-    expect(next.style).toMatchObject(share(CATALOG.page.next));
+    expect(prev.style).toMatchObject(share(CATALOG.page.prevHit));
+    expect(next.style).toMatchObject(share(CATALOG.page.nextHit));
     expect(prev.attributes['aria-label']).toBe(CATALOG.words.prev);
     expect(next.attributes['aria-label']).toBe(CATALOG.words.next);
+  });
+
+  it('says which page it is in a live region, the number being printed rather than text', () => {
+    const { sheet } = mount();
+    const status = sheet.element.children[2];
+    expect(status.attributes['aria-live']).toBe('polite');
+    expect(status.textContent).toBe(`Page 1 of ${COUNT}`);
+    dom.key('ArrowRight');
+    expect(status.textContent).toBe(`Page 2 of ${COUNT}`);
   });
 
   it('does not dim the room: its scrim carries no colour of its own', () => {
@@ -80,19 +91,30 @@ describe('the page look: the page alone', () => {
 });
 
 describe('the page look: the arrows', () => {
-  it('shows only › on the cover, both in the middle, only ‹ on the last page', () => {
+  it('marks the arrow that has nowhere to go inert, and keeps its button in place', () => {
     const { sheet, prev, next } = mount();
-    expect([prev.hidden, next.hidden]).toEqual([true, false]);
+    const inert = () => [prev.attributes['aria-disabled'], next.attributes['aria-disabled']];
+    expect(inert()).toEqual(['true', 'false']);
     next.fire('click');
-    expect([prev.hidden, next.hidden]).toEqual([false, false]);
-    next.fire('click');
-    next.fire('click');
-    expect(sheet.currentPage).toBe(3);
-    expect([prev.hidden, next.hidden]).toEqual([false, true]);
-    // Hidden is also deaf: a click that reaches a hidden arrow flips nothing past the end.
-    expect([prev.disabled, next.disabled]).toEqual([false, true]);
+    expect(inert()).toEqual(['false', 'false']);
+    for (let i = 0; i < COUNT; i++) next.fire('click');
+    expect(sheet.currentPage).toBe(COUNT - 1);
+    expect(inert()).toEqual(['false', 'true']);
+    // Present, not hidden or disabled: it keeps focus and the corner.
+    expect([prev.hidden, next.hidden, prev.disabled, next.disabled]).toEqual([false, false, false, false]);
     prev.fire('click');
-    expect(sheet.currentPage).toBe(2);
+    expect(sheet.currentPage).toBe(COUNT - 2);
+  });
+
+  it('never puts the catalog down by a tap in the corner of an arrow that has nowhere to go', () => {
+    const { sheet, prev, next } = mount();
+    // ‹ on the cover; then › on the last page, tapped over and over.
+    press(prev);
+    expect(sheet.expanded).toBe(true);
+    for (let i = 0; i < COUNT; i++) next.fire('click');
+    for (let i = 0; i < 3; i++) press(next);
+    expect(sheet.expanded).toBe(true);
+    expect(sheet.currentPage).toBe(COUNT - 1);
   });
 
   it('turns by swipe and by the arrow keys, as the sheet does', () => {
@@ -108,14 +130,15 @@ describe('the page look: the arrows', () => {
     expect(sheet.expanded).toBe(true);
   });
 
-  it('opens onto › on the cover, and on ‹ when the page has no next', () => {
-    const { sheet, next, prev } = mount({ open: false });
+  it('opens onto › and keeps focus there, inert at the last page, never dropping it to the body', () => {
+    const { sheet, next } = mount({ open: false });
     sheet.thumb.fire('click');
     expect(dom.focused).toBe(next);
+    for (let i = 0; i < COUNT; i++) next.fire('click');
+    expect(next.hidden).toBe(false);
     sheet.setOpen(false);
-    for (let i = 0; i < COUNT - 1; i++) next.fire('click');
     sheet.thumb.fire('click');
-    expect(dom.focused).toBe(prev);
+    expect(dom.focused).toBe(next);
   });
 });
 
@@ -174,15 +197,53 @@ describe('the page look: putting it down', () => {
 });
 
 describe('the page look: the grow', () => {
-  it('sits centred at full size open, and shrinks onto its thumb corner closed', () => {
+  // The page's layout box centred (before any transform), and a thumb rect at the corner.
+  const lay = (sheet: FakeSheet, box: { width: number; left: number; top: number }, thumb: { left: number; top: number; width: number }) => {
+    sheet.element.offsetWidth = box.width;
+    sheet.element.offsetLeft = box.left;
+    sheet.element.offsetTop = box.top;
+    sheet.thumb.rect = { ...thumb, height: 0 };
+  };
+
+  it('sits centred at full size open, and closed lies on the thumb as it is measured', () => {
     const { sheet } = mount({ open: false });
-    sheet.element.offsetWidth = 360;
+    lay(sheet, { width: 360, left: 200, top: 300 }, { left: 16, top: 20, width: BOOKLET_UI.thumbWidth });
     sheet.thumb.fire('click');
     expect(sheet.element.style.transform).toBe('translate(-50%, -50%)');
     sheet.setOpen(false);
-    const scale = BOOKLET_UI.thumbWidth / 360;
-    expect(sheet.element.style.transform).toBe(
-      `translate(calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-left) - 50vw), calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-top) - 50vh)) scale(${scale})`,
-    );
+    expect(sheet.element.style.transform).toBe(`translate(${16 - 200}px, ${20 - 300}px) scale(${BOOKLET_UI.thumbWidth / 360})`);
+  });
+
+  it('follows a hover-enlarged thumb, not the docked width', () => {
+    const { sheet } = mount({ open: false });
+    lay(sheet, { width: 360, left: 200, top: 300 }, { left: 16, top: 20, width: 180 });
+    sheet.thumb.fire('click');
+    sheet.setOpen(false);
+    expect(sheet.element.style.transform).toBe(`translate(${16 - 200}px, ${20 - 300}px) scale(0.5)`);
+  });
+
+  it('docks the page, measured, before the first open — even one built before it was mounted', () => {
+    const { sheet } = mount({ open: false });
+    // Built unmounted: no box yet, so scale 1.
+    expect(sheet.element.style.transform).toMatch(/scale\(1\)$/);
+    const writes: string[] = [];
+    sheet.element.style = new Proxy(sheet.element.style, {
+      set(target, key, value: string) {
+        if (key === 'transform') writes.push(value);
+        target[key as string] = value;
+        return true;
+      },
+    });
+    lay(sheet, { width: 400, left: 160, top: 100 }, { left: 16, top: 16, width: BOOKLET_UI.thumbWidth });
+    sheet.thumb.fire('click');
+    // The docked pose, from the box it has now, then the open pose to grow to.
+    expect(writes).toEqual([`translate(${16 - 160}px, ${16 - 100}px) scale(${BOOKLET_UI.thumbWidth / 400})`, 'translate(-50%, -50%)']);
+  });
+
+  it('re-settles the docked page when the window resizes', () => {
+    const { sheet } = mount({ open: false });
+    lay(sheet, { width: 500, left: 50, top: 60 }, { left: 16, top: 16, width: BOOKLET_UI.thumbWidth });
+    dom.windowListeners.get('resize')!.forEach((fn) => fn({}));
+    expect(sheet.element.style.transform).toBe(`translate(${16 - 50}px, ${16 - 60}px) scale(${BOOKLET_UI.thumbWidth / 500})`);
   });
 });

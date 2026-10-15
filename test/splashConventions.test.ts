@@ -13,7 +13,7 @@ const main = read('src/main.ts');
 const booklet = read('src/ui/booklet.ts');
 const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 const [pageW, pageH] = BOOKLET.pageSize;
-const { gutter, shadow } = BOOKLET_UI.page;
+const { gutter, shadow, radius } = BOOKLET_UI.page;
 // The page look's width, as booklet.ts's `.booklet-leaf` and index.html's `.pre-splash` both write it.
 const FIT = `width: min(calc(100vw - ${2 * gutter}px), ${pageW}px, calc(${BOOKLET_UI.maxHeight * 100}dvh * ${pageW} / ${pageH}));`;
 
@@ -44,8 +44,8 @@ describe('pre-splash: the catalog cover (1.6.1, 1.9.1, 1.9.1.5)', () => {
     expect(svg).toContain(`background: ${css(COLORS.bookletPaper)};`);
     expect(svg).toContain(`box-shadow: ${shadow};`);
     // The corners and shadow of the real page's frame.
-    expect(booklet).toContain('border-radius: 6px;\n      box-shadow: ${shadow};');
-    expect(svg).toContain('border-radius: 6px;');
+    expect(booklet).toContain('border-radius: ${radius}px;\n      box-shadow: ${shadow};');
+    expect(svg).toContain(`border-radius: ${radius}px;`);
     expect(html).toMatch(new RegExp(`fill="${css(COLORS.bookletInk)}"`));
   });
 

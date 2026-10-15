@@ -53,6 +53,10 @@ class FakeElement {
     this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]);
   }
   setPointerCapture() {}
+  // The page look measures its thumb; a fake has no layout.
+  getBoundingClientRect() {
+    return { left: 0, top: 0, width: 0, height: 0 };
+  }
   focus() {}
   getContext() {
     return { drawImage() {} };

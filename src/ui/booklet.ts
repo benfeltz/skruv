@@ -19,13 +19,13 @@ const LEAF_STYLE_ID = 'skruv-booklet-leaf';
 // The page look's own rules, in a style element of their own so the sheet's stay as they
 // were: the page alone — no surface, handle or control bar — centred over the room, its
 // frame shadowed, the thumb it grows out of docked in the upper left. Closed, the element
-// is scaled down to the thumb and moved onto its corner by an inline transform (`settle`);
-// open it is centred at full size, and the transition between is the grow.
+// is scaled and moved onto the thumb's own rect by an inline transform (`settle`); open it
+// is centred at full size, and the transition between is the grow.
 function injectLeafStyle() {
   if (document.getElementById(LEAF_STYLE_ID)) return;
   const style = document.createElement('style');
   style.id = LEAF_STYLE_ID;
-  const { shadow, gutter, growMs } = BOOKLET_UI.page;
+  const { shadow, gutter, growMs, radius } = BOOKLET_UI.page;
   style.textContent = `
     .booklet-thumb[data-corner='topLeft'] {
       top: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-top));
@@ -52,15 +52,16 @@ function injectLeafStyle() {
     }
     .booklet-leaf .booklet-frame {
       width: 100%;
-      border-radius: 6px;
+      border-radius: ${radius}px;
       box-shadow: ${shadow};
     }
     .booklet-leaf button:focus-visible {
       outline: 2px solid ${css(COLORS.uiAccent)};
       outline-offset: 3px;
     }
-    /* Still a button, for a keyboard or a screen reader to put the page down; unseen. */
-    .booklet-close {
+    /* Still a button, for a keyboard or a screen reader to put the page down; unseen. And the
+       live region that says which page it is, since the number is printed, not text. */
+    .booklet-close, .booklet-status {
       position: absolute;
       width: 1px;
       height: 1px;
@@ -80,8 +81,8 @@ function injectStyle() {
   style.textContent = `
     .booklet-thumb {
       position: fixed;
-      left: calc(16px + env(safe-area-inset-left));
-      bottom: calc(16px + env(safe-area-inset-bottom));
+      left: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-left));
+      bottom: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-bottom));
       width: ${BOOKLET_UI.thumbWidth}px;
       aspect-ratio: ${pageW} / ${pageH};
       padding: 0;
@@ -388,7 +389,7 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
     element.dataset.open = String(open);
     // A sheet takes the thumb's place; the page grows out of it and puts it back.
     thumb.hidden = open && !leaf;
-    if (leaf) settle();
+    settle();
     showAction();
     syncSheets();
     for (const fn of listeners) fn({ page, expanded: open });
@@ -415,6 +416,7 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
     if (open === value || (!value && !canClose())) return;
     // One sheet open at a time: another one open keeps this one docked.
     if (value && anyOpen(self)) return;
+    if (value) dock();
     open = value;
     notify(null);
     showScrim(open, byRoomTap ? BOOKLET_UI.scrimLingerMs : 0);
@@ -499,16 +501,32 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
   }
   window.addEventListener('keydown', onKey);
 
-  // The page look's pose (the grow): open, centred at full size; docked, shrunk to the
-  // thumb's width and moved so its top-left corner lands on the thumb's — measured at each
-  // render, so a resize is picked up by the next open or close.
-  function settle() {
-    const width = element.offsetWidth || 0;
-    const scale = width > 0 ? BOOKLET_UI.thumbWidth / width : 1;
-    const inset = `${BOOKLET_UI.cornerInset}px`;
-    element.style.transform = open
-      ? 'translate(-50%, -50%)'
-      : `translate(calc(${inset} + env(safe-area-inset-left) - 50vw), calc(${inset} + env(safe-area-inset-top) - 50vh)) scale(${scale})`;
+  // The page look's pose (the grow). Open: centred at full size. Docked: scaled to the
+  // thumb's width and moved so the page's top-left lands on the thumb's — both measured
+  // from the layout, the page's own box and the thumb's rect as it is now (a mouse-enlarged
+  // thumb included), so the grow starts from what is on screen whatever the viewport.
+  // `dock` puts the docked pose on before an open, so the transition has a start even for
+  // a page first opened from a sheet that was built before it was mounted.
+  let settle = () => {};
+  let dock = () => {};
+  if (leaf) {
+    const dockedPose = () => {
+      const { left, top, width: thumbWidth } = thumb.getBoundingClientRect();
+      // The layout box, before any transform: a hidden or unmounted element has none.
+      const width = element.offsetWidth || 0;
+      const scale = width > 0 ? thumbWidth / width : 1;
+      return `translate(${left - element.offsetLeft}px, ${top - element.offsetTop}px) scale(${scale})`;
+    };
+    dock = () => {
+      element.style.transform = dockedPose();
+      // Flushed, so the open pose that follows has this one to grow from.
+      element.getBoundingClientRect();
+    };
+    settle = () => {
+      element.style.transform = open ? 'translate(-50%, -50%)' : dockedPose();
+    };
+    // A resize or a turn of the phone moves both boxes; the docked page follows.
+    window.addEventListener('resize', settle);
   }
 
   const self: LiveSheet = { isOpen: () => open, thumb };
@@ -518,6 +536,7 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
   function dispose() {
     clearTimeout(lingering ?? undefined);
     window.removeEventListener('keydown', onKey);
+    window.removeEventListener('resize', settle);
     sheets.delete(self);
     syncSheets();
     listeners.clear();
@@ -602,26 +621,32 @@ function controlBar() {
 
 /**
  * The page look's controls: a clear button over each arrow printed in a lower corner of
- * the page (CATALOG.page.prev / .next, src/scene/catalogPages.ts draws them), none of its
- * own to show. At an end the arrow is not drawn and its button is hidden and disabled —
- * the page's own marks say which (src/game/catalogLayout.ts `pageMarks`).
+ * the page (CATALOG.page.prevHit / .nextHit, src/scene/catalogPages.ts draws the arrows),
+ * none of its own to show, and a live region for the page's number, which is printed, not
+ * text. At an end the arrow is not drawn but its button stays, inert (aria-disabled): a tap
+ * there is the button's own, never a tap on the page that would put the catalog down, and
+ * focus on it is not lost. The page's own marks say which (src/game/catalogLayout.ts `pageMarks`).
  */
 function cornerArrows() {
-  const { prev: prevRect, next: nextRect } = CATALOG.page;
+  const { prevHit, nextHit } = CATALOG.page;
   const prev = button('', CATALOG.words.prev);
   const next = button('', CATALOG.words.next);
-  for (const [control, rect] of [[prev, prevRect], [next, nextRect]] as const) {
+  for (const [control, rect] of [[prev, prevHit], [next, nextHit]] as const) {
     control.className = 'booklet-action';
     overlay(control, rect, 0);
   }
+  const status = document.createElement('span');
+  status.className = 'booklet-status';
+  status.setAttribute('aria-live', 'polite');
   return {
-    bar: null as HTMLElement | null,
+    bar: status as HTMLElement | null,
     prev,
     next,
     paint(page: number, total: number) {
       const marks = pageMarks(page, total);
-      prev.hidden = prev.disabled = !marks.prev;
-      next.hidden = next.disabled = !marks.next;
+      prev.setAttribute('aria-disabled', String(!marks.prev));
+      next.setAttribute('aria-disabled', String(!marks.next));
+      status.textContent = `Page ${page + 1} of ${total}`;
     },
   };
 }

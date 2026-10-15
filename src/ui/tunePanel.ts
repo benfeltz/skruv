@@ -1,4 +1,4 @@
-import { COLORS, TUNE } from '../constants.js';
+import { COLORS, RESET, TUNE } from '../constants.js';
 import type { Knob, Tunables } from '../game/tunables.js';
 
 // The tuning drawer, only on a ?tune URL: a gear tab under the Repack button, upper right, opens a bottom sheet of
@@ -19,8 +19,8 @@ function injectStyle() {
   style.textContent = `
     .tune-tab {
       position: fixed;
-      right: calc(${TUNE.tabInset}px + env(safe-area-inset-right));
-      top: calc(${TUNE.tabInset + TUNE.repackHeight + TUNE.tabGap}px + env(safe-area-inset-top));
+      right: calc(${RESET.inset}px + env(safe-area-inset-right));
+      top: calc(${RESET.inset + RESET.height + TUNE.tabGap}px + env(safe-area-inset-top));
       width: 44px;
       height: 44px;
       padding: 0;
