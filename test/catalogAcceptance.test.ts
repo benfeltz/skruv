@@ -7,6 +7,7 @@ import { createItemSlot } from '../src/game/itemSlot.js';
 import { pickableSet } from '../src/game/pickable.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
 import { createCatalogSheet } from '../src/ui/catalogSheet.js';
+import { entry } from './catalogFixtures.js';
 import type { CatalogEntry } from '../src/game/catalogModel.js';
 
 // Automated half of the 1.9.1 Catalog test plan (`Test Plan.md` beside the plan in the
@@ -88,9 +89,9 @@ afterEach(() => {
 
 // The epic's three items, as entries; the registry carries only JOHNNY so far.
 const entries: CatalogEntry[] = [
-  { id: 'johnny', name: 'JOHNNY', partCount: 61 },
-  { id: 'blank', name: 'BLANK', partCount: 9 },
-  { id: 'overkall', name: 'ÖVERKÄLL', partCount: 40 },
+  entry('johnny', 'JOHNNY', 61),
+  entry('blank', 'BLANK', 9),
+  entry('overkall', 'ÖVERKÄLL', 40),
 ];
 const ids = entries.map(({ id }) => id);
 
@@ -230,11 +231,12 @@ describe('AC5: the pickable hook makes the rest SOLD OUT, inert (VITE_PICKABLE)'
     expect(buildIt.attributes['aria-label']).toBe('Build BLANK');
   });
 
-  it('the stamp keeps the space below it, down to the page margin, free for a store link', () => {
-    const [, y, , h] = CATALOG.page.action;
-    const [, pageH] = BOOKLET.pageSize;
-    // Below the tag/stamp: room for a line of link text at the detail size, above the margin.
-    expect(pageH - BOOKLET.margin - (y + h)).toBeGreaterThanOrEqual(CATALOG.page.detailSize * 2);
+  it('the tag and the stamp stand on the page margin, inside the page', () => {
+    const [x, y, w, h] = CATALOG.page.action;
+    const [pageW, pageH] = BOOKLET.pageSize;
+    expect(y + h).toBe(pageH - BOOKLET.margin);
+    expect(x).toBeGreaterThanOrEqual(BOOKLET.margin);
+    expect(x + w).toBeLessThanOrEqual(pageW - BOOKLET.margin);
   });
 
   it('a flag naming no item is refused, never quietly empty', () => {

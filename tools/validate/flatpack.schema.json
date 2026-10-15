@@ -12,12 +12,27 @@
     "identity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["product", "maker", "documentCode"],
+      "required": ["product", "maker", "documentCode", "category", "variants"],
       "properties": {
         "product": { "$ref": "#/definitions/name" },
         "maker": { "$ref": "#/definitions/name" },
         "documentCode": { "$ref": "#/definitions/name" },
-        "description": { "type": "string" }
+        "category": { "$ref": "#/definitions/name" },
+        "variants": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "color", "article"],
+            "properties": {
+              "name": { "$ref": "#/definitions/name" },
+              "color": { "$ref": "#/definitions/key" },
+              "article": { "type": "string", "pattern": "^[0-9]{3}\\.[0-9]{3}\\.[0-9]{2}$" }
+            }
+          }
+        }
       }
     },
     "vocabulary": {

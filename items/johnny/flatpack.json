@@ -5,7 +5,11 @@
     "product": "JOHNNY",
     "maker": "SKRUV",
     "documentCode": "SK-0000451-1",
-    "description": "Bookcase, about 80 × 28 × 202 cm"
+    "category": "Bookcase",
+    "variants": [
+      { "name": "White", "color": "partPanel", "article": "451.000.01" },
+      { "name": "Black-brown", "color": "partPanelBlackBrown", "article": "451.000.02" }
+    ]
   },
   "vocabulary": {
     "connectors": ["dowelHole", "camBoltHole", "camLockRecess", "shelfPinHole", "backFittingHole", "dowelEnd", "boltThread", "hexSocket", "camLockBody", "pinTip", "backFittingTip", "wrenchTip", "driveSlot", "screwdriverTip"],

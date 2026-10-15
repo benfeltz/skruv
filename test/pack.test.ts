@@ -14,7 +14,7 @@ const POSE: Pose = { position: [0, 0, 0], rotation: [0, 0, 0, 1] };
 function fixture(): FlatpackFile {
   return {
     format: 1,
-    identity: { product: 'TEST', maker: 'SKRUV', documentCode: 'SK-0' },
+    identity: { product: 'TEST', maker: 'SKRUV', documentCode: 'SK-0', category: 'Shelf', variants: [{ name: 'White', color: 'partPanel', article: '999.000.01' }] },
     vocabulary: { connectors: ['dowelHole', 'dowelEnd', 'wrenchTip'], fasteners: ['dowel', 'tool'] },
     parts: {
       board: {

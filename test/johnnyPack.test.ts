@@ -57,6 +57,14 @@ describe('the shipped pack passes the validator', () => {
 });
 
 describe('manifest', () => {
+  it('carries its catalog identity: a category, two variants in known colours, no description', () => {
+    const { identity } = JSON_PACK;
+    expect(identity.category).toBe('Bookcase');
+    expect(identity.variants.map((v) => v.name)).toEqual(['White', 'Black-brown']);
+    for (const { color } of identity.variants) expect(COLORS).toHaveProperty(color);
+    expect(identity).not.toHaveProperty('description');
+  });
+
   it('matches the Design manifest quantities exactly, 61 instances in all', () => {
     expect(quantities).toEqual(DESIGN_MANIFEST);
     expect(MANIFEST).toHaveLength(61);

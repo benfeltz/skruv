@@ -5,7 +5,11 @@
     "product": "ÖVERKÄLL",
     "maker": "SKRUV",
     "documentCode": "SK-0000453-1",
-    "description": "Nightstand with one drawer, about 40 × 45 × 35 cm"
+    "category": "Nightstand",
+    "variants": [
+      { "name": "White", "color": "partPanel", "article": "453.000.01" },
+      { "name": "Gray", "color": "partPanelGray", "article": "453.000.02" }
+    ]
   },
   "vocabulary": {
     "connectors": [

@@ -28,7 +28,7 @@ const POSE: Pose = { position: [0, 0, 0], rotation: [0, 0, 0, 1] };
 function fixture(): FlatpackFile {
   return {
     format: 1,
-    identity: { product: 'TEST', maker: 'SKRUV', documentCode: 'SK-0' },
+    identity: { product: 'TEST', maker: 'SKRUV', documentCode: 'SK-0', category: 'Shelf', variants: [{ name: 'White', color: 'partPanel', article: '999.000.01' }] },
     vocabulary: { connectors: ['dowelHole', 'dowelEnd'], fasteners: ['dowel'] },
     parts: {
       board: { partNumber: '10000', box: [0.2, 0.016, 0.2], mass: 1, color: 'partPanel', quantity: 1, connectors: [connector('dowelHole-1', 'dowelHole')] },
@@ -76,6 +76,12 @@ describe('flatpack.schema.json', () => {
     ['a malformed connector ref', (p) => (p.manual.pages[2].fasten[0][1] = 'board-1')],
     ['a step page with no number', (p) => delete p.manual.pages[2].number],
     ['a page kind outside the format', (p) => p.manual.pages.push({ kind: 'appendix' })],
+    ['an article number off the NNN.NNN.NN pattern', (p) => (p.identity.variants[0].article = '45.000.01')],
+    ['a variant colour that is not a key', (p) => (p.identity.variants[0].color = 'Black brown')],
+    ['more variants than the catalog page has rows for', (p) => (p.identity.variants = Array.from({ length: 5 }, () => p.identity.variants[0]))],
+    ['no variants', (p) => (p.identity.variants = [])],
+    ['no category', (p) => delete p.identity.category],
+    ['the retired description', (p) => (p.identity.description = 'A shelf')],
     ['a doDont page with no subject', (p) => delete p.manual.pages[1].subject],
     ['a scripted page', (p) => (p.manual.pages[2].script = 'turn()')],
     ['an asset outside assets/', (p) => (p.parts.board.mesh = '../board.glb')],

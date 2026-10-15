@@ -22,6 +22,10 @@ export const COLORS = {
   sunLight: 0xffffff,
   // Parts — keyed by the catalog's `color` field.
   partPanel: 0xf1eee6,
+  // Panel colourways an item's variants name (identity.variants[].color), shown on the catalog's swatches.
+  partPanelBlackBrown: 0x3b2f2a,
+  partPanelBlack: 0x232323,
+  partPanelGray: 0x8d9094,
   partHardboard: 0x9c8466,
   partDowel: 0xd8b27a,
   partMetal: 0xa7adb3,
@@ -141,28 +145,59 @@ export const CATALOG = {
   // empty. Every build ships every pack; the rest show SOLD OUT. (vite.config.ts reads this
   // file in plain Node, where import.meta.env doesn't exist.)
   pickable: import.meta.env?.VITE_PICKABLE ?? '',
+  // An item's printed size is its built extent in metres times this, rounded.
+  cmPerMetre: 100,
   // Its pages (src/scene/catalogPages.ts), in page-canvas pixels on BOOKLET.pageSize paper.
   page: {
     wordmarkSize: 156,
     taglineSize: 30,
-    nameSize: 96,
     detailSize: 30,
-    // The headings' setting, as fractions of a type size: a title's baseline sits this far
-    // down its size; the line under it (tagline, part count) this many of its own sizes below
+    // The cover's setting, as fractions of a type size: a title's baseline sits this far
+    // down its size; the line under it (the tagline) this many of its own sizes below
     // that baseline; the drawing starts this many of them below the title's full size. The
     // line under is indented this far (page pixels) to sit optically flush under the title.
     baseline: 0.8,
     subtitleDrop: 1.6,
     drawingDrop: 2.4,
     taglineIndent: 6,
-    detailIndent: 4,
-    // The BUILD IT tag, or the SOLD OUT stamp in its place: [x, y, w, h], also the hit
-    // target src/ui/booklet.ts lays over the page. Below it, down to the page margin, nothing
-    // is drawn: the space held for a store link on a sold-out page, once there is a store.
-    action: [180, 770, 360, 104] satisfies [number, number, number, number],
-    actionTextSize: 52,
+    // An item page's lines (src/game/catalogLayout.ts), top to bottom: the heavy rule's
+    // weight; the category heading's size, and the gap between the rule and its cap line;
+    // the thin rule's weight; the name line's size (name bold, category and size beside
+    // it); a variant row's type size and its height as a multiple of that size; the thin
+    // rule under each row. `lineGap` separates the blocks; the part count (detailSize) sits
+    // `countGap` below the rows and `tagGap` above the tag.
+    heavyRule: 8,
+    headingSize: 40,
+    headingGap: 12,
+    // ...and the gap between the heading's descender and the thin rule under it.
+    ruleGap: 6,
+    thinRule: 2,
+    nameLineSize: 34,
+    rowSize: 26,
+    rowHeight: 1.7,
+    lineGap: 14,
+    countGap: 34,
+    tagGap: 34,
+    // Type's cap-line and descender depth as fractions of its size, for stacking lines
+    // without measuring them.
+    capHeight: 0.75,
+    descender: 0.25,
+    // The swatches, one filled circle per variant right of the drawing's foot: radius, gap
+    // between them, and the ink ring's weight.
+    swatchRadius: 15,
+    swatchGap: 12,
+    swatchRing: 3,
+    // The OWN IT NOW! tag, or the SOLD OUT stamp in its place: [x, y, w, h], also the hit
+    // target src/ui/booklet.ts lays over the page, its foot on the page margin (pageSize
+    // height 1000 less margin 44 less its own 104). The item page's lines stack up from it.
+    action: [160, 852, 400, 104] satisfies [number, number, number, number],
+    // Sized so OWN IT NOW! sits at its natural width between the hole and the tag's right
+    // edge (src/game/catalogLayout.ts `tagWords`); the scene squeezes it only if a font runs wide.
+    actionTextSize: 34,
     // The tag's corners and punched hole; the stamp's outline and tilt (radians).
     tagRadius: 18,
+    // Clear space kept each side of the tag's words: from the hole's edge and from the tag's right edge.
+    tagInset: 18,
     tagHole: 12,
     stampLine: 6,
     stampTurn: -0.08,
@@ -189,9 +224,10 @@ export const CATALOG = {
     brand: 'SKRUV',
     tagline: 'Catalog',
     parts: 'parts',
-    build: 'BUILD IT',
+    cm: 'cm',
+    build: 'OWN IT NOW!',
     soldOut: 'SOLD OUT',
-    // On the sheet when BUILD IT's item could not be built (src/ui/catalogSheet.ts).
+    // On the sheet when the tag's item could not be built (src/ui/catalogSheet.ts).
     buildFailed: "That one couldn't be built. Try again, or pick another.",
   },
 };

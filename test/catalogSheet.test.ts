@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, BOOKLET_UI, CATALOG } from '../src/constants.js';
 import { buildTarget, createCatalog } from '../src/game/catalogModel.js';
+import { entry } from './catalogFixtures.js';
 import { fanOffset, STACK_DEPTH, STACK_SLOT } from '../src/game/cornerStack.js';
 
 // The catalog sheet's logic (1.9.1), headless: what BUILD IT picks on each page, and where
@@ -8,8 +9,8 @@ import { fanOffset, STACK_DEPTH, STACK_SLOT } from '../src/game/cornerStack.js';
 // manual checks on a phone.
 
 const entries = [
-  { id: 'johnny', name: 'JOHNNY', partCount: 60 },
-  { id: 'blank', name: 'BLANK', partCount: 9 },
+  entry('johnny', 'JOHNNY', 60),
+  entry('blank', 'BLANK', 9),
 ];
 
 describe('buildTarget', () => {

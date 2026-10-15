@@ -15,7 +15,7 @@ import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { FlatpackFile, PartType } from '../../tools/validate/lib/pack.js';
 
 // The pack format's types, for the rest of the game: they reach it only through here.
-export type { Connector, ConnectorName, DrawingPose, InstanceId, ManifestEntry, PageFields, Resolver } from '../../tools/validate/lib/pack.js';
+export type { Connector, ConnectorName, DrawingPose, InstanceId, ManifestEntry, PageFields, Resolver, Variant } from '../../tools/validate/lib/pack.js';
 export type { Joint } from '../../tools/validate/lib/joints.js';
 import johnny from '../../items/johnny/flatpack.json';
 import blank from '../../items/blank/flatpack.json';
