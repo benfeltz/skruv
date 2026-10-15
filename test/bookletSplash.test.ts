@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOOKLET_UI, CATALOG, GESTURE } from '../src/constants.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
 import { createCatalogSheet } from '../src/ui/catalogSheet.js';
+import { entry } from './catalogFixtures.js';
 import { BuildFailed } from '../src/game/itemSlot.js';
 import type { CatalogPage } from '../src/game/catalogModel.js';
 
@@ -454,8 +455,8 @@ describe('tap to put down, from the 1.6.2 test plan', () => {
 describe('boot with the catalog up (1.9.1)', () => {
   const catalogPages: CatalogPage[] = [
     { kind: 'cover' },
-    { kind: 'item', id: 'johnny', name: 'JOHNNY', partCount: 60, pickable: false },
-    { kind: 'item', id: 'blank', name: 'BLANK', partCount: 9, pickable: true },
+    { kind: 'item', ...entry('johnny', 'JOHNNY', 60), pickable: false },
+    { kind: 'item', ...entry('blank', 'BLANK', 9), pickable: true },
   ];
 
   function mountCatalog() {

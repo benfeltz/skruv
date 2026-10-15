@@ -1,7 +1,9 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CATALOG } from '../src/constants.js';
-import { catalogEntries, createCatalog } from '../src/game/catalogModel.js';
+import { catalogEntries, createCatalog, itemSize } from '../src/game/catalogModel.js';
+import { extentOf } from '../src/game/coverLayout.js';
+import { entry } from './catalogFixtures.js';
 import { pickableSet } from '../src/game/pickable.js';
 import { ITEM_IDS, itemById } from '../src/game/item.js';
 
@@ -9,16 +11,12 @@ import { ITEM_IDS, itemById } from '../src/game/item.js';
 // the build's pickable flag. Pure — drawn by src/scene/catalogPages.ts.
 
 // A fixture of three items: the counts are the fixture's own, not the registry's (those are pinned below).
-const three = [
-  { id: 'johnny', name: 'JOHNNY', partCount: 60 },
-  { id: 'blank', name: 'BLANK', partCount: 9 },
-  { id: 'overkall', name: 'ÖVERKÄLL', partCount: 40 },
-];
+const three = [entry('johnny', 'JOHNNY', 60), entry('blank', 'BLANK', 9), entry('overkall', 'ÖVERKÄLL', 40)];
 const ids = three.map(({ id }) => id);
 
 describe('catalogEntries', () => {
   it("lists every registry item by its pack's name and box contents", () => {
-    expect(catalogEntries()).toEqual(
+    expect(catalogEntries().map(({ id, name, partCount }) => ({ id, name, partCount }))).toEqual(
       ITEM_IDS.map((id) => ({ id, name: itemById(id).identity.product, partCount: itemById(id).manifest.length })),
     );
     expect(catalogEntries()[0]).toMatchObject({ id: 'johnny', name: 'JOHNNY' });
@@ -31,12 +29,45 @@ describe('catalogEntries', () => {
   });
 });
 
+describe('the entries carry category, variants and the built size', () => {
+  it("takes category and variants from the pack's identity", () => {
+    for (const { id, category, variants } of catalogEntries()) {
+      const { identity } = itemById(id);
+      expect([category, variants]).toEqual([identity.category, identity.variants]);
+      expect(variants).toHaveLength(2);
+    }
+  });
+
+  it("sizes each item as its built extent, width × depth × height in whole cm — from the pack's boxes, never a pack field", () => {
+    for (const { id, size } of catalogEntries()) {
+      const { assembled, partTypes } = itemById(id);
+      const { min, max } = extentOf(assembled.parts, (type) => partTypes[type].size);
+      expect(size).toEqual([0, 2, 1].map((axis) => Math.round((max[axis] - min[axis]) * 100)));
+      expect(size.every(Number.isInteger)).toBe(true);
+    }
+  });
+
+  // The retired description said "about 80 × 28 × 202"; the built extent's depth rounds to 29.
+  it('measures JOHNNY at 80 × 29 × 202 cm', () => {
+    expect(catalogEntries()[0].size).toEqual([80, 29, 202]);
+  });
+});
+
+describe('itemSize', () => {
+  it('reads x, z, y of the posed boxes as width, depth, height in rounded cm', () => {
+    const sizes: Record<string, [number, number, number]> = { slab: [0.4, 0.1, 0.2], post: [0.1, 0.5, 0.1] };
+    const at = (type: string, position: [number, number, number]) => ({ type, position, rotation: [0, 0, 0, 1] });
+    // The slab spans x −0.2…0.2, y 0…0.1, z −0.1…0.1; the post stands on it at x 0.25, rising to 0.6.
+    expect(itemSize([at('slab', [0, 0.05, 0]), at('post', [0.25, 0.35, 0.025])], (type) => sizes[type])).toEqual([50, 20, 60]);
+  });
+});
+
 describe('createCatalog', () => {
   it('opens on the cover, then one page per item in the entries\' (registry) order', () => {
     const pages = createCatalog(three, new Set(ids));
     expect(pages[0]).toEqual({ kind: 'cover' });
     expect(pages.slice(1).map((page) => page.kind === 'item' && page.id)).toEqual(['johnny', 'blank', 'overkall']);
-    expect(pages[1]).toEqual({ kind: 'item', id: 'johnny', name: 'JOHNNY', partCount: 60, pickable: true });
+    expect(pages[1]).toEqual({ kind: 'item', ...three[0], pickable: true });
   });
 
   it('marks each page pickable by the set, the rest sold out', () => {

@@ -7,6 +7,7 @@ import { createItemSlot } from '../src/game/itemSlot.js';
 import { pickableSet } from '../src/game/pickable.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
 import { createCatalogSheet } from '../src/ui/catalogSheet.js';
+import { entry } from './catalogFixtures.js';
 import type { CatalogEntry } from '../src/game/catalogModel.js';
 
 // Automated half of the 1.9.1 Catalog test plan (`Test Plan.md` beside the plan in the
@@ -88,9 +89,9 @@ afterEach(() => {
 
 // The epic's three items, as entries; the registry carries only JOHNNY so far.
 const entries: CatalogEntry[] = [
-  { id: 'johnny', name: 'JOHNNY', partCount: 61 },
-  { id: 'blank', name: 'BLANK', partCount: 9 },
-  { id: 'overkall', name: 'ÖVERKÄLL', partCount: 40 },
+  entry('johnny', 'JOHNNY', 61),
+  entry('blank', 'BLANK', 9),
+  entry('overkall', 'ÖVERKÄLL', 40),
 ];
 const ids = entries.map(({ id }) => id);
 

@@ -4,23 +4,54 @@
 // Pure: the pages are drawn by src/scene/catalogPages.ts and shown by the booklet sheet.
 // Names and part counts come from each item's pack, never from here.
 
+import { extentOf } from './coverLayout.js';
 import { ITEM_IDS, itemById } from './item.js';
+import type { Variant } from './item.js';
+import type { Size } from '../../tools/validate/lib/geometry.js';
 
-/** One item as the catalog lists it: its id (folder under items/), its name, and how many parts are in its box. */
+/** An item's size in whole centimetres: width × depth × height. */
+export type ItemSize = [number, number, number];
+
+/**
+ * One item as the catalog lists it: its id (folder under items/), its name, its category,
+ * its colourways, its built size, and how many parts are in its box.
+ */
 export interface CatalogEntry {
   id: string;
   name: string;
+  category: string;
+  variants: Variant[];
+  size: ItemSize;
   partCount: number;
+}
+
+const CM_PER_M = 100;
+
+/**
+ * The built item's size in whole centimetres, worked out from its parts' boxes as posed:
+ * `[width, depth, height]` — the extent's x, z and y (the room's up is y, an item's front +z).
+ */
+export function itemSize(parts: Parameters<typeof extentOf>[0], sizeOf: (type: string) => Size): ItemSize {
+  const { min, max } = extentOf(parts, sizeOf);
+  const cm = (axis: number) => Math.round((max[axis] - min[axis]) * CM_PER_M);
+  return [cm(0), cm(2), cm(1)];
 }
 
 /** One catalog page: the cover, or an item — buildable on this build, or sold out. */
 export type CatalogPage = { kind: 'cover' } | ({ kind: 'item'; pickable: boolean } & CatalogEntry);
 
-/** Every item the game carries, as the catalog lists it: name from the pack's identity, part count from its manifest (spares included — they are in the box). */
+/** Every item the game carries, as the catalog lists it: name, category and variants from the pack's identity, size from the built item, part count from its manifest (spares included — they are in the box). */
 export function catalogEntries(): CatalogEntry[] {
   return ITEM_IDS.map((id) => {
-    const { identity, manifest } = itemById(id);
-    return { id, name: identity.product, partCount: manifest.length };
+    const { identity, manifest, assembled, partTypes } = itemById(id);
+    return {
+      id,
+      name: identity.product,
+      category: identity.category,
+      variants: identity.variants,
+      size: itemSize(assembled.parts, (type) => partTypes[type].size),
+      partCount: manifest.length,
+    };
   });
 }
 
