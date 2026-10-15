@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, CATALOG } from '../src/constants.js';
 import { itemPageLayout } from '../src/game/catalogLayout.js';
@@ -37,6 +38,19 @@ describe.each([1, 2])('the item page with %i variant row(s)', (count) => {
   it('stays inside the side margins', () => {
     const [x, , w] = layout.drawing;
     expect([layout.left, layout.right, x, x + w]).toEqual([m, pageW - m, m, pageW - m]);
+  });
+});
+
+describe('the most variants the schema admits', () => {
+  const schema = JSON.parse(readFileSync(new URL('../tools/validate/flatpack.schema.json', import.meta.url), 'utf8'));
+  const most: number = schema.properties.identity.properties.variants.maxItems;
+
+  it('still leaves the drawing room, its frame clear of the heading rule', () => {
+    const at = itemPageLayout(most);
+    const [, drawingTop, , drawingH] = at.drawing;
+    expect(drawingTop).toBeGreaterThan(at.thinRule);
+    expect(drawingH).toBeGreaterThan(0);
+    expect(drawingTop + drawingH).toBeLessThan(at.nameBaseline);
   });
 });
 

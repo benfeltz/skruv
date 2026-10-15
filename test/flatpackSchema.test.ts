@@ -78,6 +78,7 @@ describe('flatpack.schema.json', () => {
     ['a page kind outside the format', (p) => p.manual.pages.push({ kind: 'appendix' })],
     ['an article number off the NNN.NNN.NN pattern', (p) => (p.identity.variants[0].article = '45.000.01')],
     ['a variant colour that is not a key', (p) => (p.identity.variants[0].color = 'Black brown')],
+    ['more variants than the catalog page has rows for', (p) => (p.identity.variants = Array.from({ length: 5 }, () => p.identity.variants[0]))],
     ['no variants', (p) => (p.identity.variants = [])],
     ['no category', (p) => delete p.identity.category],
     ['the retired description', (p) => (p.identity.description = 'A shelf')],
