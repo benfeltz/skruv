@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ROOM, STAGE } from '../src/constants.js';
+import { windowBoxes } from '../src/game/stageBoxes.js';
 import { createRoom } from '../src/scene/room.js';
 
 // A stand-in renderer: the room only asks it for the drawing buffer's size.
@@ -9,12 +10,27 @@ const at = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const bounds = (object: THREE.Object3D) => new THREE.Box3().setFromObject(object);
 
 describe('the room as built', () => {
-  const { group, pieces } = createRoom();
+  const { group, pieces, leftWall } = createRoom();
   group.updateMatrixWorld(true);
   const box = (name: string) => bounds(pieces.get(name as 'slab')!);
+  const wallPieces = ['leftWallBelow', 'leftWallAbove', 'leftWallFront', 'leftWallBack'] as const;
+  const names = (object: THREE.Object3D) => object.children.map((child) => child.name);
 
-  it('has the slab, two walls and two lips', () => {
-    expect([...pieces.keys()].sort()).toEqual(['backWall', 'frontLip', 'leftWall', 'rightLip', 'slab']);
+  it('has the slab, a back wall, the left wall in four pieces and two lips', () => {
+    expect([...pieces.keys()].sort()).toEqual(['backWall', 'frontLip', 'leftWallAbove', 'leftWallBack', 'leftWallBelow', 'leftWallFront', 'rightLip', 'slab']);
+  });
+
+  it('holds the left wall\'s pieces, every trim piece and the sky in the one left wall group', () => {
+    const inside = names(leftWall);
+    for (const name of [...wallPieces, ...windowBoxes().map(({ name: n }) => n), 'sky']) expect(inside, name).toContain(name);
+    for (const name of ['slab', 'backWall', 'frontLip', 'rightLip']) expect(inside, name).not.toContain(name);
+  });
+
+  it('draws the sky unlit, outside the wall and without ink', () => {
+    const sky = leftWall.getObjectByName('sky') as THREE.Mesh;
+    expect(sky.material).toBeInstanceOf(THREE.MeshBasicMaterial);
+    expect(sky.position.x).toBeLessThan(-ROOM.width / 2 - STAGE.wallThickness);
+    expect(sky.children).toHaveLength(0);
   });
 
   it('tops the slab at y 0, the floor', () => {
@@ -24,7 +40,7 @@ describe('the room as built', () => {
 
   it('stands the walls\' inner faces on the back and left edges', () => {
     expect(box('backWall').max.z).toBeCloseTo(-ROOM.depth / 2, 6);
-    expect(box('leftWall').max.x).toBeCloseTo(-ROOM.width / 2, 6);
+    for (const name of wallPieces) expect(box(name).max.x, name).toBeCloseTo(-ROOM.width / 2, 6);
     expect(box('backWall').max.y).toBeCloseTo(STAGE.wallHeight, 6);
   });
 
@@ -35,7 +51,7 @@ describe('the room as built', () => {
   });
 
   it('keeps all but the slab outside the floor\'s footprint', () => {
-    for (const name of ['backWall', 'leftWall', 'frontLip', 'rightLip']) {
+    for (const name of ['backWall', ...wallPieces, 'frontLip', 'rightLip']) {
       const b = box(name);
       const e = 1e-6;
       const inside = b.min.x < ROOM.width / 2 - e && b.max.x > -ROOM.width / 2 + e && b.min.z < ROOM.depth / 2 - e && b.max.z > -ROOM.depth / 2 + e;
@@ -45,26 +61,38 @@ describe('the room as built', () => {
 
   it('draws every piece with its ink: a mesh and its edge lines in one group', () => {
     for (const piece of pieces.values()) expect(piece.children).toHaveLength(2);
+    for (const name of windowBoxes().map(({ name: n }) => n)) expect(leftWall.getObjectByName(name)!.children, name).toHaveLength(2);
   });
 });
 
 describe('the room per frame', () => {
   it('hides the back wall, ink and all, from behind it, and shows it again in front', () => {
-    const { pieces, update } = createRoom();
+    const { pieces, leftWall, update } = createRoom();
     update(at(0, 2, -ROOM.depth), renderer());
     expect(pieces.get('backWall')!.visible).toBe(false);
-    expect(pieces.get('leftWall')!.visible).toBe(true);
+    expect(leftWall.visible).toBe(true);
     update(at(0, 2, ROOM.depth), renderer());
     expect(pieces.get('backWall')!.visible).toBe(true);
   });
 
   it('hides the left wall from behind it, and both from behind the corner', () => {
-    const { pieces, update } = createRoom();
+    const { pieces, leftWall, update } = createRoom();
     update(at(-ROOM.width, 2, 0), renderer());
-    expect(pieces.get('leftWall')!.visible).toBe(false);
+    expect(leftWall.visible).toBe(false);
     expect(pieces.get('backWall')!.visible).toBe(true);
     update(at(-ROOM.width, 2, -ROOM.depth), renderer());
-    expect([pieces.get('backWall')!.visible, pieces.get('leftWall')!.visible]).toEqual([false, false]);
+    expect([pieces.get('backWall')!.visible, leftWall.visible]).toEqual([false, false]);
+  });
+
+  it('hides the left wall\'s window and sky with it, as one group', () => {
+    const { leftWall, update } = createRoom();
+    const sky = leftWall.getObjectByName('sky')!;
+    const sill = leftWall.getObjectByName('sill')!;
+    const shown = (o: THREE.Object3D) => { let v = true; for (let p: THREE.Object3D | null = o; p; p = p.parent) v &&= p.visible; return v; };
+    update(at(0, 2, 3), renderer());
+    expect([shown(sky), shown(sill)]).toEqual([true, true]);
+    update(at(-ROOM.width, 2, 0), renderer());
+    expect([shown(sky), shown(sill)]).toEqual([false, false]);
   });
 
   it('hides a wall for an eye inside its thickness, not only behind it', () => {
