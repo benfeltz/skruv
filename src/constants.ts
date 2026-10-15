@@ -22,6 +22,10 @@ export const COLORS = {
   sunLight: 0xffffff,
   // Parts — keyed by the catalog's `color` field.
   partPanel: 0xf1eee6,
+  // Panel colourways an item's variants name (identity.variants[].color), shown on the catalog's swatches.
+  partPanelBlackBrown: 0x3b2f2a,
+  partPanelBlack: 0x232323,
+  partPanelGray: 0x8d9094,
   partHardboard: 0x9c8466,
   partDowel: 0xd8b27a,
   partMetal: 0xa7adb3,

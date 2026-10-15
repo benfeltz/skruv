@@ -5,7 +5,11 @@
     "product": "BLANK",
     "maker": "SKRUV",
     "documentCode": "SK-0000452-1",
-    "description": "Side table, about 55 × 55 × 45 cm"
+    "category": "Side table",
+    "variants": [
+      { "name": "White", "color": "partPanel", "article": "452.000.01" },
+      { "name": "Black", "color": "partPanelBlack", "article": "452.000.02" }
+    ]
   },
   "vocabulary": {
     "connectors": [

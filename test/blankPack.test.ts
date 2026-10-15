@@ -19,6 +19,14 @@ const joints = deriveJoints(pack);
 const count = (type: string) => pack.manifest.filter((p) => p.type === type).length;
 
 describe('the BLANK pack', () => {
+  it('carries its catalog identity: a category, two variants in known colours, no description', () => {
+    const { identity } = FILE;
+    expect(identity.category).toBe('Side table');
+    expect(identity.variants.map((v) => v.name)).toEqual(['White', 'Black']);
+    for (const { color } of identity.variants) expect(COLORS).toHaveProperty(color);
+    expect(identity).not.toHaveProperty('description');
+  });
+
   it('passes the validator, packing included', () => {
     expect(checkPack(FILE)).toEqual([]);
   });
@@ -31,7 +39,7 @@ describe('the BLANK pack', () => {
 
   it('names the product BLANK by SKRUV, and nobody else', () => {
     expect(pack.identity).toMatchObject({ product: 'BLANK', maker: 'SKRUV' });
-    expect(JSON.stringify(FILE)).not.toMatch(/IKEA|LACK/i);
+    expect(JSON.stringify(FILE)).not.toMatch(/IKEA|\bLACK\b/i);
   });
 
   it('derives eight stud joints: each stud driven into the top, each leg pressed onto a stud', () => {

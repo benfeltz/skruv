@@ -29,6 +29,14 @@ const inCarcass = (id: string | null) => id !== null && CARCASS.includes(typeOf.
 const ofKind = (kind: string) => joints.filter((j) => j.kind === kind);
 
 describe('the ÖVERKÄLL pack', () => {
+  it('carries its catalog identity: a category, two variants in known colours, no description', () => {
+    const { identity } = FILE;
+    expect(identity.category).toBe('Nightstand');
+    expect(identity.variants.map((v) => v.name)).toEqual(['White', 'Gray']);
+    for (const { color } of identity.variants) expect(COLORS).toHaveProperty(color);
+    expect(identity).not.toHaveProperty('description');
+  });
+
   it('passes the validator, packing included', () => {
     expect(checkPack(FILE)).toEqual([]);
   });
@@ -47,7 +55,7 @@ describe('the ÖVERKÄLL pack', () => {
 
   it('names the product ÖVERKÄLL by SKRUV, with no brand word anywhere', () => {
     expect(pack.identity).toMatchObject({ product: 'ÖVERKÄLL', maker: 'SKRUV' });
-    expect(JSON.stringify(FILE)).not.toMatch(/IKEA|STORKLINTA|LACK/i);
+    expect(JSON.stringify(FILE)).not.toMatch(/IKEA|STORKLINTA|\bLACK\b/i);
   });
 
   it('derives 73 joints: 44 dowel ends, 4 bolt, 4 cam, 6 fitting, 15 screw', () => {

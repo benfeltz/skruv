@@ -22,11 +22,19 @@ export type Pair = [ConnectorName, ConnectorName];
 /** An asset path beside the pack — `assets/side.glb`. */
 export type AssetPath = string;
 
+/** One colourway of an item as the catalog lists it: its name, a key into the game's colour table, its article number. */
+export interface Variant {
+  name: string;
+  color: string;
+  article: string;
+}
+
 export interface Identity {
   product: string;
   maker: string;
   documentCode: string;
-  description?: string;
+  category: string;
+  variants: Variant[];
 }
 
 export interface Vocabulary {
