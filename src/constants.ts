@@ -135,6 +135,13 @@ export const BOOKLET_UI = {
   // ...but only once the pointer has rested on it this long (ms): a pointer passing over a
   // thumb on its way elsewhere — the manual's, past the catalog's — never grows it.
   thumbHoverDelayMs: 400,
+  // A thumb's inset from its screen corner (CSS pixels), as src/ui/booklet.ts docks it.
+  cornerInset: 16,
+  // The page look (src/ui/booklet.ts `look: 'page'`, the catalog): the page alone over the
+  // room, with a soft shadow, growing out of its docked thumb. `gutter` keeps its shadow
+  // clear of a narrow screen's edges; `growMs` is the grow to the centre and the shrink
+  // back. index.html's pre-splash mirrors the fit and the shadow.
+  page: { shadow: '0 12px 40px #0008', gutter: 12, growMs: 220 },
 };
 
 // The catalog (1.9.1): the game's front door, a second booklet of items to build
