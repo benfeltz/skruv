@@ -63,6 +63,10 @@ class FakeElement {
   setPointerCapture(id: number) {
     this.captured.push(id);
   }
+  // The catalog's page look measures its thumb; a fake has no layout.
+  getBoundingClientRect() {
+    return { left: 0, top: 0, width: 0, height: 0 };
+  }
   focus() {
     dom.focused = this;
   }
@@ -449,6 +453,9 @@ describe('tap to put down, from the 1.6.2 test plan', () => {
   });
 });
 
+// The class the sheet gave an element, which the fake carries as a plain property.
+const classOf = (element: FakeElement) => (element as unknown as { className: string }).className;
+
 // 1.9.1: the catalog is the splash — the same sheet, mounted as src/main.ts mounts it: open
 // on its cover at boot, nothing putting it down until a pick has built a room, BUILD IT laid
 // over a buildable item's tag only.
@@ -474,9 +481,9 @@ describe('boot with the catalog up (1.9.1)', () => {
     }) as unknown as FakeBooklet;
     mounted.push(catalog);
     dom.body.append(catalog.scrim, catalog.thumb, catalog.element);
-    const [handle, view, controls] = catalog.element.children;
-    const [, buildIt] = view.children[0].children;
-    const next = controls.children[2];
+    // The page look: a close the eye never sees and the page; the arrows ride in the frame.
+    const [handle, view] = catalog.element.children;
+    const [, buildIt, , next] = view.children[0].children;
     const key = (k: string) => dom.windowListeners.get('keydown')!.forEach((fn) => fn({ key: k }));
     return { catalog, handle, view, buildIt, next, key, picks };
   }
@@ -534,11 +541,13 @@ describe('boot with the catalog up (1.9.1)', () => {
     expect(catalog.expanded).toBe(false);
   });
 
-  it('sits in the corner behind the manual, turned; the manual is fanned up and right toward the room', () => {
+  it('docks upper left, the manual lower left; the manual keeps its sheet', () => {
     const { catalog } = mountCatalog();
-    expect(catalog.thumb.style.transform).toMatch(/^translate\(-?0px, -?0px\) rotate\(-?[\d.]+rad\)$/);
+    expect(catalog.thumb.dataset.corner).toBe('topLeft');
+    expect(classOf(catalog.element)).toBe('booklet-leaf');
     const manual = mount();
-    expect(manual.booklet.thumb.style.transform).toMatch(/^translate\([1-9]\d*px, -[1-9]\d*px\) rotate\(-?0rad\)$/);
+    expect(manual.booklet.thumb.dataset.corner).toBe('bottomLeft');
+    expect(classOf(manual.booklet.element)).toBe('booklet');
   });
 
   it('one sheet open at a time: under an open sheet the other thumb is inert, and opening it does nothing', () => {
@@ -585,10 +594,9 @@ describe('boot with the catalog up (1.9.1)', () => {
       },
     }) as unknown as FakeBooklet;
     mounted.push(catalog);
-    const [, view, controls] = catalog.element.children;
+    const [, view] = catalog.element.children;
     const notice = view.children[1];
-    const [, buildIt] = view.children[0].children;
-    const next = controls.children[2];
+    const [, buildIt, prev, next] = view.children[0].children;
     expect(notice.hidden).toBe(true);
     next.fire('click');
     next.fire('click');
@@ -601,7 +609,7 @@ describe('boot with the catalog up (1.9.1)', () => {
     expect(notice.textContent).toBe(CATALOG.words.buildFailed);
     expect(errors).toHaveBeenCalledOnce();
     // Flipping away clears it; the next try builds.
-    controls.children[0].fire('click');
+    prev.fire('click');
     expect(notice.hidden).toBe(true);
     next.fire('click');
     fail = false;
@@ -621,11 +629,11 @@ describe('boot with the catalog up (1.9.1)', () => {
       },
     }) as unknown as FakeBooklet;
     mounted.push(catalog);
-    const [, view, controls] = catalog.element.children;
+    const [, view] = catalog.element.children;
     const notice = view.children[1];
-    const [, buildIt] = view.children[0].children;
-    controls.children[2].fire('click');
-    controls.children[2].fire('click');
+    const [, buildIt, , next] = view.children[0].children;
+    next.fire('click');
+    next.fire('click');
     buildIt.fire('click');
     expect(notice.hidden).toBe(true);
     expect(errors).toHaveBeenCalledOnce();
@@ -645,10 +653,10 @@ describe('boot with the catalog up (1.9.1)', () => {
       },
     }) as unknown as FakeBooklet;
     mounted.push(catalog);
-    const [, view, controls] = catalog.element.children;
-    const [, buildIt] = view.children[0].children;
-    controls.children[2].fire('click');
-    controls.children[2].fire('click');
+    const [, view] = catalog.element.children;
+    const [, buildIt, , next] = view.children[0].children;
+    next.fire('click');
+    next.fire('click');
     buildIt.fire('click');
     const catalogThumb = catalog.thumb.children[0];
     expect(catalog.currentPage).toBe(2);

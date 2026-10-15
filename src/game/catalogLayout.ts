@@ -91,3 +91,31 @@ export function tagWords([x, , w, h]: readonly [number, number, number, number],
   const to = x + w - inset;
   return { centre: (from + to) / 2, width: to - from };
 }
+
+/** What a catalog page prints besides its content: its number (the cover is unnumbered) and which corner arrows it shows. */
+export interface PageMarks {
+  number: string | null;
+  prev: boolean;
+  next: boolean;
+}
+
+/** The marks for page `index` of `count`: numbered from the cover as page 1, so the first item page reads 2; no arrow where there is no page to turn to. */
+export function pageMarks(index: number, count: number): PageMarks {
+  return { number: index === 0 ? null : String(index + 1), prev: index > 0, next: index < count - 1 };
+}
+
+/**
+ * The three points of an arrow's chevron, in page pixels: centred in `rect` (`[x, y, w, h]`,
+ * CATALOG.page.prev / .next), pointing left for 'prev' and right for 'next'. The one source
+ * for the drawn arrow in src/scene/catalogPages.ts and the cold-boot stand-in in index.html.
+ */
+export function arrowChevron([x, y, w, h]: readonly [number, number, number, number], direction: 'prev' | 'next'): [number, number][] {
+  const { arrowHalfWidth: halfW, arrowHalfHeight: halfH } = CATALOG.page;
+  const [cx, cy] = [x + w / 2, y + h / 2];
+  const tip = direction === 'next' ? halfW : -halfW;
+  return [
+    [cx - tip, cy - halfH],
+    [cx + tip, cy],
+    [cx - tip, cy + halfH],
+  ];
+}

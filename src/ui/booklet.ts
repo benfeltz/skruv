@@ -1,5 +1,5 @@
 import { BOOKLET, BOOKLET_UI, CATALOG, COLORS, GESTURE } from '../constants.js';
-import { fanOffset, STACK_SLOT } from '../game/cornerStack.js';
+import { pageMarks } from '../game/catalogLayout.js';
 
 // The booklet in hand: a bottom sheet over the room. Collapsed, it is a thumbnail of the
 // open page in the corner — the only thing it puts under a finger, so the room stays
@@ -14,6 +14,65 @@ import { fanOffset, STACK_SLOT } from '../game/cornerStack.js';
 const STYLE_ID = 'skruv-booklet';
 const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 const [pageW, pageH] = BOOKLET.pageSize;
+const LEAF_STYLE_ID = 'skruv-booklet-leaf';
+
+// The page look's own rules, in a style element of their own so the sheet's stay as they
+// were: the page alone — no surface, handle or control bar — centred over the room, its
+// frame shadowed, the thumb it grows out of docked in the upper left. Closed, the element
+// is scaled and moved onto the thumb's own rect by an inline transform (`settle`); open it
+// is centred at full size, and the transition between is the grow.
+function injectLeafStyle() {
+  if (document.getElementById(LEAF_STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = LEAF_STYLE_ID;
+  const { shadow, gutter, growMs, radius } = BOOKLET_UI.page;
+  style.textContent = `
+    .booklet-thumb[data-corner='topLeft'] {
+      top: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-top));
+      bottom: auto;
+    }
+    .booklet-leaf {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      z-index: 3;
+      transform-origin: 0 0;
+      width: min(calc(100vw - ${2 * gutter}px), ${pageW}px, calc(${BOOKLET_UI.maxHeight * 100}dvh * ${pageW} / ${pageH}));
+      color: ${css(COLORS.uiText)};
+      font: 600 15px/1 system-ui, -apple-system, sans-serif;
+      transition: transform ${growMs}ms ease-out, visibility 0s linear ${growMs}ms;
+      visibility: hidden;
+    }
+    .booklet-leaf[data-open='true'] {
+      transition: transform ${growMs}ms ease-out;
+      visibility: visible;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .booklet-leaf, .booklet-leaf[data-open='true'] { transition: none; }
+    }
+    .booklet-leaf .booklet-frame {
+      width: 100%;
+      border-radius: ${radius}px;
+      box-shadow: ${shadow};
+    }
+    .booklet-leaf button:focus-visible {
+      outline: 2px solid ${css(COLORS.uiAccent)};
+      outline-offset: 3px;
+    }
+    /* Still a button, for a keyboard or a screen reader to put the page down; unseen. And the
+       live region that says which page it is, since the number is printed, not text. */
+    .booklet-close, .booklet-status {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      border: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+  `;
+  document.head.append(style);
+}
 
 function injectStyle() {
   if (document.getElementById(STYLE_ID)) return;
@@ -22,8 +81,8 @@ function injectStyle() {
   style.textContent = `
     .booklet-thumb {
       position: fixed;
-      left: calc(16px + env(safe-area-inset-left));
-      bottom: calc(16px + env(safe-area-inset-bottom));
+      left: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-left));
+      bottom: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-bottom));
       width: ${BOOKLET_UI.thumbWidth}px;
       aspect-ratio: ${pageW} / ${pageH};
       padding: 0;
@@ -38,8 +97,7 @@ function injectStyle() {
       transition: width 160ms ease-out, z-index 0s;
     }
     /* A mouse resting on the docked thumbnail grows it from its corner to a readable page,
-       about a quarter of the screen, raised over the other thumb in the corner stack (the
-       catalog's would grow behind the manual's) — still under the scrim (2) and the sheet (3).
+       about a quarter of the screen, raised over its neighbours — still under the scrim (2) and the sheet (3).
        Grow and raise both wait thumbHoverDelayMs, so a pointer passing over on its way
        elsewhere changes nothing; leaving undoes them at once. Hover-capable pointers only: a
        touch never hovers. */
@@ -218,8 +276,10 @@ export interface BookletSheetOptions {
   name?: string;
   /** Whether it starts open, on its cover (default) — or docked as a thumb. */
   open?: boolean;
-  /** Its place in the corner stack (STACK_SLOT): the manual in front by default, fanned toward the room; the catalog behind, in the corner (src/game/cornerStack.ts). */
-  slot?: number;
+  /** How it is shown open: 'sheet' (default, the manual) — a dark bottom sheet with a handle and a control bar — or 'page' (the catalog): the page alone, its number and arrows printed on it, growing out of its docked thumb. Every behaviour is the same in both. */
+  look?: 'sheet' | 'page';
+  /** Which screen corner its docked thumb sits in: 'bottomLeft' (default) or 'topLeft'. */
+  corner?: 'bottomLeft' | 'topLeft';
   /** Whether it may be put down now. While false, every way of closing it does nothing. */
   canClose?: () => boolean;
   /** What its docked thumb shows: the open page (default, the manual), or always its cover (the catalog, a brand object in the corner). */
@@ -231,14 +291,17 @@ export interface BookletSheetOptions {
 /**
  * The booklet sheet for `pages` (`{ count, canvas(index) }`, src/scene/bookletPages.ts or
  * src/scene/catalogPages.ts). Returns `{ scrim, thumb, element, currentPage, expanded,
- * onChange(fn), setOpen(value), place(), dispose() }`: mount all three elements;
+ * onChange(fn), setOpen(value), dispose() }`: mount all three elements;
  * `onChange(fn)` calls `fn({ page, expanded })` whenever either changes; `setOpen` opens or
- * docks it from outside; `place()` re-applies its stack slot after a ?tune change;
+ * docks it from outside;
  * `dispose()` takes it all back off the page. Starts open on page 0, the cover, unless told
  * otherwise — or another sheet is open: one sheet is open at a time. State is the module's own and read-only outside it.
  */
-export function createBookletSheet({ pages, name = 'instructions', open: startsOpen = true, slot = STACK_SLOT.manual, canClose = () => true, action, thumbShows = 'page' }: BookletSheetOptions) {
+export function createBookletSheet({ pages, name = 'instructions', open: startsOpen = true, canClose = () => true, action, thumbShows = 'page', look = 'sheet', corner = 'bottomLeft' }: BookletSheetOptions) {
   injectStyle();
+  // The look decides what is built and how it settles; every handler below is the same for both.
+  const leaf = look === 'page';
+  if (leaf) injectLeafStyle();
   const listeners = new Set<(state: { page: number; expanded: boolean }) => void>();
   let page = 0;
   let open = startsOpen;
@@ -256,66 +319,59 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
   thumb.type = 'button';
   thumb.className = 'booklet-thumb';
   thumb.setAttribute('aria-label', `Open the ${name}`);
+  thumb.dataset.corner = corner;
   // Full page resolution: hovered, the thumbnail is read at up to a quarter of the screen.
   const thumbCanvas = pageCanvas(pageW, pageH);
   thumb.append(thumbCanvas);
 
   const element = document.createElement('section');
-  element.className = 'booklet';
+  element.className = leaf ? 'booklet-leaf' : 'booklet';
   element.setAttribute('aria-label', name[0].toUpperCase() + name.slice(1));
 
   const handle = document.createElement('button');
   handle.type = 'button';
-  handle.className = 'booklet-handle';
+  handle.className = leaf ? 'booklet-close' : 'booklet-handle';
   handle.setAttribute('aria-label', `Close the ${name}`);
 
   const view = document.createElement('div');
   view.className = 'booklet-page';
   const viewCanvas = pageCanvas(pageW, pageH);
   viewCanvas.setAttribute('role', 'img');
-  // A page control rides on the canvas in a frame of its own; a sheet without one keeps the
-  // canvas straight in the view. `showAction` shows the open page's control, or hides it.
+  // The arrows: a control bar under the page, or printed in the page's corners. A page
+  // control rides on the canvas in a frame of its own; a sheet without one keeps the canvas
+  // straight in the view. `showAction` shows the open page's control, or hides it.
+  const arrows = leaf ? cornerArrows() : controlBar();
+  const { prev, next } = arrows;
   let showAction = () => {};
-  if (action) {
-    const actionButton = button('', '');
+  if (action || leaf) {
     const frame = document.createElement('div');
     frame.className = 'booklet-frame';
-    actionButton.className = 'booklet-action';
-    const [x, y, w, h] = action.rect;
-    // Its corners as the drawn tag's: the radius as a share of the button's own width and height.
-    const r = action.radius;
-    Object.assign(actionButton.style, {
-      left: `${(100 * x) / pageW}%`,
-      top: `${(100 * y) / pageH}%`,
-      width: `${(100 * w) / pageW}%`,
-      height: `${(100 * h) / pageH}%`,
-      borderRadius: `${(100 * r) / w}% / ${(100 * r) / h}%`,
-    });
-    actionButton.addEventListener('click', () => action.at(page)?.run());
-    frame.append(viewCanvas, actionButton);
+    frame.append(viewCanvas);
+    if (action) {
+      const actionButton = button('', '');
+      actionButton.className = 'booklet-action';
+      // Its corners as the drawn tag's: the radius as a share of the button's own width and height.
+      overlay(actionButton, action.rect, action.radius);
+      actionButton.addEventListener('click', () => action.at(page)?.run());
+      frame.append(actionButton);
+      showAction = () => {
+        const control = action.at(page);
+        actionButton.hidden = !control;
+        actionButton.setAttribute('aria-label', control?.label ?? '');
+      };
+    }
+    if (leaf) frame.append(prev, next);
     view.append(frame);
-    showAction = () => {
-      const control = action.at(page);
-      actionButton.hidden = !control;
-      actionButton.setAttribute('aria-label', control?.label ?? '');
-    };
   } else view.append(viewCanvas);
 
-  const controls = document.createElement('div');
-  controls.className = 'booklet-controls';
-  const prev = button('‹', 'Previous page');
-  const next = button('›', 'Next page');
-  const count = document.createElement('span');
-  count.className = 'booklet-count';
-  count.setAttribute('aria-live', 'polite');
-  controls.append(prev, count, next);
   // Over the head of the page, after the page itself, so the view's children keep their places.
   const notice = document.createElement('p');
   notice.className = 'booklet-notice';
   notice.setAttribute('role', 'alert');
   notice.hidden = true;
   view.append(notice);
-  element.append(handle, view, controls);
+  element.append(handle, view);
+  if (arrows.bar) element.append(arrows.bar);
 
   /** Shows `text` on the sheet, or takes it away (null). */
   function notify(text: string | null) {
@@ -328,12 +384,12 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
     const draw = (target: HTMLCanvasElement, index: number) => target.getContext('2d')!.drawImage(pages.canvas(index), 0, 0, target.width, target.height);
     if (open) draw(viewCanvas, page);
     draw(thumbCanvas, thumbShows === 'cover' ? 0 : page);
-    count.textContent = `${page + 1} / ${pages.count}`;
     viewCanvas.setAttribute('aria-label', `Page ${page + 1} of ${pages.count}`);
-    prev.disabled = page === 0;
-    next.disabled = page === pages.count - 1;
+    arrows.paint(page, pages.count);
     element.dataset.open = String(open);
-    thumb.hidden = open;
+    // A sheet takes the thumb's place; the page grows out of it and puts it back.
+    thumb.hidden = open && !leaf;
+    settle();
     showAction();
     syncSheets();
     for (const fn of listeners) fn({ page, expanded: open });
@@ -360,6 +416,7 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
     if (open === value || (!value && !canClose())) return;
     // One sheet open at a time: another one open keeps this one docked.
     if (value && anyOpen(self)) return;
+    if (value) dock();
     open = value;
     notify(null);
     showScrim(open, byRoomTap ? BOOKLET_UI.scrimLingerMs : 0);
@@ -444,12 +501,32 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
   }
   window.addEventListener('keydown', onKey);
 
-  // Its place in the corner stack (src/game/cornerStack.ts): the front one fanned up and
-  // right toward the room, the ones behind it in the corner, turned — read at use time so
-  // ?tune moves it live. Paint order is mount order: mount the back ones first.
-  function place() {
-    const { x, y, turn } = fanOffset(slot, CATALOG.stack);
-    thumb.style.transform = `translate(${x}px, ${y}px) rotate(${turn}rad)`;
+  // The page look's pose (the grow). Open: centred at full size. Docked: scaled to the
+  // thumb's width and moved so the page's top-left lands on the thumb's — both measured
+  // from the layout, the page's own box and the thumb's rect as it is now (a mouse-enlarged
+  // thumb included), so the grow starts from what is on screen whatever the viewport.
+  // `dock` puts the docked pose on before an open, so the transition has a start even for
+  // a page first opened from a sheet that was built before it was mounted.
+  let settle = () => {};
+  let dock = () => {};
+  if (leaf) {
+    const dockedPose = () => {
+      const { left, top, width: thumbWidth } = thumb.getBoundingClientRect();
+      // The layout box, before any transform: a hidden or unmounted element has none.
+      const width = element.offsetWidth || 0;
+      const scale = width > 0 ? thumbWidth / width : 1;
+      return `translate(${left - element.offsetLeft}px, ${top - element.offsetTop}px) scale(${scale})`;
+    };
+    dock = () => {
+      element.style.transform = dockedPose();
+      // Flushed, so the open pose that follows has this one to grow from.
+      element.getBoundingClientRect();
+    };
+    settle = () => {
+      element.style.transform = open ? 'translate(-50%, -50%)' : dockedPose();
+    };
+    // A resize or a turn of the phone moves both boxes; the docked page follows.
+    window.addEventListener('resize', settle);
   }
 
   const self: LiveSheet = { isOpen: () => open, thumb };
@@ -459,6 +536,7 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
   function dispose() {
     clearTimeout(lingering ?? undefined);
     window.removeEventListener('keydown', onKey);
+    window.removeEventListener('resize', settle);
     sheets.delete(self);
     syncSheets();
     listeners.clear();
@@ -471,7 +549,6 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
   // sheet takes itself back out — registry entry and key listener — before the error goes on,
   // since the caller never got a sheet to dispose.
   try {
-    place();
     showScrim(open);
     render();
   } catch (error) {
@@ -493,7 +570,6 @@ export function createBookletSheet({ pages, name = 'instructions', open: startsO
     setOpen(value: boolean) {
       setOpen(value);
     },
-    place,
     notify,
     onChange(fn: (state: { page: number; expanded: boolean }) => void) {
       listeners.add(fn);
@@ -508,6 +584,71 @@ function pageCanvas(width: number, height: number) {
   canvas.width = width;
   canvas.height = height;
   return canvas;
+}
+
+/** Lays `control` over a page rect `[x, y, w, h]` in page fractions, its corners rounded by `radius` (page pixels) as a share of its own width and height. */
+function overlay(control: HTMLElement, [x, y, w, h]: readonly [number, number, number, number], radius: number) {
+  Object.assign(control.style, {
+    left: `${(100 * x) / pageW}%`,
+    top: `${(100 * y) / pageH}%`,
+    width: `${(100 * w) / pageW}%`,
+    height: `${(100 * h) / pageH}%`,
+    borderRadius: `${(100 * radius) / w}% / ${(100 * radius) / h}%`,
+  });
+}
+
+/** The sheet look's controls: ‹ n / N ›, a bar under the page; an arrow disabled at its end. */
+function controlBar() {
+  const bar = document.createElement('div');
+  bar.className = 'booklet-controls';
+  const prev = button('‹', 'Previous page');
+  const next = button('›', 'Next page');
+  const count = document.createElement('span');
+  count.className = 'booklet-count';
+  count.setAttribute('aria-live', 'polite');
+  bar.append(prev, count, next);
+  return {
+    bar: bar as HTMLElement | null,
+    prev,
+    next,
+    paint(page: number, total: number) {
+      count.textContent = `${page + 1} / ${total}`;
+      prev.disabled = page === 0;
+      next.disabled = page === total - 1;
+    },
+  };
+}
+
+/**
+ * The page look's controls: a clear button over each arrow printed in a lower corner of
+ * the page (CATALOG.page.prevHit / .nextHit, src/scene/catalogPages.ts draws the arrows),
+ * none of its own to show, and a live region for the page's number, which is printed, not
+ * text. At an end the arrow is not drawn but its button stays, inert (aria-disabled): a tap
+ * there is the button's own, never a tap on the page that would put the catalog down, and
+ * focus on it is not lost. The page's own marks say which (src/game/catalogLayout.ts `pageMarks`).
+ */
+function cornerArrows() {
+  const { prevHit, nextHit } = CATALOG.page;
+  const prev = button('', CATALOG.words.prev);
+  const next = button('', CATALOG.words.next);
+  for (const [control, rect] of [[prev, prevHit], [next, nextHit]] as const) {
+    control.className = 'booklet-action';
+    overlay(control, rect, 0);
+  }
+  const status = document.createElement('span');
+  status.className = 'booklet-status';
+  status.setAttribute('aria-live', 'polite');
+  return {
+    bar: status as HTMLElement | null,
+    prev,
+    next,
+    paint(page: number, total: number) {
+      const marks = pageMarks(page, total);
+      prev.setAttribute('aria-disabled', String(!marks.prev));
+      next.setAttribute('aria-disabled', String(!marks.next));
+      status.textContent = `Page ${page + 1} of ${total}`;
+    },
+  };
 }
 
 function button(label: string, name: string) {

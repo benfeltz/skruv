@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BOOKLET, CATALOG, COLORS } from '../constants.js';
-import { itemPageLayout, tagWords } from '../game/catalogLayout.js';
+import { arrowChevron, itemPageLayout, pageMarks, tagWords } from '../game/catalogLayout.js';
 import type { ItemPageLayout } from '../game/catalogLayout.js';
 import { coverLayout, extentOf } from '../game/coverLayout.js';
 import { itemById } from '../game/item.js';
@@ -76,7 +76,8 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
       viewItems.push({ type: typeOf('room', name), position: at, rotation: [0, 0, 0, 1], weight: 'faint' });
     }
     const top = m + layout.wordmarkSize + layout.taglineSize * layout.drawingDrop;
-    views.draw(ctx, viewItems, [m, top, pageW - 2 * m, pageH - top - m]);
+    // Down to the arrows' row, not the margin: the › is printed in the corner under it.
+    views.draw(ctx, viewItems, [m, top, pageW - 2 * m, layout.next[1] - layout.lineGap - top]);
   }
 
   // A rule across the page's margins: its top edge and weight.
@@ -198,11 +199,38 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
     ctx.restore();
   }
 
+  // What every page carries (src/game/catalogLayout.ts `pageMarks`): its number, bottom
+  // centre, and a chevron in each corner it has a page to turn to. The buttons that turn
+  // them are the booklet sheet's, laid over CATALOG.page.prev / .next.
+  function marks(ctx: Ctx, index: number) {
+    const { number, prev, next } = pageMarks(index, pages.length);
+    ctx.fillStyle = INK;
+    if (number !== null) {
+      ctx.font = font(layout.pageNumberSize, 600);
+      ctx.textAlign = 'center';
+      ctx.fillText(number, pageW / 2, pageH - layout.pageNumberFoot);
+      ctx.textAlign = 'start';
+    }
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = layout.arrowStroke;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (const [shown, rect, direction] of [[prev, layout.prev, 'prev'], [next, layout.next, 'next']] as const) {
+      if (!shown) continue;
+      const [start, ...rest] = arrowChevron(rect, direction);
+      ctx.beginPath();
+      ctx.moveTo(...start);
+      for (const point of rest) ctx.lineTo(...point);
+      ctx.stroke();
+    }
+  }
+
   function draw(index: number) {
     const sheet = newPage();
     const page = pages[index];
     if (page.kind === 'cover') cover(sheet.ctx);
     else item(sheet.ctx, page);
+    marks(sheet.ctx, index);
     return sheet.canvas;
   }
 

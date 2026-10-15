@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOOKLET, CATALOG } from '../src/constants.js';
 import { createCatalog } from '../src/game/catalogModel.js';
-import { STACK_SLOT } from '../src/game/cornerStack.js';
 import { createItemSlot } from '../src/game/itemSlot.js';
 import { pickableSet } from '../src/game/pickable.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
@@ -54,6 +53,10 @@ class FakeElement {
     this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]);
   }
   setPointerCapture() {}
+  // The page look measures its thumb; a fake has no layout.
+  getBoundingClientRect() {
+    return { left: 0, top: 0, width: 0, height: 0 };
+  }
   focus() {}
   getContext() {
     return { drawImage() {} };
@@ -129,12 +132,13 @@ function boot({ flag, failBuild = new Set<string>() }: { flag: string; failBuild
   const sheet = catalog as unknown as Sheet;
   body.append(sheet.scrim, sheet.thumb, sheet.element);
   live.push(sheet);
-  const [, view, controls] = sheet.element.children;
-  const buildIt = view.children[0].children[1];
+  const [, view] = sheet.element.children;
+  // The page's frame: the canvas, BUILD IT, then the ‹ and › laid over the printed corners.
+  const [, buildIt, prev, next] = view.children[0].children;
   const notice = view.children[1];
   const turnTo = (page: number) => {
-    while (sheet.currentPage < page) controls.children[2].fire('click');
-    while (sheet.currentPage > page) controls.children[0].fire('click');
+    while (sheet.currentPage < page) next.fire('click');
+    while (sheet.currentPage > page) prev.fire('click');
   };
   return { pages, items, catalog: sheet, buildIt, notice, turnTo, manuals, door: () => named };
 }
@@ -156,7 +160,7 @@ describe('AC1: cold boot opens the catalog on its cover, the room empty (1.9.1)'
 });
 
 describe('AC2: BUILD IT goes straight into the room, both booklets docked (Ben, 1:50 PM)', () => {
-  it('the catalog docks behind, the new manual docks in front, nothing opens', () => {
+  it('the catalog docks upper left, the new manual docks lower left, nothing opens', () => {
     const { catalog, buildIt, turnTo, items, manuals } = boot({ flag: '' });
     turnTo(1);
     buildIt.fire('click');
@@ -164,11 +168,9 @@ describe('AC2: BUILD IT goes straight into the room, both booklets docked (Ben, 
     expect(catalog.expanded).toBe(false);
     expect(manuals).toHaveLength(1);
     expect(manuals[0].expanded).toBe(false);
-    // Catalog behind, in the corner (turned); manual in front, fanned up and right toward the
-    // room so the path to it never crosses the catalog (Ben's 1.9.1 test).
-    expect(STACK_SLOT.catalog).toBeGreaterThan(STACK_SLOT.manual);
-    expect(catalog.thumb.style.transform).toMatch(/^translate\(-?0px, -?0px\) rotate\(/);
-    expect(manuals[0].thumb.style.transform).toMatch(/^translate\([1-9]\d*px, -[1-9]\d*px\)/);
+    // Each in a corner of its own (1.9.1.5): the catalog upper left, the manual lower left.
+    expect(catalog.thumb.dataset.corner).toBe('topLeft');
+    expect(manuals[0].thumb.dataset.corner).toBe('bottomLeft');
   });
 });
 

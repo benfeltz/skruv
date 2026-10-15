@@ -16,9 +16,9 @@ function injectStyle() {
   style.textContent = `
     .reset-button {
       position: fixed;
-      right: calc(16px + env(safe-area-inset-right));
-      top: calc(16px + env(safe-area-inset-top));
-      min-height: 44px;
+      right: calc(${RESET.inset}px + env(safe-area-inset-right));
+      top: calc(${RESET.inset}px + env(safe-area-inset-top));
+      min-height: ${RESET.height}px;
       padding: 0 16px;
       border: 2px solid ${css(COLORS.uiText)}33;
       border-radius: 22px;

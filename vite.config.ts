@@ -6,7 +6,6 @@ import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
 import { DEV_WS } from './src/constants.js';
 import { pickableSet } from './src/game/pickable.js';
-import { stampCount } from './src/game/splash.js';
 
 // The upgrade's Host must name this machine, as Vite requires of its own HMR socket — else
 // a site whose DNS rebinds to 127.0.0.1 sends a Host (and Origin) of its own and passes the
@@ -111,20 +110,10 @@ function pickableCheck(): Plugin {
   };
 }
 
-// The pre-splash's page counter, derived from the same folders: index.html carries a literal
-// (test/splashConventions.test.ts pins it) for anything that serves the file untransformed,
-// and the dev server and the build stamp the real count over it — a new item needs no edit.
-function splashCount(): Plugin {
-  return {
-    name: 'skruv-splash-count',
-    transformIndexHtml: (html) => stampCount(html, packIds('items').length),
-  };
-}
-
 export default defineConfig({
   // Served at the domain root (custom domain skruv.site) — a non-root base 404s every asset.
   base: '/',
-  plugins: [devStream(), pickableCheck(), splashCount()],
+  plugins: [devStream(), pickableCheck()],
   test: {
     include: ['test/**/*.test.ts'],
   },
