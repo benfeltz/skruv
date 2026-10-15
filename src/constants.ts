@@ -5,11 +5,10 @@ import { CONTRACT } from '../tools/validate/lib/vocabulary.js';
 import type { Vec3 } from '../tools/validate/lib/geometry.js';
 
 export const ROOM = {
-  width: 10,
-  depth: 10,
-  // No ceiling. A real room's height — well clear of the 2.02 m bookcase standing — and
-  // low enough that zooming out lifts the camera over the walls (dollhouse view), where
-  // their inward faces vanish from outside.
+  width: 5,
+  depth: 4,
+  // The lift ceiling, well clear of the 2.02 m bookcase standing; the drawn walls are
+  // shorter (see the stage's wall height).
   height: 3,
 };
 
@@ -237,7 +236,7 @@ export const LIGHTS = {
   sunIntensity: 1.6,
   sunPosition: [-4, 7, 2] satisfies Vec3,
   shadowMapSize: 1024,
-  shadowExtent: 6,
+  shadowExtent: 3.5,
   // Offsets shadow lookups along the normal so millimetre-thin parts don't self-shadow
   // into stripes (acne); small enough that contact shadows stay attached.
   shadowNormalBias: 0.02,
@@ -315,7 +314,7 @@ export const RESET = {
   // Where: laid flat in a patch starting this far out from the box's long side and this
   // deep, running the box's length, a gap between pieces; each dropped from this clearance
   // above the floor. Pieces that don't fit go in again `layerHeight` higher, to land on top.
-  respawn: { offset: 0.35, depth: 2.5, gap: 0.05, height: 0.25, layerHeight: 0.1 },
+  respawn: { offset: 0.35, depth: 1.5, gap: 0.05, height: 0.25, layerHeight: 0.1 },
 };
 
 export const PHYSICS = {

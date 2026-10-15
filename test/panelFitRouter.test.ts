@@ -74,7 +74,7 @@ function makePart(id: string, type: string, { position, rotation }: Pose): Part 
 
 const IDENTITY: Quat = [0, 0, 0, 1];
 const HALF_TURN_Z: Quat = [0, 0, Math.SQRT1_2, Math.SQRT1_2]; // the side panel's hole faces up
-const SIDE: Pose = { position: [0, 0.008, 0], rotation: HALF_TURN_Z };
+const SIDE: Pose = { position: [-0.6, 0.008, 0], rotation: HALF_TURN_Z };
 const DOWEL_HALF = PART_TYPES.dowel.size[1] / 2;
 // The bottom panel standing on its edge, its right-hand holes (3 and 4) facing down.
 const HOLES_DOWN: Quat = [0, 0, -Math.SQRT1_2, Math.SQRT1_2];
@@ -125,8 +125,8 @@ interface Options {
 
 function harness({ panelAt, dowels = [0, 1], home = [], extra = [], carrying, lift = false }: Options = {}) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
-  camera.position.set(0.9, 1.3, 1.1);
-  camera.lookAt(0.9, 0.2, 0);
+  camera.position.set(0.3, 1.3, 1.1);
+  camera.lookAt(0.3, 0.2, 0);
   camera.updateMatrixWorld(true);
 
   const side = makePart('sidePanel-1', 'sidePanel', SIDE);
