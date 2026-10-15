@@ -191,6 +191,21 @@ export const CATALOG = {
     // target src/ui/booklet.ts lays over the page, its foot on the page margin (pageSize
     // height 1000 less margin 44 less its own 104). The item page's lines stack up from it.
     action: [160, 852, 400, 104] satisfies [number, number, number, number],
+    // The corner arrows, printed on the page and tapped through a clear button over each
+    // (src/ui/booklet.ts): [x, y, w, h], level with the tag, in the lower corners — ‹ at the
+    // left margin, › at the right — each 100 page pixels square (72 CSS px at the widest
+    // page, over the 44 a thumb needs), and clear of the tag's columns by 16.
+    prev: [44, 852, 100, 104] satisfies [number, number, number, number],
+    next: [576, 852, 100, 104] satisfies [number, number, number, number],
+    // An arrow drawn as a chevron at its rect's centre: this far up and down from it, this
+    // far across, in this stroke weight (page pixels).
+    arrowHalfHeight: 22,
+    arrowHalfWidth: 13,
+    arrowStroke: 7,
+    // The page number, bottom centre, in the margin under the tag: its type size, and its
+    // baseline this far up from the page's foot.
+    pageNumberSize: 24,
+    pageNumberFoot: 12,
     // Sized so OWN IT NOW! sits at its natural width between the hole and the tag's right
     // edge (src/game/catalogLayout.ts `tagWords`); the scene squeezes it only if a font runs wide.
     actionTextSize: 34,
@@ -229,6 +244,9 @@ export const CATALOG = {
     soldOut: 'SOLD OUT',
     // On the sheet when the tag's item could not be built (src/ui/catalogSheet.ts).
     buildFailed: "That one couldn't be built. Try again, or pick another.",
+    // The corner arrows' accessible names (the buttons laid over the printed chevrons).
+    prev: 'Previous page',
+    next: 'Next page',
   },
 };
 

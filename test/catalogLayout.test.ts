@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, CATALOG } from '../src/constants.js';
-import { itemPageLayout, tagWords } from '../src/game/catalogLayout.js';
+import { arrowChevron, itemPageLayout, pageMarks, tagWords } from '../src/game/catalogLayout.js';
 
 // The item page's lines (1.9.1.1), headless: in order, all above the unmoved tag, with room
 // left for the drawing. How the drawing reads on a phone is a manual check.
@@ -107,5 +107,68 @@ describe('the tag', () => {
     const { width } = tagWords(CATALOG.page.action, tagHole, tagInset);
     // 11 glyphs at a generous 0.75 em each, the widest a heavy sans caps run is likely to be.
     expect(CATALOG.words.build.length * 0.75 * CATALOG.page.actionTextSize).toBeLessThanOrEqual(width);
+  });
+});
+
+// 1.9.1.5: the number and corner arrows every catalog page prints.
+describe('pageMarks', () => {
+  it('leaves the cover unnumbered, with only a next arrow', () => {
+    expect(pageMarks(0, 4)).toEqual({ number: null, prev: false, next: true });
+  });
+
+  it('numbers item pages from 2 and gives a middle page both arrows', () => {
+    expect(pageMarks(1, 4)).toEqual({ number: '2', prev: true, next: true });
+    expect(pageMarks(2, 4)).toEqual({ number: '3', prev: true, next: true });
+  });
+
+  it('drops the next arrow on the last page', () => {
+    expect(pageMarks(3, 4)).toEqual({ number: '4', prev: true, next: false });
+  });
+});
+
+describe('the corner arrows and page number', () => {
+  const { prev, next, action, pageNumberSize, pageNumberFoot } = CATALOG.page;
+  const overlaps = ([ax, ay, aw, ah]: readonly number[], [bx, by, bw, bh]: readonly number[]) => ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah;
+
+  it.each([
+    ['prev', prev],
+    ['next', next],
+  ])('keeps the %s rect inside the page margins and at least 88 page px square (44 CSS px at half scale)', (_, [x, y, w, h]) => {
+    expect(x).toBeGreaterThanOrEqual(m);
+    expect(x + w).toBeLessThanOrEqual(pageW - m);
+    expect(y + h).toBeLessThanOrEqual(pageH - m);
+    expect(Math.min(w, h)).toBeGreaterThanOrEqual(88);
+  });
+
+  it('puts ‹ in the lower left and › in the lower right, level with the tag, and overlaps neither the tag nor the part count', () => {
+    expect(prev[0] + prev[2]).toBeLessThan(pageW / 2);
+    expect(next[0]).toBeGreaterThan(pageW / 2);
+    expect(prev[1]).toBe(next[1]);
+    expect(overlaps(prev, action)).toBe(false);
+    expect(overlaps(next, action)).toBe(false);
+    const { partCountBaseline } = itemPageLayout(1);
+    expect(partCountBaseline).toBeLessThan(prev[1]);
+  });
+
+  it('prints the number in the margin under the tag, centred', () => {
+    const baseline = pageH - pageNumberFoot;
+    expect(baseline - pageNumberSize * CATALOG.page.capHeight).toBeGreaterThan(action[1] + action[3]);
+    expect(baseline).toBeLessThan(pageH);
+  });
+
+  it('draws each chevron inside its rect, pointing away from the page it leaves', () => {
+    for (const [rect, direction] of [[prev, 'prev'], [next, 'next']] as const) {
+      const points = arrowChevron(rect, direction);
+      const [x, y, w, h] = rect;
+      for (const [px, py] of points) {
+        expect(px).toBeGreaterThan(x);
+        expect(px).toBeLessThan(x + w);
+        expect(py).toBeGreaterThan(y);
+        expect(py).toBeLessThan(y + h);
+      }
+      // The tip is the middle point: left of the ends for ‹, right of them for ›.
+      const [first, tip] = points;
+      expect(Math.sign(tip[0] - first[0])).toBe(direction === 'next' ? 1 : -1);
+    }
   });
 });
