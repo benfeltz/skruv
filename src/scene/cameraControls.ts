@@ -11,8 +11,8 @@ export type PickDistance = (origin: Vec3, direction: Vec3) => number | null;
 /**
  * Touch camera: one finger orbits, two fingers pan + pinch-zoom toward the fingers (so a
  * pinch on a dowel closes in on that dowel). The orbit target roams the whole floor; after
- * every update the target and camera are clamped (cameraLimits.js) — camera inside the
- * walls horizontally, above the floor, free to rise over the wall tops.
+ * every update the target and camera are clamped (cameraLimits.js) — the camera above the
+ * floor and otherwise free, inside the room or out.
  *
  * The pivot: when a gesture starts (OrbitControls' `start` — a press, a wheel, a second
  * finger joining) the target moves along the line of sight to the first part `pickDistance`
@@ -52,15 +52,15 @@ export function createCameraControls(camera: Camera, domElement: HTMLElement, { 
   controls.zoomToCursor = true;
 
   // Where OrbitControls has the camera, unclamped — its orbit and zoom kept whole. The
-  // wall clamp only moves the camera as drawn, so orbiting toward a wall slides along it
-  // and the chosen distance comes back once the camera swings clear; the clamp never
+  // floor clamp only moves the camera as drawn, so orbiting under the floor slides along
+  // it and the chosen distance comes back once the camera swings clear; the clamp never
   // leaks into OrbitControls' own state.
   const free = camera.position.clone();
 
   function confine() {
     free.copy(camera.position);
     controls.target.set(...clampTargetAlongView(controls.target.toArray(), free.toArray(), ROOM, CAMERA_LIMITS));
-    camera.position.set(...clampCamera(free.toArray(), ROOM, CAMERA_LIMITS));
+    camera.position.set(...clampCamera(free.toArray(), CAMERA_LIMITS));
     camera.lookAt(controls.target);
   }
 
@@ -72,7 +72,7 @@ export function createCameraControls(camera: Camera, domElement: HTMLElement, { 
   // A gesture's pivot, picked once as it starts — from the unclamped eye, down the line
   // OrbitControls orbits along. Every press handler has only recorded screen positions by
   // then (and the wheel fires it before zooming), so moving the target here is safe. While
-  // the wall clamp has pushed the camera, that line is not the one on screen — moving the
+  // the floor clamp has pushed the camera, that line is not the one on screen — moving the
   // target along it would turn the view — so the target stays.
   function pickPivot() {
     if (!CAMERA.pivotOnParts || camera.position.distanceTo(free) > 1e-6) return;

@@ -8,7 +8,7 @@ import { clampCamera, clampTarget, clampTargetAlongView, panSpeedAt, pivotAlongV
 import type { Vec3 } from '../tools/validate/lib/geometry.js';
 
 const room = { width: 10, depth: 8, height: 3 };
-const limits = { targetMargin: 0.5, targetHeight: [0, 2], wallMargin: 0.4, floorClearance: 0.05 };
+const limits = { targetMargin: 0.5, targetHeight: [0, 2], floorClearance: 0.05 };
 
 describe('clampTarget', () => {
   it('leaves a target over the floor alone, down to floor level', () => {
@@ -22,16 +22,16 @@ describe('clampTarget', () => {
 });
 
 describe('clampCamera', () => {
-  it('holds the camera wallMargin inside the walls horizontally', () => {
-    expect(clampCamera([7, 1, -7], room, limits)).toEqual([4.6, 1, -3.6]);
+  it('leaves the camera free outside the walls horizontally', () => {
+    expect(clampCamera([7, 1, -7], limits)).toEqual([7, 1, -7]);
   });
 
   it('keeps the camera above the floor', () => {
-    expect(clampCamera([0, -0.3, 0], room, limits)).toEqual([0, 0.05, 0]);
+    expect(clampCamera([0, -0.3, 0], limits)).toEqual([0, 0.05, 0]);
   });
 
   it('lets the camera rise over the wall tops (dollhouse view)', () => {
-    expect(clampCamera([0, 12, 0], room, limits)).toEqual([0, 12, 0]);
+    expect(clampCamera([0, 12, 0], limits)).toEqual([0, 12, 0]);
   });
 });
 
@@ -58,11 +58,9 @@ describe('shipped camera limits', () => {
     expect(startY + CAMERA_LIMITS.maxDistance * Math.cos(CAMERA_LIMITS.minPolarAngle)).toBeGreaterThan(ROOM.height);
   });
 
-  it('keeps the camera inside the walls whatever the zoom', () => {
+  it('leaves the camera free outside the room whatever the zoom', () => {
     const far = CAMERA_LIMITS.maxDistance * 3;
-    const [x, , z] = clampCamera([far, 1, -far], ROOM, CAMERA_LIMITS);
-    expect(Math.abs(x)).toBeLessThanOrEqual(ROOM.width / 2 - CAMERA_LIMITS.wallMargin);
-    expect(Math.abs(z)).toBeLessThanOrEqual(ROOM.depth / 2 - CAMERA_LIMITS.wallMargin);
+    expect(clampCamera([far, 1, -far], CAMERA_LIMITS)).toEqual([far, 1, -far]);
   });
 
   it('starts the camera within its limits', () => {
@@ -71,7 +69,7 @@ describe('shipped camera limits', () => {
     const distance = Math.hypot(cx - tx, cy - ty, cz - tz);
     const polar = Math.acos((cy - ty) / distance);
     expect(clampTarget(CAMERA.startTarget, ROOM, CAMERA_LIMITS)).toEqual(CAMERA.startTarget);
-    expect(clampCamera(CAMERA.startPosition, ROOM, CAMERA_LIMITS)).toEqual(CAMERA.startPosition);
+    expect(clampCamera(CAMERA.startPosition, CAMERA_LIMITS)).toEqual(CAMERA.startPosition);
     expect(distance).toBeGreaterThanOrEqual(CAMERA_LIMITS.minDistance);
     expect(distance).toBeLessThanOrEqual(CAMERA_LIMITS.maxDistance);
     expect(polar).toBeGreaterThanOrEqual(CAMERA_LIMITS.minPolarAngle);
@@ -98,7 +96,7 @@ describe('startPosition (1.7.1 mobile start zoom)', () => {
       const eye = startPosition(CAMERA.startPosition, CAMERA.startTarget, scale);
       const distance = Math.hypot(...eye.map((v, i) => v - CAMERA.startTarget[i]));
       expect(distance, `scale ${scale}`).toBeLessThanOrEqual(CAMERA_LIMITS.maxDistance);
-      expect(clampCamera(eye, ROOM, CAMERA_LIMITS), `scale ${scale}`).toEqual(eye);
+      expect(clampCamera(eye, CAMERA_LIMITS), `scale ${scale}`).toEqual(eye);
     }
   });
 });

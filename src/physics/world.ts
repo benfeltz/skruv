@@ -1,5 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import { FASTENER, PHYSICS, ROOM } from '../constants.js';
+import { FASTENER, PHYSICS } from '../constants.js';
+import { colliderBoxes, sizeAndCentre } from '../game/stageBoxes.js';
 import { createAccumulator } from './stepping.js';
 import type { Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
 import type { BondMode, JointFrame } from '../game/assembly.js';
@@ -45,23 +46,17 @@ const ANGULAR_AXES = [RAPIER.JointAxis.AngX, RAPIER.JointAxis.AngY, RAPIER.Joint
 // Likewise its motor model enum: the same numbers as MotorModel.
 type RawMotorModel = Parameters<RAPIER.World['impulseJoints']['raw']['jointConfigureMotorModel']>[2];
 
-/** Static slabs just outside the visible floor and walls, so surfaces line up exactly. */
+/**
+ * The stage as colliders, from the same boxes the room draws (src/game/stageBoxes.ts): the
+ * slab, the back and left walls up to the lift ceiling, the front and right lips. Their
+ * inner faces are the drawn ones; the front and right walls of the old room are gone.
+ */
 function addRoomColliders(world: RAPIER.World) {
-  const half = PHYSICS.roomColliderThickness / 2;
-  const halfW = ROOM.width / 2;
-  const halfD = ROOM.depth / 2;
-  const halfH = ROOM.height / 2;
-  const slabs: { halfExtents: Vec3; center: Vec3 }[] = [
-    { halfExtents: [halfW + 2 * half, half, halfD + 2 * half], center: [0, -half, 0] },
-    { halfExtents: [halfW + 2 * half, halfH, half], center: [0, halfH, -halfD - half] },
-    { halfExtents: [halfW + 2 * half, halfH, half], center: [0, halfH, halfD + half] },
-    { halfExtents: [half, halfH, halfD], center: [-halfW - half, halfH, 0] },
-    { halfExtents: [half, halfH, halfD], center: [halfW + half, halfH, 0] },
-  ];
-  for (const { halfExtents, center } of slabs) {
+  for (const box of colliderBoxes(PHYSICS.roomColliderThickness)) {
+    const { size, centre } = sizeAndCentre(box);
     world.createCollider(
-      RAPIER.ColliderDesc.cuboid(...halfExtents)
-        .setTranslation(...center)
+      RAPIER.ColliderDesc.cuboid(size[0] / 2, size[1] / 2, size[2] / 2)
+        .setTranslation(...centre)
         .setFriction(PHYSICS.friction)
         .setRestitution(PHYSICS.restitution),
     );

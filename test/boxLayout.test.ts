@@ -133,7 +133,7 @@ describe('the layout follows the box wherever it is dragged (1.7.1)', () => {
   const toBoxLocal = (pose: Pose, p: number[]) => rotateVector(inverse(pose.rotation), p.map((v, i) => v - pose.position[i]) as Vec3);
   const typeOf = new Map(MANIFEST.map(({ id, type }) => [id, type]));
   const types = [...MANIFEST.map((p) => p.type), 'boxLid'];
-  const moved: Pose = { position: [-2.5, 0, -1.2], rotation: yawed(0.7) };
+  const moved: Pose = { position: [-1.5, 0, 0], rotation: yawed(0.2) };
 
   it('defaults to the box where it stands at boot: today\'s layout, exactly', () => {
     const boot: Pose = { position: [0, 0, 0.6], rotation: yawed(Math.PI / 2) };

@@ -5,18 +5,34 @@ import { CONTRACT } from '../tools/validate/lib/vocabulary.js';
 import type { Vec3 } from '../tools/validate/lib/geometry.js';
 
 export const ROOM = {
-  width: 10,
-  depth: 10,
-  // No ceiling. A real room's height — well clear of the 2.02 m bookcase standing — and
-  // low enough that zooming out lifts the camera over the walls (dollhouse view), where
-  // their inward faces vanish from outside.
+  width: 6,
+  depth: 5,
+  // The lift ceiling, well clear of the 2.02 m bookcase standing; the drawn walls are
+  // shorter (see the stage's wall height).
   height: 3,
+};
+
+// The diorama stage (src/game/stageBoxes.ts, built by src/scene/room.ts and mirrored by
+// src/physics/world.ts): a base slab under the floor, two walls (back and left) and a low
+// lip on the open front and right edges — all standing outside the floor's footprint, so
+// every clamp that reads ROOM is unchanged. `ROOM.height` stays the lift ceiling.
+export const STAGE = {
+  wallThickness: 0.1,
+  wallHeight: 2.5,
+  slabThickness: 0.1,
+  lipHeight: 0.03,
+  lipThickness: 0.03,
+  // The ink edges' width in CSS pixels (LineMaterial linewidth, against the canvas's CSS size).
+  inkWidth: 3,
 };
 
 export const COLORS = {
   background: 0x1b1d22,
   floor: 0xc9b79c,
-  wall: 0xe8e4dc,
+  // The stage's ink edges: the manual's ink, so the room and the booklet draw alike.
+  stageInk: 0x1c1c1c,
+  // The stage walls: white, like the catalog's paper (COLORS.bookletPaper).
+  wall: 0xffffff,
   skyLight: 0xffffff,
   groundLight: 0x8a7a66,
   sunLight: 0xffffff,
@@ -258,7 +274,7 @@ export const LIGHTS = {
   sunIntensity: 1.6,
   sunPosition: [-4, 7, 2] satisfies Vec3,
   shadowMapSize: 1024,
-  shadowExtent: 6,
+  shadowExtent: 4.2,
   // Offsets shadow lookups along the normal so millimetre-thin parts don't self-shadow
   // into stripes (acne); small enough that contact shadows stay attached.
   shadowNormalBias: 0.02,
@@ -285,21 +301,20 @@ export const CAMERA = {
 // Orbit limits (src/scene/cameraLimits.ts, applied by src/scene/cameraControls.ts). The
 // orbit target roams the whole floor so the camera can get right up to any part; as a
 // gesture starts it moves along the view to the first part in the middle of the screen,
-// else the floor (CAMERA.pivotOnParts), and holds there. The camera is clamped inside the
-// walls and above the floor every frame, and may rise over the wall tops when zoomed out
-// (dollhouse view).
+// else the floor (CAMERA.pivotOnParts), and holds there. The camera is clamped above the
+// floor every frame and is otherwise free, inside the room or out (a wall it is behind is
+// cut away).
 export const CAMERA_LIMITS = {
   // The target stays this far inside the walls, between these heights: down to the parts
   // lying on the floor, up to just over the standing bookcase.
   targetMargin: 0.6,
   targetHeight: [0, 2.2],
-  wallMargin: 0.4,
   // The camera never dips nearer the floor than this.
   floorClearance: 0.05,
   // Close enough that a dowel and the hole it goes in fill much of a phone screen.
   minDistance: 0.15,
   // Far enough to take in the whole room from over the walls.
-  maxDistance: 6,
+  maxDistance: 8,
   // Panning slows with zoom; closer than panReference (m) it is sped back up, by at most
   // maxPanBoost, so moving around a close-up doesn't crawl.
   panReference: 1.2,
@@ -340,7 +355,7 @@ export const RESET = {
   // Where: laid flat in a patch starting this far out from the box's long side and this
   // deep, running the box's length, a gap between pieces; each dropped from this clearance
   // above the floor. Pieces that don't fit go in again `layerHeight` higher, to land on top.
-  respawn: { offset: 0.35, depth: 2.5, gap: 0.05, height: 0.25, layerHeight: 0.1 },
+  respawn: { offset: 0.35, depth: 1.5, gap: 0.05, height: 0.25, layerHeight: 0.1 },
 };
 
 export const PHYSICS = {

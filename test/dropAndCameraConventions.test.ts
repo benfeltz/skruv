@@ -65,7 +65,7 @@ describe('shipped camera, from the first frame (rounds 4–6)', () => {
       const target: Vec3 = [x, 0, z];
       const camera = add(target, [0, CAMERA_LIMITS.minDistance * Math.cos(Math.PI / 3), CAMERA_LIMITS.minDistance * Math.sin(Math.PI / 3)]);
       expect(clampTargetAlongView(target, camera, ROOM, CAMERA_LIMITS)).toEqual(target);
-      expect(clampCamera(camera, ROOM, CAMERA_LIMITS)).toEqual(camera);
+      expect(clampCamera(camera, CAMERA_LIMITS)).toEqual(camera);
     }
   });
 
@@ -81,9 +81,9 @@ describe('shipped camera, from the first frame (rounds 4–6)', () => {
     expect(CAMERA_LIMITS.floorClearance).toBeGreaterThan(CAMERA.near);
   });
 
-  it('lets a zoomed-out camera rise over the 3 m walls while staying inside them', () => {
-    const high = clampCamera([0, CAMERA_LIMITS.maxDistance, 99], ROOM, CAMERA_LIMITS);
+  it('lets a zoomed-out camera rise over the wall tops (the lift ceiling) and stay where it is outside the room', () => {
+    const high = clampCamera([0, CAMERA_LIMITS.maxDistance, 99], CAMERA_LIMITS);
     expect(high[1]).toBeGreaterThan(ROOM.height);
-    expect(Math.abs(high[2])).toBeLessThanOrEqual(ROOM.depth / 2 - CAMERA_LIMITS.wallMargin);
+    expect(high[2]).toBe(99);
   });
 });

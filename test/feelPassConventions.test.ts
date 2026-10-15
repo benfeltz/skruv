@@ -296,11 +296,10 @@ describe('lifting goes straight up (1.8.1 Step 1)', () => {
 });
 
 describe('dollhouse zoom-out keeps its protections (AC6, regression risk)', () => {
-  it('never lets the camera through a wall horizontally, nor under the floor', () => {
+  it('never lets the camera under the floor, wherever it is outside', () => {
     for (const point of [[99, -5, 99], [-99, 0, -99], [0, -1, 99]] as Vec3[]) {
-      const [x, y, z] = clampCamera(point, ROOM, CAMERA_LIMITS);
-      expect(Math.abs(x)).toBeLessThanOrEqual(ROOM.width / 2 - CAMERA_LIMITS.wallMargin);
-      expect(Math.abs(z)).toBeLessThanOrEqual(ROOM.depth / 2 - CAMERA_LIMITS.wallMargin);
+      const [x, y, z] = clampCamera(point, CAMERA_LIMITS);
+      expect([x, z]).toEqual([point[0], point[2]]);
       expect(y).toBeGreaterThan(CAMERA.near);
     }
   });
