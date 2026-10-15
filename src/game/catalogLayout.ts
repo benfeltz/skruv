@@ -80,3 +80,14 @@ export function itemPageLayout(variantCount: number): ItemPageLayout {
     partCountBaseline,
   };
 }
+
+/**
+ * Where the tag's words go: centred between the punched hole's right edge and the tag's
+ * right edge, `inset` clear on each side. `action` is `[x, y, w, h]` (CATALOG.page.action);
+ * the hole sits at the middle of the tag's left `h`-square, `holeRadius` round.
+ */
+export function tagWords([x, , w, h]: readonly [number, number, number, number], holeRadius: number, inset: number) {
+  const from = x + h / 2 + holeRadius + inset;
+  const to = x + w - inset;
+  return { centre: (from + to) / 2, width: to - from };
+}

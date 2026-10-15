@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, CATALOG } from '../src/constants.js';
-import { itemPageLayout } from '../src/game/catalogLayout.js';
+import { itemPageLayout, tagWords } from '../src/game/catalogLayout.js';
 
 // The item page's lines (1.9.1.1), headless: in order, all above the unmoved tag, with room
 // left for the drawing. How the drawing reads on a phone is a manual check.
@@ -83,5 +83,29 @@ describe('a second variant row', () => {
     expect(two.partCountBaseline).toBe(one.partCountBaseline);
     expect(two.drawing[1]).toBe(one.drawing[1]);
     expect(two.drawing[3]).toBeLessThan(one.drawing[3]);
+  });
+});
+
+describe('the tag', () => {
+  const [x, , w, h] = CATALOG.page.action;
+  const { tagHole, tagInset } = CATALOG.page;
+
+  it('stays centred on the page and inside the margins', () => {
+    expect(x + w / 2).toBe(pageW / 2);
+    expect(x).toBeGreaterThanOrEqual(m);
+    expect(x + w).toBeLessThanOrEqual(pageW - m);
+  });
+
+  it('centres its words between the hole and the right edge, the same clear space each side', () => {
+    const { centre, width } = tagWords(CATALOG.page.action, tagHole, tagInset);
+    const holeRight = x + h / 2 + tagHole;
+    expect(centre - width / 2 - holeRight).toBeCloseTo(tagInset);
+    expect(x + w - (centre + width / 2)).toBeCloseTo(tagInset);
+  });
+
+  it('gives OWN IT NOW! room at its natural width: the type size times a heavy cap run stays under the space', () => {
+    const { width } = tagWords(CATALOG.page.action, tagHole, tagInset);
+    // 11 glyphs at a generous 0.75 em each, the widest a heavy sans caps run is likely to be.
+    expect(CATALOG.words.build.length * 0.75 * CATALOG.page.actionTextSize).toBeLessThanOrEqual(width);
   });
 });

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BOOKLET, CATALOG, COLORS } from '../constants.js';
-import { itemPageLayout } from '../game/catalogLayout.js';
+import { itemPageLayout, tagWords } from '../game/catalogLayout.js';
 import type { ItemPageLayout } from '../game/catalogLayout.js';
 import { coverLayout, extentOf } from '../game/coverLayout.js';
 import { itemById } from '../game/item.js';
@@ -171,9 +171,10 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
     ctx.font = font(layout.actionTextSize, 800);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Centred on the tag right of the hole's square, [x + h, x + w], squeezed to fit it less
-    // an inset each side, clear of the tag's rounded corners.
-    ctx.fillText(text, x + (w + h) / 2, y + h / 2, w - h - 2 * layout.tagInset);
+    // Centred between the hole and the tag's right edge, clear of both; `width` only
+    // squeezes a font that runs wide.
+    const words = tagWords(layout.action, layout.tagHole, layout.tagInset);
+    ctx.fillText(text, words.centre, y + h / 2, words.width);
     ctx.textAlign = 'start';
     ctx.textBaseline = 'alphabetic';
   }

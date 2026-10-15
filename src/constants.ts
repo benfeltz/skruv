@@ -190,13 +190,13 @@ export const CATALOG = {
     // The OWN IT NOW! tag, or the SOLD OUT stamp in its place: [x, y, w, h], also the hit
     // target src/ui/booklet.ts lays over the page, its foot on the page margin (pageSize
     // height 1000 less margin 44 less its own 104). The item page's lines stack up from it.
-    action: [180, 852, 360, 104] satisfies [number, number, number, number],
-    // Sized so OWN IT NOW! fits the tag right of its hole; the scene squeezes it to the
-    // tag if a font runs wide.
-    actionTextSize: 36,
+    action: [160, 852, 400, 104] satisfies [number, number, number, number],
+    // Sized so OWN IT NOW! sits at its natural width between the hole and the tag's right
+    // edge (src/game/catalogLayout.ts `tagWords`); the scene squeezes it only if a font runs wide.
+    actionTextSize: 34,
     // The tag's corners and punched hole; the stamp's outline and tilt (radians).
     tagRadius: 18,
-    // Clear space kept each side of the tag's words when they are squeezed to fit.
+    // Clear space kept each side of the tag's words: from the hole's edge and from the tag's right edge.
     tagInset: 18,
     tagHole: 12,
     stampLine: 6,
