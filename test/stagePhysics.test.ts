@@ -46,6 +46,12 @@ describe('the stage holds parts on the floor', () => {
     expect(x - CUBE[0]).toBeGreaterThan(-edgeX - 0.01);
   });
 
+  it('stops a cube lofted through the window\'s opening at the wall face, as at any other height', async () => {
+    const { sill, height } = STAGE.window;
+    const { x } = await shoved(CUBE, [-edgeX + 1, sill + height / 2, 0], [-8, 0, 0]);
+    expect(x - CUBE[0]).toBeGreaterThan(-edgeX - 0.01);
+  });
+
   it('stops a cube thrown hard at the back wall', async () => {
     const { z } = await shoved(CUBE, [0, CUBE[1], -edgeZ + 1], [0, 0, -8]);
     expect(z - CUBE[2]).toBeGreaterThan(-edgeZ - 0.01);
