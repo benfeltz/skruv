@@ -3,7 +3,7 @@
 // A wall is drawn only while the eye is on its inner side: from behind it, the wall would
 // stand between the camera and the room, so it is hidden (its ink lines with it).
 
-import { stageBoxes } from '../game/stageBoxes.js';
+import { LEFT_WALL_PIECES, stageBoxes } from '../game/stageBoxes.js';
 import type { StageBox } from '../game/stageBoxes.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 
@@ -24,7 +24,8 @@ const boxNamed = (name: string) => stageBoxes().find((box) => box.name === name)
 /** The two walls the stage has, from the same boxes the room draws: back (−z) and left (−x). */
 export const STAGE_WALLS = {
   back: innerFace(boxNamed('backWall')),
-  left: innerFace(boxNamed('leftWall')),
+  // The left wall's pieces share one inner face, so any one of them gives the plane.
+  left: innerFace(boxNamed(LEFT_WALL_PIECES[0])),
 } satisfies Record<string, Wall>;
 
 /**
