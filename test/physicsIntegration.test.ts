@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { placeLayout } from '../tools/validate/lib/geometry.js';
 import type { Pose, Vec3 } from '../tools/validate/lib/geometry.js';
-import { DISPLAY, PHYSICS } from '../src/constants.js';
-import { createAssembly, seatHome } from '../src/game/assembly.js';
-import { ASSEMBLED, PART_TYPES } from '../src/game/item.js';
+import { PHYSICS } from '../src/constants.js';
+import { PART_TYPES } from '../src/game/item.js';
 import { baseRest, createPackedWorldLayout, lidRest, respawnSpots } from '../src/game/boxLayout.js';
 import { createPhysicsWorld } from '../src/physics/world.js';
 import type { Body, PhysicsWorld } from '../src/physics/world.js';
-import type { PartId } from '../src/game/assembly.js';
 
 // Headless Rapier runs of the 1.5 start state — the real physics module, no renderer.
 // Meshes are stubs: `register` only copies poses onto them.
@@ -52,41 +49,6 @@ describe('the packed flatpack under physics', () => {
     const t = box.translation();
     expect(Math.hypot(t.x - home.position[0], t.y - home.position[1], t.z - home.position[2])).toBeLessThan(0.002);
     expect(box.isSleeping()).toBe(true);
-  });
-});
-
-describe('the display shelf under physics', () => {
-  it('stands: every part within 2 mm of its assembled pose, shelves on their pins', async () => {
-    const physics = await createPhysicsWorld();
-    const layout = ASSEMBLED;
-    const half = DISPLAY.yaw / 2;
-    const posed = placeLayout(layout.parts, { position: DISPLAY.position, rotation: [0, Math.sin(half), 0, Math.cos(half)] });
-    const parts = spawn(physics, posed);
-    const assembly = createAssembly((id) => parts.get(id)!.type);
-    seatHome(
-      assembly,
-      layout.joints.map((j) => ({
-        partA: j.hardware,
-        connectorA: j.hardwareConnector,
-        partB: j.host,
-        connectorB: j.hostConnector,
-        mover: j.mover,
-        ctx: { through: j.through, captured: j.captured },
-      })),
-    );
-    // What the router's reconcile does on `sync()`: one physics joint per bond.
-    const poseOf = (id: PartId): Pose => {
-      const { body } = parts.get(id)!;
-      const t = body.translation();
-      const r = body.rotation();
-      return { position: [t.x, t.y, t.z], rotation: [r.x, r.y, r.z, r.w] };
-    };
-    for (const bond of assembly.bonds(poseOf)) physics.join(parts.get(bond.a)!.body, parts.get(bond.b)!.body, bond.frame, bond.mode);
-    run(physics, 10);
-    for (const [id, { body, start }] of parts) {
-      const t = body.translation();
-      expect(Math.hypot(t.x - start[0], t.y - start[1], t.z - start[2]), id).toBeLessThan(0.002);
-    }
   });
 });
 

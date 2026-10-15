@@ -21,9 +21,8 @@ describe('repack reset (decision 9)', () => {
     expect(unseatAll).not.toMatch(/physics\.unjoin|assembly\.unseat/);
   });
 
-  it("puts back only the player's parts and the lid, never the display shelf", () => {
-    expect(world).toMatch(/const playerParts = parts\.filter\(\(part\) => !display\.parts\.includes\(part\) && part !== flatpack\.base && part !== flatpack\.lid\);/);
-    expect(repack).not.toMatch(/display/);
+  it("puts back only the player's parts and the lid, never the box", () => {
+    expect(world).toMatch(/const playerParts = parts\.filter\(\(part\) => part !== flatpack\.base && part !== flatpack\.lid\);/);
     expect(repack).toMatch(/physics\.place\(body, position, rotation\)/);
   });
 
@@ -46,7 +45,7 @@ describe('recovery sweep (Feedback #9)', () => {
     expect(sweep).toMatch(/sweepIn = RESET\.sweepInterval;/);
   });
 
-  it('respawns only loose player parts, never the display shelf', () => {
+  it('respawns only loose player parts, the lid and the box', () => {
     expect(sweep).toMatch(/\[\.\.\.playerParts, flatpack\.lid, flatpack\.base\]/);
     expect(sweep).toMatch(/compoundOf\(id\)\.size === 1/);
     // One batch per sweep, so the parts recovered together are laid out together.
@@ -79,7 +78,7 @@ describe('highlight and booklet stay aids (decision 8)', () => {
 });
 
 describe('no audio (0.0.1)', () => {
-  it.each(['src/main.ts', 'src/scene/itemWorld.ts', 'src/ui/booklet.ts', 'src/ui/resetButton.ts', 'src/scene/highlight.ts', 'src/scene/flatpack.ts', 'src/scene/displayShelf.ts', 'src/scene/bookletPages.ts'])(
+  it.each(['src/main.ts', 'src/scene/itemWorld.ts', 'src/ui/booklet.ts', 'src/ui/resetButton.ts', 'src/scene/highlight.ts', 'src/scene/flatpack.ts', 'src/scene/bookletPages.ts'])(
     '%s plays nothing',
     (path) => {
       expect(read(path)).not.toMatch(/\bAudio(Context|Listener)?\b|PositionalAudio|\.play\(/);

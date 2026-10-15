@@ -267,17 +267,6 @@ export const BOX = {
   friction: 1,
 };
 
-// The display JOHNNY (src/scene/displayShelf.ts): a second, already-built shelf standing
-// against the back wall, left of the start view — the exhibit, and a disassembly
-// playground. `position`/`yaw` place the assembled layout's frame (floor under the carcass
-// centre, front +z); its back panel's rear face is ~0.143 m behind that centre.
-export const DISPLAY = {
-  position: [-1.6, 0, -ROOM.depth / 2 + 0.165] satisfies Vec3,
-  yaw: 0,
-  // Its parts' ids: the manifest's, prefixed, so they never collide with the player's set.
-  idPrefix: 'display/',
-};
-
 // Repack and recovery (src/ui/resetButton.ts, src/main.ts).
 export const RESET = {
   // The repack button arms on a first tap and repacks only on a second within this many
