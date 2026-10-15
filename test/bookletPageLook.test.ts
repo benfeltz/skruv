@@ -27,7 +27,6 @@ type FakeSheet = Omit<ReturnType<typeof createBookletSheet>, 'scrim' | 'thumb' |
 function mount(options: { open?: boolean; canClose?: () => boolean; corner?: 'topLeft' | 'bottomLeft' } = {}) {
   const sheet = createBookletSheet({
     pages: { count: COUNT, canvas: () => ({}) as CanvasImageSource },
-    look: 'page',
     corner: 'topLeft',
     ...options,
   }) as unknown as FakeSheet;

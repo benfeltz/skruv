@@ -130,17 +130,12 @@ export const BOOKLET_UI = {
   // The collapsed thumbnail of the open page, bottom-left — small enough to leave the room
   // to the fingers.
   thumbWidth: 64,
-  // A horizontal swipe this long flips a page; a downward one this long closes the sheet.
+  // A horizontal swipe this long flips a page; a downward one this long closes it.
   swipeDistance: 48,
-  // The open sheet never grows wider than this, nor taller than this share of the screen.
-  maxWidth: 520,
+  // The open page never grows taller than this share of the screen.
   maxHeight: 0.92,
-  // The sheet's own height round the page (handle, controls, gaps, padding; CSS pixels):
-  // the page fits in maxHeight less this. index.html's pre-splash mirrors it.
-  chromeHeight: 120,
-  // A notice on the sheet (a pick that would not build): laid over the head of the page, so
-  // it never adds to chromeHeight — its type size and line height, and its inset, padding
-  // and corner radius (CSS pixels).
+  // A notice on the page (a pick that would not build): laid over its head, out of the flow
+  // — its type size and line height, and its inset, padding and corner radius (CSS pixels).
   notice: { size: 14, lineHeight: 1.3, inset: 8, padding: 8, radius: 8 },
   // After a tap on the room puts the booklet down, the scrim stays this long to catch the
   // click a touch synthesises after the lift.
@@ -153,8 +148,8 @@ export const BOOKLET_UI = {
   thumbHoverDelayMs: 400,
   // A thumb's inset from its screen corner (CSS pixels), as src/ui/booklet.ts docks it.
   cornerInset: 16,
-  // The page look (src/ui/booklet.ts `look: 'page'`, the catalog): the page alone over the
-  // room, with a soft shadow, growing out of its docked thumb. `gutter` keeps its shadow
+  // The open page (src/ui/booklet.ts): the page alone over the room, with a soft shadow,
+  // growing out of its docked thumb. `gutter` keeps its shadow
   // clear of a narrow screen's edges; `growMs` is the grow to the centre and the shrink
   // back; `radius` rounds the page's corners. index.html's pre-splash mirrors the fit,
   // the shadow and the radius.

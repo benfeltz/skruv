@@ -5,7 +5,7 @@ import { createBookletSheet } from './booklet.js';
 import type { CatalogPage } from '../game/catalogModel.js';
 
 /**
- * The catalog in hand: a booklet sheet (src/ui/booklet.ts) in its page look — the page alone
+ * The catalog in hand: a booklet sheet (src/ui/booklet.ts) — the page alone
  * over the room, its number and corner arrows printed on it, docked as a thumbnail in the
  * upper left and growing out of it — over `pages` (src/scene/catalogPages.ts), with BUILD IT
  * laid over every buildable item's tag — `onPick(id)` when tapped; a sold-out stamp is inert
@@ -31,7 +31,6 @@ export function createCatalogSheet({
     pages,
     name: 'catalog',
     open,
-    look: 'page',
     corner: 'topLeft',
     // Docked, it shows its cover — SKRUV — whatever page it was put down on (Ben, 1.9.1).
     thumbShows: 'cover',

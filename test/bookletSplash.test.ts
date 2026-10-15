@@ -128,9 +128,10 @@ function mount() {
   dom.body.append(booklet.scrim, booklet.thumb, booklet.element);
   const changes: { page: number; expanded: boolean }[] = [];
   booklet.onChange((change) => changes.push(change));
-  const [handle, , controls] = booklet.element.children;
-  const [prev, , next] = controls.children;
-  const count = controls.children[1];
+  // The page look: a close the eye never sees, the page with its arrows in the frame, and
+  // the live region that names the page.
+  const [handle, view, count] = booklet.element.children;
+  const [, prev, next] = view.children[0].children;
   const key = (k: string) => dom.windowListeners.get('keydown')!.forEach((fn) => fn({ key: k }));
   const scrimUp = () => dom.body.children.includes(booklet.scrim) && !booklet.scrim.hidden;
   return { booklet, changes, handle, prev, next, count, key, scrimUp };
@@ -148,8 +149,7 @@ describe('boot: the booklet in hand on its cover (1.6.1)', () => {
     expect(booklet.expanded).toBe(true);
     expect(booklet.currentPage).toBe(0);
     expect(booklet.element.dataset.open).toBe('true');
-    expect(booklet.thumb.hidden).toBe(true);
-    expect(count.textContent).toBe(`1 / ${COUNT}`);
+    expect(count.textContent).toBe(`Page 1 of ${COUNT}`);
     expect(scrimUp()).toBe(true);
     expect(dom.focused).toBe(null);
   });
@@ -283,7 +283,7 @@ describe('tap off to put it down — every time it is open (1.6.1)', () => {
     next.fire('click');
     key('ArrowRight');
     expect(booklet.currentPage).toBe(2);
-    expect(count.textContent).toBe(`3 / ${COUNT}`);
+    expect(count.textContent).toBe(`Page 3 of ${COUNT}`);
     expect(scrimUp()).toBe(true);
   });
 });
@@ -334,7 +334,7 @@ describe('tap the sheet to put it down, swipe to flip (1.6.2)', () => {
   it.each<[string, (sheet: Sheet) => FakeElement]>([
     ['the page', ({ booklet }) => view(booklet)],
     ['the page count', ({ count }) => count],
-    ['the controls row between the arrows', ({ booklet }) => booklet.element.children[2]],
+    ['the frame the arrows ride in', ({ booklet }) => view(booklet).children[0]],
     ['the sheet itself', ({ booklet }) => booklet.element],
   ])('one tap on %s puts the booklet down, like a tap on the room', (_, target) => {
     const sheet = mount();
@@ -422,7 +422,7 @@ describe('tap to put down, from the 1.6.2 test plan', () => {
     press(view(booklet), { dx: -BOOKLET_UI.swipeDistance });
     next.fire('click');
     expect(booklet.currentPage).toBe(2);
-    expect(count.textContent).toBe(`3 / ${COUNT}`);
+    expect(count.textContent).toBe(`Page 3 of ${COUNT}`);
     expect(booklet.expanded).toBe(true);
     press(view(booklet));
     expect(booklet.expanded).toBe(false);
@@ -541,13 +541,13 @@ describe('boot with the catalog up (1.9.1)', () => {
     expect(catalog.expanded).toBe(false);
   });
 
-  it('docks upper left, the manual lower left; the manual keeps its sheet', () => {
+  it('docks upper left; the manual is the same sheet module, in the same look', () => {
     const { catalog } = mountCatalog();
     expect(catalog.thumb.dataset.corner).toBe('topLeft');
     expect(classOf(catalog.element)).toBe('booklet-leaf');
     const manual = mount();
     expect(manual.booklet.thumb.dataset.corner).toBe('bottomLeft');
-    expect(classOf(manual.booklet.element)).toBe('booklet');
+    expect(classOf(manual.booklet.element)).toBe('booklet-leaf');
   });
 
   it('one sheet open at a time: under an open sheet the other thumb is inert, and opening it does nothing', () => {
@@ -665,7 +665,8 @@ describe('boot with the catalog up (1.9.1)', () => {
     const manual = createBookletSheet({ pages: { count: COUNT, canvas: page }, open: false }) as unknown as FakeBooklet;
     mounted.push(manual);
     manual.thumb.fire('click');
-    manual.element.children[2].children[2].fire('click');
+    // The page's next arrow, then the close button.
+    manual.element.children[1].children[0].children[2].fire('click');
     manual.element.children[0].fire('click');
     expect(manual.currentPage).toBe(1);
     expect(manual.thumb.children[0].drawn).toEqual({ index: 1 });
