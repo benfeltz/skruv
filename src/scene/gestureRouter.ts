@@ -2006,7 +2006,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     carries,
     update,
     // Brings the physics joints in line with the graph after a change made outside a
-    // gesture — a part set seated pre-fastened — through the same reconcile a tap
+    // gesture — a part set seated pre-fastened by a test or a persisted build, which the app does not yet do — through the same reconcile a tap
     // or turn runs.
     sync: reconcile,
     // The repack's teardown: lets go of any gesture in progress, has every joint elsewhere
