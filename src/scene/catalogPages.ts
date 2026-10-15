@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { BOOKLET, CATALOG } from '../constants.js';
+import { BOOKLET, CATALOG, COLORS } from '../constants.js';
+import { itemPageLayout } from '../game/catalogLayout.js';
 import { coverLayout, extentOf } from '../game/coverLayout.js';
 import { itemById } from '../game/item.js';
 import { createViewRenderer } from './bookletPages.js';
-import { createPageCache, FAINT, font, INK, newPage, PAPER } from './pagePaper.js';
+import { createPageCache, css, FAINT, font, INK, newPage, PAPER } from './pagePaper.js';
 import type { CatalogPage, ItemPage } from '../game/catalogModel.js';
 import type { ViewItem } from './bookletPages.js';
 import { placeLayout } from '../../tools/validate/lib/geometry.js';
@@ -13,10 +14,13 @@ import type { Size, Vec3 } from '../../tools/validate/lib/geometry.js';
 // black line art on white paper, the same hidden-line renders as the manual
 // (bookletPages.ts `createViewRenderer`). The cover is SKRUV over a wire-drawn room corner
 // with every item standing in it, built; an item page is the item, its name, how many parts
-// are in its box, and the BUILD IT tag — or a SOLD OUT stamp, with the space under it held
-// for a store link. WHAT the pages are is src/game/catalogModel.ts's; this module only
-// draws. The BUILD IT hit target is the booklet sheet's (src/ui/booklet.ts), laid over
-// CATALOG.page.action.
+// is laid out like a catalog spread (1.9.1.1): a heavy rule, the category as the heading, the
+// item's line drawing with a swatch per colourway, its bold name with category and size, a
+// ruled row per colourway with its article number, the part count, and the OWN IT NOW! tag —
+// or a SOLD OUT stamp, with the space under it held for a store link. WHAT the pages say is
+// src/game/catalogModel.ts's and WHERE is src/game/catalogLayout.ts's; this module only
+// draws. The tag's hit target is the booklet sheet's (src/ui/booklet.ts), laid over
+// CATALOG.page.action, which the lines above never move.
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -74,16 +78,81 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
     views.draw(ctx, viewItems, [m, top, pageW - 2 * m, pageH - top - m]);
   }
 
-  // The item built, its name and box count, and BUILD IT or SOLD OUT.
-  function item(ctx: Ctx, page: ItemPage) {
+  // A rule across the page's margins: its top edge and weight.
+  function rule(ctx: Ctx, y: number, weight: number, left: number, right: number) {
     ctx.fillStyle = INK;
-    ctx.font = font(layout.nameSize, 800);
-    ctx.fillText(page.name, m, m + layout.nameSize * layout.baseline);
+    ctx.fillRect(left, y, right - left, weight);
+  }
+
+  // The category as the heading, a heavy rule over it and a thin one under.
+  function heading(ctx: Ctx, page: ItemPage, at: ReturnType<typeof itemPageLayout>) {
+    rule(ctx, at.heavyRule, layout.heavyRule, at.left, at.right);
+    ctx.fillStyle = INK;
+    ctx.font = font(layout.headingSize, 800);
+    ctx.fillText(page.category, at.left, at.headingBaseline);
+    rule(ctx, at.thinRule, layout.thinRule, at.left, at.right);
+  }
+
+  // One filled circle per variant in its colour, ink-ringed, stacked up from the drawing's
+  // foot at the right margin — beside the drawing, never over the item.
+  function swatches(ctx: Ctx, page: ItemPage, at: ReturnType<typeof itemPageLayout>) {
+    const [, y, , h] = at.drawing;
+    const { swatchRadius: r, swatchGap, swatchRing } = layout;
+    page.variants.forEach(({ color }, i) => {
+      const cx = at.right - r;
+      const cy = y + h - r - i * (2 * r + swatchGap);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+      ctx.fillStyle = css(COLORS[color as keyof typeof COLORS]);
+      ctx.fill();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = swatchRing;
+      ctx.stroke();
+    });
+  }
+
+  // The bold name, then category and `W×D×H cm` in regular weight, on one line.
+  function nameLine(ctx: Ctx, page: ItemPage, at: ReturnType<typeof itemPageLayout>) {
+    ctx.fillStyle = INK;
+    ctx.font = font(layout.nameLineSize, 800);
+    ctx.fillText(page.name, at.left, at.nameBaseline);
+    const nameW = ctx.measureText(`${page.name} `).width;
+    ctx.font = font(layout.nameLineSize, 500);
+    ctx.fillText(`${page.category} ${page.size.join('×')} ${words.cm}`, at.left + nameW, at.nameBaseline);
+  }
+
+  // A row per variant: its name left, its article number right, a thin rule under it.
+  function variantRows(ctx: Ctx, page: ItemPage, at: ReturnType<typeof itemPageLayout>) {
+    ctx.fillStyle = INK;
+    ctx.font = font(layout.rowSize, 600);
+    page.variants.forEach(({ name, article }, i) => {
+      const { baseline, rule: ruleY } = at.rows[i];
+      ctx.textAlign = 'start';
+      ctx.fillText(name, at.left, baseline);
+      ctx.textAlign = 'right';
+      ctx.fillText(article, at.right, baseline);
+      rule(ctx, ruleY, layout.thinRule, at.left, at.right);
+    });
+    ctx.textAlign = 'start';
+  }
+
+  // Our own line, kept: how many parts are in the box.
+  function partCount(ctx: Ctx, page: ItemPage, at: ReturnType<typeof itemPageLayout>) {
+    ctx.fillStyle = INK;
     ctx.font = font(layout.detailSize, 600);
-    ctx.fillText(`${page.partCount} ${words.parts}`, m + layout.detailIndent, m + layout.nameSize * layout.baseline + layout.detailSize * layout.subtitleDrop);
-    const top = m + layout.nameSize + layout.detailSize * layout.drawingDrop;
-    const [, actionY] = layout.action;
-    views.draw(ctx, built(page.id, [0, 0, 0], 'bold'), [m, top, pageW - 2 * m, actionY - top - m]);
+    ctx.fillText(`${page.partCount} ${words.parts}`, at.left, at.partCountBaseline);
+  }
+
+  // The item page: heading, the item built in its frame, swatches, name line, rows, the
+  // part count, then the tag — or the SOLD OUT stamp in its place.
+  function item(ctx: Ctx, page: ItemPage) {
+    const at = itemPageLayout(page.variants.length);
+    heading(ctx, page, at);
+    views.draw(ctx, built(page.id, [0, 0, 0], 'bold'), at.drawing);
+    swatches(ctx, page, at);
+    nameLine(ctx, page, at);
+    variantRows(ctx, page, at);
+    partCount(ctx, page, at);
     if (page.pickable) tag(ctx, words.build);
     else stamp(ctx, words.soldOut);
   }
@@ -102,8 +171,8 @@ export function createCatalogPages(renderer: THREE.WebGLRenderer, pages: readonl
     ctx.font = font(layout.actionTextSize, 800);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Centred on the tag right of the hole's square, [x + h, x + w].
-    ctx.fillText(text, x + (w + h) / 2, y + h / 2);
+    // Centred on the tag right of the hole's square, [x + h, x + w], squeezed to fit it.
+    ctx.fillText(text, x + (w + h) / 2, y + h / 2, w - h);
     ctx.textAlign = 'start';
     ctx.textBaseline = 'alphabetic';
   }

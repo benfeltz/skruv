@@ -149,17 +149,15 @@ export const CATALOG = {
   page: {
     wordmarkSize: 156,
     taglineSize: 30,
-    nameSize: 96,
     detailSize: 30,
-    // The headings' setting, as fractions of a type size: a title's baseline sits this far
-    // down its size; the line under it (tagline, part count) this many of its own sizes below
+    // The cover's setting, as fractions of a type size: a title's baseline sits this far
+    // down its size; the line under it (the tagline) this many of its own sizes below
     // that baseline; the drawing starts this many of them below the title's full size. The
     // line under is indented this far (page pixels) to sit optically flush under the title.
     baseline: 0.8,
     subtitleDrop: 1.6,
     drawingDrop: 2.4,
     taglineIndent: 6,
-    detailIndent: 4,
     // An item page's lines (src/game/catalogLayout.ts), top to bottom: the heavy rule's
     // weight; the category heading's size, and the gap between the rule and its cap line;
     // the thin rule's weight; the name line's size (name bold, category and size beside

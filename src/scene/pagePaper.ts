@@ -4,7 +4,8 @@ import { BOOKLET, COLORS } from '../constants.js';
 // src/scene/catalogPages.ts): its inks and type, a blank page, and the page cache the
 // booklet sheet reads — drawn on first ask, the rest in idle time.
 
-const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
+/** A colour-table number as a CSS colour. */
+export const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 export const INK = css(COLORS.bookletInk);
 export const FAINT = css(COLORS.bookletFaint);
 export const PAPER = css(COLORS.bookletPaper);
