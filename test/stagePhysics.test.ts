@@ -58,8 +58,7 @@ describe('the stage holds parts on the floor', () => {
 });
 
 describe('a part that does go over the open edge is recovered (1.5 sweep)', () => {
-  it('goes over a lip taller than itself and falls past the slab, flagged escaped', async () => {
-    // A cube is taller than the lip: it rolls over and drops off the slab's edge.
+  it('a cube taller than the lip rolls over it and falls past the slab, flagged escaped', async () => {
     const { x, y, z } = await shoved(CUBE, [edgeX - 0.5, CUBE[1], 0], [4, 0, 0]);
     expect(x).toBeGreaterThan(edgeX + STAGE.lipThickness);
     expect(hasEscaped([x, y, z], ROOM, 0.05)).toBe(true);

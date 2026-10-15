@@ -4,7 +4,8 @@ import { ROOM, STAGE } from '../src/constants.js';
 import { createRoom } from '../src/scene/room.js';
 
 // A stand-in renderer: the room only asks it for the drawing buffer's size.
-const renderer = (width = 800, height = 600) => ({ getDrawingBufferSize: (target: THREE.Vector2) => target.set(width, height) }) as unknown as THREE.WebGLRenderer;
+const renderer = (width = 800, height = 600) => ({ getSize: (target: THREE.Vector2) => target.set(width, height) }) as unknown as THREE.WebGLRenderer;
+const at = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const bounds = (object: THREE.Object3D) => new THREE.Box3().setFromObject(object);
 
 describe('the room as built', () => {
@@ -50,40 +51,48 @@ describe('the room as built', () => {
 describe('the room per frame', () => {
   it('hides the back wall, ink and all, from behind it, and shows it again in front', () => {
     const { pieces, update } = createRoom();
-    update([0, 2, -ROOM.depth], renderer());
+    update(at(0, 2, -ROOM.depth), renderer());
     expect(pieces.get('backWall')!.visible).toBe(false);
     expect(pieces.get('leftWall')!.visible).toBe(true);
-    update([0, 2, ROOM.depth], renderer());
+    update(at(0, 2, ROOM.depth), renderer());
     expect(pieces.get('backWall')!.visible).toBe(true);
   });
 
   it('hides the left wall from behind it, and both from behind the corner', () => {
     const { pieces, update } = createRoom();
-    update([-ROOM.width, 2, 0], renderer());
+    update(at(-ROOM.width, 2, 0), renderer());
     expect(pieces.get('leftWall')!.visible).toBe(false);
     expect(pieces.get('backWall')!.visible).toBe(true);
-    update([-ROOM.width, 2, -ROOM.depth], renderer());
+    update(at(-ROOM.width, 2, -ROOM.depth), renderer());
     expect([pieces.get('backWall')!.visible, pieces.get('leftWall')!.visible]).toEqual([false, false]);
+  });
+
+  it('hides a wall for an eye inside its thickness, not only behind it', () => {
+    const { pieces, update } = createRoom();
+    update(at(0, 2, -ROOM.depth / 2 - STAGE.wallThickness / 2), renderer());
+    expect(pieces.get('backWall')!.visible).toBe(false);
   });
 
   it('never hides the slab or the lips', () => {
     const { pieces, update } = createRoom();
-    update([-ROOM.width, 2, -ROOM.depth], renderer());
+    update(at(-ROOM.width, 2, -ROOM.depth), renderer());
     for (const name of ['slab', 'frontLip', 'rightLip'] as const) expect(pieces.get(name)!.visible, name).toBe(true);
   });
 
-  it('keeps the ink resolution at the drawing buffer size', () => {
+  it('keeps the ink resolution at the canvas CSS size, whatever the pixel ratio', () => {
     const { pieces, update } = createRoom();
-    update([0, 2, 3], renderer(1170, 2532));
+    update(at(0, 2, 3), renderer(1170, 2532));
     const lines = pieces.get('slab')!.children[1] as unknown as { material: { resolution: THREE.Vector2 } };
     expect(lines.material.resolution.toArray()).toEqual([1170, 2532]);
   });
 
   it('builds no geometry per frame', () => {
     const { pieces, update } = createRoom();
-    const before = [...pieces.values()].flatMap((piece) => piece.children.map((child) => (child as THREE.Mesh).geometry));
-    for (let i = 0; i < 5; i++) update([i, 2, 3], renderer());
-    const after = [...pieces.values()].flatMap((piece) => piece.children.map((child) => (child as THREE.Mesh).geometry));
-    expect(after).toEqual(before);
+    const geometries = () => [...pieces.values()].flatMap((piece) => piece.children.map((child) => (child as THREE.Mesh).geometry));
+    const before = geometries();
+    for (let i = 0; i < 5; i++) update(at(i, 2, 3), renderer());
+    const after = geometries();
+    expect(after).toHaveLength(before.length);
+    after.forEach((geometry, i) => expect(geometry).toBe(before[i]));
   });
 });

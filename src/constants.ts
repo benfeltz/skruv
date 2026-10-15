@@ -22,7 +22,7 @@ export const STAGE = {
   slabThickness: 0.1,
   lipHeight: 0.03,
   lipThickness: 0.03,
-  // The ink edges' width, in device-independent pixels (LineMaterial linewidth).
+  // The ink edges' width in CSS pixels (LineMaterial linewidth, against the canvas's CSS size).
   inkWidth: 3,
 };
 

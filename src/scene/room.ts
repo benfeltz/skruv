@@ -5,6 +5,7 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import { COLORS, STAGE } from '../constants.js';
 import { sizeAndCentre, stageBoxes } from '../game/stageBoxes.js';
 import type { StageBoxName } from '../game/stageBoxes.js';
+import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 import { STAGE_WALLS, wallHidden } from './stageCutaway.js';
 
 /**
@@ -37,16 +38,24 @@ export function createRoom() {
     group.add(piece);
   }
 
-  const buffer = new THREE.Vector2();
+  const backWall = pieces.get('backWall')!;
+  const leftWall = pieces.get('leftWall')!;
+  // Reused every frame: the eye as a tuple and the canvas size, so the loop allocates nothing.
+  const eyeAt: Vec3 = [0, 0, 0];
+  const size = new THREE.Vector2();
   return {
     group,
     pieces,
-    /** Per frame: hide the walls the eye is behind; sync the ink to the drawing buffer. */
-    update(eye: readonly [number, number, number], renderer: THREE.WebGLRenderer) {
-      pieces.get('backWall')!.visible = !wallHidden([...eye], STAGE_WALLS.back);
-      pieces.get('leftWall')!.visible = !wallHidden([...eye], STAGE_WALLS.left);
-      renderer.getDrawingBufferSize(buffer);
-      ink.resolution.copy(buffer);
+    /**
+     * Per frame: hide the walls the eye is behind; keep the ink's resolution at the canvas's
+     * CSS size, so `STAGE.inkWidth` is the same on screen at any pixel ratio.
+     */
+    update(eye: THREE.Vector3, renderer: THREE.WebGLRenderer) {
+      eye.toArray(eyeAt);
+      backWall.visible = !wallHidden(eyeAt, STAGE_WALLS.back);
+      leftWall.visible = !wallHidden(eyeAt, STAGE_WALLS.left);
+      renderer.getSize(size);
+      if (!size.equals(ink.resolution)) ink.resolution.copy(size);
     },
   };
 }

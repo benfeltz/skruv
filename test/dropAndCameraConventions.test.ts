@@ -81,7 +81,7 @@ describe('shipped camera, from the first frame (rounds 4–6)', () => {
     expect(CAMERA_LIMITS.floorClearance).toBeGreaterThan(CAMERA.near);
   });
 
-  it('lets a zoomed-out camera rise over the 3 m walls and stay where it is outside them', () => {
+  it('lets a zoomed-out camera rise over the wall tops (the lift ceiling) and stay where it is outside the room', () => {
     const high = clampCamera([0, CAMERA_LIMITS.maxDistance, 99], CAMERA_LIMITS);
     expect(high[1]).toBeGreaterThan(ROOM.height);
     expect(high[2]).toBe(99);

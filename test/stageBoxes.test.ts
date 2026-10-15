@@ -62,9 +62,8 @@ describe('the stage as colliders', () => {
 
   it('is at least as thick as it is drawn, so a fast part cannot tunnel', () => {
     for (const name of ['slab', 'backWall', 'leftWall']) {
-      const a = sizeAndCentre(by(drawn, name)).size;
-      const b = sizeAndCentre(by(solid, name)).size;
-      expect(Math.min(...b.filter((v, i) => v !== a[i]))).toBeGreaterThanOrEqual(PHYSICS.roomColliderThickness);
+      const axis = by(drawn, name).outward.findIndex((v) => v !== 0);
+      expect(sizeAndCentre(by(solid, name)).size[axis], name).toBeGreaterThanOrEqual(PHYSICS.roomColliderThickness);
     }
   });
 });
