@@ -1,7 +1,7 @@
 // The catalog's item page, as numbers (1.9.1.1): where each line sits on the page, top to
 // bottom — heavy rule, category heading, thin rule, the drawing's frame, the name line, a row
-// per variant, the part count — all above the tag, which never moves (CATALOG.page.action:
-// it is also the hit target the booklet sheet lays over the page). The drawing takes what the
+// per variant, the part count — all above the tag (CATALOG.page.action, the one source for where the
+// tag is drawn and where it is tapped; the lines stack up from it). The drawing takes what the
 // lines leave. Pure — src/scene/catalogPages.ts draws what this lays out.
 
 import { BOOKLET, CATALOG } from '../constants.js';
@@ -51,7 +51,7 @@ export function itemPageLayout(variantCount: number): ItemPageLayout {
   // Up from the tag.
   const partCountBaseline = tagTop - p.tagGap;
   const rowHeight = p.rowSize * p.rowHeight;
-  const rowsBottom = partCountBaseline - p.detailSize * p.capHeight - p.lineGap;
+  const rowsBottom = partCountBaseline - p.detailSize * p.capHeight - p.countGap;
   const rowsTop = rowsBottom - variantCount * rowHeight;
   const rows = Array.from({ length: variantCount }, (_, i) => {
     const bottom = rowsTop + (i + 1) * rowHeight;

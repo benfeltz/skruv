@@ -22,12 +22,11 @@ describe.each([1, 2])('the item page with %i variant row(s)', (count) => {
     for (const { baseline, rule } of layout.rows) expect(rule).toBeGreaterThan(baseline);
   });
 
-  it('keeps every line above the tag and the tag where it was', () => {
+  it('keeps every line above the tag', () => {
     const [, drawingTop, , drawingH] = layout.drawing;
     expect(layout.partCountBaseline).toBeLessThan(tagTop);
     expect(drawingTop + drawingH).toBeLessThan(tagTop);
     for (const { rule } of layout.rows) expect(rule).toBeLessThan(tagTop);
-    expect(CATALOG.page.action).toEqual([180, 770, 360, 104]);
   });
 
   it('leaves the drawing at least half the page height less its margins', () => {
@@ -64,6 +63,16 @@ describe('the most variants the schema admits', () => {
     expect(drawingTop).toBeGreaterThan(at.thinRule);
     expect(drawingH).toBeGreaterThan(0);
     expect(drawingTop + drawingH).toBeLessThan(at.nameBaseline);
+  });
+});
+
+describe('the part count', () => {
+  it('keeps clear space from the rows above it and from the tag below it', () => {
+    const { detailSize, capHeight, countGap, tagGap } = CATALOG.page;
+    const at = itemPageLayout(2);
+    const lastRule = at.rows[1].rule + CATALOG.page.thinRule;
+    expect(at.partCountBaseline - detailSize * capHeight - lastRule).toBeGreaterThanOrEqual(countGap);
+    expect(tagTop - at.partCountBaseline).toBeGreaterThanOrEqual(tagGap);
   });
 });
 

@@ -21,7 +21,7 @@ import type { Size, Vec3 } from '../../tools/validate/lib/geometry.js';
 // or a SOLD OUT stamp, with the space under it held for a store link. WHAT the pages say is
 // src/game/catalogModel.ts's and WHERE is src/game/catalogLayout.ts's; this module only
 // draws. The tag's hit target is the booklet sheet's (src/ui/booklet.ts), laid over
-// CATALOG.page.action, which the lines above never move.
+// CATALOG.page.action, which the lines above stack up from.
 
 type Ctx = CanvasRenderingContext2D;
 

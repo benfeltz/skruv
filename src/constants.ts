@@ -165,7 +165,7 @@ export const CATALOG = {
     // the thin rule's weight; the name line's size (name bold, category and size beside
     // it); a variant row's type size and its height as a multiple of that size; the thin
     // rule under each row. `lineGap` separates the blocks; the part count (detailSize) sits
-    // `tagGap` above the tag.
+    // `countGap` below the rows and `tagGap` above the tag.
     heavyRule: 8,
     headingSize: 40,
     headingGap: 12,
@@ -176,7 +176,8 @@ export const CATALOG = {
     rowSize: 26,
     rowHeight: 1.7,
     lineGap: 14,
-    tagGap: 22,
+    countGap: 34,
+    tagGap: 34,
     // Type's cap-line and descender depth as fractions of its size, for stacking lines
     // without measuring them.
     capHeight: 0.75,
@@ -187,9 +188,9 @@ export const CATALOG = {
     swatchGap: 12,
     swatchRing: 3,
     // The OWN IT NOW! tag, or the SOLD OUT stamp in its place: [x, y, w, h], also the hit
-    // target src/ui/booklet.ts lays over the page. Below it, down to the page margin, nothing
-    // is drawn: the space held for a store link on a sold-out page, once there is a store.
-    action: [180, 770, 360, 104] satisfies [number, number, number, number],
+    // target src/ui/booklet.ts lays over the page, its foot on the page margin (pageSize
+    // height 1000 less margin 44 less its own 104). The item page's lines stack up from it.
+    action: [180, 852, 360, 104] satisfies [number, number, number, number],
     // Sized so OWN IT NOW! fits the tag right of its hole; the scene squeezes it to the
     // tag if a font runs wide.
     actionTextSize: 36,
