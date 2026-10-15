@@ -5,8 +5,8 @@ import { CONTRACT } from '../tools/validate/lib/vocabulary.js';
 import type { Vec3 } from '../tools/validate/lib/geometry.js';
 
 export const ROOM = {
-  width: 5,
-  depth: 4,
+  width: 6,
+  depth: 5,
   // The lift ceiling, well clear of the 2.02 m bookcase standing; the drawn walls are
   // shorter (see the stage's wall height).
   height: 3,
@@ -31,7 +31,8 @@ export const COLORS = {
   floor: 0xc9b79c,
   // The stage's ink edges: the manual's ink, so the room and the booklet draw alike.
   stageInk: 0x1c1c1c,
-  wall: 0xe8e4dc,
+  // The stage walls: white, like the catalog's paper (COLORS.bookletPaper).
+  wall: 0xffffff,
   skyLight: 0xffffff,
   groundLight: 0x8a7a66,
   sunLight: 0xffffff,
@@ -252,7 +253,7 @@ export const LIGHTS = {
   sunIntensity: 1.6,
   sunPosition: [-4, 7, 2] satisfies Vec3,
   shadowMapSize: 1024,
-  shadowExtent: 3.5,
+  shadowExtent: 4.2,
   // Offsets shadow lookups along the normal so millimetre-thin parts don't self-shadow
   // into stripes (acne); small enough that contact shadows stay attached.
   shadowNormalBias: 0.02,
@@ -292,7 +293,7 @@ export const CAMERA_LIMITS = {
   // Close enough that a dowel and the hole it goes in fill much of a phone screen.
   minDistance: 0.15,
   // Far enough to take in the whole room from over the walls.
-  maxDistance: 6,
+  maxDistance: 8,
   // Panning slows with zoom; closer than panReference (m) it is sped back up, by at most
   // maxPanBoost, so moving around a close-up doesn't crawl.
   panReference: 1.2,
