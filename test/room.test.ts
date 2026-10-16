@@ -178,6 +178,28 @@ describe('the sky turns', () => {
     expect(materials.size).toBe(1);
   });
 
+  it('pierces the one sky material with the pinhole mask, a hole where a star shows', () => {
+    const [panel] = skyMeshes(createRoom());
+    const material = panel!.material as THREE.MeshBasicMaterial;
+    expect(material.alphaMap).not.toBeNull();
+    expect(material.alphaTest).toBe(STAGE.scenery.stars.alphaTest);
+  });
+
+  it('lights the backlight to the stars at night and to the sky\'s own colour at noon', () => {
+    const room = createRoom();
+    const backlight = room.backWall.getObjectByName('backSceneryBacklight') as THREE.Mesh;
+    const colour = () => (backlight.material as THREE.MeshBasicMaterial).color.clone();
+    // The knob starts on noon, where a room built at another hour is not scrubbed: move it off and back.
+    STAGE.sky.phase = 0.4;
+    room.update(at(0, 2, 3), renderer(), 0);
+    STAGE.sky.phase = 0.5;
+    room.update(at(0, 2, 3), renderer(), 0);
+    expect(colour().equals(skyColour(room))).toBe(true);
+    STAGE.sky.phase = 0;
+    room.update(at(0, 2, 3), renderer(), 0);
+    expect(colour().getHex()).toBe(COLORS.starlight);
+  });
+
   it('moves the colour when game time passes', () => {
     const room = createRoom();
     STAGE.sky.phase = 0.3;
@@ -211,7 +233,8 @@ describe('the sky turns', () => {
       room.group.traverse((o) => {
         expect(o).not.toBeInstanceOf(THREE.Light);
         const material = (o as THREE.Mesh).material as THREE.Material & { color?: THREE.Color } | undefined;
-        if (material?.color && material !== sky) colours.push([o.name, material.color.getHex()]);
+        // The backlight behind a back panel follows the sky too; everything else holds still.
+        if (material?.color && material !== sky && !o.name.endsWith('SceneryBacklight')) colours.push([o.name, material.color.getHex()]);
       });
       return colours;
     };
