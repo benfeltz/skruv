@@ -113,8 +113,8 @@ function boot({ flag, failBuild = new Set<string>() }: { flag: string; failBuild
     build: () => {
       if (failBuild.has(named)) throw new Error(`build ${named} broke`);
       // The item world's manual, mounted docked as itemWorld.ts mounts it.
-      const manual = createBookletSheet({ pages: { count: 3, canvas: () => ({}) as CanvasImageSource }, open: false }) as unknown as Sheet;
-      body.append(manual.scrim, manual.thumb, manual.element);
+      const manual = createBookletSheet({ pages: { count: 3, canvas: () => ({}) as CanvasImageSource }, open: false, docked: 'strip', blocking: false }) as unknown as Sheet;
+      body.append(manual.thumb, manual.element);
       manuals.push(manual);
       live.push(manual);
       return { item: named, manual, dispose: () => manual.dispose() };
@@ -160,7 +160,7 @@ describe('AC1: cold boot opens the catalog on its cover, the room empty (1.9.1)'
 });
 
 describe('AC2: BUILD IT goes straight into the room, both booklets docked (Ben, 1:50 PM)', () => {
-  it('the catalog docks upper left, the new manual docks lower left, nothing opens', () => {
+  it('the catalog docks upper left, the new manual docks as the strip along the bottom, nothing opens', () => {
     const { catalog, buildIt, turnTo, items, manuals } = boot({ flag: '' });
     turnTo(1);
     buildIt.fire('click');
@@ -168,9 +168,11 @@ describe('AC2: BUILD IT goes straight into the room, both booklets docked (Ben, 
     expect(catalog.expanded).toBe(false);
     expect(manuals).toHaveLength(1);
     expect(manuals[0].expanded).toBe(false);
-    // Each in a corner of its own (1.9.1.5): the catalog upper left, the manual lower left.
+    // Each in a place of its own: the catalog upper left, the manual the strip, no corner.
     expect(catalog.thumb.dataset.corner).toBe('topLeft');
-    expect(manuals[0].thumb.dataset.corner).toBe('bottomLeft');
+    expect(manuals[0].thumb.className).toBe('booklet-strip');
+    expect(manuals[0].thumb.dataset.corner).toBeUndefined();
+    expect(manuals[0].scrim).toBeNull();
   });
 });
 

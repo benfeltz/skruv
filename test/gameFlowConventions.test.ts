@@ -59,9 +59,11 @@ describe('recovery sweep (Feedback #9)', () => {
 });
 
 describe('highlight and booklet stay aids (decision 8)', () => {
-  it("lights only the player's set, and only while the booklet is open", () => {
+  it("lights only the player's set, from the centre page, open or not (1.9.1.2)", () => {
     expect(world).toMatch(/createHighlight\(playerParts\)/);
-    expect(world).toMatch(/expanded && shown\.kind === 'step' \? shown\.types : \[\]/);
+    expect(world).toMatch(/highlight\.show\(shown\.kind === 'step' \? shown\.types : \[\]\)/);
+    // Never conditioned on the page being open.
+    expect(world).not.toMatch(/expanded && shown/);
   });
 
   it('keeps the highlight out of the booklet DOM — main passes the page', () => {
@@ -125,9 +127,9 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
     expect(booklet).toMatch(/open: startsOpen = true/);
     expect(booklet).toMatch(/let page = 0;\s*let open = startsOpen;/);
     expect(main).toMatch(/createCatalogSheet\(\{\s*pages: catalogPages,\s*open: true,/);
-    expect(world).toMatch(/createBookletSheet\(\{ pages: bookletPages, open: false \}\)/);
-    // After BUILD IT, focus lands on the manual in front, never the catalog thumb behind it.
-    expect(main).toMatch(/catalog\.setOpen\(false\);\s*\/\/[^\n]*\n\s*world\.booklet\.thumb\.focus\(\{ preventScroll: true \}\);/);
+    expect(world).toMatch(/createBookletSheet\(\{ pages: bookletPages, open: false, docked: 'strip', blocking: false \}\)/);
+    // After BUILD IT, focus lands on the manual's strip, never the catalog thumb behind it.
+    expect(main).toMatch(/catalog\.setOpen\(false\);\s*\/\/[^\n]*\n\s*world\.booklet\.focus\(\);/);
   });
 
   // Each booklet has a corner of its own (1.9.1.5): no stack to fan, so no knob to re-place.
@@ -180,7 +182,10 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
   it('puts the scrim over the room and the sheet over the scrim, mounted by the item world', () => {
     expect(booklet).toMatch(/\.booklet-scrim \{[^}]*position: fixed;[^}]*inset: 0;[^}]*z-index: 2;/);
     expect(booklet.slice(booklet.indexOf('    .booklet-leaf {'), booklet.indexOf(".booklet-leaf[data-open='true'] {"))).toMatch(/z-index: 3;/);
-    expect(world).toMatch(/document\.body\.append\(booklet\.scrim, booklet\.thumb, booklet\.element\)/);
+    // The catalog is blocking and mounts its scrim; the manual is not, and has none to mount.
+    expect(main).toMatch(/document\.body\.append\(catalog\.scrim, catalog\.thumb, catalog\.element\)/);
+    expect(world).toMatch(/document\.body\.append\(booklet\.thumb, booklet\.element\)/);
+    expect(world).not.toMatch(/booklet\.scrim/);
   });
 
   it('swallows the put-down tap in the booklet, never in the gesture router', () => {

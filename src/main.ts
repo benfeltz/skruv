@@ -109,8 +109,8 @@ const items = createItemSlot({
 // The catalog is the splash: the game boots with it open on its cover, and it outlives
 // item worlds, so it is the room's — mounted before any manual. BUILD IT goes straight into
 // the room: the item is built, the catalog put down into the upper-left corner and the new
-// manual docked in the lower left. Until the first pick there is no room to go back to, so
-// nothing puts it down.
+// manual docked as the strip along the bottom. Until the first pick there is no room to go
+// back to, so nothing puts it down.
 const catalogPages = createCatalogPages(renderer, createCatalog(catalogEntries(), pickableSet(CATALOG.pickable, ITEM_IDS)));
 const catalog = createCatalogSheet({
   pages: catalogPages,
@@ -119,8 +119,8 @@ const catalog = createCatalogSheet({
   onPick: (id) => {
     const world = items.pick(id);
     catalog.setOpen(false);
-    // Focus goes to the item's manual, not back to the catalog thumb.
-    world.booklet.thumb.focus({ preventScroll: true });
+    // Focus goes to the item's manual — its strip's centre page — not back to the catalog thumb.
+    world.booklet.focus();
   },
 });
 document.body.append(catalog.scrim, catalog.thumb, catalog.element);

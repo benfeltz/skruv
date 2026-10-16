@@ -706,11 +706,9 @@ function createStrip(name: string, count: number, root: HTMLElement) {
         const slot = slots[at];
         slot.button.dataset.empty = String(index === null);
         slot.button.setAttribute('aria-hidden', String(index === null));
-        if (index === null) {
-          slot.button.removeAttribute('aria-label');
-        } else {
-          slot.button.setAttribute('aria-label', at === centreSlot(total) ? `Page ${index + 1} of ${count}, ${open ? 'close' : 'open'} it` : `Go to page ${index + 1} of ${count}`);
-        }
+        const centred = at === centreSlot(total);
+        const label = centred ? `Page ${(index ?? 0) + 1} of ${count}, ${open ? 'close' : 'open'} it` : `Go to page ${(index ?? 0) + 1} of ${count}`;
+        slot.button.setAttribute('aria-label', index === null ? '' : label);
         if (at === centreSlot(total)) slot.button.setAttribute('aria-expanded', String(open));
         if (index !== null && slot.shows !== index) draw(slot.canvas, index);
         slot.shows = index;

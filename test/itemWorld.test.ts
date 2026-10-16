@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CAMERA, PHYSICS } from '../src/constants.js';
+import { CAMERA, COLORS, PHYSICS } from '../src/constants.js';
 import { createBus } from '../src/game/events.js';
 import { createHaptics } from '../src/game/haptics.js';
-import { ITEM_ID, ITEM_IDS, MANIFEST, setItem } from '../src/game/item.js';
+import { ITEM_ID, ITEM_IDS, MANIFEST, PART_TYPES, setItem } from '../src/game/item.js';
 import { createItemSlot } from '../src/game/itemSlot.js';
 import { createPhysicsWorld } from '../src/physics/world.js';
 import { createCameraControls } from '../src/scene/cameraControls.js';
@@ -378,5 +378,52 @@ describe('the swap: picking from the catalog (1.9.1)', () => {
     } finally {
       setItem('johnny');
     }
+  });
+});
+
+describe('the manual in the room (1.9.1.2)', () => {
+  // The centre page's parts glow whether or not it is open, and a page with no parts lights none.
+  it('lights the centre step page\'s parts with the manual docked, and none on a page without parts', async () => {
+    const { deps } = await engine();
+    const stepPages = {
+      count: 3,
+      pages: [{ kind: 'cover' }, { kind: 'step', types: Object.keys(PART_TYPES) }, { kind: 'back' }] as unknown as BookletPages['pages'],
+      canvas: () => ({}) as HTMLCanvasElement,
+      prerender() {},
+      dispose() {},
+    };
+    const world = createItemWorld({ ...deps, pages: () => stepPages });
+    const lit = () => {
+      let count = 0;
+      deps.scene.traverse((object) => {
+        const material = (object as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+        if (material?.emissive?.getHex() === COLORS.highlight) count++;
+      });
+      return count;
+    };
+    const [prev, , next] = [world.booklet.thumb.children[0], world.booklet.thumb.children[1], world.booklet.thumb.children[2]] as unknown as FakeElement[];
+    // On the cover: nothing, and nothing is open.
+    expect(world.booklet.expanded).toBe(false);
+    expect(lit()).toBe(0);
+    next.dispatch('click', {});
+    expect(world.booklet.currentPage).toBe(1);
+    expect(world.booklet.expanded).toBe(false);
+    expect(lit()).toBeGreaterThan(0);
+    next.dispatch('click', {});
+    expect(lit()).toBe(0);
+    prev.dispatch('click', {});
+    expect(lit()).toBeGreaterThan(0);
+    world.dispose();
+  });
+
+  it('mounts the strip and the page only — no scrim over the room', async () => {
+    const { deps } = await engine();
+    const world = createItemWorld(deps);
+    const mounted = body.children as unknown[];
+    expect(mounted).toContain(world.booklet.thumb);
+    expect(mounted).toContain(world.booklet.element);
+    expect(body.children.map((node) => node.className)).not.toContain('booklet-scrim');
+    expect(world.booklet.scrim).toBeNull();
+    world.dispose();
   });
 });
