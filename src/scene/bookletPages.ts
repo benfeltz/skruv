@@ -243,9 +243,9 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
       ctx.fillStyle = INK;
       ctx.textAlign = 'center';
       ctx.font = font(28, 800);
-      ctx.fillText(`${count}×`, cx, cy + r + 34);
+      ctx.fillText(`${count}×`, cx, cy + r + BOOKLET.inset.countDrop);
       ctx.font = font(17, 500);
-      ctx.fillText(partNumber, cx, cy + r + 56);
+      ctx.fillText(partNumber, cx, cy + r + BOOKLET.inset.partDrop);
       ctx.textAlign = 'left';
     });
     if (page.tool) {
@@ -266,7 +266,8 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     const frame: Rect = [m, top, pageW - 2 * m, pageH - m - top];
     const { items, lines, anchorOf } = drawingOf(page);
     const project = views.draw(ctx, items, frame, orientation, { lines });
-    insets.forEach((inset, i) => tail(ctx, centres[i], r, project(anchorOf(inset))));
+    // From under the labels, so the line never crosses the count or the part number.
+    insets.forEach((inset, i) => tail(ctx, [centres[i][0], cy + r + BOOKLET.inset.tailFrom], project(anchorOf(inset))));
     if (page.turns.length) turnArrow(ctx, frame[0] + frame[2] - 80, frame[1] + 70, 46);
     if (page.tip) {
       // Two people tip it up together: an arc over the drawing, a figure at each side.
@@ -596,22 +597,18 @@ function ring(ctx: Ctx, x: number, y: number, r: number) {
   ctx.stroke();
 }
 
-// A thin tail from an inset's ring (centre `from`, radius `r`) to its joint `to` in the
-// drawing: a shallow bow, a dot at the joint.
-function tail(ctx: Ctx, from: [number, number], r: number, to: [number, number]) {
+// A thin tail from `from` (under an inset's labels) to its joint `to` in the drawing: a
+// shallow bow, a dot at the joint.
+function tail(ctx: Ctx, from: [number, number], to: [number, number]) {
   const [dx, dy] = [to[0] - from[0], to[1] - from[1]];
-  const length = Math.hypot(dx, dy);
-  // The joint lies inside the ring: nothing to run.
-  if (length <= r) return;
-  const [ux, uy] = [dx / length, dy / length];
-  const start: [number, number] = [from[0] + ux * r, from[1] + uy * r];
-  const bow = (length - r) * BOOKLET.inset.tailBow;
+  const bow = Math.hypot(dx, dy) * BOOKLET.inset.tailBow;
+  const length = Math.hypot(dx, dy) || 1;
   ctx.strokeStyle = INK;
   ctx.fillStyle = INK;
   ctx.lineWidth = BOOKLET.inset.tailLine;
   ctx.beginPath();
-  ctx.moveTo(...start);
-  ctx.quadraticCurveTo((start[0] + to[0]) / 2 - uy * bow, (start[1] + to[1]) / 2 + ux * bow, ...to);
+  ctx.moveTo(...from);
+  ctx.quadraticCurveTo((from[0] + to[0]) / 2 - (dy / length) * bow, (from[1] + to[1]) / 2 + (dx / length) * bow, ...to);
   ctx.stroke();
   ctx.beginPath();
   ctx.arc(to[0], to[1], BOOKLET.inset.tailDot, 0, 2 * Math.PI);

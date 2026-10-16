@@ -159,11 +159,16 @@ export const BOOKLET = {
     ringLine: 3,
     tailLine: 2,
     tailDot: 5,
-    tailBow: 0.18,
+    tailBow: 0.12,
     tool: 0.46,
     toolOnly: 64,
     // Where the tool sits in the first inset, as a fraction of its radius from the centre, and
     // how much of the tool's own disc its drawing fills.
+    // Below the ring's foot: the count's and the part number's baselines, and where a tail starts
+    // (under both, so it never crosses them).
+    countDrop: 34,
+    partDrop: 56,
+    tailFrom: 68,
     toolAt: 0.6,
     toolFill: 0.7,
     // The way an inset turns its hole's axis on the page: up, a little towards the viewer, so
