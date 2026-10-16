@@ -137,15 +137,18 @@ export function floatOut(joint: Joint, layout: ExplodeLayout, partTypes: PartTyp
 
 /**
  * One detail inset per fastener type the page adds, in `step.hardware`'s order: its count
- * and part number, the first joint of that type the page seats, the host at its pose with
+ * and part number, the first joint of that type the page seats (one it pushes the fastener in by, if any), the host at its pose with
  * the fastener floated out of it, and the box round the hole mouth to frame.
  */
 export function insetsFor(step: Pick<BuildStep, 'joints' | 'hardware'>, layout: ExplodeLayout, partTypes: PartTypes): Inset[] {
   const { part, hole, end } = lookups(layout, partTypes);
   const insets: Inset[] = [];
   for (const count of step.hardware) {
-    const index = step.joints.find((i) => layout.joints[i].mover === layout.joints[i].hardware && part(layout.joints[i].hardware).type === count.type);
-    // `hardware` counts the pieces the page's own joints push in.
+    // The joint the page pushes the fastener in by; a piece the page seats only by its second
+    // end (a part pressed onto it) still counts, so any joint of its type will do.
+    const ofType = step.joints.filter((i) => part(layout.joints[i].hardware).type === count.type);
+    const index = ofType.find((i) => layout.joints[i].mover === layout.joints[i].hardware) ?? ofType[0];
+    // `hardware` counts the pieces the page's own joints seat, so one exists.
     if (index === undefined) continue;
     const joint = layout.joints[index];
     const host = part(joint.host);

@@ -142,6 +142,12 @@ describe('insetsFor', () => {
     expect(inset.focus.max[1]).toBeCloseTo(0.01 + BOOKLET.explode.hardware + f);
   });
 
+  it('still gives a fastener the page seats only by its second end an inset', () => {
+    const insets = insetsFor({ joints: [2, 3], hardware }, layout, partTypes);
+    expect(insets).toHaveLength(1);
+    expect(insets[0]).toMatchObject({ type: 'dowel', count: 2, joint: 2 });
+  });
+
   it('gives a step with no hardware no insets', () => {
     expect(insetsFor({ joints: [2], hardware: [] }, layout, partTypes)).toEqual([]);
   });
@@ -159,7 +165,6 @@ describe.each(ITEM_IDS)('%s: every step page', (id) => {
       const insets = insetsFor(step, layout, item.partTypes);
       expect(insets.map(({ type, count, partNumber }) => ({ type, count, partNumber })), `step ${step.number}`).toEqual(step.hardware);
       for (const inset of insets) {
-        expect(layout.joints[inset.joint].mover, `step ${step.number}`).toBe(layout.joints[inset.joint].hardware);
         for (const k of [0, 1, 2]) {
           expect(inset.anchor[k]).toBeGreaterThanOrEqual(inset.focus.min[k]);
           expect(inset.anchor[k]).toBeLessThanOrEqual(inset.focus.max[k]);
