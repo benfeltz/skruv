@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { COLORS, STAGE } from '../src/constants.js';
-import { advance, phaseFromClock, skyColourAt } from '../src/game/skyCycle.js';
+import { advance, hexToRgb, loopOf, phaseFromClock, skyColourAt } from '../src/game/skyCycle.js';
 
-const rgbOf = (hex: number) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255].map((c) => c / 255);
+const rgbOf = hexToRgb;
 const { keyframes } = STAGE.sky;
 
 describe('the clock sets the phase', () => {
@@ -44,5 +44,24 @@ describe('skyColourAt', () => {
   });
   it('paints the day colour at noon', () => {
     expect(skyColourAt(0.5)).toEqual(rgbOf(COLORS.sky));
+  });
+});
+
+describe('keyframes that do not start at 0', () => {
+  const loop = loopOf([{ at: 0.1, color: 0xff0000 }, { at: 0.6, color: 0x0000ff }]);
+  it('blend the last back to the first across the wrap, never past either', () => {
+    expect(skyColourAt(0.1, [0, 0, 0], loop)).toEqual([1, 0, 0]);
+    expect(skyColourAt(0.85, [0, 0, 0], loop)[0]).toBeCloseTo(0.5, 9);
+    for (const p of [0, 0.05, 0.99]) {
+      for (const c of skyColourAt(p, [0, 0, 0], loop)) {
+        expect(c).toBeGreaterThanOrEqual(0);
+        expect(c).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+  it('refuses keyframes it cannot blend', () => {
+    expect(() => loopOf([])).toThrow(/at least one/);
+    expect(() => loopOf([{ at: 0.2, color: 0 }, { at: 0.2, color: 1 }])).toThrow(/share phase/);
+    expect(() => loopOf([{ at: 1, color: 0 }])).toThrow(/outside/);
   });
 });

@@ -12,6 +12,14 @@ export const ROOM = {
   height: 3,
 };
 
+// Wall-clock units and the byte range of a hex colour channel, for the sky's clock and colour maths.
+export const CLOCK = {
+  secondsPerMinute: 60,
+  minutesPerHour: 60,
+  hoursPerDay: 24,
+  channelMax: 255,
+};
+
 // The sky beyond the window by day: the day keyframe of STAGE.sky and COLORS.sky.
 const SKY_DAY = 0x9ec9e8;
 
