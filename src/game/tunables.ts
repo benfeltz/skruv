@@ -11,7 +11,7 @@
 // never a JS object path — and units are the schema's, in the engine's own units; a key
 // once published is renamed only with a profile format bump.
 
-import { AIM, CAMERA, FASTENER, GESTURE, HAPTICS, LIFT_LINE, PANEL, PHYSICS, RENDER, RING, SNAP, TUNE, TURN_RING } from '../constants.js';
+import { AIM, CAMERA, FASTENER, GESTURE, HAPTICS, LIFT_LINE, PANEL, PHYSICS, RENDER, RING, SNAP, STAGE, TUNE, TURN_RING } from '../constants.js';
 
 /** Bumped whenever a key is renamed or its unit changes, so old profiles stay readable. */
 export const PROFILE_FORMAT = 1;
@@ -140,6 +140,14 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
   'joint.playDamping': {
     object: FASTENER, prop: 'playDamping', min: 0, max: 5000, step: 50, unit: 'N·m·s/rad', group: 'joint',
     desc: 'Resistance to the slump: a sag, not a drop',
+  },
+  'stage.skyCycleMinutes': {
+    object: STAGE.sky, prop: 'cycleMinutes', min: 1, max: 60, step: 1, unit: 'min', group: 'stage',
+    desc: 'Minutes of game time for the sky beyond the windows to turn through night, dawn, day and dusk',
+  },
+  'stage.skyPhase': {
+    object: STAGE.sky, prop: 'phase', min: 0, max: 1, step: 0.01, unit: 'cycle', group: 'stage',
+    desc: 'Scrub the sky to a point in its cycle (0 midnight, 0.25 dawn, 0.5 day, 0.75 dusk); it keeps turning from there',
   },
   'physics.linearDamping': {
     object: PHYSICS, prop: 'linearDamping', min: 0, max: 2, step: 0.05, unit: '1/s', group: 'physics',

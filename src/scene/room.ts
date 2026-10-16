@@ -3,6 +3,8 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { COLORS, STAGE } from '../constants.js';
+import { advance, phaseFromClock, skyColourAt } from '../game/skyCycle.js';
+import type { Rgb } from '../game/skyCycle.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { sizeAndCentre, skyRects, stageBoxes, wallBox, wallPieces, windowBoxes, windowOpeningBoxes } from '../game/stageBoxes.js';
 import type { StageBox, StageBoxName, WallName } from '../game/stageBoxes.js';
@@ -22,6 +24,8 @@ export function createRoom() {
   const floor = new THREE.MeshStandardMaterial({ color: COLORS.floor });
   const wall = new THREE.MeshStandardMaterial({ color: COLORS.wall });
   const trim = new THREE.MeshStandardMaterial({ color: COLORS.trim });
+  // One unlit material for every sky plane: the cycle writes its colour once a frame.
+  const skyMaterial = new THREE.MeshBasicMaterial({ color: COLORS.sky });
 
   const boxGeometry = (box: StageBox<string>) => {
     const { size, centre } = sizeAndCentre(box);
@@ -67,7 +71,7 @@ export function createRoom() {
     side.add(wallMesh, trimMesh, wallInk);
     // The skies: flat unlit planes outside the openings facing the room, no ink.
     skyRects(name).forEach((sky, i) => {
-      const skyMesh = new THREE.Mesh(new THREE.PlaneGeometry(sky.width, sky.height), new THREE.MeshBasicMaterial({ color: COLORS.sky }));
+      const skyMesh = new THREE.Mesh(new THREE.PlaneGeometry(sky.width, sky.height), skyMaterial);
       skyMesh.name = `${name}Sky${i}`;
       skyMesh.rotation.y = sky.yaw;
       skyMesh.position.set(...sky.centre);
@@ -82,6 +86,10 @@ export function createRoom() {
   // Reused every frame: the eye as a tuple and the canvas size, so the loop allocates nothing.
   const eyeAt: Vec3 = [0, 0, 0];
   const size = new THREE.Vector2();
+  // The sky's phase lives here; the scrub is seen once, when the knob moves it off what was last applied.
+  let phase = phaseFromClock(new Date());
+  let scrubbed = STAGE.sky.phase;
+  const skyRgb: Rgb = [0, 0, 0];
   return {
     group,
     pieces,
@@ -89,14 +97,22 @@ export function createRoom() {
     backWall,
     /**
      * Per frame: hide the walls the eye is behind; keep the ink's resolution at the canvas's
-     * CSS size, so `STAGE.inkWidth` is the same on screen at any pixel ratio.
+     * CSS size, so `STAGE.inkWidth` is the same on screen at any pixel ratio; turn the sky
+     * on by `delta` seconds of game time.
      */
-    update(eye: THREE.Vector3, renderer: THREE.WebGLRenderer) {
+    update(eye: THREE.Vector3, renderer: THREE.WebGLRenderer, delta: number) {
       eye.toArray(eyeAt);
       backWall.visible = !wallHidden(eyeAt, STAGE_WALLS.back);
       leftWall.visible = !wallHidden(eyeAt, STAGE_WALLS.left);
       renderer.getSize(size);
       if (!size.equals(ink.resolution)) ink.resolution.copy(size);
+      if (STAGE.sky.phase !== scrubbed) {
+        scrubbed = STAGE.sky.phase;
+        phase = scrubbed;
+      }
+      phase = advance(phase, delta, STAGE.sky.cycleMinutes);
+      skyColourAt(phase, skyRgb);
+      skyMaterial.color.setRGB(skyRgb[0], skyRgb[1], skyRgb[2], THREE.SRGBColorSpace);
     },
   };
 }

@@ -52,6 +52,8 @@ describe('LIVE_KNOBS', () => {
       'fastener.screwRadians',
       'joint.angularPlay',
       'joint.playDamping',
+      'stage.skyCycleMinutes',
+      'stage.skyPhase',
       'physics.linearDamping',
       'physics.angularDamping',
       'physics.friction',
