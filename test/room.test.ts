@@ -200,6 +200,50 @@ describe('the sky turns', () => {
     expect(colour().getHex()).toBe(COLORS.starlight);
   });
 
+  it('shows the sun by day and the moon by night, each wholly inside its box', () => {
+    const room = createRoom();
+    const shownAt = (phase: number) => {
+      STAGE.sky.phase = phase;
+      room.update(at(0, 2, 3), renderer(), 0);
+      return ['Sun', 'Moon'].map((body) => room.backWall.getObjectByName(`backScenery${body}`)!.visible);
+    };
+    shownAt(0.4);
+    expect(shownAt(0.5)).toEqual([true, false]);
+    expect(shownAt(0)).toEqual([false, true]);
+    for (const phase of [0.3, 0.5, 0.7]) {
+      shownAt(phase);
+      const sun = bounds(room.backWall.getObjectByName('backScenerySun')!);
+      const box = bounds(room.backWall.getObjectByName('backScenery')!);
+      expect(sun.min.x).toBeGreaterThanOrEqual(box.min.x - 1e-6);
+      expect(sun.max.x).toBeLessThanOrEqual(box.max.x + 1e-6);
+    }
+  });
+
+  it('clips the drifting cloud to its box\'s sides, fill and ink', () => {
+    const cloud = createRoom().backWall.getObjectByName('backSceneryCloud')!;
+    const planes = (cloud.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>).material.clippingPlanes;
+    expect(planes).toHaveLength(2);
+    expect((cloud.children[1] as unknown as { material: THREE.Material }).material.clippingPlanes).toHaveLength(2);
+  });
+
+  it('stands the hills far to near and the trees on the near one, all inside the box', () => {
+    const { backWall, leftWall } = createRoom();
+    for (const wall of [backWall, leftWall]) {
+      wall.updateMatrixWorld(true);
+      const name = wall === backWall ? 'back' : 'left';
+      const box = bounds(wall.getObjectByName(`${name}Scenery`)!);
+      const parts = [`${name}SceneryHill0`, `${name}SceneryHill1`, `${name}SceneryTrees`].map((n) => wall.getObjectByName(n)!);
+      for (const part of parts) {
+        const b = bounds(part);
+        expect(b.min.distanceTo(b.max)).toBeGreaterThan(0);
+        for (const axis of ['x', 'y', 'z'] as const) {
+          expect(b.min[axis]).toBeGreaterThanOrEqual(box.min[axis] - 1e-6);
+          expect(b.max[axis]).toBeLessThanOrEqual(box.max[axis] + 1e-6);
+        }
+      }
+    }
+  });
+
   it('moves the colour when game time passes', () => {
     const room = createRoom();
     STAGE.sky.phase = 0.3;

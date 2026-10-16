@@ -104,8 +104,9 @@ export const STAGE = {
     sun: { radius: 0.12, depth: 1.1 },
     moon: { radius: 0.1, depth: 1.1 },
     arc: { horizon: 0.5, rise: 0.42 },
-    // Segments round a disc's rim.
+    // Segments round a disc's rim, and how far an outline stands in front of its fill so the two never fight for depth.
     discSegments: 32,
+    inkLift: 0.002,
     // The back panel stands this far in front of the backlight behind it.
     backlight: { gap: 0.03 },
     // How lit the backlight is at each phase (0 the sky's own colour, 1 full starlight); the loop closes on the first.

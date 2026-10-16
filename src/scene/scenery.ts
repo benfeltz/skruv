@@ -4,8 +4,20 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import type { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { COLORS, STAGE } from '../constants.js';
-import { sceneryBox, starlightAt, starMask } from '../game/scenery.js';
-import type { BoxFace } from '../game/scenery.js';
+import {
+  bodyAt,
+  celestial,
+  closedSegments,
+  cloudPolygon,
+  cloudX,
+  discPolygon,
+  hillPolyline,
+  sceneryBox,
+  starlightAt,
+  starMask,
+  treePolygons,
+} from '../game/scenery.js';
+import type { BoxFace, Point } from '../game/scenery.js';
 import type { WallName } from '../game/stageBoxes.js';
 
 /** One inner face as a plane in box-local coordinates, its +z normal turned into the box. */
@@ -42,6 +54,21 @@ function tileUvs(geometry: THREE.PlaneGeometry, width: number, height: number, o
   const uv = geometry.getAttribute('uv');
   for (let i = 0; i < uv.count; i++) uv.setXY(i, (position.getX(i) + width / 2) / tile + offset, (position.getY(i) + height / 2) / tile);
 }
+
+/** The ink segments of a closed polygon on the plane z, as flat x, y, z pairs. */
+function inkPositions(polygon: readonly Point[], z: number): number[] {
+  const flat = closedSegments(polygon);
+  return Array.from({ length: (flat.length / 2) | 0 }, (_, i) => [flat[2 * i]!, flat[2 * i + 1]!, z]).flat();
+}
+
+const cutout = (polygons: readonly (readonly Point[])[], material: THREE.Material) =>
+  new THREE.Mesh(
+    mergeGeometries(polygons.map((polygon) => new THREE.ShapeGeometry(new THREE.Shape(polygon.map(([x, y]) => new THREE.Vector2(x, y))))))!,
+    material,
+  );
+
+/** Hill layers' paper tones, far to near; the tree is darker, the sun paper, the moon faint. */
+const HILL_TONES = [COLORS.sceneryFaint, COLORS.sceneryPaper];
 
 /**
  * One wall's diorama box, behind the mouth on the wall's outer face: a closed shoebox whose inside is a dark paper
@@ -93,15 +120,77 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
 
   group.add(inside, backlight, panel, skin, edgeInk);
 
+  // The paper theatre: cutouts at their depths, each an ink-outlined silhouette. The static outlines (the box's
+  // edges, the hills, the trees) share one ink draw.
+  const { scenery } = STAGE;
+  const { inkLift } = scenery;
+  const staticInk = [...edges];
+  const unlit = (color: number) => new THREE.MeshBasicMaterial({ color });
+  scenery.hills.forEach((hill, layer) => {
+    const polygon = hillPolyline(name, layer);
+    const mesh = cutout([polygon], unlit(HILL_TONES[layer]!));
+    mesh.name = `${name}SceneryHill${layer}`;
+    mesh.position.z = -hill.depth;
+    group.add(mesh);
+    staticInk.push(...inkPositions(polygon, inkLift - hill.depth));
+  });
+  const trees = treePolygons(name);
+  if (trees.length > 0) {
+    const mesh = cutout(trees, unlit(COLORS.sceneryDark));
+    mesh.name = `${name}SceneryTrees`;
+    mesh.position.z = -scenery.tree.depth;
+    group.add(mesh);
+    for (const tree of trees) staticInk.push(...inkPositions(tree, inkLift - scenery.tree.depth));
+  }
+  edgeInk.geometry.setPositions(staticInk);
+
+  // A moving cutout: a fill and its ink in one group that `update` slides.
+  const mover = (label: string, polygon: readonly Point[], color: number, depth: number, material: LineMaterial) => {
+    const fill = cutout([polygon], unlit(color));
+    const outline = new LineSegments2(new LineSegmentsGeometry().setPositions(inkPositions(polygon, inkLift)), material);
+    const moving = new THREE.Group();
+    moving.name = `${name}Scenery${label}`;
+    moving.position.z = -depth;
+    moving.add(fill, outline);
+    group.add(moving);
+    return { moving, fill, outline };
+  };
+  const disc = (radius: number) => discPolygon(radius);
+  const sun = mover('Sun', disc(scenery.sun.radius), COLORS.sceneryPaper, scenery.sun.depth, ink);
+  const moon = mover('Moon', disc(scenery.moon.radius), COLORS.sceneryFaint, scenery.moon.depth, ink);
+
+  // The cloud drifts across and wraps, so it is clipped to the box's sides, in the room's frame (the room stands
+  // at the origin): a cloud half past the edge must not show outside the box.
+  const along = new THREE.Vector3(Math.cos(mouth.yaw), 0, -Math.sin(mouth.yaw));
+  const centre = new THREE.Vector3(...mouth.centre);
+  const clips = [
+    new THREE.Plane(along.clone(), mouth.width / 2 - along.dot(centre)),
+    new THREE.Plane(along.clone().negate(), mouth.width / 2 + along.dot(centre)),
+  ];
+  const cloudInk = ink.clone();
+  cloudInk.clippingPlanes = clips;
+  const cloud = mover('Cloud', cloudPolygon(name), COLORS.sceneryPaper, scenery.cloud.depth, cloudInk);
+  (cloud.fill.material as THREE.MeshBasicMaterial).clippingPlanes = clips;
+
   let lit = NaN;
+  let elapsed = 0;
   return {
     group,
     /** Per frame: `phase` of the day and `delta` seconds of game time, after the sky material is painted for `phase`. */
     update(phase: number, delta: number) {
-      void delta;
+      elapsed += delta;
+      cloud.moving.position.x = cloudX(name, elapsed);
+      cloudInk.resolution.copy(ink.resolution);
       if (phase === lit) return;
       lit = phase;
       (backlight.material as THREE.MeshBasicMaterial).color.copy(skyMaterial.color).lerp(starlight, starlightAt(phase));
+      const bodies = celestial(phase);
+      for (const [body, shape, radius] of [[bodies.sun, sun, scenery.sun.radius], [bodies.moon, moon, scenery.moon.radius]] as const) {
+        shape.moving.visible = body.visible;
+        const [x, y] = bodyAt(name, body, radius);
+        shape.moving.position.x = x;
+        shape.moving.position.y = y;
+      }
     },
   };
 }
