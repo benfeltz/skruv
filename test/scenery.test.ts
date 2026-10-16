@@ -24,22 +24,20 @@ const inside = (mouth: ReturnType<typeof sceneryMouth>, [x, y]: [number, number]
   Math.abs(x) <= mouth.width / 2 + 1e-9 && Math.abs(y) <= mouth.height / 2 + 1e-9;
 
 describe('the box behind a wall', () => {
-  it('has a mouth over every opening and the margin, within the wall top and the floor', () => {
+  it('has a mouth over every opening, within the wall top and the floor', () => {
     for (const name of WALL_NAMES) {
       const mouth = sceneryMouth(name);
       const openings = windowOpenings(name);
-      const lo = Math.min(...openings.map((o) => o.a0)) - STAGE.window.skyMargin;
-      const hi = Math.max(...openings.map((o) => o.a1)) + STAGE.window.skyMargin;
-      expect(mouth.width).toBeCloseTo(hi - lo, 9);
-      expect(mouth.alongCentre).toBeCloseTo((lo + hi) / 2, 9);
+      expect(mouth.alongCentre - mouth.width / 2).toBeLessThan(Math.min(...openings.map((o) => o.a0)));
+      expect(mouth.alongCentre + mouth.width / 2).toBeGreaterThan(Math.max(...openings.map((o) => o.a1)));
       expect(mouth.centre[1] + mouth.height / 2).toBeLessThanOrEqual(STAGE.wallHeight + 1e-9);
       expect(mouth.centre[1] - mouth.height / 2).toBeGreaterThanOrEqual(-1e-9);
     }
   });
 
   it('is one wide mouth for the back wall\'s two windows and one for the left wall\'s', () => {
-    expect(sceneryMouth('back').width).toBeGreaterThan(2 * STAGE.window.width + STAGE.window.skyMargin);
-    expect(sceneryMouth('left').width).toBeCloseTo(STAGE.window.width + 2 * STAGE.window.skyMargin, 9);
+    expect(sceneryMouth('back').width).toBeGreaterThan(2 * STAGE.window.width + 2);
+    expect(sceneryMouth('left').width).toBeGreaterThan(STAGE.window.width + 2);
   });
 
   it('reaches back by the scenery depth with five faces turned into it', () => {

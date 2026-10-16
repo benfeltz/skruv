@@ -64,8 +64,6 @@ export const STAGE = {
     frame: 0.04,
     frameDepth: 0.04,
     rail: 0.04,
-    // How far the scenery box's mouth reaches past the openings on every side (the box is closed, so no view leaves it).
-    skyMargin: 0.5,
   },
   // The paper theatre behind each wall's windows (src/game/scenery.ts, built by src/scene/scenery.ts): a closed box
   // `depth` deep, its mouth on the wall's outer face. Lengths are metres; `base`, `horizon` and `rise` are fractions of

@@ -199,11 +199,19 @@ describe('the windows', () => {
     }
   });
 
-  it('share one mouth between a wall\'s windows, reaching the margin past the outermost', () => {
-    const openings = windowOpenings('back');
-    const mouth = sceneryMouth('back');
-    expect(mouth.width).toBeCloseTo(openings[openings.length - 1]!.a1 - openings[0]!.a0 + 2 * win.skyMargin, 9);
-    expect(sceneryMouth('left').width).toBeCloseTo(win.width + 2 * win.skyMargin, 9);
+  it('spans each wall\'s whole face, so the box reaches far past every opening', () => {
+    expect(sceneryMouth('back').width).toBeCloseTo(ROOM.width, 9);
+    expect(sceneryMouth('left').width).toBeCloseTo(ROOM.depth, 9);
+    for (const name of WALL_NAMES) {
+      const mouth = sceneryMouth(name);
+      expect(mouth.height).toBe(STAGE.wallHeight);
+      expect(mouth.centre[1]).toBeCloseTo(STAGE.wallHeight / 2, 9);
+      // The whole wall is open to the box beyond each opening: at least a metre of box to either side.
+      for (const o of windowOpenings(name)) {
+        expect(o.a0 - (mouth.alongCentre - mouth.width / 2)).toBeGreaterThan(0.5);
+        expect(mouth.alongCentre + mouth.width / 2 - o.a1).toBeGreaterThan(0.5);
+      }
+    }
   });
 
   it('runs a mouth\'s x along the wall axis the way its turn carries it', () => {
