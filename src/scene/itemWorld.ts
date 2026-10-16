@@ -167,23 +167,26 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   add(gizmo.object);
 
   // The booklet: pages drawn from the same models, flipped freely — reference, never a gate.
-  // It arrives docked in the corner, in front of the catalog: BUILD IT goes straight into the
-  // room, so nothing opens on a pick (Ben, 1.9.1). Opened, a tap outside the sheet puts it
-  // down and does nothing else.
+  // It arrives docked as the carousel strip along the bottom, in front of the catalog: BUILD
+  // IT goes straight into the room, so nothing opens on a pick (Ben, 1.9.1). It never blocks
+  // the room — no scrim: only the strip and the open page take input, so the camera and the
+  // parts stay live around them (1.9.1.2).
   const bookletPages = pages();
   undo.push(() => bookletPages.dispose());
-  const booklet = createBookletSheet({ pages: bookletPages, open: false });
-  document.body.append(booklet.scrim, booklet.thumb, booklet.element);
+  const booklet = createBookletSheet({ pages: bookletPages, open: false, docked: 'strip', blocking: false });
+  document.body.append(booklet.thumb, booklet.element);
   undo.push(() => booklet.dispose());
 
-  // While the booklet is open, the open page's parts glow — the player's own set only, never
-  // the box and its lid.
+  // The centre page's parts glow, whether or not it is open — the player's own set only,
+  // never the box and its lid. A page with no parts (cover, inventory, controls) lights none.
   const playerParts = parts.filter((part) => part !== flatpack.base && part !== flatpack.lid);
   const highlight = createHighlight(playerParts);
-  booklet.onChange(({ page, expanded }) => {
+  const light = (page: number) => {
     const shown = bookletPages.pages[page];
-    highlight.show(expanded && shown.kind === 'step' ? shown.types : []);
-  });
+    highlight.show(shown.kind === 'step' ? shown.types : []);
+  };
+  booklet.onChange(({ page }) => light(page));
+  light(booklet.currentPage);
 
   const ghost = createGhost();
   add(ghost.object);

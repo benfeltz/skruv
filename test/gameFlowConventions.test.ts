@@ -59,9 +59,11 @@ describe('recovery sweep (Feedback #9)', () => {
 });
 
 describe('highlight and booklet stay aids (decision 8)', () => {
-  it("lights only the player's set, and only while the booklet is open", () => {
+  it("lights only the player's set, from the centre page, open or not (1.9.1.2)", () => {
     expect(world).toMatch(/createHighlight\(playerParts\)/);
-    expect(world).toMatch(/expanded && shown\.kind === 'step' \? shown\.types : \[\]/);
+    expect(world).toMatch(/highlight\.show\(shown\.kind === 'step' \? shown\.types : \[\]\)/);
+    // Never conditioned on the page being open.
+    expect(world).not.toMatch(/expanded && shown/);
   });
 
   it('keeps the highlight out of the booklet DOM — main passes the page', () => {
@@ -110,11 +112,9 @@ describe('booklet focus (PR #12 review)', () => {
   const booklet = read('src/ui/booklet.ts');
   const setOpen = booklet.slice(booklet.indexOf('function setOpen('), booklet.indexOf("thumb.addEventListener('click'"));
 
-  it('opens onto a control that is never disabled at that moment, the handle as the last resort', () => {
-    expect(setOpen).toMatch(/\[next, prev, handle\]\.find\(\(control\) => !control\.disabled\)/);
-    expect(setOpen).not.toMatch(/\(open \? next : thumb\)/);
-    // The handle is never disabled anywhere.
-    expect(booklet).not.toMatch(/handle\.disabled\s*=/);
+  it('opens onto the next arrow, which is only ever aria-disabled — focus is never lost at the last page', () => {
+    expect(setOpen).toMatch(/\(open \? arrows\.next : \(carousel\?\.centre\(\) \?\? thumb\)\)\?\.focus/);
+    expect(booklet).not.toMatch(/\.disabled\s*=/);
   });
 });
 
@@ -127,9 +127,9 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
     expect(booklet).toMatch(/open: startsOpen = true/);
     expect(booklet).toMatch(/let page = 0;\s*let open = startsOpen;/);
     expect(main).toMatch(/createCatalogSheet\(\{\s*pages: catalogPages,\s*open: true,/);
-    expect(world).toMatch(/createBookletSheet\(\{ pages: bookletPages, open: false \}\)/);
-    // After BUILD IT, focus lands on the manual in front, never the catalog thumb behind it.
-    expect(main).toMatch(/catalog\.setOpen\(false\);\s*\/\/[^\n]*\n\s*world\.booklet\.thumb\.focus\(\{ preventScroll: true \}\);/);
+    expect(world).toMatch(/createBookletSheet\(\{ pages: bookletPages, open: false, docked: 'strip', blocking: false \}\)/);
+    // After BUILD IT, focus lands on the manual's strip, never the catalog thumb behind it.
+    expect(main).toMatch(/catalog\.setOpen\(false\);\s*\/\/[^\n]*\n\s*world\.booklet\.focus\(\);/);
   });
 
   // Each booklet has a corner of its own (1.9.1.5): no stack to fan, so no knob to re-place.
@@ -157,8 +157,8 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
   // nor take a tap meant for BUILD IT: laid over the head of the page, out of the flow, deaf
   // to the pointer — and clear of the tag's rows even on a small phone held sideways.
   it('lays the notice over the head of the page, out of the flow, never over BUILD IT', () => {
-    const notice = booklet.slice(booklet.indexOf('.booklet-notice {'), booklet.indexOf('`;', booklet.indexOf('.booklet-notice {')));
-    expect(booklet).toMatch(/\.booklet-page \{ position: relative; \}/);
+    const notice = booklet.slice(booklet.indexOf('.booklet-notice {'), booklet.indexOf('\n    }', booklet.indexOf('.booklet-notice {')));
+    expect(booklet.slice(booklet.indexOf('.booklet-page {'), booklet.indexOf('.booklet-page canvas {'))).toMatch(/position: relative;/);
     expect(notice).toMatch(/position: absolute;/);
     expect(notice).toMatch(/top: \$\{BOOKLET_UI\.notice\.inset\}px;/);
     expect(notice).not.toMatch(/bottom:/);
@@ -168,7 +168,7 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
     // The page as drawn on a small phone sideways (320 CSS px tall), height-limited.
     const SCREEN_HEIGHT = 320;
     const [pageW, pageH] = BOOKLET.pageSize;
-    const pageHeight = BOOKLET_UI.maxHeight * SCREEN_HEIGHT - BOOKLET_UI.chromeHeight;
+    const pageHeight = BOOKLET_UI.maxHeight * SCREEN_HEIGHT;
     const pageWidth = (pageHeight * pageW) / pageH;
     const { size, lineHeight, inset, padding } = BOOKLET_UI.notice;
     // Wrapped at about half an em a character (system-ui runs narrower), every line counted.
@@ -181,12 +181,15 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
 
   it('puts the scrim over the room and the sheet over the scrim, mounted by the item world', () => {
     expect(booklet).toMatch(/\.booklet-scrim \{[^}]*position: fixed;[^}]*inset: 0;[^}]*z-index: 2;/);
-    expect(booklet.slice(booklet.indexOf('    .booklet {'), booklet.indexOf(".booklet[data-open='true'] {"))).toMatch(/z-index: 3;/);
-    expect(world).toMatch(/document\.body\.append\(booklet\.scrim, booklet\.thumb, booklet\.element\)/);
+    expect(booklet.slice(booklet.indexOf('    .booklet-leaf {'), booklet.indexOf(".booklet-leaf[data-open='true'] {"))).toMatch(/z-index: 3;/);
+    // The catalog is blocking and mounts its scrim; the manual is not, and has none to mount.
+    expect(main).toMatch(/document\.body\.append\(catalog\.scrim, catalog\.thumb, catalog\.element\)/);
+    expect(world).toMatch(/document\.body\.append\(booklet\.thumb, booklet\.element\)/);
+    expect(world).not.toMatch(/booklet\.scrim/);
   });
 
   it('swallows the put-down tap in the booklet, never in the gesture router', () => {
-    const scrimUp = booklet.slice(booklet.indexOf("scrim.addEventListener('pointerup'"), booklet.indexOf("thumb.addEventListener('click'"));
+    const scrimUp = booklet.slice(booklet.indexOf("scrim?.addEventListener('pointerup'"), booklet.indexOf("thumb.addEventListener('click'"));
     expect(booklet).toMatch(/pointerdown', \(event\) => \{\s*pressed\.add\(event\.pointerId\);/);
     // Only a press that began on the scrim, and only while open (PR #17 review, test plan).
     expect(scrimUp).toMatch(/if \(!pressed\.delete\(event\.pointerId\) \|\| !open\) return;\s*setOpen\(false, \{ byRoomTap: true \}\);/);
@@ -206,7 +209,7 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
     const thumbRule = booklet.slice(booklet.indexOf('    .booklet-thumb {'), booklet.indexOf('@media (hover: hover)'));
     // Animated; since 1.9.1 the raise (z-index) rides along, both undone at once on leave.
     expect(thumbRule).toMatch(/transition: width 160ms ease-out, z-index 0s;/);
-    expect(booklet).toMatch(/const thumbCanvas = pageCanvas\(pageW, pageH\);/);
+    expect(booklet).toMatch(/const thumbCanvas = stripped \? null : pageCanvas\(pageW, pageH\);/);
     // Nothing transforms the scrim (PR #17 round-4 review).
     const scrimRule = booklet.slice(booklet.indexOf('.booklet-scrim {'), booklet.indexOf('.booklet-thumb canvas'));
     expect(scrimRule).not.toMatch(/transform|transition/);

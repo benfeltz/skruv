@@ -2,9 +2,9 @@ import { vi } from 'vitest';
 
 // A minimal fake DOM, enough for src/ui/booklet.ts: elements that hold children, listeners,
 // attributes and a dataset, events that bubble from the target up, one focused element, and
-// window key listeners. test/bookletSplash.test.ts carries its own copy of the same shape.
+// window key listeners and a viewport width. test/bookletSplash.test.ts carries its own copy of the same shape.
 
-type FakeEvent = { type: string; target: FakeElement; pointerId: number; button: number; clientX: number; clientY: number; timeStamp: number };
+type FakeEvent = { type: string; target: FakeElement; pointerId: number; pointerType: string; button: number; detail: number; clientX: number; clientY: number; timeStamp: number };
 type Listener = (event: object) => void;
 
 export class FakeElement {
@@ -38,6 +38,10 @@ export class FakeElement {
   setAttribute(name: string, value: string) {
     this.attributes[name] = value;
   }
+  removeAttribute(name: string) {
+    delete this.attributes[name];
+  }
+  tabIndex = 0;
   append(...nodes: FakeElement[]) {
     for (const node of nodes) {
       node.parent = this;
@@ -63,12 +67,16 @@ export class FakeElement {
   getContext() {
     return { drawImage: (source: unknown) => (this.drawn = source) };
   }
+  contains(node: FakeElement | null): boolean {
+    for (let up: FakeElement | null = node; up; up = up.parent) if (up === this) return true;
+    return false;
+  }
   closest(tag: string) {
     const up = (node: FakeElement | null): FakeElement | null => (node === null ? null : node.tag === tag ? node : up(node.parent));
     return up(this);
   }
   fire(type: string, init: Partial<FakeEvent> = {}) {
-    const event: FakeEvent = { type, target: this, pointerId: 1, button: 0, clientX: 0, clientY: 0, timeStamp: 0, ...init };
+    const event: FakeEvent = { type, target: this, pointerId: 1, pointerType: 'mouse', button: 0, detail: 0, clientX: 0, clientY: 0, timeStamp: 0, ...init };
     const up = (node: FakeElement | null) => {
       if (node === null) return;
       for (const fn of node.listeners.get(type) ?? []) fn(event);
@@ -83,6 +91,8 @@ export interface FakeDom {
   body: FakeElement;
   focused: FakeElement | null;
   windowListeners: Map<string, Listener[]>;
+  /** The viewport's width, as `window.innerWidth`: a test sets it, then fires `resize`. */
+  viewport: { width: number };
   /** Presses a key on the window. */
   key(name: string): void;
 }
@@ -95,6 +105,7 @@ export function installFakeDom(): FakeDom {
     body: undefined as unknown as FakeElement,
     focused: null,
     windowListeners,
+    viewport: { width: 1280 },
     key: (name) => windowListeners.get('keydown')?.forEach((fn) => fn({ key: name })),
   };
   dom.head = new FakeElement('head', dom);
@@ -106,6 +117,9 @@ export function installFakeDom(): FakeDom {
     getElementById: (id: string) => dom.head.children.find((node) => node.id === id) ?? null,
   });
   vi.stubGlobal('window', {
+    get innerWidth() {
+      return dom.viewport.width;
+    },
     addEventListener: (type: string, fn: Listener) => windowListeners.set(type, [...(windowListeners.get(type) ?? []), fn]),
     removeEventListener: (type: string, fn: Listener) => windowListeners.set(type, (windowListeners.get(type) ?? []).filter((f) => f !== fn)),
   });

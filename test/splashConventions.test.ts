@@ -92,11 +92,10 @@ describe('pre-splash: the catalog cover (1.6.1, 1.9.1, 1.9.1.5)', () => {
   // the catalog's canvas, so the frame must be exactly the page: the element's width, the
   // page's aspect ratio, the canvas filling it — the same fit the pre-splash page has.
   it("sizes the catalog's page frame as the page itself, so the corner buttons land on the drawn marks", () => {
-    const frame = booklet.slice(booklet.indexOf('.booklet-leaf .booklet-frame {'), booklet.indexOf('.booklet-leaf button:focus-visible'));
+    const frame = booklet.slice(booklet.indexOf('.booklet-frame {'), booklet.indexOf('.booklet-frame canvas'));
     expect(frame).toContain('width: 100%;');
-    const sheetFrame = booklet.slice(booklet.indexOf('.booklet-frame {'), booklet.indexOf('.booklet-frame canvas'));
-    expect(sheetFrame).toContain('aspect-ratio: ${pageW} / ${pageH};');
-    expect(booklet).toMatch(/\.booklet-frame canvas \{ width: 100%; height: 100%; max-height: none; \}/);
+    expect(frame).toContain('aspect-ratio: ${pageW} / ${pageH};');
+    expect(booklet).toMatch(/\.booklet-frame canvas \{ width: 100%; height: auto; \}/);
   });
 
   it('takes no input — the scrim and the real sheet own every touch', () => {

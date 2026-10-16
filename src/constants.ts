@@ -164,17 +164,12 @@ export const BOOKLET_UI = {
   // The collapsed thumbnail of the open page, bottom-left — small enough to leave the room
   // to the fingers.
   thumbWidth: 64,
-  // A horizontal swipe this long flips a page; a downward one this long closes the sheet.
+  // A horizontal swipe this long flips a page; a downward one this long closes it.
   swipeDistance: 48,
-  // The open sheet never grows wider than this, nor taller than this share of the screen.
-  maxWidth: 520,
+  // The open page never grows taller than this share of the screen.
   maxHeight: 0.92,
-  // The sheet's own height round the page (handle, controls, gaps, padding; CSS pixels):
-  // the page fits in maxHeight less this. index.html's pre-splash mirrors it.
-  chromeHeight: 120,
-  // A notice on the sheet (a pick that would not build): laid over the head of the page, so
-  // it never adds to chromeHeight — its type size and line height, and its inset, padding
-  // and corner radius (CSS pixels).
+  // A notice on the page (a pick that would not build): laid over its head, out of the flow
+  // — its type size and line height, and its inset, padding and corner radius (CSS pixels).
   notice: { size: 14, lineHeight: 1.3, inset: 8, padding: 8, radius: 8 },
   // After a tap on the room puts the booklet down, the scrim stays this long to catch the
   // click a touch synthesises after the lift.
@@ -187,12 +182,46 @@ export const BOOKLET_UI = {
   thumbHoverDelayMs: 400,
   // A thumb's inset from its screen corner (CSS pixels), as src/ui/booklet.ts docks it.
   cornerInset: 16,
-  // The page look (src/ui/booklet.ts `look: 'page'`, the catalog): the page alone over the
-  // room, with a soft shadow, growing out of its docked thumb. `gutter` keeps its shadow
+  // The open page (src/ui/booklet.ts): the page alone over the room, with a soft shadow,
+  // growing out of its docked thumb. `gutter` keeps its shadow
   // clear of a narrow screen's edges; `growMs` is the grow to the centre and the shrink
   // back; `radius` rounds the page's corners. index.html's pre-splash mirrors the fit,
   // the shadow and the radius.
   page: { shadow: '0 12px 40px #0008', gutter: 12, growMs: 220, radius: 6 },
+  // The manual's docked strip (src/ui/booklet.ts `docked: 'strip'`, laid out by
+  // src/game/carouselModel.ts): pages along the bottom centre, the centre one larger and
+  // current, an arrow button at each end. `narrow` pages show below `breakpoint` (CSS px of
+  // viewport width), `wide` at or above it. `centreWidth` and `sideWidth` are page widths,
+  // `gap` the space between slots, `arrow` an arrow button's side (a thumb-sized target),
+  // `inset` the strip's distance from the screen's bottom edge. `peekDelayMs` is how long a
+  // touch rests on the centre page before it pops open (a touch that moves past the tap
+  // distance first is a swipe, never a peek).
+  // `openGap` is the space between the strip and the open page above it.
+  // Its look: a slot's corner `radius` (px) and `shadow`; the arrows' glyph size (px) and the
+  // hex alpha of their surface, so the room shows faintly through.
+  strip: {
+    breakpoint: 600,
+    narrow: 3,
+    wide: 5,
+    centreWidth: 120,
+    sideWidth: 72,
+    gap: 8,
+    arrow: 44,
+    inset: 12,
+    openGap: 12,
+    peekDelayMs: 280,
+    radius: 6,
+    shadow: '0 4px 14px #0006',
+    arrowGlyph: 22,
+    arrowAlpha: 'e6',
+  },
+  // ...and on a short viewport (a phone held sideways: `maxHeight` CSS px or less) the strip
+  // draws smaller, so the open page above it keeps a readable size.
+  stripShort: { maxHeight: 480, centreWidth: 72, sideWidth: 44 },
+  // ...and on a narrow phone (`maxWidth` CSS px or less) the side pages draw narrower, so the
+  // arrows, three slots and their gaps fit the width (the arrows 2 x 44, the gaps 4 x 8, the
+  // centre 120 and two sides of 48 make 336).
+  stripNarrow: { maxWidth: 400, sideWidth: 48 },
 };
 
 // The catalog (1.9.1): the game's front door, a second booklet of items to build
@@ -373,11 +402,17 @@ export const BOX = {
   friction: 1,
 };
 
+// The control cluster (src/ui/controlCluster.ts): the column of buttons in the upper right —
+// Repack, Snap rotate, and the ?tune gear — the one owner of that corner. Its inset from the
+// screen corner and the gap between its buttons (CSS pixels).
+export const CLUSTER = {
+  inset: 16,
+  gap: 8,
+};
+
 // Repack and recovery (src/ui/resetButton.ts, src/main.ts).
 export const RESET = {
-  // The button's inset from the screen corner and its height (CSS pixels): src/ui/
-  // resetButton.ts draws it so, and the ?tune gear (src/ui/tunePanel.ts) sits under it.
-  inset: 16,
+  // The button's height (CSS pixels); its place is the control cluster's (CLUSTER).
   height: 44,
   // The repack button arms on a first tap and repacks only on a second within this many
   // ms — cheap insurance against a fat finger wiping a build.
@@ -735,10 +770,6 @@ export const TUNE = {
   // The tuning drawer (src/ui/tunePanel.ts) exists only on a URL carrying this query flag
   // (…/skruv/?tune); the plain URL is the teaser, untouched.
   queryFlag: 'tune',
-  // The gear tab sits upper right, under the Repack button (src/ui/resetButton.ts), so the
-  // catalog's thumb has the upper left alone: the gap left between the two (CSS pixels);
-  // Repack's own inset and height are RESET's.
-  tabGap: 8,
   // The drawer, in CSS pixels: never wider than this, nor taller than this share of the
   // screen, so the build stays in view above it.
   panelMaxWidth: 520,

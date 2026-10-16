@@ -2,7 +2,7 @@ import { COLORS } from '../constants.js';
 
 // The src/ui pattern: a module builds its own element with plain DOM calls, owns the
 // <style> it needs (injected once), takes colours from COLORS, and returns a small API.
-// No framework; the caller decides where to mount it.
+// No framework; the caller decides where to mount it (the control cluster, in the game).
 
 const STYLE_ID = 'skruv-toggle-button';
 const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
@@ -13,9 +13,6 @@ function injectStyle() {
   style.id = STYLE_ID;
   style.textContent = `
     .toggle-button {
-      position: fixed;
-      right: calc(16px + env(safe-area-inset-right));
-      bottom: calc(16px + env(safe-area-inset-bottom));
       min-height: 44px;
       padding: 0 16px;
       border: 2px solid ${css(COLORS.uiText)}33;

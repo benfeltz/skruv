@@ -1,6 +1,6 @@
 import { COLORS, RESET } from '../constants.js';
 
-// The repack button, top right: everything of the player's back in the box. A first tap
+// The repack button, first in the control cluster (src/ui/controlCluster.ts): everything of the player's back in the box. A first tap
 // only arms it ("Tap again to repack"); a second within RESET.confirmMs repacks, and the
 // arm lapses on its own. Follows the src/ui pattern (own element, own style).
 
@@ -15,9 +15,6 @@ function injectStyle() {
   style.id = STYLE_ID;
   style.textContent = `
     .reset-button {
-      position: fixed;
-      right: calc(${RESET.inset}px + env(safe-area-inset-right));
-      top: calc(${RESET.inset}px + env(safe-area-inset-top));
       min-height: ${RESET.height}px;
       padding: 0 16px;
       border: 2px solid ${css(COLORS.uiText)}33;
