@@ -79,7 +79,7 @@ function injectStyle() {
       -webkit-tap-highlight-color: transparent;
     }
     .booklet-thumb canvas { display: block; width: 100%; height: 100%; }
-    .booklet-thumb:focus-visible, .booklet-leaf button:focus-visible {
+    .booklet-thumb:focus-visible, .booklet-leaf button:focus-visible, .booklet-strip button:focus-visible {
       outline: 2px solid ${css(COLORS.uiAccent)};
       outline-offset: 3px;
     }
@@ -230,10 +230,6 @@ function injectStyle() {
       -webkit-tap-highlight-color: transparent;
     }
     .booklet-arrow[aria-disabled='true'] { opacity: 0.3; cursor: default; }
-    .booklet-strip button:focus-visible {
-      outline: 2px solid ${css(COLORS.uiAccent)};
-      outline-offset: 3px;
-    }
     /* A manual page opens above its strip, resting on it, as wide as the room above allows. */
     .booklet-leaf[data-docked='strip'] {
       --strip-reserve: ${reserveFor(strip.centreWidth)}px;
@@ -341,7 +337,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   const element = document.createElement('section');
   element.className = 'booklet-leaf';
   element.dataset.docked = docked;
-  element.setAttribute('aria-label', name[0].toUpperCase() + name.slice(1));
+  element.setAttribute('aria-label', capitalised(name));
 
   const close = document.createElement('button');
   close.type = 'button';
@@ -693,7 +689,7 @@ function createStrip(name: string, count: number, root: HTMLElement) {
   const box = document.createElement('div');
   box.className = 'booklet-slots';
   root.setAttribute('role', 'group');
-  root.setAttribute('aria-label', `${name[0].toUpperCase()}${name.slice(1)} pages`);
+  root.setAttribute('aria-label', `${capitalised(name)} pages`);
   root.append(prev, box, next);
 
   // A slot shows a page at most `centreWidth` CSS px wide: its canvas is that at the device's
@@ -734,14 +730,15 @@ function createStrip(name: string, count: number, root: HTMLElement) {
       const total = visible();
       if (total !== slots.length) rebuild(total);
       const shown = windowOf(page, count, total);
+      const centre = centreSlot(total);
       shown.forEach((index, at) => {
         const slot = slots[at];
         slot.button.dataset.empty = String(index === null);
         slot.button.setAttribute('aria-hidden', String(index === null));
-        const centred = at === centreSlot(total);
+        const centred = at === centre;
         const label = centred ? `Page ${(index ?? 0) + 1} of ${count}, ${open ? 'close' : 'open'} it` : `Go to page ${(index ?? 0) + 1} of ${count}`;
         slot.button.setAttribute('aria-label', index === null ? '' : label);
-        if (at === centreSlot(total)) slot.button.setAttribute('aria-expanded', String(open));
+        if (centred) slot.button.setAttribute('aria-expanded', String(open));
         if (index !== null && slot.shows !== index) draw(slot.canvas, index);
         slot.shows = index;
       });
@@ -750,6 +747,8 @@ function createStrip(name: string, count: number, root: HTMLElement) {
     },
   };
 }
+
+const capitalised = (text: string) => text[0].toUpperCase() + text.slice(1);
 
 function pageCanvas(width: number, height: number) {
   const canvas = document.createElement('canvas');
