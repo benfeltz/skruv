@@ -695,6 +695,8 @@ function createStrip(name: string, count: number, root: HTMLElement) {
   let slots: { button: HTMLButtonElement; canvas: HTMLCanvasElement; shows: number | null | undefined }[] = [];
   const visible = () => visibleCount(window.innerWidth);
   function rebuild(total: number) {
+    // A turn of the phone or a resized window may take away the slot that has focus.
+    const hadFocus = slots.some(({ button: old }) => old === document.activeElement);
     for (const { button: old } of slots) old.remove();
     slots = Array.from({ length: total }, (_, index) => {
       const slot = button('', '');
@@ -707,6 +709,7 @@ function createStrip(name: string, count: number, root: HTMLElement) {
       box.append(slot);
       return { button: slot, canvas, shows: undefined };
     });
+    if (hadFocus) slots[centreSlot(total)].button.focus({ preventScroll: true });
   }
 
   return {

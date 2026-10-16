@@ -85,6 +85,17 @@ describe('what the strip shows', () => {
     expect(dom.body.children).toEqual([manual.thumb, manual.element]);
   });
 
+  it('keeps focus on the strip when a resize rebuilds its slots', () => {
+    const { centre } = mountStrip({ viewport: 1280, page: 3 });
+    // The fake document's active element is the focused one, as a real document's is.
+    vi.stubGlobal('document', { ...document, get activeElement() { return dom.focused; } });
+    centre().focus();
+    dom.viewport.width = 390;
+    dom.windowListeners.get('resize')!.forEach((fn) => fn({}));
+    expect(dom.focused).toBe(centre());
+    expect(dom.focused?.dataset.centre).toBe('true');
+  });
+
   it('re-lays out when the viewport crosses the breakpoint', () => {
     const { slots, manual } = mountStrip({ viewport: 1280, page: 3 });
     expect(slots()).toHaveLength(5);
