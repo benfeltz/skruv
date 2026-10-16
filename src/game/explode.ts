@@ -4,7 +4,7 @@
 // distance is BOOKLET.explode / BOOKLET.inset.
 
 import { BOOKLET } from '../constants.js';
-import { add, connectorInWorld, scale, sub } from '../../tools/validate/lib/geometry.js';
+import { add, connectorInWorld, scale } from '../../tools/validate/lib/geometry.js';
 import type { Pose, Vec3 } from '../../tools/validate/lib/geometry.js';
 import type { BuildStep, PartCount } from './bookletModel.js';
 import type { Connector, GamePartType, InstanceId, Joint } from './item.js';
@@ -141,28 +141,29 @@ export function floatOut(joint: Joint, layout: ExplodeLayout, partTypes: PartTyp
  * the fastener floated out of it, and the box round the hole mouth to frame.
  */
 export function insetsFor(step: Pick<BuildStep, 'joints' | 'hardware'>, layout: ExplodeLayout, partTypes: PartTypes): Inset[] {
-  const { part, hole } = lookups(layout, partTypes);
+  const { part, hole, end } = lookups(layout, partTypes);
   const insets: Inset[] = [];
   for (const count of step.hardware) {
     const index = step.joints.find((i) => layout.joints[i].mover === layout.joints[i].hardware && part(layout.joints[i].hardware).type === count.type);
     // `hardware` counts the pieces the page's own joints push in.
     if (index === undefined) continue;
     const joint = layout.joints[index];
-    const [from, to] = floatOut(joint, layout, partTypes);
     const host = part(joint.host);
     const fastener = part(joint.hardware);
     const { position: anchor, axis } = hole(joint);
+    const lift = scale(axis, BOOKLET.explode.hardware);
+    const from = end(joint);
     // The hole mouth and the spot the fastener floats to, each with `focus` to spare.
-    const spots = [anchor, add(anchor, sub(to, from))];
+    const spots = [anchor, add(anchor, lift)];
     const box = (pick: (a: number, b: number) => number, sign: number): Vec3 => [0, 1, 2].map((k) => pick(...(spots.map((s) => s[k] + sign * BOOKLET.inset.focus) as [number, number]))) as Vec3;
     insets.push({
       ...count,
       joint: index,
       items: [
         { id: host.id, type: host.type, position: host.position, rotation: host.rotation },
-        { id: fastener.id, type: fastener.type, position: add(fastener.position, sub(to, from)), rotation: fastener.rotation },
+        { id: fastener.id, type: fastener.type, position: add(fastener.position, lift), rotation: fastener.rotation },
       ],
-      leader: [from, to],
+      leader: [from, add(from, lift)],
       focus: { min: box(Math.min, -1), max: box(Math.max, 1) },
       axis,
       anchor,
