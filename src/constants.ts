@@ -110,10 +110,12 @@ export const STAGE = {
     // The back panel stands this far in front of the backlight behind it.
     backlight: { gap: 0.03 },
     // How lit the backlight is at each phase (0 the sky's own colour, 1 full starlight); the loop closes on the first.
+    // Level 0 holds from mid-morning to mid-afternoon, so no pinhole shows by day.
     starlight: [
       { at: 0, level: 1 },
       { at: 0.25, level: 0.4 },
-      { at: 0.5, level: 0 },
+      { at: 0.35, level: 0 },
+      { at: 0.65, level: 0 },
       { at: 0.75, level: 0.4 },
     ],
     // Pinholes: how many per tile, their radius in metres, the tile's side in metres (the mask repeats every tile), the

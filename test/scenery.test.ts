@@ -177,6 +177,8 @@ describe('the stars', () => {
     expect(starlightAt(0.5)).toBe(0);
     expect(starlightAt(0.25)).toBeGreaterThan(0);
     expect(starlightAt(0.25)).toBeLessThan(1);
+    // No pinhole shows from mid-morning to mid-afternoon, not only at noon.
+    for (const phase of [0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65]) expect(starlightAt(phase)).toBe(0);
     expect(starlightAt(0.125)).toBeGreaterThan(starlightAt(0.25));
     expect(starlightAt(0.375)).toBeLessThan(starlightAt(0.25));
     expect(starlightAt(1)).toBe(starlightAt(0));
