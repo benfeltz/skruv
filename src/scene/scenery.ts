@@ -114,8 +114,6 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
     const [nx, ny] = corners[(i + 1) % corners.length]!;
     return [x, y, -depth, nx, ny, -depth, x, y, 0, x, y, -depth];
   });
-  const edgeInk = new LineSegments2(new LineSegmentsGeometry().setPositions(edges), ink);
-  edgeInk.name = `${name}SceneryInk`;
 
   // The light behind the back panel: the sky's own colour by day, so the pinholes vanish, starlight by night.
   const backlight = new THREE.Mesh(new THREE.PlaneGeometry(mouth.width, mouth.height), new THREE.MeshBasicMaterial());
@@ -123,7 +121,7 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
   backlight.position.z = -depth;
   const starlight = new THREE.Color(COLORS.starlight);
 
-  group.add(inside, backlight, panel, skin, edgeInk);
+  group.add(inside, backlight, panel, skin);
 
   // The paper theatre: cutouts at their depths, each an ink-outlined silhouette. The static outlines (the box's
   // edges, the hills, the trees) share one ink draw.
@@ -148,7 +146,9 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
     group.add(mesh);
     for (const tree of trees) staticInk.push(...inkPositions(tree, inkLift - scenery.tree.depth));
   }
-  edgeInk.geometry.setPositions(staticInk);
+  const staticLines = new LineSegments2(new LineSegmentsGeometry().setPositions(staticInk), ink);
+  staticLines.name = `${name}SceneryInk`;
+  group.add(staticLines);
 
   // A moving cutout: a fill and its ink in one group that `update` slides.
   const mover = (label: string, polygon: readonly Point[], color: number, depth: number, material: LineMaterial) => {
@@ -161,9 +161,8 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
     group.add(moving);
     return { moving, fill, outline };
   };
-  const disc = (radius: number) => discPolygon(radius);
-  const sun = mover('Sun', disc(scenery.sun.radius), COLORS.sceneryPaper, scenery.sun.depth, ink);
-  const moon = mover('Moon', disc(scenery.moon.radius), COLORS.sceneryFaint, scenery.moon.depth, ink);
+  const sun = mover('Sun', discPolygon(scenery.sun.radius), COLORS.sceneryPaper, scenery.sun.depth, ink);
+  const moon = mover('Moon', discPolygon(scenery.moon.radius), COLORS.sceneryFaint, scenery.moon.depth, ink);
 
   // The cloud drifts across and wraps, so it is clipped to the box's sides, in the room's frame (the room stands
   // at the origin): a cloud half past the edge must not show outside the box.
