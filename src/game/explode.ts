@@ -45,11 +45,16 @@ export interface Inset extends PartCount {
 const ZERO: Vec3 = [0, 0, 0];
 const EPSILON = 1e-9;
 
+// A layout's parts by id, built once per layout.
+const partsOf = new WeakMap<ExplodeLayout, ReadonlyMap<InstanceId, ExplodeLayout['parts'][number]>>();
+
 // Look-ups over a layout: a part by id, and a joint's hole and fastener end in the world.
 function lookups(layout: ExplodeLayout, partTypes: PartTypes) {
-  const partById = new Map(layout.parts.map((p) => [p.id, p]));
+  let partById = partsOf.get(layout);
+  if (!partById) partsOf.set(layout, (partById = new Map(layout.parts.map((p) => [p.id, p]))));
+  const byId = partById;
   // Every id a joint names is a part of the layout.
-  const part = (id: InstanceId) => partById.get(id)!;
+  const part = (id: InstanceId) => byId.get(id)!;
   const hole = (j: Joint) => connectorInWorld(partTypes[part(j.host).type].connectors[j.hostConnector], part(j.host));
   const end = (j: Joint) => connectorInWorld(partTypes[part(j.hardware).type].connectors[j.hardwareConnector], part(j.hardware)).position;
   return { part, hole, end };
@@ -101,10 +106,16 @@ export function separation(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'>, l
   }
 
   // Hardware seated earlier, only in pulled-away parts, rides with them.
+  const shown = new Set(step.shown);
   const hostsOf = new Map<InstanceId, InstanceId[]>();
-  for (const j of layout.joints) hostsOf.set(j.hardware, [...(hostsOf.get(j.hardware) ?? []), j.host]);
+  for (const j of layout.joints) {
+    if (!shown.has(j.host)) continue;
+    const hosts = hostsOf.get(j.hardware);
+    if (hosts) hosts.push(j.host);
+    else hostsOf.set(j.hardware, [j.host]);
+  }
   for (const id of step.shown) {
-    const hosts = (hostsOf.get(id) ?? []).filter((h) => step.shown.includes(h));
+    const hosts = hostsOf.get(id) ?? [];
     if (offsets.has(id) || !hosts.length || !hosts.every((h) => offsets.has(h) && !floated.has(h))) continue;
     offsets.set(id, offsets.get(hosts[0])!);
   }
