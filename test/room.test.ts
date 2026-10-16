@@ -193,12 +193,34 @@ describe('the sky turns', () => {
     expect(skyColour(room).equals(midnight)).toBe(false);
   });
 
-  it('leaves the stage light and the walls\' colours alone', () => {
+  it('changes the sky material and nothing else the room owns, and the room owns no light', () => {
     const room = createRoom();
-    const wall = (room.backWall.getObjectByName('backWallMesh') as THREE.Mesh).material as THREE.MeshStandardMaterial;
-    const wallColour = wall.color.getHex();
+    const sky = skyMeshes(room)[0]!.material;
+    const others = () => {
+      const colours: [string, number][] = [];
+      room.group.traverse((o) => {
+        expect(o).not.toBeInstanceOf(THREE.Light);
+        const material = (o as THREE.Mesh).material as THREE.Material & { color?: THREE.Color } | undefined;
+        if (material?.color && material !== sky) colours.push([o.name, material.color.getHex()]);
+      });
+      return colours;
+    };
+    const before = others();
+    expect(before.length).toBeGreaterThan(0);
     STAGE.sky.phase = 0;
     room.update(at(0, 2, 3), renderer(), 10);
-    expect(wall.color.getHex()).toBe(wallColour);
+    expect(others()).toEqual(before);
+  });
+
+  it('mirrors the live phase into the knob, so scrubbing to where the sky is changes nothing', () => {
+    const room = createRoom();
+    STAGE.sky.phase = 0.2;
+    room.update(at(0, 2, 3), renderer(), 0);
+    room.update(at(0, 2, 3), renderer(), 36);
+    expect(STAGE.sky.phase).toBeCloseTo(0.25, 9);
+    const here = skyColour(room);
+    STAGE.sky.phase = 0.25 + 0; // the sky's own phase: not a scrub
+    room.update(at(0, 2, 3), renderer(), 0);
+    expect(skyColour(room).equals(here)).toBe(true);
   });
 });

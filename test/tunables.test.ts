@@ -159,4 +159,26 @@ describe('createTunables', () => {
     expect(() => tunables.applyProfile({ format: 999, knobs: {} })).toThrow(/format/);
     expect(() => tunables.applyProfile(null)).toThrow(/format/);
   });
+
+  it('leaves a scrub knob out of Defaults and profiles, but still sets and resets it by name', () => {
+    const object = { a: 1, phase: 0.5 };
+    const tunables = createTunables({
+      'g.a': { object, prop: 'a', min: 0, max: 2, step: 0.1, unit: 'm', group: 'g', desc: 'a' },
+      'g.phase': { object, prop: 'phase', min: 0, max: 1, step: 0.01, unit: '', group: 'g', desc: 'p', scrub: true },
+    });
+    tunables.set('g.a', 0.2);
+    tunables.set('g.phase', 0.9);
+    expect(tunables.toProfile().knobs).toEqual({ 'g.a': 0.2 });
+    tunables.reset();
+    expect(object).toEqual({ a: 1, phase: 0.9 });
+    expect(tunables.applyProfile({ format: PROFILE_FORMAT, knobs: { 'g.a': 0.4, 'g.phase': 0.1 } })).toEqual({ skipped: ['g.phase'] });
+    expect(object).toEqual({ a: 0.4, phase: 0.9 });
+    tunables.reset('g.phase');
+    expect(object.phase).toBe(0.5);
+  });
+
+  it('keeps the sky scrub out of the feel profile', () => {
+    expect(createTunables().toProfile().knobs).not.toHaveProperty(['stage.skyPhase']);
+    expect(createTunables().toProfile().knobs).toHaveProperty(['stage.skyCycleMinutes']);
+  });
 });

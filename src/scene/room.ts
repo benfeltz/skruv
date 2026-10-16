@@ -86,9 +86,10 @@ export function createRoom() {
   // Reused every frame: the eye as a tuple and the canvas size, so the loop allocates nothing.
   const eyeAt: Vec3 = [0, 0, 0];
   const size = new THREE.Vector2();
-  // The sky's phase lives here; the scrub is seen once, when the knob moves it off what was last applied.
+  // The sky's phase lives here, mirrored into STAGE.sky.phase each frame; the knob moving it off the mirror is a scrub.
   let phase = phaseFromClock(new Date());
   let scrubbed = STAGE.sky.phase;
+  let painted = NaN;
   const skyRgb: Rgb = [0, 0, 0];
   return {
     group,
@@ -111,6 +112,10 @@ export function createRoom() {
         phase = scrubbed;
       }
       phase = advance(phase, delta, STAGE.sky.cycleMinutes);
+      // The scrub reads the live phase, so setting it to where the sky already is changes nothing and anywhere else jumps.
+      STAGE.sky.phase = scrubbed = phase;
+      if (phase === painted) return;
+      painted = phase;
       skyColourAt(phase, skyRgb);
       skyMaterial.color.setRGB(skyRgb[0], skyRgb[1], skyRgb[2], THREE.SRGBColorSpace);
     },

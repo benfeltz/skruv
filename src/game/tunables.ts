@@ -28,6 +28,8 @@ export interface Knob {
   unit: string;
   group: string;
   desc: string;
+  /** A one-shot command, not a feel: its value mirrors live state, so Defaults and profiles leave it alone. */
+  scrub?: boolean;
 }
 
 /** `fn(key, value)`, told after every change. */
@@ -146,7 +148,7 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
     desc: 'Minutes of game time for the sky beyond the windows to turn through night, dawn, day and dusk',
   },
   'stage.skyPhase': {
-    object: STAGE.sky, prop: 'phase', min: 0, max: 1, step: 0.01, unit: 'cycle', group: 'stage',
+    object: STAGE.sky, prop: 'phase', min: 0, max: 1, step: 0.01, unit: 'cycle', group: 'stage', scrub: true,
     desc: 'Scrub the sky to a point in its cycle (0 midnight, 0.25 dawn, 0.5 day, 0.75 dusk); it keeps turning from there',
   },
   'physics.linearDamping': {
@@ -206,9 +208,9 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
  *   get(key)             current value
  *   set(key, value)      clamps into range, writes through, tells subscribers; returns the
  *                        value applied. Unknown keys and non-numbers throw.
- *   reset(key?)          one knob, or every knob, back to its default
+ *   reset(key?)          one knob, or every feel knob, back to its default (a scrub knob only when named)
  *   subscribe(fn)        `fn(key, value)` after every change; returns the unsubscribe
- *   toProfile()          `{ format, knobs: { key: value } }` — every knob
+ *   toProfile()          `{ format, knobs: { key: value } }` — every feel knob (not scrub knobs)
  *   applyProfile(p)      sets each knob it names (all or nothing: a non-number anywhere
  *                        throws before any is set); keys this build doesn't have
  *                        (another engine's, a newer build's) are skipped and returned
@@ -239,7 +241,7 @@ export function createTunables(knobs: Readonly<Record<string, Knob>> = LIVE_KNOB
   }
 
   function reset(key?: string) {
-    for (const k of key === undefined ? [...defaults.keys()] : [key]) set(k, defaults.get(k));
+    for (const k of key === undefined ? [...defaults.keys()].filter((d) => !knobs[d]!.scrub) : [key]) set(k, defaults.get(k));
   }
 
   function subscribe(fn: KnobSubscriber) {
@@ -260,19 +262,19 @@ export function createTunables(knobs: Readonly<Record<string, Knob>> = LIVE_KNOB
       desc,
     }));
 
-  const toProfile = (): FeelProfile => ({ format: PROFILE_FORMAT, knobs: Object.fromEntries(Object.keys(knobs).map((key) => [key, get(key)])) });
+  const toProfile = (): FeelProfile => ({ format: PROFILE_FORMAT, knobs: Object.fromEntries(Object.keys(knobs).filter((key) => !knobs[key]!.scrub).map((key) => [key, get(key)])) });
 
   function applyProfile(profile: { format?: unknown; knobs?: unknown } | null | undefined) {
     if (profile?.format !== PROFILE_FORMAT || typeof profile.knobs !== 'object' || profile.knobs === null) {
       throw new Error(`not a format ${PROFILE_FORMAT} feel profile`);
     }
     const entries = Object.entries(profile.knobs);
-    const known = entries.filter(([key]) => Object.hasOwn(knobs, key));
+    const known = entries.filter(([key]) => Object.hasOwn(knobs, key) && !knobs[key]!.scrub);
     // All or nothing: a bad value anywhere leaves every knob as it was.
     const bad = known.find(([, value]) => typeof value !== 'number' || !Number.isFinite(value));
     if (bad) throw new Error(`knob ${bad[0]} takes a number, got ${bad[1]}`);
     for (const [key, value] of known) set(key, value);
-    return { skipped: entries.filter(([key]) => !Object.hasOwn(knobs, key)).map(([key]) => key) };
+    return { skipped: entries.filter(([key]) => !Object.hasOwn(knobs, key) || knobs[key]!.scrub).map(([key]) => key) };
   }
 
   return { list, get, set, reset, subscribe, toProfile, applyProfile };
