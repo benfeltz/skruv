@@ -7,6 +7,7 @@
 // across the pier, and each wall is its own slice.
 
 import { STAGE } from '../constants.js';
+import { closedLoop, segmentAt, sortedKeyframes } from './skyCycle.js';
 import { sceneryMouth } from './stageBoxes.js';
 import type { SceneryMouth, WallName } from './stageBoxes.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
@@ -169,21 +170,13 @@ export function bodyAt(mouth: SceneryMouth, body: Body, radius: number, out: Poi
   return out;
 }
 
+const STARLIGHT_LOOP = closedLoop(sortedKeyframes(scenery.starlight, 'starlight'));
+
 /** How lit the backlight is at `phase`, 0 to 1: the sky's own colour by day, full starlight by night. */
 export function starlightAt(phase: number): number {
-  const stops = scenery.starlight;
-  const p = ((phase % 1) + 1) % 1;
-  const first = stops[0]!;
-  const last = stops[stops.length - 1]!;
-  if (p < first.at) return blend(last.level, first.level, (p + 1 - (last.at)) / (first.at + 1 - last.at));
-  let i = 0;
-  while (i < stops.length - 1 && p >= stops[i + 1]!.at) i++;
-  const from = stops[i]!;
-  const to = stops[i + 1] ?? { at: first.at + 1, level: first.level };
-  return blend(from.level, to.level, (p - from.at) / (to.at - from.at));
+  const { from, to, t } = segmentAt(STARLIGHT_LOOP, phase);
+  return from.level + (to.level - from.level) * t;
 }
-
-const blend = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /** A seeded generator (mulberry32): the same seed gives the same stars everywhere, with no `Math.random`. */
 function seeded(seed: number): () => number {
