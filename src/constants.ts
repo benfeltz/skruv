@@ -164,6 +164,9 @@ export const BOOKLET_UI = {
   // distance first is a swipe, never a peek).
   // `openGap` is the space between the strip and the open page above it.
   strip: { breakpoint: 600, narrow: 3, wide: 5, centreWidth: 120, sideWidth: 72, gap: 8, arrow: 44, inset: 12, openGap: 12, peekDelayMs: 280 },
+  // ...and on a short viewport (a phone held sideways: `maxHeight` CSS px or less) the strip
+  // draws smaller, so the open page above it keeps a readable size.
+  stripShort: { maxHeight: 480, centreWidth: 72, sideWidth: 44 },
 };
 
 // The catalog (1.9.1): the game's front door, a second booklet of items to build

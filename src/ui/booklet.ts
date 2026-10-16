@@ -1,4 +1,4 @@
-import { BOOKLET, BOOKLET_UI, CATALOG, COLORS, GESTURE } from '../constants.js';
+import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, RESET } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
 import { centreSlot, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
 import { peekNext } from '../game/peekGesture.js';
@@ -29,9 +29,14 @@ function injectStyle() {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   const { shadow, gutter, growMs, radius } = BOOKLET_UI.page;
-  const { strip } = BOOKLET_UI;
-  // What the strip and the gap above it take off the bottom of the screen (CSS pixels).
-  const stripReserve = strip.inset + Math.round((strip.centreWidth * pageH) / pageW) + strip.openGap;
+  const { strip, stripShort } = BOOKLET_UI;
+  // What the strip and the gap above it take off the bottom of the screen (CSS pixels), at
+  // the full size and on a short viewport.
+  const reserveFor = (centreWidth: number) => strip.inset + Math.round((centreWidth * pageH) / pageW) + strip.openGap;
+  // A portrait phone's open page reaches up past the control cluster's buttons (Repack and
+  // Snap rotate, in the upper right); its top is held below them. Elsewhere it is clear of
+  // the cluster sideways, and only the gutter is kept.
+  const clusterBottom = CLUSTER.inset + 2 * RESET.height + CLUSTER.gap + gutter;
   style.textContent = `
     .booklet-thumb {
       position: fixed;
@@ -174,6 +179,8 @@ function injectStyle() {
        the open page (3), over nothing but the room's lower edge. Its own box only takes
        input; the touch-action is none so a swipe along it is ours, not the browser's. */
     .booklet-strip {
+      --slot-centre: ${strip.centreWidth}px;
+      --slot-side: ${strip.sideWidth}px;
       position: fixed;
       left: 50%;
       bottom: calc(${strip.inset}px + env(safe-area-inset-bottom));
@@ -189,7 +196,7 @@ function injectStyle() {
     }
     .booklet-slots { display: flex; align-items: flex-end; justify-content: center; gap: ${strip.gap}px; min-width: 0; }
     .booklet-slot {
-      flex: 0 1 ${strip.sideWidth}px;
+      flex: 0 1 var(--slot-side);
       min-width: 0;
       aspect-ratio: ${pageW} / ${pageH};
       padding: 0;
@@ -203,7 +210,7 @@ function injectStyle() {
       -webkit-tap-highlight-color: transparent;
     }
     .booklet-slot[data-centre='true'] {
-      flex: 0 0 ${strip.centreWidth}px;
+      flex: 0 0 var(--slot-centre);
       border-color: ${css(COLORS.uiAccent)};
     }
     .booklet-slot[data-empty='true'] { visibility: hidden; }
@@ -229,9 +236,18 @@ function injectStyle() {
     }
     /* A manual page opens above its strip, resting on it, as wide as the room above allows. */
     .booklet-leaf[data-docked='strip'] {
+      --strip-reserve: ${reserveFor(strip.centreWidth)}px;
+      --strip-top: ${gutter}px;
       top: auto;
-      bottom: calc(${stripReserve}px + env(safe-area-inset-bottom));
-      width: min(calc(100vw - ${2 * gutter}px), ${pageW}px, calc((100dvh - ${stripReserve + gutter}px - env(safe-area-inset-bottom)) * ${pageW} / ${pageH}));
+      bottom: calc(var(--strip-reserve) + env(safe-area-inset-bottom));
+      width: min(calc(100vw - ${2 * gutter}px), ${pageW}px, calc((100dvh - var(--strip-reserve) - var(--strip-top) - env(safe-area-inset-bottom)) * ${pageW} / ${pageH}));
+    }
+    @media (orientation: portrait) {
+      .booklet-leaf[data-docked='strip'] { --strip-top: ${clusterBottom}px; }
+    }
+    @media (max-height: ${stripShort.maxHeight}px) {
+      .booklet-strip { --slot-centre: ${stripShort.centreWidth}px; --slot-side: ${stripShort.sideWidth}px; }
+      .booklet-leaf[data-docked='strip'] { --strip-reserve: ${reserveFor(stripShort.centreWidth)}px; }
     }
   `;
   document.head.append(style);

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BOOKLET_UI, GESTURE } from '../src/constants.js';
+import { BOOKLET, BOOKLET_UI, CLUSTER, GESTURE, RESET } from '../src/constants.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
 import { FakeElement, installFakeDom } from './support/fakeDom.js';
 import type { FakeDom } from './support/fakeDom.js';
@@ -348,6 +348,38 @@ describe('it never blocks the room', () => {
     up(centre());
     expect(manual.element.style.transform).toBe('translate(-50%, 0)');
     expect(manual.element.dataset.docked).toBe('strip');
+  });
+});
+
+// What the open page may take of a screen is CSS; these pin the numbers it is built from.
+describe("the open manual page's room above the strip", () => {
+  const css = () => {
+    mountStrip();
+    return dom.head.children.find((node) => node.id === 'skruv-booklet')!.textContent;
+  };
+  const [pageW, pageH] = BOOKLET.pageSize;
+  const { strip, stripShort, page } = BOOKLET_UI;
+  const reserve = (centreWidth: number) => strip.inset + Math.round((centreWidth * pageH) / pageW) + strip.openGap;
+
+  it('reserves the strip and the gap, and shrinks the strip on a short viewport so the page keeps its size', () => {
+    const rules = css();
+    expect(rules).toContain(`--strip-reserve: ${reserve(strip.centreWidth)}px;`);
+    expect(rules).toContain(`@media (max-height: ${stripShort.maxHeight}px) {`);
+    expect(rules).toContain(`--strip-reserve: ${reserve(stripShort.centreWidth)}px;`);
+    // A phone held sideways: the page above the compact strip is bigger than above the full one.
+    const sideways = 360;
+    const room = (centreWidth: number) => sideways - reserve(centreWidth) - page.gutter;
+    expect(room(stripShort.centreWidth)).toBeGreaterThan(room(strip.centreWidth));
+    expect(room(stripShort.centreWidth)).toBeGreaterThanOrEqual(210);
+  });
+
+  it("holds a portrait page's top below Repack and Snap rotate, the cluster's two buttons", () => {
+    const rules = css();
+    const below = CLUSTER.inset + 2 * RESET.height + CLUSTER.gap + page.gutter;
+    expect(rules).toContain('@media (orientation: portrait) {');
+    expect(rules).toContain(`--strip-top: ${below}px;`);
+    // ...which clears the cluster's bottom edge (Repack, a gap, Snap rotate) by the gutter.
+    expect(below - page.gutter).toBe(CLUSTER.inset + 2 * RESET.height + CLUSTER.gap);
   });
 });
 
