@@ -1,12 +1,15 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
 import { COLORS, ROOM, STAGE } from '../src/constants.js';
+import { sceneryMouth } from '../src/game/stageBoxes.js';
 import { createRoom } from '../src/scene/room.js';
 
 // A stand-in renderer: the room only asks it for the drawing buffer's size.
 const renderer = (width = 800, height = 600) => ({ getSize: (target: THREE.Vector2) => target.set(width, height) }) as unknown as THREE.WebGLRenderer;
 const at = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const bounds = (object: THREE.Object3D) => new THREE.Box3().setFromObject(object);
+
+const sceneryHalfWidth = () => sceneryMouth('back').width / 2;
 
 describe('the room as built', () => {
   const { group, pieces, leftWall, backWall } = createRoom();
@@ -241,6 +244,21 @@ describe('the sky turns', () => {
     const planes = (cloud.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>).material.clippingPlanes;
     expect(planes).toHaveLength(2);
     expect((cloud.children[1] as unknown as { material: THREE.Material }).material.clippingPlanes).toHaveLength(2);
+  });
+
+  it('keeps the cloud\'s clip planes on the box\'s sides wherever the room stands', () => {
+    const room = createRoom();
+    room.group.position.set(5, 1, -2);
+    room.group.rotation.y = 0.7;
+    room.update(at(0, 2, 3), renderer(), 1);
+    const cloud = room.backWall.getObjectByName('backSceneryCloud')!;
+    const scenery = room.backWall.getObjectByName('backScenery')!;
+    const planes = (cloud.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>).material.clippingPlanes!;
+    room.group.updateMatrixWorld(true);
+    const edges = [new THREE.Vector3(-1, 0, 0), new THREE.Vector3(1, 0, 0)].map((v) => v.multiplyScalar(sceneryHalfWidth()).applyMatrix4(scenery.matrixWorld));
+    // Each side's own edge lies on its plane, and the box's middle is inside both.
+    edges.forEach((edge, i) => expect(planes[i]!.distanceToPoint(edge)).toBeCloseTo(0, 6));
+    expect(planes.every((p) => p.distanceToPoint(scenery.getWorldPosition(new THREE.Vector3())) > 0)).toBe(true);
   });
 
   it('merges the box\'s inside, the hills and the trees into one paper mesh, all inside the box', () => {

@@ -165,14 +165,11 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
   const body = mover('Body', discPolygon(scenery.sun.radius), COLORS.sceneryPaper, scenery.sun.depth, ink);
   const moonScale = scenery.moon.radius / scenery.sun.radius;
 
-  // The cloud drifts across and wraps, so it is clipped to the box's sides, in the room's frame (the room stands
-  // at the origin): a cloud half past the edge must not show outside the box.
-  const along = new THREE.Vector3(Math.cos(mouth.yaw), 0, -Math.sin(mouth.yaw));
-  const centre = new THREE.Vector3(...mouth.centre);
-  const clips = [
-    new THREE.Plane(along.clone(), mouth.width / 2 - along.dot(centre)),
-    new THREE.Plane(along.clone().negate(), mouth.width / 2 + along.dot(centre)),
-  ];
+  // The cloud drifts across and wraps, so it is clipped to the box's sides: a cloud half past the edge must not show
+  // outside the box. The planes are the box's sides in its own frame, carried to world space each frame from the
+  // group's matrix, so they follow the room wherever it stands.
+  const sidePlanes = [new THREE.Plane(new THREE.Vector3(1, 0, 0), mouth.width / 2), new THREE.Plane(new THREE.Vector3(-1, 0, 0), mouth.width / 2)];
+  const clips = sidePlanes.map((plane) => plane.clone());
   const cloudInk = ink.clone();
   cloudInk.clippingPlanes = clips;
   const cloud = mover('Cloud', cloudPolygon(name), COLORS.sceneryPaper, scenery.cloud.depth, cloudInk);
@@ -189,6 +186,8 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
     update(phase: number, delta: number) {
       elapsed += delta;
       cloud.moving.position.x = cloudX(mouth, elapsed);
+      group.updateWorldMatrix(true, false);
+      clips.forEach((clip, i) => clip.copy(sidePlanes[i]!).applyMatrix4(group.matrixWorld));
       cloudInk.resolution.copy(ink.resolution);
       if (phase === lit) return;
       lit = phase;
