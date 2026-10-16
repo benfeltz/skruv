@@ -375,7 +375,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
 
       // `position` and `rotation` (assembled frame) carried into this panel's flat frame.
       function flatPose(position: Vec3, rotation: Quat) {
-        local.compose(s.set(...position), q.set(...rotation), p.set(1, 1, 1));
+        local.compose(p.set(...position), q.set(...rotation), s.set(1, 1, 1));
         pose.copy(toFlat).multiply(local).decompose(p, q, s);
         return { position: [p.x, p.y, p.z + offset] as Vec3, rotation: q.toArray() as Quat };
       }
