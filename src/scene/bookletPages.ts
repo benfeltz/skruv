@@ -4,6 +4,7 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { BOOKLET, COLORS } from '../constants.js';
 import { createBooklet, gamePagesFor } from '../game/bookletModel.js';
+import { explodeStep, floatOut } from '../game/explode.js';
 import { createPageCache, FAINT, font, INK, newPage, PAPER } from './pagePaper.js';
 import { rowsFor } from '../game/controlsPage.js';
 import { ITEM_ID, itemById } from '../game/item.js';
@@ -229,8 +230,8 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     }
 
     const frame: Rect = [m, m + 2 * r + 80, pageW - 2 * m, pageH - (2 * m + 2 * r + 80)];
-    if (page.pose === 'parts') views.draw(ctx, looseParts(page), frame);
-    else views.draw(ctx, itemsFor(new Set(page.shown), page.tip ? new Set() : boldOf(page)), frame, ORIENTATION[page.pose]);
+    const { items, lines } = drawingOf(page);
+    views.draw(ctx, items, frame, page.pose === 'parts' ? UPRIGHT : ORIENTATION[page.pose], { lines });
     if (page.turns.length) turnArrow(ctx, frame[0] + frame[2] - 80, frame[1] + 70, 46);
     if (page.tip) {
       // Two people tip it up together: an arc over the drawing, a figure at each side.
@@ -278,16 +279,28 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     });
   }
 
+  // What a step page's frame draws: its new parts and fasteners pulled apart along their holes
+  // (src/game/explode.ts), with leader lines back; a loose-parts page keeps its fan.
+  function drawingOf(page: BuildStep): { items: ViewItem[]; lines: [Vec3, Vec3][] } {
+    if (page.pose === 'parts') return looseParts(page);
+    const bold = page.tip ? new Set<InstanceId>() : boldOf(page);
+    const { items, leaders } = explodeStep(page, layout, item.partTypes);
+    return { items: items.map((it) => ({ ...it, weight: bold.has(it.id) ? 'bold' : 'faint' })), lines: leaders };
+  }
+
   // A loose-parts page: each panel the page works on laid flat with its own hardware in it,
-  // the panels fanned out one behind another.
+  // the panels fanned out one behind another. Hardware the page pushes in floats out of its
+  // hole, in the panel's flat frame, with a leader back.
   function looseParts(page: BuildStep) {
     const panels = [...new Set(page.joints.map((i) => layout.joints[i].host)), ...page.parts].filter(
       (id, i, all) => all.indexOf(id) === i,
     );
     const items: ViewItem[] = [];
+    const lines: [Vec3, Vec3][] = [];
     const pose = new THREE.Matrix4();
     const local = new THREE.Matrix4();
     const inverse = new THREE.Matrix4();
+    const toFlat = new THREE.Matrix4();
     const p = new THREE.Vector3();
     const q = new THREE.Quaternion();
     const s = new THREE.Vector3();
@@ -297,19 +310,31 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
       const size = item.partTypes[panel.type].size;
       const flat = LAY_FLAT[size.indexOf(Math.min(...size))];
       inverse.compose(p.set(...panel.position), q.set(...panel.rotation), s.set(1, 1, 1)).invert();
-      const hardware = page.joints.map((i) => layout.joints[i]).filter((j) => j.host === id).map((j) => partById.get(j.hardware)!);
+      // The assembled frame to this panel's place in the fan.
+      toFlat.makeRotationFromQuaternion(flat).multiply(inverse);
+      const place = (v: Vec3): Vec3 => p.set(...v).applyMatrix4(toFlat).add(s.set(0, 0, offset)).toArray();
+      const joints = page.joints.map((i) => layout.joints[i]).filter((j) => j.host === id);
       // Flat extent across the fan: this panel starts half of it past the last one's edge.
       const depth = Math.min(...size.filter((d) => d !== Math.min(...size)));
       offset += depth / 2;
-      for (const part of [panel, ...hardware]) {
-        local.compose(p.set(...part.position), q.set(...part.rotation), s.set(1, 1, 1));
-        pose.makeRotationFromQuaternion(flat).multiply(inverse).multiply(local);
-        pose.decompose(p, q, s);
-        items.push({ ...part, position: [p.x, p.y, p.z + offset], rotation: q.toArray(), weight: 'bold' });
+      items.push({ ...panel, ...flatPose(panel.position, panel.rotation), weight: 'bold' });
+      for (const joint of joints) {
+        const hardware = partById.get(joint.hardware)!;
+        const [from, to] = joint.mover === joint.hardware ? floatOut(joint, layout, item.partTypes) : [hardware.position, hardware.position];
+        const float: Vec3 = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
+        items.push({ ...hardware, ...flatPose([hardware.position[0] + float[0], hardware.position[1] + float[1], hardware.position[2] + float[2]], hardware.rotation), weight: 'bold' });
+        if (joint.mover === joint.hardware) lines.push([place(from), place(to)]);
       }
       offset += depth / 2 + BOOKLET.fanGap;
+
+      // `position` and `rotation` (assembled frame) carried into this panel's flat frame.
+      function flatPose(position: Vec3, rotation: Quat) {
+        local.compose(s.set(...position), q.set(...rotation), p.set(1, 1, 1));
+        pose.copy(toFlat).multiply(local).decompose(p, q, s);
+        return { position: [p.x, p.y, p.z + offset] as Vec3, rotation: q.toArray() as Quat };
+      }
     }
-    return items;
+    return { items, lines };
   }
 
   const single = (type: string): ViewItem & { id: string } => ({ id: type, type, position: [0, 0, 0], rotation: [0, 0, 0, 1], weight: 'bold' });
