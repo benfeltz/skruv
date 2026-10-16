@@ -122,6 +122,7 @@ function injectStyle() {
     .booklet-page {
       position: relative;
       display: flex;
+      align-items: flex-start;
       justify-content: center;
       touch-action: none;
       user-select: none;
@@ -165,7 +166,9 @@ function injectStyle() {
       border-radius: ${radius}px;
       box-shadow: ${shadow};
     }
-    .booklet-frame canvas { width: 100%; height: 100%; }
+    /* The canvas's own width and height attributes are the page's proportions, so its height
+       follows its width in any browser — never stretched to a box taller than the page. */
+    .booklet-frame canvas { width: 100%; height: auto; }
     .booklet-action {
       position: absolute;
       padding: 0;
