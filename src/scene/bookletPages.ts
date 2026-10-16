@@ -222,11 +222,11 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     const cy = m + maxRadius;
     const centres = insets.map((_, i): [number, number] => [left + r + i * (2 * r + gap), cy]);
     const orientation = page.pose === 'parts' ? UPRIGHT : ORIENTATION[page.pose];
-    insets.forEach(({ type, count, partNumber, items, leader, focus, axis }, i) => {
+    insets.forEach(({ count, partNumber, items, leader, focus, axis }, i) => {
       const [cx] = centres[i];
       const d = Math.round(2 * r);
       const { canvas } = views.render(
-        items.map((it) => ({ ...it, weight: it.type === type ? 'bold' : 'faint' })),
+        items.map((it) => ({ ...it, weight: 'bold' as const })),
         d,
         d,
         // Turned so the fastener floats up off a face the viewer sees, whatever the page's pose.

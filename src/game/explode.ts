@@ -15,7 +15,7 @@ export interface ExplodeLayout {
   joints: readonly Joint[];
 }
 
-type PartTypes = Readonly<Record<string, Pick<GamePartType, 'partNumber'> & { connectors: readonly Pick<Connector, 'position' | 'axis'>[] }>>;
+type PartTypes = Readonly<Record<string, Pick<GamePartType, 'partNumber' | 'size'> & { connectors: readonly Pick<Connector, 'position' | 'axis'>[] }>>;
 
 /** One part as an exploded drawing places it. */
 export interface ExplodedItem extends Pose {
@@ -34,7 +34,7 @@ export interface Inset extends PartCount {
   items: ExplodedItem[];
   /** The line from the fastener's seated spot to where it floats. */
   leader: Leader;
-  /** The box the inset frames — the hole mouth and where the fastener floats — in the main drawing's frame. */
+  /** The box the inset frames — the floated fastener, filling the circle — in the main drawing's frame. */
   focus: { min: Vec3; max: Vec3 };
   /** The hole's world axis, out of its mouth: the way the fastener floats. */
   axis: Vec3;
@@ -148,7 +148,7 @@ export function floatOut(joint: Joint, layout: ExplodeLayout, partTypes: PartTyp
 /**
  * One detail inset per fastener type the page adds, in `step.hardware`'s order: its count
  * and part number, the first joint of that type the page seats (one it pushes the fastener in by, if any), the host at its pose with
- * the fastener floated out of it, and the box round the hole mouth to frame.
+ * the fastener floated out of it, and the box round the fastener to frame.
  */
 export function insetsFor(step: Pick<BuildStep, 'joints' | 'hardware'>, layout: ExplodeLayout, partTypes: PartTypes): Inset[] {
   const { part, hole, end } = lookups(layout, partTypes);
@@ -166,18 +166,19 @@ export function insetsFor(step: Pick<BuildStep, 'joints' | 'hardware'>, layout: 
     const { position: anchor, axis } = hole(joint);
     const lift = scale(axis, BOOKLET.explode.hardware);
     const from = end(joint);
-    // The hole mouth and the spot the fastener floats to, each with `focus` to spare.
-    const spots = [anchor, add(anchor, lift)];
-    const box = (pick: (a: number, b: number) => number, sign: number): Vec3 => [0, 1, 2].map((k) => pick(...(spots.map((s) => s[k] + sign * BOOKLET.inset.focus) as [number, number]))) as Vec3;
+    // The floated fastener, framed so it fills the circle: `focus` of its longest side each way.
+    const floated = add(fastener.position, lift);
+    const reach = Math.max(...partTypes[fastener.type].size) * BOOKLET.inset.focus;
+    const focus = { min: add(floated, [-reach, -reach, -reach]), max: add(floated, [reach, reach, reach]) };
     insets.push({
       ...count,
       joint: index,
       items: [
         { id: host.id, type: host.type, position: host.position, rotation: host.rotation },
-        { id: fastener.id, type: fastener.type, position: add(fastener.position, lift), rotation: fastener.rotation },
+        { id: fastener.id, type: fastener.type, position: floated, rotation: fastener.rotation },
       ],
       leader: [from, add(from, lift)],
-      focus: { min: box(Math.min, -1), max: box(Math.max, 1) },
+      focus,
       axis,
       anchor,
     });

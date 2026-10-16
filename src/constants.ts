@@ -149,13 +149,13 @@ export const BOOKLET = {
   // `cancel` is the length below which a part's pulls from opposing joints count as none.
   explode: { hardware: 0.05, part: 0.2, assembly: 0.35, leaderLine: 1, cancel: 1e-9 },
   // Detail insets (src/scene/bookletPages.ts `step`), page-canvas pixels except `focus`: one
-  // circle per fastener type across the top, shrunk to fit the row. `focus` is the half-size
-  // in metres of the box round a hole mouth each inset frames. `tool` is the tool's share of
+  // circle per fastener type across the top, shrunk to fit the row. `focus` is how far, as a
+  // multiple of the fastener's longest side, each inset frames round the floated fastener. `tool` is the tool's share of
   // the circle, drawn in its lower right; `toolOnly` its radius when a step fastens nothing.
   inset: {
     radius: 72,
     gap: 24,
-    focus: 0.03,
+    focus: 0.75,
     ringLine: 3,
     tailLine: 2,
     tailDot: 5,

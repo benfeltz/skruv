@@ -12,10 +12,10 @@ import type { Quat, Vec3 } from '../tools/validate/lib/geometry.js';
 // seated in it, and a side whose two holes press onto two dowels standing in the plate.
 const ID: Quat = [0, 0, 0, 1];
 const partTypes = {
-  plate: { partNumber: 'P', connectors: [{ position: [0.1, 0.01, 0] as Vec3, axis: [0, 1, 0] as Vec3 }, { position: [-0.1, 0.01, 0] as Vec3, axis: [0, 1, 0] as Vec3 }] },
-  dowel: { partNumber: 'D', connectors: [{ position: [0, 0.02, 0] as Vec3, axis: [0, -1, 0] as Vec3 }, { position: [0, -0.02, 0] as Vec3, axis: [0, 1, 0] as Vec3 }] },
+  plate: { partNumber: 'P', size: [0.4, 0.02, 0.2] as Vec3, connectors: [{ position: [0.1, 0.01, 0] as Vec3, axis: [0, 1, 0] as Vec3 }, { position: [-0.1, 0.01, 0] as Vec3, axis: [0, 1, 0] as Vec3 }] },
+  dowel: { partNumber: 'D', size: [0.01, 0.04, 0.01] as Vec3, connectors: [{ position: [0, 0.02, 0] as Vec3, axis: [0, -1, 0] as Vec3 }, { position: [0, -0.02, 0] as Vec3, axis: [0, 1, 0] as Vec3 }] },
   // A side standing on the dowels: its holes face down.
-  side: { partNumber: 'S', connectors: [{ position: [0.1, -0.01, 0] as Vec3, axis: [0, -1, 0] as Vec3 }, { position: [-0.1, -0.01, 0] as Vec3, axis: [0, -1, 0] as Vec3 }] },
+  side: { partNumber: 'S', size: [0.3, 0.02, 0.2] as Vec3, connectors: [{ position: [0.1, -0.01, 0] as Vec3, axis: [0, -1, 0] as Vec3 }, { position: [-0.1, -0.01, 0] as Vec3, axis: [0, -1, 0] as Vec3 }] },
 };
 const at = (id: string, type: string, position: Vec3) => ({ id, type, position, rotation: ID });
 const joint = (hardware: string, hardwareConnector: number, host: string, hostConnector: number, mover: string): Joint => ({
@@ -132,14 +132,16 @@ describe('insetsFor', () => {
     expect(inset.leader[1][1] - inset.leader[0][1]).toBeCloseTo(BOOKLET.explode.hardware);
   });
 
-  it('frames a box round the hole mouth and the floated fastener, and anchors the tail at the hole', () => {
+  it('frames the floated fastener, filling the circle, and anchors the tail at the hole', () => {
     const [inset] = insetsFor({ joints: [0, 1], hardware }, layout, partTypes);
     expect(inset.anchor).toEqual([0.1, 0.01, 0]);
-    const f = BOOKLET.inset.focus;
-    expect(inset.focus.min[0]).toBeCloseTo(0.1 - f);
-    expect(inset.focus.max[0]).toBeCloseTo(0.1 + f);
-    expect(inset.focus.min[1]).toBeCloseTo(0.01 - f);
-    expect(inset.focus.max[1]).toBeCloseTo(0.01 + BOOKLET.explode.hardware + f);
+    // The dowel's centre floats to y = 0.01 + hardware; its longest side is 0.04.
+    const reach = 0.04 * BOOKLET.inset.focus;
+    const y = 0.01 + BOOKLET.explode.hardware;
+    expect(inset.focus.min[0]).toBeCloseTo(0.1 - reach);
+    expect(inset.focus.max[0]).toBeCloseTo(0.1 + reach);
+    expect(inset.focus.min[1]).toBeCloseTo(y - reach);
+    expect(inset.focus.max[1]).toBeCloseTo(y + reach);
   });
 
   it('still gives a fastener the page seats only by its second end an inset', () => {
@@ -165,9 +167,11 @@ describe.each(ITEM_IDS)('%s: every step page', (id) => {
       const insets = insetsFor(step, layout, item.partTypes);
       expect(insets.map(({ type, count, partNumber }) => ({ type, count, partNumber })), `step ${step.number}`).toEqual(step.hardware);
       for (const inset of insets) {
+        // The floated fastener sits inside its own frame.
+        const fastener = inset.items[1].position;
         for (const k of [0, 1, 2]) {
-          expect(inset.anchor[k]).toBeGreaterThanOrEqual(inset.focus.min[k]);
-          expect(inset.anchor[k]).toBeLessThanOrEqual(inset.focus.max[k]);
+          expect(fastener[k]).toBeGreaterThan(inset.focus.min[k]);
+          expect(fastener[k]).toBeLessThan(inset.focus.max[k]);
         }
       }
     }
