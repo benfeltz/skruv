@@ -65,11 +65,30 @@ describe('the hills', () => {
     }
   });
 
-  it('are continuous across the pier of the back wall', () => {
-    const profile = hillPolyline('back', near).slice(1, -1);
-    const steps = profile.slice(1).map(([, y], i) => Math.abs(y - profile[i]![1]));
-    const reach = (2 * Math.PI * scenery.hills[near]!.amplitude * (1 + 1 / scenery.hillDetail.ratio)) / scenery.hillSamplesPerMetre;
-    expect(Math.max(...steps)).toBeLessThan(reach);
+  it('are continuous across the pier of the back wall, in steps too small to show', () => {
+    for (let layer = 0; layer < scenery.hills.length; layer++) {
+      const profile = hillSkyline('back', layer);
+      const steps = profile.slice(1).map(([, y], i) => Math.abs(y - profile[i]![1]));
+      expect(Math.max(...steps), `layer ${layer}`).toBeLessThan(0.08);
+    }
+  });
+
+  it('roll smoothly in the near layer and peak sharply in the far one, so the two read as different distances', () => {
+    const corner = (layer: number) => {
+      const y = hillSkyline('back', layer).map(([, v]) => v);
+      return Math.max(...y.slice(1, -1).map((v, i) => Math.abs(y[i + 2]! - 2 * v + y[i]!)));
+    };
+    const nearLayer = scenery.hills.length - 1;
+    expect(scenery.hills[0]!.ridged).toBe(true);
+    expect(scenery.hills[nearLayer]!.ridged).toBe(false);
+    expect(corner(nearLayer)).toBeLessThan(0.003);
+    expect(corner(0)).toBeGreaterThan(8 * corner(nearLayer));
+  });
+
+  it('sample finely enough that a smooth hill has no corners', () => {
+    expect(scenery.hillSamplesPerMetre).toBeGreaterThanOrEqual(30);
+    const mouth = sceneryMouth('back');
+    expect(hillPolyline('back', 1).length).toBeGreaterThan(mouth.width * scenery.hillSamplesPerMetre);
   });
 
   it('close into polygons inside the mouth, from its floor corners up', () => {

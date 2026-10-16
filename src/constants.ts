@@ -70,16 +70,17 @@ export const STAGE = {
   // STAGE.wallHeight above the floor; every `depth` is metres behind the mouth.
   scenery: {
     depth: 1.2,
-    // Rolling hills, far then near: a paper tone, a baseline, and two sines (the second finer, see `hillDetail`).
+    // The far layer is a mountain range, the near one rolling hills, far then near. Each: a paper tone, a baseline, an
+    // amplitude and wavelength (metres), a phase, and a second, finer wave (`ratio` of the wavelength, `weight` of the
+    // profile). A `ridged` layer's waves are folded into sharp peaks over rounded valleys; the others are smooth sines.
     hills: [
-      { depth: 1.0, tone: SCENERY_FAINT, base: 0.55, amplitude: 0.12, wavelength: 1.6, phase: 0 },
-      { depth: 0.6, tone: SCENERY_PAPER, base: 0.4, amplitude: 0.18, wavelength: 1.1, phase: 2.1 },
+      { depth: 1.0, tone: SCENERY_FAINT, base: 0.62, amplitude: 0.45, wavelength: 2.2, phase: 0, ratio: 0.37, weight: 0.4, ridged: true },
+      { depth: 0.6, tone: SCENERY_PAPER, base: 0.4, amplitude: 0.14, wavelength: 2.4, phase: 2.1, ratio: 0.5, weight: 0.2, ridged: false },
     ],
-    // The second sine of a hill's profile: how much finer it is than the first, how much of the profile it carries, and
-    // how many times the layer's phase it is turned by.
-    hillDetail: { ratio: 0.43, weight: 0.35, phaseScale: 2 },
-    // Samples along a hill's profile per metre of box width.
-    hillSamplesPerMetre: 8,
+    // How many times a layer's phase the finer wave is turned by.
+    hillPhaseScale: 2,
+    // Samples along a hill's profile per metre of box width: fine enough that a smooth hill shows no corners.
+    hillSamplesPerMetre: 40,
     // A drifting cloud: its layer, its height up the wall, its width, its drift in metres per second of game time,
     // and its silhouette in unit width (x centred, y up from its flat bottom).
     cloud: {

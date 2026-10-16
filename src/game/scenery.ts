@@ -55,12 +55,14 @@ export function sceneryBox(name: WallName): SceneryBox {
   };
 }
 
+/** A unit wave of phase `x`: a sine, or its ridged fold with a sharp peak at 0 and rounded valleys. */
+const wave = (x: number, ridged: boolean) => (ridged ? 1 - 2 * Math.abs(Math.sin(x / 2)) : Math.sin(x));
+
 /** The world height (metres above the floor) of hill layer `layer` at `along`, a world position on the wall's axis. */
 export function hillHeight(along: number, layer: number): number {
   const hill = scenery.hills[layer]!;
-  const { ratio, weight, phaseScale } = scenery.hillDetail;
-  const swell = (1 - weight) * Math.sin((TAU * along) / hill.wavelength + hill.phase)
-    + weight * Math.sin((TAU * along) / (hill.wavelength * ratio) + phaseScale * hill.phase);
+  const swell = (1 - hill.weight) * wave((TAU * along) / hill.wavelength + hill.phase, hill.ridged)
+    + hill.weight * wave((TAU * along) / (hill.wavelength * hill.ratio) + scenery.hillPhaseScale * hill.phase, hill.ridged);
   return hill.base * STAGE.wallHeight + hill.amplitude * swell;
 }
 
