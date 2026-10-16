@@ -71,22 +71,31 @@ describe('the hills', () => {
     }
   });
 
-  it('roll smoothly in the near layer and peak sharply in the far one, so the two read as different distances', () => {
-    const corner = (layer: number) => {
+  it('roll smoothly in every layer, with no corners', () => {
+    for (let layer = 0; layer < scenery.hills.length; layer++) {
       const y = hillSkyline('back', layer).map(([, v]) => v);
-      return Math.max(...y.slice(1, -1).map((v, i) => Math.abs(y[i + 2]! - 2 * v + y[i]!)));
-    };
-    const nearLayer = scenery.hills.length - 1;
-    expect(scenery.hills[0]!.ridged).toBe(true);
-    expect(scenery.hills[nearLayer]!.ridged).toBe(false);
-    expect(corner(nearLayer)).toBeLessThan(0.003);
-    expect(corner(0)).toBeGreaterThan(8 * corner(nearLayer));
+      const corner = Math.max(...y.slice(1, -1).map((v, i) => Math.abs(y[i + 2]! - 2 * v + y[i]!)));
+      expect(corner, `layer ${layer}`).toBeLessThan(0.003);
+    }
+  });
+
+  it('read as distance: three layers, each further back lower in amplitude and fainter in tone', () => {
+    expect(scenery.hills).toHaveLength(3);
+    const lum = (hex: number) => ((hex >> 16) & 255) + ((hex >> 8) & 255) + (hex & 255);
+    for (let i = 1; i < scenery.hills.length; i++) {
+      const far = scenery.hills[i - 1]!;
+      const near = scenery.hills[i]!;
+      expect(far.depth).toBeGreaterThan(near.depth);
+      expect(far.amplitude).toBeLessThan(near.amplitude);
+      expect(lum(far.tone)).toBeLessThan(lum(near.tone));
+    }
+    expect('ridged' in scenery.hills[0]!).toBe(false);
   });
 
   it('sample finely enough that a smooth hill has no corners', () => {
     expect(scenery.hillSamplesPerMetre).toBeGreaterThanOrEqual(30);
     const mouth = sceneryMouth('back');
-    expect(hillPolyline('back', 1).length).toBeGreaterThan(mouth.width * scenery.hillSamplesPerMetre);
+    expect(hillPolyline('back', 2).length).toBeGreaterThan(mouth.width * scenery.hillSamplesPerMetre);
   });
 
   it('close into polygons inside the mouth, from its floor corners up', () => {

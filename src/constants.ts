@@ -23,8 +23,9 @@ export const CLOCK = {
 // The sky beyond the window by day: the day keyframe of STAGE.sky and COLORS.sky.
 const SKY_DAY = 0x9ec9e8;
 
-// The scenery's paper tones (COLORS.scenery*): faint for the far hills, paper for the near ones.
-const SCENERY_FAINT = 0xd6d6d6;
+// The scenery's paper tones (COLORS.scenery*): faint for the far hills, paper for the near ones, one between.
+const SCENERY_FAINT = 0xd0d0d0;
+const SCENERY_MID = 0xe2e0dc;
 const SCENERY_PAPER = 0xf1eee6;
 
 // The diorama stage (src/game/stageBoxes.ts, built by src/scene/room.ts and mirrored by
@@ -70,12 +71,13 @@ export const STAGE = {
   // STAGE.wallHeight above the floor; every `depth` is metres behind the mouth.
   scenery: {
     depth: 1.2,
-    // The far layer is a mountain range, the near one rolling hills, far then near. Each: a paper tone, a baseline, an
-    // amplitude and wavelength (metres), a phase, and a second, finer wave (`ratio` of the wavelength, `weight` of the
-    // profile). A `ridged` layer's waves are folded into sharp peaks over rounded valleys; the others are smooth sines.
+    // Three layers of rolling hills, far to near, each further back lower in amplitude and fainter in tone. Each: a
+    // paper tone, a baseline (a fraction of the wall height), an amplitude and wavelength (metres), a phase, and a
+    // second, finer wave (`ratio` of the wavelength, `weight` of the profile).
     hills: [
-      { depth: 1.0, tone: SCENERY_FAINT, base: 0.62, amplitude: 0.45, wavelength: 2.2, phase: 0, ratio: 0.37, weight: 0.4, ridged: true },
-      { depth: 0.6, tone: SCENERY_PAPER, base: 0.4, amplitude: 0.14, wavelength: 2.4, phase: 2.1, ratio: 0.5, weight: 0.2, ridged: false },
+      { depth: 1.0, tone: SCENERY_FAINT, base: 0.52, amplitude: 0.07, wavelength: 3.0, phase: 1.0, ratio: 0.5, weight: 0.2 },
+      { depth: 0.8, tone: SCENERY_MID, base: 0.46, amplitude: 0.1, wavelength: 2.6, phase: 0, ratio: 0.5, weight: 0.2 },
+      { depth: 0.6, tone: SCENERY_PAPER, base: 0.4, amplitude: 0.14, wavelength: 2.4, phase: 2.1, ratio: 0.5, weight: 0.2 },
     ],
     // How many times a layer's phase the finer wave is turned by.
     hillPhaseScale: 2,
@@ -84,7 +86,7 @@ export const STAGE = {
     // A drifting cloud: its layer, its height up the wall, its width, its drift in metres per second of game time,
     // and its silhouette in unit width (x centred, y up from its flat bottom).
     cloud: {
-      depth: 0.8,
+      depth: 0.7,
       height: 0.7,
       width: 0.7,
       drift: 0.01,
@@ -220,6 +222,7 @@ export const COLORS = {
   // Scenery (src/scene/scenery.ts): the box's inside, the paper cutouts (far, near hills), and the backlight at night.
   sceneryBoxInside: 0x2c2a33,
   sceneryFaint: SCENERY_FAINT,
+  sceneryMid: SCENERY_MID,
   sceneryPaper: SCENERY_PAPER,
   starlight: 0xffffff,
   groundLight: 0x8a7a66,
