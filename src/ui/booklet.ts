@@ -1,4 +1,4 @@
-import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, RESET } from '../constants.js';
+import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, RENDER, RESET } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
 import { centreSlot, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
 import { peekNext } from '../game/peekGesture.js';
@@ -332,8 +332,9 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     thumb.dataset.corner = corner;
   }
   // Full page resolution: hovered, the thumbnail is read at up to a quarter of the screen.
-  const thumbCanvas = pageCanvas(pageW, pageH);
-  if (!stripped) thumb.append(thumbCanvas);
+  // A strip draws into its slots' own, small canvases instead.
+  const thumbCanvas = stripped ? null : pageCanvas(pageW, pageH);
+  if (thumbCanvas) thumb.append(thumbCanvas);
   const carousel = stripped ? createStrip(name, pages.count, thumb) : null;
   const anchor = () => carousel?.centre() ?? thumb;
 
@@ -394,10 +395,9 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   const drawer = (target: HTMLCanvasElement, index: number) => target.getContext('2d')!.drawImage(pages.canvas(index), 0, 0, target.width, target.height);
 
   function render() {
-    const draw = drawer;
-    if (open) draw(viewCanvas, page);
-    if (carousel) carousel.paint(page, draw, open);
-    else draw(thumbCanvas, thumbShows === 'cover' ? 0 : page);
+    if (open) drawer(viewCanvas, page);
+    if (carousel) carousel.paint(page, drawer, open);
+    else if (thumbCanvas) drawer(thumbCanvas, thumbShows === 'cover' ? 0 : page);
     viewCanvas.setAttribute('aria-label', `Page ${page + 1} of ${pages.count}`);
     arrows.paint(page, pages.count);
     element.dataset.open = String(open);
@@ -696,6 +696,11 @@ function createStrip(name: string, count: number, root: HTMLElement) {
   root.setAttribute('aria-label', `${name[0].toUpperCase()}${name.slice(1)} pages`);
   root.append(prev, box, next);
 
+  // A slot shows a page at most `centreWidth` CSS px wide: its canvas is that at the device's
+  // pixel ratio (as the room's renderer is capped), not the page's full resolution.
+  const ratio = Math.min(window.devicePixelRatio || 1, RENDER.maxPixelRatio);
+  const slotWidth = Math.round(BOOKLET_UI.strip.centreWidth * ratio);
+  const slotHeight = Math.round((slotWidth * pageH) / pageW);
   let slots: { button: HTMLButtonElement; canvas: HTMLCanvasElement; shows: number | null | undefined }[] = [];
   const visible = () => visibleCount(window.innerWidth);
   function rebuild(total: number) {
@@ -708,7 +713,7 @@ function createStrip(name: string, count: number, root: HTMLElement) {
       slot.dataset.slot = String(index);
       slot.dataset.centre = String(index === centreSlot(total));
       slot.tabIndex = index === centreSlot(total) ? 0 : -1;
-      const canvas = pageCanvas(pageW, pageH);
+      const canvas = pageCanvas(slotWidth, slotHeight);
       slot.append(canvas);
       box.append(slot);
       return { button: slot, canvas, shows: undefined };

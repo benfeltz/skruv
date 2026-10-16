@@ -79,6 +79,15 @@ describe('what the strip shows', () => {
     expect(slots().map((slot) => slot.dataset.centre)).toEqual(['false', 'false', 'true', 'false', 'false']);
   });
 
+  it("draws the slots into small canvases, not the page's full resolution, and builds no thumbnail canvas", () => {
+    const { slots } = mountStrip({ viewport: 1280 });
+    const canvas = slots()[2].children[0] as unknown as { width: number; height: number };
+    // The fake window has no device pixel ratio: one canvas pixel per CSS pixel.
+    expect(canvas.width).toBe(BOOKLET_UI.strip.centreWidth);
+    expect(canvas.width * canvas.height).toBeLessThan(BOOKLET.pageSize[0] * BOOKLET.pageSize[1] * 0.05);
+    expect(slots().every((slot) => slot.children.length === 1)).toBe(true);
+  });
+
   it('has no scrim: nothing over the room but the strip and the page', () => {
     const { manual } = mountStrip();
     expect(manual.scrim).toBeNull();

@@ -209,7 +209,7 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
     const thumbRule = booklet.slice(booklet.indexOf('    .booklet-thumb {'), booklet.indexOf('@media (hover: hover)'));
     // Animated; since 1.9.1 the raise (z-index) rides along, both undone at once on leave.
     expect(thumbRule).toMatch(/transition: width 160ms ease-out, z-index 0s;/);
-    expect(booklet).toMatch(/const thumbCanvas = pageCanvas\(pageW, pageH\);/);
+    expect(booklet).toMatch(/const thumbCanvas = stripped \? null : pageCanvas\(pageW, pageH\);/);
     // Nothing transforms the scrim (PR #17 round-4 review).
     const scrimRule = booklet.slice(booklet.indexOf('.booklet-scrim {'), booklet.indexOf('.booklet-thumb canvas'));
     expect(scrimRule).not.toMatch(/transform|transition/);
