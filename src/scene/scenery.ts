@@ -12,6 +12,8 @@ import {
   cloudX,
   discPolygon,
   hillPolyline,
+  hillSkyline,
+  openSegments,
   sceneryBox,
   starlightAt,
   starMask,
@@ -55,11 +57,13 @@ function tileUvs(geometry: THREE.PlaneGeometry, width: number, height: number, o
   for (let i = 0; i < uv.count; i++) uv.setXY(i, (position.getX(i) + width / 2) / tile + offset, (position.getY(i) + height / 2) / tile);
 }
 
-/** The ink segments of a closed polygon on the plane z, as flat x, y, z pairs. */
-function inkPositions(polygon: readonly Point[], z: number): number[] {
-  const flat = closedSegments(polygon);
+/** Flat x, y segment endpoints on the plane z, as x, y, z triples. */
+function onPlane(flat: readonly number[], z: number): number[] {
   return Array.from({ length: (flat.length / 2) | 0 }, (_, i) => [flat[2 * i]!, flat[2 * i + 1]!, z]).flat();
 }
+
+/** The ink of a closed polygon on the plane z. */
+const inkPositions = (polygon: readonly Point[], z: number) => onPlane(closedSegments(polygon), z);
 
 const cutout = (polygons: readonly (readonly Point[])[], material: THREE.Material) =>
   new THREE.Mesh(
@@ -132,7 +136,8 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
     mesh.name = `${name}SceneryHill${layer}`;
     mesh.position.z = -hill.depth;
     group.add(mesh);
-    staticInk.push(...inkPositions(polygon, inkLift - hill.depth));
+    // Only the skyline is inked: the polygon's floor and sides lie in the box's own faces.
+    staticInk.push(...onPlane(openSegments(hillSkyline(name, layer)), inkLift - hill.depth));
   });
   const trees = treePolygons(name);
   if (trees.length > 0) {

@@ -126,6 +126,16 @@ export function closedSegments(polygon: readonly Point[]): number[] {
   });
 }
 
+/** An open polyline as ink segments: x0, y0, x1, y1 for each edge between neighbours, none closing it. */
+export function openSegments(points: readonly Point[]): number[] {
+  return points.slice(1).flatMap(([x1, y1], i) => [points[i]![0], points[i]![1], x1, y1]);
+}
+
+/** A hill layer's skyline alone — the polygon without its floor corners — so the ink never runs along the box's floor or sides. */
+export function hillSkyline(name: WallName, layer: number): Point[] {
+  return hillPolyline(name, layer).slice(1, -1);
+}
+
 /** Where a body stands on the sky: `x` across the box (0 left to 1 right), `y` its height over the horizon (-1 to 1). */
 export interface Body {
   x: number;

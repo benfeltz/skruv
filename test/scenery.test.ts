@@ -9,6 +9,8 @@ import {
   discPolygon,
   hillHeight,
   hillPolyline,
+  hillSkyline,
+  openSegments,
   sceneryBox,
   starField,
   starlightAt,
@@ -208,6 +210,20 @@ describe('the stars', () => {
 });
 
 describe('outlines', () => {
+  it('ink a hill\'s skyline alone, without the floor or the sides', () => {
+    const mouth = sceneryMouth('back');
+    const skyline = hillSkyline('back', near);
+    expect(skyline).toEqual(hillPolyline('back', near).slice(1, -1));
+    const segments = openSegments(skyline);
+    expect(segments).toHaveLength(4 * (skyline.length - 1));
+    // Every edge runs along the profile: none rests on the floor or stands on a side.
+    for (let i = 0; i < segments.length; i += 4) {
+      expect(segments[i]).not.toBe(segments[i + 2]);
+      expect(segments[i + 1]).toBeGreaterThan(-mouth.height / 2);
+    }
+    expect(openSegments([[0, 0], [1, 0]])).toEqual([0, 0, 1, 0]);
+  });
+
   it('turn a polygon into one segment per edge, closed', () => {
     const square: [number, number][] = [[0, 0], [1, 0], [1, 1], [0, 1]];
     const segments = closedSegments(square);
