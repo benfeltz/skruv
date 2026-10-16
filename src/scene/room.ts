@@ -6,9 +6,10 @@ import { COLORS, STAGE } from '../constants.js';
 import { advance, phaseFromClock, skyColourAt } from '../game/skyCycle.js';
 import type { Rgb } from '../game/skyCycle.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { sizeAndCentre, skyRects, stageBoxes, wallBox, wallPieces, windowBoxes, windowOpeningBoxes } from '../game/stageBoxes.js';
+import { sizeAndCentre, stageBoxes, wallBox, wallPieces, windowBoxes, windowOpeningBoxes } from '../game/stageBoxes.js';
 import type { StageBox, StageBoxName, WallName } from '../game/stageBoxes.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
+import { createScenery } from './scenery.js';
 import { STAGE_WALLS, wallHidden } from './stageCutaway.js';
 
 /**
@@ -24,7 +25,7 @@ export function createRoom() {
   const floor = new THREE.MeshStandardMaterial({ color: COLORS.floor });
   const wall = new THREE.MeshStandardMaterial({ color: COLORS.wall });
   const trim = new THREE.MeshStandardMaterial({ color: COLORS.trim });
-  // One unlit material for every sky plane: the cycle writes its colour once a frame.
+  // One unlit material for every box's back panel: the cycle writes its colour once a frame.
   const skyMaterial = new THREE.MeshBasicMaterial({ color: COLORS.sky });
 
   const boxGeometry = (box: StageBox<string>) => {
@@ -49,9 +50,10 @@ export function createRoom() {
   }
 
   // Each wall is one group — its pieces merged into one mesh, the trim into another, one ink
-  // for the whole, and a sky behind each window — so the cutaway hides them together and a
+  // for the whole, and a scenery box behind its windows — so the cutaway hides them together and a
   // wall costs a handful of draws. The ink is the wall's outline plus the openings' edges and
   // the trim's own edges, not each piece's: no seams where the pieces meet.
+  const sceneries: ReturnType<typeof createScenery>[] = [];
   const buildWall = (name: WallName) => {
     const side = new THREE.Group();
     side.name = `${name}Wall`;
@@ -69,14 +71,10 @@ export function createRoom() {
     const wallInk = new LineSegments2(new LineSegmentsGeometry().setPositions(inkGeometry.getAttribute('position').array as Float32Array), ink);
     wallInk.name = `${name}WallInk`;
     side.add(wallMesh, trimMesh, wallInk);
-    // The skies: flat unlit planes outside the openings facing the room, no ink.
-    skyRects(name).forEach((sky, i) => {
-      const skyMesh = new THREE.Mesh(new THREE.PlaneGeometry(sky.width, sky.height), skyMaterial);
-      skyMesh.name = `${name}Sky${i}`;
-      skyMesh.rotation.y = sky.yaw;
-      skyMesh.position.set(...sky.centre);
-      side.add(skyMesh);
-    });
+    // The scenery: a closed diorama box behind the openings, in the wall's group so the cutaway hides it with the wall.
+    const scenery = createScenery(name, { ink, skyMaterial });
+    side.add(scenery.group);
+    sceneries.push(scenery);
     group.add(side);
     return side;
   };
@@ -114,10 +112,12 @@ export function createRoom() {
       phase = advance(phase, delta, STAGE.sky.cycleMinutes);
       // The scrub reads the live phase, so setting it to where the sky already is changes nothing and anywhere else jumps.
       STAGE.sky.phase = scrubbed = phase;
-      if (phase === painted) return;
-      painted = phase;
-      skyColourAt(phase, skyRgb);
-      skyMaterial.color.setRGB(skyRgb[0], skyRgb[1], skyRgb[2], THREE.SRGBColorSpace);
+      if (phase !== painted) {
+        painted = phase;
+        skyColourAt(phase, skyRgb);
+        skyMaterial.color.setRGB(skyRgb[0], skyRgb[1], skyRgb[2], THREE.SRGBColorSpace);
+      }
+      for (const scenery of sceneries) scenery.update(phase, delta);
     },
   };
 }

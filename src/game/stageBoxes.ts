@@ -182,27 +182,6 @@ export function windowBoxes(name: WallName): StageBox<WindowBoxName>[] {
   });
 }
 
-/**
- * The fixed sky behind one opening: a plane outside it facing the room, by centre, size and
- * yaw. It stands `skyGap` behind the wall and reaches `skyMargin` past the opening: a ray
- * through the reveal runs at most width/wallThickness sideways per metre, so margin ≥ gap ×
- * that keeps the dark background out of the window at any view the reveal lets through.
- */
-export function skyRects(name: WallName): { centre: Vec3; width: number; height: number; yaw: number }[] {
-  const wall = wallSpec(name);
-  const { skyGap, skyMargin } = STAGE.window;
-  const x = wall.inner - STAGE.wallThickness - skyGap;
-  return windowOpenings(name).map((o) => {
-    // Never above the wall's top (a band hovering over the wall) nor below the floor.
-    const top = Math.min(o.y1 + skyMargin, STAGE.wallHeight);
-    const bottom = Math.max(o.y0 - skyMargin, 0);
-    const centre: Vec3 = [0, (top + bottom) / 2, 0];
-    centre[wall.across] = x;
-    centre[wall.along] = (o.a0 + o.a1) / 2;
-    return { centre, width: o.a1 - o.a0 + 2 * skyMargin, height: top - bottom, yaw: wall.yaw };
-  });
-}
-
 /** The mouth of a wall's scenery box: a rectangle on the wall's outer face, turned to face the room. */
 export interface SceneryMouth {
   /** The mouth's centre in the room's frame. */

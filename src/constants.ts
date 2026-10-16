@@ -60,10 +60,7 @@ export const STAGE = {
     frame: 0.04,
     frameDepth: 0.04,
     rail: 0.04,
-    // The fixed sky: how far outside the wall it stands, and how far it reaches past the opening on every side
-    // (margin ≥ gap × width / wallThickness, so no grazing view through the reveal leaves it). The scenery box's mouth
-    // reaches `skyMargin` past the openings too.
-    skyGap: 0.05,
+    // How far the scenery box's mouth reaches past the openings on every side (the box is closed, so no view leaves it).
     skyMargin: 0.5,
   },
   // The paper theatre behind each wall's windows (src/game/scenery.ts, built by src/scene/scenery.ts): a closed box
