@@ -3,7 +3,7 @@
 // A wall is drawn only while the eye is on its inner side: from behind it, the wall would
 // stand between the camera and the room, so it is hidden (its ink lines with it).
 
-import { stageBoxes } from '../game/stageBoxes.js';
+import { wallBox } from '../game/stageBoxes.js';
 import type { StageBox } from '../game/stageBoxes.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 
@@ -14,17 +14,15 @@ export interface Wall {
 }
 
 // A wall box's inner face: the face opposite its outward side, normal pointing the other way.
-function innerFace({ min, max, outward }: StageBox): Wall {
+function innerFace({ min, max, outward }: StageBox<string>): Wall {
   const point = outward.map((o, i) => (o < 0 ? max[i] : o > 0 ? min[i] : 0)) as Vec3;
   return { point, inward: outward.map((o) => 0 - o) as Vec3 };
 }
 
-const boxNamed = (name: string) => stageBoxes().find((box) => box.name === name)!;
-
 /** The two walls the stage has, from the same boxes the room draws: back (−z) and left (−x). */
 export const STAGE_WALLS = {
-  back: innerFace(boxNamed('backWall')),
-  left: innerFace(boxNamed('leftWall')),
+  back: innerFace(wallBox('back')),
+  left: innerFace(wallBox('left')),
 } satisfies Record<string, Wall>;
 
 /**

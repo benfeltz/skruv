@@ -3,13 +3,14 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { COLORS, STAGE } from '../constants.js';
-import { sizeAndCentre, stageBoxes } from '../game/stageBoxes.js';
-import type { StageBoxName } from '../game/stageBoxes.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { sizeAndCentre, skyRects, stageBoxes, wallBox, wallPieces, windowBoxes, windowOpeningBoxes } from '../game/stageBoxes.js';
+import type { StageBox, StageBoxName, WallName } from '../game/stageBoxes.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 import { STAGE_WALLS, wallHidden } from './stageCutaway.js';
 
 /**
- * The diorama: a base slab whose top is the floor, a back and a left wall, and a low lip on
+ * The diorama: a base slab whose top is the floor, a back wall and a left wall with a window in it, and a low lip on
  * the front and right edges, every edge in ink. Built once; `update` only flips a wall's
  * visibility (its ink lines go with it) and keeps the line resolution current.
  */
@@ -20,32 +21,72 @@ export function createRoom() {
   const ink = new LineMaterial({ color: COLORS.stageInk, linewidth: STAGE.inkWidth });
   const floor = new THREE.MeshStandardMaterial({ color: COLORS.floor });
   const wall = new THREE.MeshStandardMaterial({ color: COLORS.wall });
-  const materials: Record<StageBoxName, THREE.Material> = { slab: floor, backWall: wall, leftWall: wall, frontLip: wall, rightLip: wall };
+  const trim = new THREE.MeshStandardMaterial({ color: COLORS.trim });
+
+  const boxGeometry = (box: StageBox<string>) => {
+    const { size, centre } = sizeAndCentre(box);
+    return new THREE.BoxGeometry(...size).translate(...centre);
+  };
+  const edgesOf = (geometry: THREE.BufferGeometry) => new THREE.EdgesGeometry(geometry);
 
   // One group per box: the mesh and its ink travel together, so hiding it hides both.
   const pieces = new Map<StageBoxName, THREE.Group>();
   for (const box of stageBoxes()) {
-    const { size, centre } = sizeAndCentre(box);
-    const geometry = new THREE.BoxGeometry(...size);
-    const mesh = new THREE.Mesh(geometry, materials[box.name]);
+    if (box.name.includes('Wall')) continue;
+    const geometry = boxGeometry(box);
+    const mesh = new THREE.Mesh(geometry, box.name === 'slab' ? floor : wall);
     mesh.receiveShadow = true;
-    const edges = new LineSegments2(new LineSegmentsGeometry().fromEdgesGeometry(new THREE.EdgesGeometry(geometry)), ink);
+    const edges = new LineSegments2(new LineSegmentsGeometry().fromEdgesGeometry(edgesOf(geometry)), ink);
     const piece = new THREE.Group();
     piece.name = box.name;
-    piece.position.set(...centre);
     piece.add(mesh, edges);
     pieces.set(box.name, piece);
     group.add(piece);
   }
 
-  const backWall = pieces.get('backWall')!;
-  const leftWall = pieces.get('leftWall')!;
+  // Each wall is one group — its pieces merged into one mesh, the trim into another, one ink
+  // for the whole, and a sky behind each window — so the cutaway hides them together and a
+  // wall costs a handful of draws. The ink is the wall's outline plus the openings' edges and
+  // the trim's own edges, not each piece's: no seams where the pieces meet.
+  const buildWall = (name: WallName) => {
+    const side = new THREE.Group();
+    side.name = `${name}Wall`;
+    const wallMesh = new THREE.Mesh(mergeGeometries(wallPieces(name).map(boxGeometry))!, wall);
+    wallMesh.name = `${name}WallMesh`;
+    const trimGeometry = mergeGeometries(windowBoxes(name).map(boxGeometry))!;
+    const trimMesh = new THREE.Mesh(trimGeometry, trim);
+    trimMesh.name = `${name}WindowTrim`;
+    for (const mesh of [wallMesh, trimMesh]) mesh.receiveShadow = true;
+    const inkGeometry = mergeGeometries([
+      edgesOf(boxGeometry(wallBox(name))),
+      ...windowOpeningBoxes(name).map((box) => edgesOf(boxGeometry(box))),
+      edgesOf(trimGeometry),
+    ])!;
+    const wallInk = new LineSegments2(new LineSegmentsGeometry().setPositions(inkGeometry.getAttribute('position').array as Float32Array), ink);
+    wallInk.name = `${name}WallInk`;
+    side.add(wallMesh, trimMesh, wallInk);
+    // The skies: flat unlit planes outside the openings facing the room, no ink.
+    skyRects(name).forEach((sky, i) => {
+      const skyMesh = new THREE.Mesh(new THREE.PlaneGeometry(sky.width, sky.height), new THREE.MeshBasicMaterial({ color: COLORS.sky }));
+      skyMesh.name = `${name}Sky${i}`;
+      skyMesh.rotation.y = sky.yaw;
+      skyMesh.position.set(...sky.centre);
+      side.add(skyMesh);
+    });
+    group.add(side);
+    return side;
+  };
+  const backWall = buildWall('back');
+  const leftWall = buildWall('left');
+
   // Reused every frame: the eye as a tuple and the canvas size, so the loop allocates nothing.
   const eyeAt: Vec3 = [0, 0, 0];
   const size = new THREE.Vector2();
   return {
     group,
     pieces,
+    leftWall,
+    backWall,
     /**
      * Per frame: hide the walls the eye is behind; keep the ink's resolution at the canvas's
      * CSS size, so `STAGE.inkWidth` is the same on screen at any pixel ratio.

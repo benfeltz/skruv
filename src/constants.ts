@@ -13,17 +13,47 @@ export const ROOM = {
 };
 
 // The diorama stage (src/game/stageBoxes.ts, built by src/scene/room.ts and mirrored by
-// src/physics/world.ts): a base slab under the floor, two walls (back and left) and a low
-// lip on the open front and right edges — all standing outside the floor's footprint, so
-// every clamp that reads ROOM is unchanged. `ROOM.height` stays the lift ceiling.
+// src/physics/world.ts): a base slab under the floor, two walls (back and left, with windows) and a low
+// lip on the open front and right edges — every collider stands outside the floor's footprint,
+// so every clamp that reads ROOM is unchanged. `ROOM.height` stays the lift ceiling. The
+// window's casing, sill and apron are the one visual-only exception: up to casingProud +
+// sillDepth inside the footprint at window height, with no colliders (a part pushed against
+// the wall there draws through the trim).
 export const STAGE = {
   wallThickness: 0.1,
-  wallHeight: 2.5,
+  // Equal to the lift ceiling (ROOM.height): the walls stand as high as a lifted part can go.
+  wallHeight: 3,
   slabThickness: 0.1,
   lipHeight: 0.03,
   lipThickness: 0.03,
   // The ink edges' width in CSS pixels (LineMaterial linewidth, against the canvas's CSS size).
   inkWidth: 3,
+  // The double-hung windows, all one design, spaced evenly along their wall: one in the left
+  // wall (centred, z = 0) and two in the long back wall. All in metres.
+  window: {
+    // How many windows each wall carries.
+    count: { left: 1, back: 2 },
+    // The opening: its width along the wall, its height, and the height of its bottom edge.
+    width: 1.0,
+    height: 1.6,
+    sill: 0.8,
+    // The flat casing round the opening's sides and head: its band width and how far it stands proud of the wall.
+    casing: 0.08,
+    casingProud: 0.02,
+    // The sill board: how far it sticks into the room past the casing, and its thickness.
+    sillDepth: 0.06,
+    sillThickness: 0.03,
+    // The apron board under the sill: its height.
+    apron: 0.06,
+    // The thin frame in the opening (its band width and depth) and the horizontal meeting rail between the sashes.
+    frame: 0.04,
+    frameDepth: 0.04,
+    rail: 0.04,
+    // The fixed sky: how far outside the wall it stands, and how far it reaches past the opening on every side
+    // (margin ≥ gap × width / wallThickness, so no grazing view through the reveal leaves it).
+    skyGap: 0.05,
+    skyMargin: 0.5,
+  },
 };
 
 export const COLORS = {
@@ -33,6 +63,10 @@ export const COLORS = {
   stageInk: 0x1c1c1c,
   // The stage walls: white, like the catalog's paper (COLORS.bookletPaper).
   wall: 0xffffff,
+  // The window's casing, sill, apron, frame and rail: white, like the wall.
+  trim: 0xffffff,
+  // The sky beyond the window, fixed until the day–night cycle animates it.
+  sky: 0x9ec9e8,
   skyLight: 0xffffff,
   groundLight: 0x8a7a66,
   sunLight: 0xffffff,
