@@ -497,7 +497,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   // or cancel: past the tap distance it is a swipe — one page, never a peek or a tap;
   // within it, on a side slot it moves there, on the centre slot a mouse toggles the page
   // and a touch holds it open: the peek state machine (src/game/peekGesture.ts) times that,
-  // and its release puts the page back. The strip's arrows are plain buttons with their own
+  // and its release — or a lost capture — puts the page back. The strip's arrows are plain buttons with their own
   // click; a keyboard's click on a slot (detail 0 — a pointer's was handled here) does what a
   // tap does.
   let peek: PeekState = 'idle';
@@ -550,6 +550,9 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     };
     thumb.addEventListener('pointerup', endStripPress);
     thumb.addEventListener('pointercancel', endStripPress);
+    // A capture the browser takes back (the strip went inert under a finger, a second finger
+    // opened the catalog) is the press ending: no tap, no flip, and a peek is put back.
+    thumb.addEventListener('lostpointercapture', endStripPress);
     thumb.addEventListener('click', (event) => {
       const slot = (event.target as Element).closest('button')?.dataset.slot;
       if (event.detail === 0 && slot !== undefined) tapSlot(Number(slot), false);

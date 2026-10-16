@@ -215,6 +215,23 @@ describe('opening it on a touch: hold to peek, release to put it back', () => {
     expect(manual.expanded).toBe(true);
   });
 
+  it('a lost capture ends the press: a peeked page goes back and the strip takes the next press', () => {
+    const { manual, centre } = mountStrip();
+    touchDown(centre());
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs);
+    expect(manual.expanded).toBe(true);
+    centre().fire('lostpointercapture', { pointerType: 'touch' });
+    expect(manual.expanded).toBe(false);
+    // Not stuck: a press lost before the delay never peeks late, and the next press works.
+    touchDown(centre());
+    centre().fire('lostpointercapture', { pointerType: 'touch' });
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs * 2);
+    expect(manual.expanded).toBe(false);
+    touchDown(centre());
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs);
+    expect(manual.expanded).toBe(true);
+  });
+
   it('a cancelled touch puts a peeked page back', () => {
     const { manual, centre } = mountStrip();
     touchDown(centre());
