@@ -20,6 +20,12 @@ describe('the room as built', () => {
     expect(group.children).toContain(backWall);
   });
 
+  it('draws a wall\'s scenery in a handful of meshes, not one per cutout', () => {
+    const meshes: THREE.Object3D[] = [];
+    backWall.getObjectByName('backScenery')!.traverse((o) => { if ((o as THREE.Mesh).isMesh || (o as { isLineSegments2?: boolean }).isLineSegments2) meshes.push(o); });
+    expect(meshes.length).toBeLessThanOrEqual(10);
+  });
+
   it('holds a wall, its window trim, its ink and one scenery box in the wall\'s one group', () => {
     expect(names(leftWall)).toEqual(['leftScenery', 'leftWallInk', 'leftWallMesh', 'leftWindowTrim']);
     expect(names(backWall)).toEqual(['backScenery', 'backWallInk', 'backWallMesh', 'backWindowTrim']);
@@ -203,22 +209,30 @@ describe('the sky turns', () => {
     expect(colour().getHex()).toBe(COLORS.starlight);
   });
 
-  it('shows the sun by day and the moon by night, each wholly inside its box', () => {
+  it('shows one disc: the sun by day and the moon, smaller and fainter, by night, wholly inside its box', () => {
     const room = createRoom();
-    const shownAt = (phase: number) => {
+    const body = room.backWall.getObjectByName('backSceneryBody')!;
+    const tone = () => ((body.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex();
+    const at_ = (phase: number) => {
       STAGE.sky.phase = phase;
       room.update(at(0, 2, 3), renderer(), 0);
-      return ['Sun', 'Moon'].map((body) => room.backWall.getObjectByName(`backScenery${body}`)!.visible);
     };
-    shownAt(0.4);
-    expect(shownAt(0.5)).toEqual([true, false]);
-    expect(shownAt(0)).toEqual([false, true]);
-    for (const phase of [0.3, 0.5, 0.7]) {
-      shownAt(phase);
-      const sun = bounds(room.backWall.getObjectByName('backScenerySun')!);
+    at_(0.4);
+    at_(0.5);
+    expect([body.visible, tone(), body.scale.x]).toEqual([true, COLORS.sceneryPaper, 1]);
+    at_(0);
+    expect(body.visible).toBe(true);
+    expect(tone()).toBe(COLORS.sceneryFaint);
+    expect(body.scale.x).toBeCloseTo(STAGE.scenery.moon.radius / STAGE.scenery.sun.radius, 9);
+    at_(0.25);
+    expect(body.visible).toBe(false);
+    for (const phase of [0.3, 0.5, 0.7, 0.05, 0.95]) {
+      at_(phase);
+      const disc = bounds(body);
       const box = bounds(room.backWall.getObjectByName('backScenery')!);
-      expect(sun.min.x).toBeGreaterThanOrEqual(box.min.x - 1e-6);
-      expect(sun.max.x).toBeLessThanOrEqual(box.max.x + 1e-6);
+      expect(disc.min.x).toBeGreaterThanOrEqual(box.min.x - 1e-6);
+      expect(disc.max.x).toBeLessThanOrEqual(box.max.x + 1e-6);
+      expect(disc.max.y).toBeLessThanOrEqual(box.max.y + 1e-6);
     }
   });
 
@@ -229,13 +243,13 @@ describe('the sky turns', () => {
     expect((cloud.children[1] as unknown as { material: THREE.Material }).material.clippingPlanes).toHaveLength(2);
   });
 
-  it('stands the hills far to near and the trees on the near one, all inside the box', () => {
+  it('merges the box\'s inside, the hills and the trees into one paper mesh, all inside the box', () => {
     const { backWall, leftWall } = createRoom();
     for (const wall of [backWall, leftWall]) {
       wall.updateMatrixWorld(true);
       const name = wall === backWall ? 'back' : 'left';
       const box = bounds(wall.getObjectByName(`${name}Scenery`)!);
-      const parts = [`${name}SceneryHill0`, `${name}SceneryHill1`, `${name}SceneryTrees`].map((n) => wall.getObjectByName(n)!);
+      const parts = [`${name}SceneryPaper`].map((n) => wall.getObjectByName(n)!);
       for (const part of parts) {
         const b = bounds(part);
         expect(b.min.distanceTo(b.max)).toBeGreaterThan(0);
@@ -280,8 +294,9 @@ describe('the sky turns', () => {
       room.group.traverse((o) => {
         expect(o).not.toBeInstanceOf(THREE.Light);
         const material = (o as THREE.Mesh).material as THREE.Material & { color?: THREE.Color } | undefined;
-        // The backlight behind a back panel follows the sky too; everything else holds still.
-        if (material?.color && material !== sky && !o.name.endsWith('SceneryBacklight')) colours.push([o.name, material.color.getHex()]);
+        // The backlight behind a back panel and the sun-or-moon disc follow the sky too; everything else holds still.
+        const follows = o.name.endsWith('SceneryBacklight') || o.parent?.name.endsWith('SceneryBody');
+        if (material?.color && material !== sky && !follows) colours.push([o.name, material.color.getHex()]);
       });
       return colours;
     };

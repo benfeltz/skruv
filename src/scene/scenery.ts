@@ -69,11 +69,19 @@ function onPlane(flat: readonly number[], z: number): number[] {
 /** The ink of a closed polygon on the plane z. */
 const inkPositions = (polygon: readonly Point[], z: number) => onPlane(closedSegments(polygon), z);
 
-const cutout = (polygons: readonly (readonly Point[])[], material: THREE.Material) =>
-  new THREE.Mesh(
-    mergeGeometries(polygons.map((polygon) => new THREE.ShapeGeometry(new THREE.Shape(polygon.map(([x, y]) => new THREE.Vector2(x, y))))))!,
-    material,
-  );
+/** A polygon as a flat triangulated shape, one `color` for every vertex, standing `z` out. */
+function paper(polygon: readonly Point[], color: number, z: number) {
+  const geometry = new THREE.ShapeGeometry(new THREE.Shape(polygon.map(([x, y]) => new THREE.Vector2(x, y)))).translate(0, 0, z);
+  return withColor(geometry, color);
+}
+
+/** The geometry with every vertex coloured, so cutouts of different tones merge into one mesh. */
+function withColor(geometry: THREE.BufferGeometry, color: number) {
+  const rgb = new THREE.Color(color);
+  const count = geometry.getAttribute('position').count;
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: count }, () => [rgb.r, rgb.g, rgb.b]).flat(), 3));
+  return geometry;
+}
 
 /**
  * One wall's diorama box, behind the mouth on the wall's outer face: a closed shoebox whose inside is a dark paper
@@ -88,12 +96,6 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
   group.position.set(...mouth.centre);
   group.rotation.y = mouth.yaw;
 
-  const sides = box.faces.filter((face) => face.name !== 'back');
-  const inside = new THREE.Mesh(
-    mergeGeometries(sides.map(faceGeometry))!,
-    new THREE.MeshBasicMaterial({ color: COLORS.sceneryBoxInside }),
-  );
-  inside.name = `${name}SceneryInside`;
   pierceSky(skyMaterial);
   const panelGeometry = new THREE.PlaneGeometry(mouth.width, mouth.height);
   tileUvs(panelGeometry, mouth.width, mouth.height, STAGE.scenery.stars.offset[name]);
@@ -121,38 +123,35 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
   backlight.position.z = -depth;
   const starlight = new THREE.Color(COLORS.starlight);
 
-  group.add(inside, backlight, panel, skin);
+  group.add(backlight, panel, skin);
 
-  // The paper theatre: cutouts at their depths, each an ink-outlined silhouette. The static outlines (the box's
-  // edges, the hills, the trees) share one ink draw.
+  // The paper theatre: the box's inside and the static cutouts at their depths merge into one vertex-coloured mesh,
+  // and their outlines (the box's edges, the hills' skylines, the trees) into one ink draw; only the sun or moon
+  // and the cloud move, each its own fill and ink.
   const { scenery } = STAGE;
   const { inkLift } = scenery;
   const staticInk = [...edges];
-  const unlit = (color: number) => new THREE.MeshBasicMaterial({ color });
+  const cutouts = box.faces
+    .filter((face) => face.name !== 'back')
+    .map((face) => withColor(faceGeometry(face), COLORS.sceneryBoxInside));
   scenery.hills.forEach((hill, layer) => {
-    const polygon = hillPolyline(name, layer);
-    const mesh = cutout([polygon], unlit(hill.tone));
-    mesh.name = `${name}SceneryHill${layer}`;
-    mesh.position.z = -hill.depth;
-    group.add(mesh);
+    cutouts.push(paper(hillPolyline(name, layer), hill.tone, -hill.depth));
     // Only the skyline is inked: the polygon's floor and sides lie in the box's own faces.
     staticInk.push(...onPlane(openSegments(hillSkyline(name, layer)), inkLift - hill.depth));
   });
-  const trees = treePolygons(name);
-  if (trees.length > 0) {
-    const mesh = cutout(trees, unlit(COLORS.sceneryDark));
-    mesh.name = `${name}SceneryTrees`;
-    mesh.position.z = -scenery.tree.depth;
-    group.add(mesh);
-    for (const tree of trees) staticInk.push(...inkPositions(tree, inkLift - scenery.tree.depth));
+  for (const tree of treePolygons(name)) {
+    cutouts.push(paper(tree, COLORS.sceneryDark, -scenery.tree.depth));
+    staticInk.push(...inkPositions(tree, inkLift - scenery.tree.depth));
   }
+  const paperMesh = new THREE.Mesh(mergeGeometries(cutouts)!, new THREE.MeshBasicMaterial({ vertexColors: true }));
+  paperMesh.name = `${name}SceneryPaper`;
   const staticLines = new LineSegments2(new LineSegmentsGeometry().setPositions(staticInk), ink);
   staticLines.name = `${name}SceneryInk`;
-  group.add(staticLines);
+  group.add(paperMesh, staticLines);
 
   // A moving cutout: a fill and its ink in one group that `update` slides.
   const mover = (label: string, polygon: readonly Point[], color: number, depth: number, material: LineMaterial) => {
-    const fill = cutout([polygon], unlit(color));
+    const fill = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(polygon.map(([x, y]) => new THREE.Vector2(x, y)))), new THREE.MeshBasicMaterial({ color }));
     const outline = new LineSegments2(new LineSegmentsGeometry().setPositions(inkPositions(polygon, inkLift)), material);
     const moving = new THREE.Group();
     moving.name = `${name}Scenery${label}`;
@@ -161,8 +160,10 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
     group.add(moving);
     return { moving, fill, outline };
   };
-  const sun = mover('Sun', discPolygon(scenery.sun.radius), COLORS.sceneryPaper, scenery.sun.depth, ink);
-  const moon = mover('Moon', discPolygon(scenery.moon.radius), COLORS.sceneryFaint, scenery.moon.depth, ink);
+  // One disc serves the sun by day and the moon by night — they are never up together — recoloured and scaled to
+  // whichever is up.
+  const body = mover('Body', discPolygon(scenery.sun.radius), COLORS.sceneryPaper, scenery.sun.depth, ink);
+  const moonScale = scenery.moon.radius / scenery.sun.radius;
 
   // The cloud drifts across and wraps, so it is clipped to the box's sides, in the room's frame (the room stands
   // at the origin): a cloud half past the edge must not show outside the box.
@@ -193,14 +194,15 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
       lit = phase;
       (backlight.material as THREE.MeshBasicMaterial).color.copy(skyMaterial.color).lerp(starlight, starlightAt(phase));
       celestial(phase, bodies);
-      sun.moving.visible = bodies.sun.visible;
-      moon.moving.visible = bodies.moon.visible;
-      bodyAt(mouth, bodies.sun, scenery.sun.radius, spot);
-      sun.moving.position.x = spot[0];
-      sun.moving.position.y = spot[1];
-      bodyAt(mouth, bodies.moon, scenery.moon.radius, spot);
-      moon.moving.position.x = spot[0];
-      moon.moving.position.y = spot[1];
+      const up = bodies.sun.visible ? bodies.sun : bodies.moon;
+      const radius = bodies.sun.visible ? scenery.sun.radius : scenery.moon.radius;
+      body.moving.visible = up.visible;
+      if (!up.visible) return;
+      (body.fill.material as THREE.MeshBasicMaterial).color.setHex(bodies.sun.visible ? COLORS.sceneryPaper : COLORS.sceneryFaint);
+      body.moving.scale.setScalar(bodies.sun.visible ? 1 : moonScale);
+      bodyAt(mouth, up, radius, spot);
+      body.moving.position.x = spot[0];
+      body.moving.position.y = spot[1];
     },
   };
 }
