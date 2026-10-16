@@ -139,7 +139,7 @@ const fps = createFpsGuard();
 
 createLoop((delta, rawDelta) => {
   cameraControls.update(delta);
-  room.update(camera.position, renderer);
+  room.update(camera.position, renderer, delta);
   items.current?.update(delta);
   // Measured on the true delta: the clamped one would floor every slow device at 15 fps.
   const { render, sample } = fps.frame(rawDelta);

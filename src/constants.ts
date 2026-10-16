@@ -12,6 +12,17 @@ export const ROOM = {
   height: 3,
 };
 
+// Wall-clock units and the byte range of a hex colour channel, for the sky's clock and colour maths.
+export const CLOCK = {
+  secondsPerMinute: 60,
+  minutesPerHour: 60,
+  hoursPerDay: 24,
+  channelMax: 255,
+};
+
+// The sky beyond the window by day: the day keyframe of STAGE.sky and COLORS.sky.
+const SKY_DAY = 0x9ec9e8;
+
 // The diorama stage (src/game/stageBoxes.ts, built by src/scene/room.ts and mirrored by
 // src/physics/world.ts): a base slab under the floor, two walls (back and left, with windows) and a low
 // lip on the open front and right edges — every collider stands outside the floor's footprint,
@@ -54,6 +65,21 @@ export const STAGE = {
     skyGap: 0.05,
     skyMargin: 0.5,
   },
+  // The sky beyond the windows turns on game time (src/game/skyCycle.ts), colour only: the stage's light,
+  // the room's colours and the camera do not follow it.
+  sky: {
+    // One full night-dawn-day-dusk cycle, in minutes of game time.
+    cycleMinutes: 12,
+    // Scrub: setting it (the ?tune knob) jumps the cycle to this phase (0 midnight, 0.5 noon); the loop keeps advancing from there.
+    phase: 0.5,
+    // Colour at each phase in [0, 1), ascending; the last blends back round to the first.
+    keyframes: [
+      { at: 0, color: 0x0b1026 },
+      { at: 0.25, color: 0xf2a679 },
+      { at: 0.5, color: SKY_DAY },
+      { at: 0.75, color: 0xc2566b },
+    ],
+  },
 };
 
 export const COLORS = {
@@ -65,8 +91,8 @@ export const COLORS = {
   wall: 0xffffff,
   // The window's casing, sill, apron, frame and rail: white, like the wall.
   trim: 0xffffff,
-  // The sky beyond the window, fixed until the day–night cycle animates it.
-  sky: 0x9ec9e8,
+  // The sky beyond the window by day — the day keyframe of STAGE.sky; the cycle animates it.
+  sky: SKY_DAY,
   skyLight: 0xffffff,
   groundLight: 0x8a7a66,
   sunLight: 0xffffff,

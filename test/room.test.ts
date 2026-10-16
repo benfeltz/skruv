@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
-import { ROOM, STAGE } from '../src/constants.js';
+import { afterEach, describe, expect, it } from 'vitest';
+import { COLORS, ROOM, STAGE } from '../src/constants.js';
 import { createRoom } from '../src/scene/room.js';
 
 // A stand-in renderer: the room only asks it for the drawing buffer's size.
@@ -92,19 +92,19 @@ describe('the room per frame', () => {
 
   it('hides the back wall, ink and all, from behind it, and shows it again in front', () => {
     const { backWall, leftWall, update } = createRoom();
-    update(at(0, 2, -ROOM.depth), renderer());
+    update(at(0, 2, -ROOM.depth), renderer(), 0);
     expect(backWall.visible).toBe(false);
     expect(leftWall.visible).toBe(true);
-    update(at(0, 2, ROOM.depth), renderer());
+    update(at(0, 2, ROOM.depth), renderer(), 0);
     expect(backWall.visible).toBe(true);
   });
 
   it('hides the left wall from behind it, and both from behind the corner', () => {
     const { backWall, leftWall, update } = createRoom();
-    update(at(-ROOM.width, 2, 0), renderer());
+    update(at(-ROOM.width, 2, 0), renderer(), 0);
     expect(leftWall.visible).toBe(false);
     expect(backWall.visible).toBe(true);
-    update(at(-ROOM.width, 2, -ROOM.depth), renderer());
+    update(at(-ROOM.width, 2, -ROOM.depth), renderer(), 0);
     expect([backWall.visible, leftWall.visible]).toEqual([false, false]);
   });
 
@@ -116,31 +116,31 @@ describe('the room per frame', () => {
     ];
     const left = parts(leftWall, 'left', 1);
     const back = parts(backWall, 'back', 2);
-    update(at(0, 2, 3), renderer());
+    update(at(0, 2, 3), renderer(), 0);
     expect([...left, ...back].map(shown)).toEqual([true, true, true, true, true]);
-    update(at(-ROOM.width, 2, 0), renderer());
+    update(at(-ROOM.width, 2, 0), renderer(), 0);
     expect(left.map(shown)).toEqual([false, false]);
     expect(back.map(shown)).toEqual([true, true, true]);
-    update(at(0, 2, -ROOM.depth), renderer());
+    update(at(0, 2, -ROOM.depth), renderer(), 0);
     expect(back.map(shown)).toEqual([false, false, false]);
     expect(left.map(shown)).toEqual([true, true]);
   });
 
   it('hides a wall for an eye inside its thickness, not only behind it', () => {
     const { backWall, update } = createRoom();
-    update(at(0, 2, -ROOM.depth / 2 - STAGE.wallThickness / 2), renderer());
+    update(at(0, 2, -ROOM.depth / 2 - STAGE.wallThickness / 2), renderer(), 0);
     expect(backWall.visible).toBe(false);
   });
 
   it('never hides the slab or the lips', () => {
     const { pieces, update } = createRoom();
-    update(at(-ROOM.width, 2, -ROOM.depth), renderer());
+    update(at(-ROOM.width, 2, -ROOM.depth), renderer(), 0);
     for (const name of ['slab', 'frontLip', 'rightLip'] as const) expect(pieces.get(name)!.visible, name).toBe(true);
   });
 
   it('keeps the ink resolution at the canvas CSS size, whatever the pixel ratio', () => {
     const { pieces, update } = createRoom();
-    update(at(0, 2, 3), renderer(1170, 2532));
+    update(at(0, 2, 3), renderer(1170, 2532), 0);
     const lines = pieces.get('slab')!.children[1] as unknown as { material: { resolution: THREE.Vector2 } };
     expect(lines.material.resolution.toArray()).toEqual([1170, 2532]);
   });
@@ -149,9 +149,78 @@ describe('the room per frame', () => {
     const { pieces, update } = createRoom();
     const geometries = () => [...pieces.values()].flatMap((piece) => piece.children.map((child) => (child as THREE.Mesh).geometry));
     const before = geometries();
-    for (let i = 0; i < 5; i++) update(at(i, 2, 3), renderer());
+    for (let i = 0; i < 5; i++) update(at(i, 2, 3), renderer(), 0);
     const after = geometries();
     expect(after).toHaveLength(before.length);
     after.forEach((geometry, i) => expect(geometry).toBe(before[i]));
+  });
+});
+
+describe('the sky turns', () => {
+  const skyMeshes = (room: ReturnType<typeof createRoom>) =>
+    [room.leftWall.getObjectByName('leftSky0'), room.backWall.getObjectByName('backSky0'), room.backWall.getObjectByName('backSky1')] as THREE.Mesh[];
+  const skyColour = (room: ReturnType<typeof createRoom>) => (skyMeshes(room)[0]!.material as THREE.MeshBasicMaterial).color.clone();
+  const saved = { ...STAGE.sky };
+  afterEach(() => { STAGE.sky.phase = saved.phase; STAGE.sky.cycleMinutes = saved.cycleMinutes; });
+
+  it('shares one material across every sky plane', () => {
+    const materials = new Set(skyMeshes(createRoom()).map((m) => m.material));
+    expect(materials.size).toBe(1);
+  });
+
+  it('moves the colour when game time passes', () => {
+    const room = createRoom();
+    STAGE.sky.phase = 0.3;
+    room.update(at(0, 2, 3), renderer(), 0);
+    const before = skyColour(room);
+    room.update(at(0, 2, 3), renderer(), 20);
+    expect(skyColour(room).equals(before)).toBe(false);
+  });
+
+  it('jumps to a scrubbed phase, then keeps advancing from it', () => {
+    const room = createRoom();
+    STAGE.sky.phase = 0.4;
+    room.update(at(0, 2, 3), renderer(), 0);
+    STAGE.sky.phase = 0.5;
+    room.update(at(0, 2, 3), renderer(), 0);
+    const noon = skyColour(room);
+    expect(noon.getHex()).toBe(COLORS.sky);
+    STAGE.sky.phase = 0;
+    room.update(at(0, 2, 3), renderer(), 0);
+    const midnight = skyColour(room);
+    expect(midnight.equals(noon)).toBe(false);
+    room.update(at(0, 2, 3), renderer(), 30);
+    expect(skyColour(room).equals(midnight)).toBe(false);
+  });
+
+  it('changes the sky material and nothing else the room owns, and the room owns no light', () => {
+    const room = createRoom();
+    const sky = skyMeshes(room)[0]!.material;
+    const others = () => {
+      const colours: [string, number][] = [];
+      room.group.traverse((o) => {
+        expect(o).not.toBeInstanceOf(THREE.Light);
+        const material = (o as THREE.Mesh).material as THREE.Material & { color?: THREE.Color } | undefined;
+        if (material?.color && material !== sky) colours.push([o.name, material.color.getHex()]);
+      });
+      return colours;
+    };
+    const before = others();
+    expect(before.length).toBeGreaterThan(0);
+    STAGE.sky.phase = 0;
+    room.update(at(0, 2, 3), renderer(), 10);
+    expect(others()).toEqual(before);
+  });
+
+  it('mirrors the live phase into the knob, so scrubbing to where the sky is changes nothing', () => {
+    const room = createRoom();
+    STAGE.sky.phase = 0.2;
+    room.update(at(0, 2, 3), renderer(), 0);
+    room.update(at(0, 2, 3), renderer(), 36);
+    expect(STAGE.sky.phase).toBeCloseTo(0.25, 9);
+    const here = skyColour(room);
+    STAGE.sky.phase = 0.25 + 0; // the sky's own phase: not a scrub
+    room.update(at(0, 2, 3), renderer(), 0);
+    expect(skyColour(room).equals(here)).toBe(true);
   });
 });
