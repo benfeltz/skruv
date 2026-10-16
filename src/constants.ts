@@ -103,13 +103,14 @@ export const STAGE = {
     // The back panel stands this far in front of the backlight behind it.
     backlight: { gap: 0.03 },
     // How lit the backlight is at each phase (0 the sky's own colour, 1 full starlight); the loop closes on the first.
-    // Level 0 holds from mid-morning to mid-afternoon, so no pinhole shows by day.
+    // Stars come up only once dusk has gone (the sky near its darkest, from 0.88) and are gone before dawn begins to
+    // lighten it (by 0.12), fading smoothly at each end; none by day, at dawn or at dusk.
     starlight: [
       { at: 0, level: 1 },
-      { at: 0.25, level: 0.4 },
-      { at: 0.35, level: 0 },
-      { at: 0.65, level: 0 },
-      { at: 0.75, level: 0.4 },
+      { at: 0.05, level: 1 },
+      { at: 0.12, level: 0 },
+      { at: 0.88, level: 0 },
+      { at: 0.95, level: 1 },
     ],
     // Pinholes: how many per tile, their radius in metres, the tile's side in metres (the mask repeats every tile), the
     // mask's side in texels, the generator's seed, and each wall's offset into the tile as a fraction.

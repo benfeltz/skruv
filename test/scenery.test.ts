@@ -176,17 +176,24 @@ describe('the sun and moon', () => {
 });
 
 describe('the stars', () => {
-  it('are fully lit at midnight and gone at noon, blending through dawn and dusk', () => {
+  it('are lit only at night: full in the dark, none at dusk, dawn or midday', () => {
     expect(starlightAt(0)).toBe(1);
-    expect(starlightAt(0.5)).toBe(0);
-    expect(starlightAt(0.25)).toBeGreaterThan(0);
-    expect(starlightAt(0.25)).toBeLessThan(1);
-    // No pinhole shows from mid-morning to mid-afternoon, not only at noon.
-    for (const phase of [0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65]) expect(starlightAt(phase)).toBe(0);
-    expect(starlightAt(0.125)).toBeGreaterThan(starlightAt(0.25));
-    expect(starlightAt(0.375)).toBeLessThan(starlightAt(0.25));
+    expect(starlightAt(0.98)).toBe(1);
+    for (const phase of [0.12, 0.2, 0.25, 0.3, 0.5, 0.7, 0.75, 0.8, 0.88]) expect(starlightAt(phase), `phase ${phase}`).toBe(0);
+  });
+
+  it('fade in after dusk and out before dawn, smoothly and one way each', () => {
+    const rising = [0.88, 0.9, 0.92, 0.95].map(starlightAt);
+    expect(rising).toEqual([...rising].sort((a, b) => a - b));
+    expect(rising[0]).toBe(0);
+    expect(rising[3]).toBe(1);
+    const falling = [0.05, 0.07, 0.1, 0.12].map(starlightAt);
+    expect(falling).toEqual([...falling].sort((a, b) => b - a));
+    expect(falling[0]).toBe(1);
+    expect(falling[3]).toBe(0);
     expect(starlightAt(1)).toBe(starlightAt(0));
-    expect(starlightAt(0.9)).toBeGreaterThan(starlightAt(0.75));
+    expect(starlightAt(0.9)).toBeGreaterThan(0);
+    expect(starlightAt(0.9)).toBeLessThan(1);
   });
 
   it('are the same for the same seed and inside the tile', () => {
