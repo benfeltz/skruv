@@ -183,23 +183,28 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
 
   let lit = NaN;
   let elapsed = 0;
+  // Reused every frame, so the loop allocates nothing.
+  const bodies = celestial(0);
+  const spot: Point = [0, 0];
   return {
     group,
     /** Per frame: `phase` of the day and `delta` seconds of game time, after the sky material is painted for `phase`. */
     update(phase: number, delta: number) {
       elapsed += delta;
-      cloud.moving.position.x = cloudX(name, elapsed);
+      cloud.moving.position.x = cloudX(mouth, elapsed);
       cloudInk.resolution.copy(ink.resolution);
       if (phase === lit) return;
       lit = phase;
       (backlight.material as THREE.MeshBasicMaterial).color.copy(skyMaterial.color).lerp(starlight, starlightAt(phase));
-      const bodies = celestial(phase);
-      for (const [body, shape, radius] of [[bodies.sun, sun, scenery.sun.radius], [bodies.moon, moon, scenery.moon.radius]] as const) {
-        shape.moving.visible = body.visible;
-        const [x, y] = bodyAt(name, body, radius);
-        shape.moving.position.x = x;
-        shape.moving.position.y = y;
-      }
+      celestial(phase, bodies);
+      sun.moving.visible = bodies.sun.visible;
+      moon.moving.visible = bodies.moon.visible;
+      bodyAt(mouth, bodies.sun, scenery.sun.radius, spot);
+      sun.moving.position.x = spot[0];
+      sun.moving.position.y = spot[1];
+      bodyAt(mouth, bodies.moon, scenery.moon.radius, spot);
+      moon.moving.position.x = spot[0];
+      moon.moving.position.y = spot[1];
     },
   };
 }

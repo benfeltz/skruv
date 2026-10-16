@@ -121,9 +121,9 @@ describe('the trees and the cloud', () => {
   it('drifts at its speed and wraps once clear of the mouth', () => {
     const name = 'back';
     const reach = sceneryMouth(name).width + scenery.cloud.width;
-    expect(cloudX(name, 0)).toBeCloseTo(-reach / 2, 9);
-    expect(cloudX(name, 100) - cloudX(name, 0)).toBeCloseTo(100 * scenery.cloud.drift, 9);
-    expect(cloudX(name, reach / scenery.cloud.drift)).toBeCloseTo(cloudX(name, 0), 6);
+    expect(cloudX(sceneryMouth(name), 0)).toBeCloseTo(-reach / 2, 9);
+    expect(cloudX(sceneryMouth(name), 100) - cloudX(sceneryMouth(name), 0)).toBeCloseTo(100 * scenery.cloud.drift, 9);
+    expect(cloudX(sceneryMouth(name), reach / scenery.cloud.drift)).toBeCloseTo(cloudX(sceneryMouth(name), 0), 6);
     const mouth = sceneryMouth(name);
     expect(cloudPolygon(name).every(([, y]) => Math.abs(y) <= mouth.height / 2)).toBe(true);
   });
@@ -160,11 +160,19 @@ describe('the sun and moon', () => {
     for (const name of WALL_NAMES) {
       const mouth = sceneryMouth(name);
       for (const [phase, body, radius] of [[0.25, 'sun', scenery.sun.radius], [0.5, 'sun', scenery.sun.radius], [0.75, 'sun', scenery.sun.radius], [0, 'moon', scenery.moon.radius]] as const) {
-        const [x, y] = bodyAt(name, celestial(phase)[body], radius);
+        const [x, y] = bodyAt(mouth, celestial(phase)[body], radius);
         expect(Math.abs(x) + radius).toBeLessThanOrEqual(mouth.width / 2 + 1e-9);
         expect(y + radius).toBeLessThanOrEqual(mouth.height / 2 + 1e-9);
       }
     }
+  });
+
+  it('writes into the buffers it is given, allocating nothing', () => {
+    const bodies = celestial(0);
+    expect(celestial(0.5, bodies)).toBe(bodies);
+    expect(bodies.sun.visible).toBe(true);
+    const spot: [number, number] = [0, 0];
+    expect(bodyAt(sceneryMouth('back'), bodies.sun, scenery.sun.radius, spot)).toBe(spot);
   });
 
   it('stands in front of the back panel and behind the hills', () => {

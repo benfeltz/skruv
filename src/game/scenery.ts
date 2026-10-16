@@ -107,8 +107,8 @@ export function cloudPolygon(name: WallName): Point[] {
 }
 
 /** Where the cloud's centre is after `seconds` of game time: drifting left to right, wrapping once clear of the mouth. */
-export function cloudX(name: WallName, seconds: number): number {
-  const reach = sceneryMouth(name).width + scenery.cloud.width;
+export function cloudX(mouth: SceneryMouth, seconds: number): number {
+  const reach = mouth.width + scenery.cloud.width;
   const travelled = (((scenery.cloud.drift * seconds) % reach) + reach) % reach;
   return -reach / 2 + travelled;
 }
@@ -146,23 +146,27 @@ export interface Body {
 /**
  * The sun and moon at `phase`, as positions on one arc over the horizon: the sun rises on the left at dawn (0.25),
  * tops out at noon and sets on the right at dusk (0.75); the moon is half a day behind it. A body shows while above
- * the horizon. Pure phase maths, so the floor's light patch can follow the same sun.
+ * the horizon. Pure phase maths, so the floor's light patch can follow the same sun; written into `out` when given,
+ * so the loop allocates nothing.
  */
-export function celestial(phase: number): { sun: Body; moon: Body } {
+export function celestial(phase: number, out: { sun: Body; moon: Body } = { sun: { x: 0, y: 0, visible: false }, moon: { x: 0, y: 0, visible: false } }): { sun: Body; moon: Body } {
   const angle = TAU * (phase - 0.25);
-  const sun = { x: (1 - Math.cos(angle)) / 2, y: Math.sin(angle) };
-  const moon = { x: (1 + Math.cos(angle)) / 2, y: -Math.sin(angle) };
-  return { sun: { ...sun, visible: sun.y > 0 }, moon: { ...moon, visible: moon.y > 0 } };
+  const { sun, moon } = out;
+  sun.x = (1 - Math.cos(angle)) / 2;
+  sun.y = Math.sin(angle);
+  sun.visible = sun.y > 0;
+  moon.x = (1 + Math.cos(angle)) / 2;
+  moon.y = -sun.y;
+  moon.visible = moon.y > 0;
+  return out;
 }
 
-/** A body's centre in a wall's box-local coordinates, its disc kept wholly between the box's sides. */
-export function bodyAt(name: WallName, body: Body, radius: number): Point {
-  const mouth = sceneryMouth(name);
+/** A body's centre in a wall's box-local coordinates, its disc kept wholly between the box's sides; written into `out` when given. */
+export function bodyAt(mouth: SceneryMouth, body: Body, radius: number, out: Point = [0, 0]): Point {
   const { horizon, rise } = scenery.arc;
-  return [
-    -mouth.width / 2 + radius + body.x * (mouth.width - 2 * radius),
-    (horizon + body.y * rise) * STAGE.wallHeight - mouth.centre[1],
-  ];
+  out[0] = -mouth.width / 2 + radius + body.x * (mouth.width - 2 * radius);
+  out[1] = (horizon + body.y * rise) * STAGE.wallHeight - mouth.centre[1];
+  return out;
 }
 
 /** How lit the backlight is at `phase`, 0 to 1: the sky's own colour by day, full starlight by night. */
