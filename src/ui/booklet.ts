@@ -578,8 +578,12 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   }
 
   function onKey(event: KeyboardEvent) {
-    // A slider or a field has its own use of the arrow keys.
-    if ((event.target as Element | null)?.closest('input, textarea, select')) return;
+    // The browser's and the page's own: a chord (Alt+Left is back), a key something else has
+    // taken, and a control that is not ours — a slider or a field, but also the cluster's
+    // buttons and the tune drawer — has its own use of the arrow keys.
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const control = (event.target as Element | null)?.closest?.('input, textarea, select, button, a, [role="slider"]');
+    if (control && !thumb.contains(control) && !element.contains(control)) return;
     if (event.key === 'Escape') {
       if (open) setOpen(false);
       return;

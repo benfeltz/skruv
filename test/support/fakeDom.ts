@@ -67,6 +67,10 @@ export class FakeElement {
   getContext() {
     return { drawImage: (source: unknown) => (this.drawn = source) };
   }
+  contains(node: FakeElement | null): boolean {
+    for (let up: FakeElement | null = node; up; up = up.parent) if (up === this) return true;
+    return false;
+  }
   closest(tag: string) {
     const up = (node: FakeElement | null): FakeElement | null => (node === null ? null : node.tag === tag ? node : up(node.parent));
     return up(this);

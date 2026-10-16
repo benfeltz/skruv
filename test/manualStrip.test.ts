@@ -173,11 +173,36 @@ describe('moving along the strip', () => {
     expect(catalog.currentPage).toBe(1);
   });
 
-  it('leaves the arrow keys to a slider that has focus', () => {
+  it('leaves the arrow keys to a slider or a control that is not its own', () => {
     const { manual } = mountStrip();
-    const slider = new FakeElement('input', dom);
-    slider.closest = (tag: string) => (tag.includes('input') ? slider : null);
-    dom.windowListeners.get('keydown')!.forEach((fn) => fn({ key: 'ArrowRight', target: slider }));
+    const control = (tag: string) => {
+      const element = new FakeElement(tag, dom);
+      element.closest = () => element;
+      return element;
+    };
+    for (const target of [control('input'), control('button')]) {
+      dom.windowListeners.get('keydown')!.forEach((fn) => fn({ key: 'ArrowRight', target }));
+    }
+    expect(manual.currentPage).toBe(0);
+  });
+
+  it("steps on the arrow keys from its own strip, and from the page's own body", () => {
+    const { manual, centre } = mountStrip();
+    dom.windowListeners.get('keydown')!.forEach((fn) => fn({ key: 'ArrowRight', target: centre() }));
+    expect(manual.currentPage).toBe(1);
+    // Focus on the document body (nothing focused) is the common case.
+    dom.key('ArrowRight');
+    expect(manual.currentPage).toBe(2);
+  });
+
+  it('leaves a chord or a key already handled alone: Alt+Left is the browser back, not a flip', () => {
+    const { manual } = mountStrip();
+    const send = (extra: object) => dom.windowListeners.get('keydown')!.forEach((fn) => fn({ key: 'ArrowRight', ...extra }));
+    send({ altKey: true });
+    send({ ctrlKey: true });
+    send({ metaKey: true });
+    send({ shiftKey: true });
+    send({ defaultPrevented: true });
     expect(manual.currentPage).toBe(0);
   });
 });
