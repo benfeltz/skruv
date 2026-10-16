@@ -29,7 +29,7 @@ function injectStyle() {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   const { shadow, gutter, growMs, radius } = BOOKLET_UI.page;
-  const { strip, stripShort } = BOOKLET_UI;
+  const { strip, stripShort, stripNarrow } = BOOKLET_UI;
   // What the strip and the gap above it take off the bottom of the screen (CSS pixels), at
   // the full size and on a short viewport.
   const reserveFor = (centreWidth: number) => strip.inset + Math.round((centreWidth * pageH) / pageW) + strip.openGap;
@@ -197,10 +197,11 @@ function injectStyle() {
       user-select: none;
       -webkit-user-select: none;
     }
-    .booklet-slots { display: flex; align-items: flex-end; justify-content: center; gap: ${strip.gap}px; min-width: 0; }
+    .booklet-slots { display: flex; align-items: flex-end; justify-content: center; gap: ${strip.gap}px; }
     .booklet-slot {
-      flex: 0 1 var(--slot-side);
-      min-width: 0;
+      /* An explicit width, never a shrinking basis: Safari collapsed those to nothing. */
+      flex: none;
+      width: var(--slot-side);
       aspect-ratio: ${pageW} / ${pageH};
       padding: 0;
       border: 2px solid ${css(COLORS.uiText)}33;
@@ -213,7 +214,7 @@ function injectStyle() {
       -webkit-tap-highlight-color: transparent;
     }
     .booklet-slot[data-centre='true'] {
-      flex: 0 0 var(--slot-centre);
+      width: var(--slot-centre);
       border-color: ${css(COLORS.uiAccent)};
     }
     .booklet-slot[data-empty='true'] { visibility: hidden; }
@@ -243,6 +244,9 @@ function injectStyle() {
     }
     @media (orientation: portrait) {
       .booklet-leaf[data-docked='strip'] { --strip-top: ${clusterBottom}px; }
+    }
+    @media (max-width: ${stripNarrow.maxWidth}px) {
+      .booklet-strip { --slot-side: ${stripNarrow.sideWidth}px; }
     }
     @media (max-height: ${stripShort.maxHeight}px) {
       .booklet-strip { --slot-centre: ${stripShort.centreWidth}px; --slot-side: ${stripShort.sideWidth}px; }

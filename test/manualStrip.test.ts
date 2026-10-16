@@ -428,6 +428,23 @@ describe("the open manual page's room above the strip", () => {
   });
 });
 
+// Ben's iPhone: the side slots collapsed to slivers beside the centre page.
+describe('the slots keep their width in every browser', () => {
+  it('gives each slot an explicit width — never a shrinking flex basis — that fits a narrow phone', () => {
+    mountStrip();
+    const rules = dom.head.children.find((node) => node.id === 'skruv-booklet')!.textContent;
+    const slot = rules.slice(rules.indexOf('.booklet-slot {'), rules.indexOf(".booklet-slot[data-centre='true']"));
+    expect(slot).toContain('flex: none;');
+    expect(slot).toContain('width: var(--slot-side);');
+    expect(rules).not.toMatch(/flex: 0 1 var\(--slot/);
+    const { strip, stripNarrow } = BOOKLET_UI;
+    expect(rules).toContain(`@media (max-width: ${stripNarrow.maxWidth}px) {`);
+    // Two arrows, four gaps, the centre and two sides, inside a 360 px phone less its gutters.
+    const row = 2 * strip.arrow + 4 * strip.gap + strip.centreWidth + 2 * stripNarrow.sideWidth;
+    expect(row).toBeLessThanOrEqual(360 - 2 * strip.gap);
+  });
+});
+
 describe('the catalog wins', () => {
   it('opening the catalog puts an open manual page down, without moving focus', () => {
     const { manual, centre } = mountStrip();

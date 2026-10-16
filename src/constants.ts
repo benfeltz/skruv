@@ -184,6 +184,10 @@ export const BOOKLET_UI = {
   // ...and on a short viewport (a phone held sideways: `maxHeight` CSS px or less) the strip
   // draws smaller, so the open page above it keeps a readable size.
   stripShort: { maxHeight: 480, centreWidth: 72, sideWidth: 44 },
+  // ...and on a narrow phone (`maxWidth` CSS px or less) the side pages draw narrower, so the
+  // arrows, three slots and their gaps fit the width (the arrows 2 x 44, the gaps 4 x 8, the
+  // centre 120 and two sides of 48 make 336).
+  stripNarrow: { maxWidth: 400, sideWidth: 48 },
 };
 
 // The catalog (1.9.1): the game's front door, a second booklet of items to build
