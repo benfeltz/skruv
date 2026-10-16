@@ -331,11 +331,36 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
   return { count: pages.length, pages, ...createPageCache(pages.length, draw, views.dispose) };
 }
 
+/** What `render` and `draw` take beyond the parts: line segments, and a box to frame on. */
+export interface Extras {
+  /** Segments `[from, to]` in the drawing's frame, drawn faint (leader lines). */
+  lines?: [Vec3, Vec3][];
+  /** The world box to fit the camera to, in place of the parts' own boxes. */
+  frame?: { min: Vec3; max: Vec3 };
+}
+
+const mid = ({ min, max }: { min: Vec3; max: Vec3 }): Vec3 => [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+
+// The camera-space extent of the corners of `boxes` ({ pose matrix, half sizes }).
+function viewOf(boxes: { matrix: THREE.Matrix4; half: THREE.Vector3 }[], worldToCamera: THREE.Matrix4) {
+  const view = new THREE.Box3();
+  const corner = new THREE.Vector3();
+  for (const { matrix, half } of boxes) {
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+      corner.set(sx * half.x, sy * half.y, sz * half.z);
+      view.expandByPoint(corner.applyMatrix4(matrix).applyMatrix4(worldToCamera));
+    }
+  }
+  return view;
+}
+
 /**
  * Hidden-line outline renders: every part a white box (faces hide what lies behind) with
  * its edges drawn as fat lines, bold or faint, sized by `sizeOf(type)`. Geometry is built
- * once per part type. `render(items, width, height, orientation)` returns a canvas of the
- * drawing framed to fit, `draw(ctx, items, rect, orientation)` puts one on a page; `dispose()` frees the geometry and materials. Shared with the catalog's pages (src/scene/catalogPages.ts).
+ * once per part type. `render(items, width, height, orientation, extras)` returns `{ canvas,
+ * project }` — the drawing framed to fit (or on `extras.frame`), with `extras.lines` drawn
+ * faint, and the projector from world points to canvas pixels; `draw(ctx, items, rect,
+ * orientation, extras)` puts one on a page and returns the projector in page pixels; `dispose()` frees the geometry and materials. Shared with the catalog's pages (src/scene/catalogPages.ts).
  */
 export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type: string) => Size) {
   const fill = new THREE.MeshBasicMaterial({
@@ -360,10 +385,11 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
   };
   const camera = new THREE.OrthographicCamera();
   const direction = new THREE.Vector3(...BOOKLET.viewDirection).normalize();
+  const leaderMaterial = new LineMaterial({ color: COLORS.bookletFaint, linewidth: BOOKLET.explode.leaderLine });
   const corner = new THREE.Vector3();
   const clearColor = new THREE.Color();
 
-  function render(items: ViewItem[], width: number, height: number, orientation = UPRIGHT) {
+  function render(items: ViewItem[], width: number, height: number, orientation = UPRIGHT, { lines: extra = [], frame }: Extras = {}) {
     const scene = new THREE.Group();
     const root = new THREE.Group();
     root.quaternion.copy(orientation);
@@ -376,22 +402,32 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
       part.add(new THREE.Mesh(box, fill), new LineSegments2(edges, lines[weight]));
       root.add(part);
     }
+    // Extra segments (leader lines), in the drawing's own frame, faint.
+    const extraGeometry = extra.length ? new LineSegmentsGeometry().setPositions(extra.flat(2)) : null;
+    if (extraGeometry) root.add(new LineSegments2(extraGeometry, leaderMaterial));
     scene.updateMatrixWorld(true);
 
-    // Frame the drawing: every box corner in the camera's view, padded, at the frame's aspect.
+    // Frame the drawing: the corners of the boxes in view (every part's, or `frame`'s), padded,
+    // at the frame's aspect. Depth always spans every part, so a tight frame clips nothing.
     camera.position.copy(direction).multiplyScalar(50);
     camera.up.set(0, 1, 0);
     camera.lookAt(0, 0, 0);
     camera.updateMatrixWorld(true);
-    const view = new THREE.Box3();
-    for (const part of root.children) {
-      // Each part's first child is its box.
-      const half = (part.children[0] as THREE.Mesh<THREE.BoxGeometry>).geometry.parameters;
-      for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
-        corner.set((sx * half.width) / 2, (sy * half.height) / 2, (sz * half.depth) / 2);
-        view.expandByPoint(corner.applyMatrix4(part.matrixWorld).applyMatrix4(camera.matrixWorldInverse));
-      }
-    }
+    const boxes = root.children.flatMap((part) => {
+      // Each part's first child is its box; the extra lines have none.
+      const box = part.children[0] as THREE.Mesh<THREE.BoxGeometry> | undefined;
+      if (!box) return [];
+      const { width: w, height: h, depth: d } = box.geometry.parameters;
+      return [{ matrix: part.matrixWorld, half: new THREE.Vector3(w / 2, h / 2, d / 2) }];
+    });
+    const frameBox = frame
+      ? [{
+          matrix: new THREE.Matrix4().multiplyMatrices(root.matrixWorld, new THREE.Matrix4().makeTranslation(...mid(frame))),
+          half: new THREE.Vector3(...frame.max).sub(new THREE.Vector3(...frame.min)).multiplyScalar(0.5),
+        }]
+      : boxes;
+    const view = viewOf(frameBox, camera.matrixWorldInverse);
+    const depth = viewOf(boxes.length ? boxes : frameBox, camera.matrixWorldInverse);
     const centre = view.getCenter(new THREE.Vector3());
     const size = view.getSize(new THREE.Vector3());
     const pad = 1 + 2 * BOOKLET.framePadding;
@@ -401,11 +437,11 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
       right: centre.x + (span * width) / 2,
       top: centre.y + (span * height) / 2,
       bottom: centre.y - (span * height) / 2,
-      near: -view.max.z - 1,
-      far: -view.min.z + 1,
+      near: -Math.max(view.max.z, depth.max.z) - 1,
+      far: -Math.min(view.min.z, depth.min.z) + 1,
     });
     camera.updateProjectionMatrix();
-    for (const material of Object.values(lines)) material.resolution.set(width, height);
+    for (const material of [...Object.values(lines), leaderMaterial]) material.resolution.set(width, height);
 
     const target = new THREE.WebGLRenderTarget(width, height, { samples: 4 });
     const previous = renderer.getRenderTarget();
@@ -437,12 +473,28 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
       }
     }
     out.getContext('2d')!.putImageData(image, 0, 0);
-    return out;
+    extraGeometry?.dispose();
+    // Where a world point (the drawing's frame, before `orientation`) lands on this canvas.
+    const toCanvas = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(root.matrixWorld);
+    const project = (point: Vec3): [number, number] => {
+      const ndc = corner.set(...point).applyMatrix4(toCanvas);
+      return [((ndc.x + 1) / 2) * width, ((1 - ndc.y) / 2) * height];
+    };
+    return { canvas: out, project };
   }
 
-  /** Draws `items` into the rectangle [x, y, w, h] of a page's `ctx`, framed to fit. */
-  function draw(ctx: Ctx, items: ViewItem[], [x, y, w, h]: Rect, orientation = UPRIGHT) {
-    ctx.drawImage(render(items, Math.round(w), Math.round(h), orientation), x, y, w, h);
+  /**
+   * Draws `items` into the rectangle [x, y, w, h] of a page's `ctx`, framed to fit (or on
+   * `extras.frame`). Returns the projector from world points to page pixels.
+   */
+  function draw(ctx: Ctx, items: ViewItem[], [x, y, w, h]: Rect, orientation = UPRIGHT, extras: Extras = {}) {
+    const [rw, rh] = [Math.round(w), Math.round(h)];
+    const { canvas, project } = render(items, rw, rh, orientation, extras);
+    ctx.drawImage(canvas, x, y, w, h);
+    return (point: Vec3): [number, number] => {
+      const [px, py] = project(point);
+      return [x + (px * w) / rw, y + (py * h) / rh];
+    };
   }
 
   /** Frees every geometry and material it built — the pages it drew are plain canvases and stay. */
@@ -453,7 +505,7 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
     }
     geometries.clear();
     fill.dispose();
-    for (const material of Object.values(lines)) material.dispose();
+    for (const material of [...Object.values(lines), leaderMaterial]) material.dispose();
   }
 
   return { render, draw, dispose };
