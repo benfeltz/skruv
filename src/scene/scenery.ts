@@ -17,7 +17,6 @@ import {
   sceneryBox,
   starlightAt,
   starMask,
-  treePolygons,
 } from '../game/scenery.js';
 import type { BoxFace, Point } from '../game/scenery.js';
 import type { WallName } from '../game/stageBoxes.js';
@@ -126,7 +125,7 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
   group.add(backlight, panel, skin);
 
   // The paper theatre: the box's inside and the static cutouts at their depths merge into one vertex-coloured mesh,
-  // and their outlines (the box's edges, the hills' skylines, the trees) into one ink draw; only the sun or moon
+  // and their outlines (the box's edges, the hills' skylines) into one ink draw; only the sun or moon
   // and the cloud move, each its own fill and ink.
   const { scenery } = STAGE;
   const { inkLift } = scenery;
@@ -139,10 +138,6 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
     // Only the skyline is inked: the polygon's floor and sides lie in the box's own faces.
     staticInk.push(...onPlane(openSegments(hillSkyline(name, layer)), inkLift - hill.depth));
   });
-  for (const tree of treePolygons(name)) {
-    cutouts.push(paper(tree, COLORS.sceneryDark, -scenery.tree.depth));
-    staticInk.push(...inkPositions(tree, inkLift - scenery.tree.depth));
-  }
   const paperMesh = new THREE.Mesh(mergeGeometries(cutouts)!, new THREE.MeshBasicMaterial({ vertexColors: true }));
   paperMesh.name = `${name}SceneryPaper`;
   const staticLines = new LineSegments2(new LineSegmentsGeometry().setPositions(staticInk), ink);

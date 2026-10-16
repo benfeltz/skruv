@@ -261,7 +261,7 @@ describe('the sky turns', () => {
     expect(planes.every((p) => p.distanceToPoint(scenery.getWorldPosition(new THREE.Vector3())) > 0)).toBe(true);
   });
 
-  it('merges the box\'s inside, the hills and the trees into one paper mesh, all inside the box', () => {
+  it('merges the box\'s inside, the hills into one paper mesh, all inside the box', () => {
     const { backWall, leftWall } = createRoom();
     for (const wall of [backWall, leftWall]) {
       wall.updateMatrixWorld(true);

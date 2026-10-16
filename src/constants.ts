@@ -82,17 +82,6 @@ export const STAGE = {
     hillDetail: { ratio: 0.43, weight: 0.35, phaseScale: 2 },
     // Samples along a hill's profile per metre of box width.
     hillSamplesPerMetre: 8,
-    // The trees stand on the near hill, in front of that layer, `at` along each wall (world metres, the wall's own axis,
-    // so each in view through a window); `outline` is the silhouette in unit height (x centred, y up).
-    tree: {
-      depth: 0.5,
-      height: 0.6,
-      at: { back: [-1.1, 0.9], left: [0.3] },
-      outline: [
-        [-0.04, 0], [0.04, 0], [0.04, 0.3], [0.2, 0.34], [0.26, 0.46], [0.2, 0.56], [0.14, 0.62], [0.16, 0.74],
-        [0.1, 0.88], [0, 1], [-0.1, 0.88], [-0.16, 0.74], [-0.14, 0.62], [-0.2, 0.56], [-0.26, 0.46], [-0.2, 0.34],
-      ] satisfies [number, number][],
-    },
     // A drifting cloud: its layer, its height up the wall, its width, its drift in metres per second of game time,
     // and its silhouette in unit width (x centred, y up from its flat bottom).
     cloud: {
@@ -165,11 +154,10 @@ export const COLORS = {
   // The sky beyond the window by day — the day keyframe of STAGE.sky; the cycle animates it.
   sky: SKY_DAY,
   skyLight: 0xffffff,
-  // Scenery (src/scene/scenery.ts): the box's inside, the paper cutouts (far, near, tree), and the backlight at night.
+  // Scenery (src/scene/scenery.ts): the box's inside, the paper cutouts (far, near hills), and the backlight at night.
   sceneryBoxInside: 0x2c2a33,
   sceneryFaint: SCENERY_FAINT,
   sceneryPaper: SCENERY_PAPER,
-  sceneryDark: 0x8d9094,
   starlight: 0xffffff,
   groundLight: 0x8a7a66,
   sunLight: 0xffffff,

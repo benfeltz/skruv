@@ -66,8 +66,6 @@ export function hillHeight(along: number, layer: number): number {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 
-/** Box-local x of a world position along the wall. */
-const localX = (mouth: SceneryMouth, along: number) => mouth.alongSign * (along - mouth.alongCentre);
 
 /**
  * Hill layer `layer` as a polygon in box-local coordinates, wound from the box floor's left corner up and along the
@@ -83,20 +81,6 @@ export function hillPolyline(name: WallName, layer: number): Point[] {
     return [x, clamp(hillHeight(along, layer) - mouth.centre[1], -half, half)];
   });
   return [[-mouth.width / 2, -half], ...profile, [mouth.width / 2, -half]];
-}
-
-/** The trees on a wall's near hill as polygons in box-local coordinates, base on the hill; only those wholly in the mouth. */
-export function treePolygons(name: WallName): Point[][] {
-  const mouth = sceneryMouth(name);
-  const near = scenery.hills.length - 1;
-  const { height, outline, at } = scenery.tree;
-  return at[name]
-    .map((along): Point[] => {
-      const x = localX(mouth, along);
-      const base = hillHeight(along, near) - mouth.centre[1];
-      return outline.map(([u, v]): Point => [x + u * height, base + v * height]);
-    })
-    .filter((tree) => tree.every(([x, y]) => Math.abs(x) <= mouth.width / 2 && Math.abs(y) <= mouth.height / 2));
 }
 
 /** The cloud's silhouette in box-local coordinates, centred on x = 0 at its height. */

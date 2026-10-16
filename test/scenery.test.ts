@@ -15,7 +15,6 @@ import {
   starField,
   starlightAt,
   starMask,
-  treePolygons,
 } from '../src/game/scenery.js';
 import { WALL_NAMES, sceneryMouth, windowOpenings } from '../src/game/stageBoxes.js';
 
@@ -95,29 +94,7 @@ describe('the hills', () => {
   });
 });
 
-describe('the trees and the cloud', () => {
-  it('stand on the near hill, inside the mouth', () => {
-    for (const name of WALL_NAMES) {
-      const mouth = sceneryMouth(name);
-      const trees = treePolygons(name);
-      expect(trees).toHaveLength(scenery.tree.at[name].length);
-      trees.forEach((tree, i) => {
-        const along = scenery.tree.at[name][i]!;
-        const base = Math.min(...tree.map(([, y]) => y));
-        expect(base).toBeCloseTo(hillHeight(along, near) - mouth.centre[1], 9);
-        expect(tree.every((p) => inside(mouth, p))).toBe(true);
-      });
-    }
-  });
-
-  it('puts every tree in view through a window', () => {
-    for (const name of WALL_NAMES) {
-      for (const along of scenery.tree.at[name]) {
-        expect(windowOpenings(name).some((o) => along > o.a0 && along < o.a1)).toBe(true);
-      }
-    }
-  });
-
+describe('the cloud', () => {
   it('drifts at its speed and wraps once clear of the mouth', () => {
     const name = 'back';
     const reach = sceneryMouth(name).width + scenery.cloud.width;
