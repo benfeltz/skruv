@@ -146,7 +146,8 @@ export const BOOKLET = {
   // axis: how far hardware floats out of its hole, how far a part pressed onto hardware is
   // pulled away, and (sub-assembly install pages, PR 2) a built assembly held off its place.
   // `leaderLine` is the weight of the faint line back from a floated fastener to its hole.
-  explode: { hardware: 0.05, part: 0.2, assembly: 0.35, leaderLine: 1 },
+  // `cancel` is the length below which a part's pulls from opposing joints count as none.
+  explode: { hardware: 0.05, part: 0.2, assembly: 0.35, leaderLine: 1, cancel: 1e-9 },
   // Detail insets (src/scene/bookletPages.ts `step`), page-canvas pixels except `focus`: one
   // circle per fastener type across the top, shrunk to fit the row. `focus` is the half-size
   // in metres of the box round a hole mouth each inset frames. `tool` is the tool's share of
@@ -161,6 +162,10 @@ export const BOOKLET = {
     tailBow: 0.18,
     tool: 0.46,
     toolOnly: 64,
+    // Where the tool sits in the first inset, as a fraction of its radius from the centre, and
+    // how much of the tool's own disc its drawing fills.
+    toolAt: 0.6,
+    toolFill: 0.7,
     // The way an inset turns its hole's axis on the page: up, a little towards the viewer, so
     // the fastener always floats up off a face the viewer sees.
     lift: [0, 1, 0.35] satisfies Vec3,

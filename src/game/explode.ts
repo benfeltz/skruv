@@ -43,7 +43,6 @@ export interface Inset extends PartCount {
 }
 
 const ZERO: Vec3 = [0, 0, 0];
-const EPSILON = 1e-9;
 
 // A layout's parts by id, built once per layout.
 const partsOf = new WeakMap<ExplodeLayout, ReadonlyMap<InstanceId, ExplodeLayout['parts'][number]>>();
@@ -89,7 +88,7 @@ export function separation(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'>, l
   for (const [id, sum] of pressedOn) {
     const length = Math.hypot(...sum);
     // Opposing joints cancel: nothing to pull away along.
-    if (length > EPSILON) offsets.set(id, scale(sum, BOOKLET.explode.part / length));
+    if (length > BOOKLET.explode.cancel) offsets.set(id, scale(sum, BOOKLET.explode.part / length));
   }
 
   const leaders: Leader[] = [];

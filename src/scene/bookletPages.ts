@@ -252,13 +252,14 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
       // In the first inset's lower right; alone in the first slot when the step fastens nothing.
       const [cx] = centres[0] ?? [left + BOOKLET.inset.toolOnly, cy];
       const rad = insets.length ? r * BOOKLET.inset.tool : BOOKLET.inset.toolOnly;
-      const [tx, ty] = insets.length ? [cx + r * 0.6, cy + r * 0.6] : [cx, cy];
+      const [tx, ty] = insets.length ? [cx + r * BOOKLET.inset.toolAt, cy + r * BOOKLET.inset.toolAt] : [cx, cy];
       ctx.fillStyle = PAPER;
       ctx.beginPath();
       ctx.arc(tx, ty, rad, 0, 2 * Math.PI);
       ctx.fill();
       ring(ctx, tx, ty, rad);
-      views.draw(ctx, [single(page.tool)], [tx - rad * 0.7, ty - rad * 0.7, rad * 1.4, rad * 1.4]);
+      const fill = rad * BOOKLET.inset.toolFill;
+      views.draw(ctx, [single(page.tool)], [tx - fill, ty - fill, 2 * fill, 2 * fill]);
     }
 
     const top = m + 2 * maxRadius + 80;
