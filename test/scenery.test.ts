@@ -232,6 +232,24 @@ describe('the sun and moon', () => {
     expect(bodyAt(sceneryMouth('back'), bodies.sun, scenery.sun.radius, spot)).toBe(spot);
   });
 
+  it('crosses the windows\' visible band: above the near hills\' line, its peak clear of the opening\'s head', () => {
+    const { horizon, rise } = scenery.arc;
+    const nearHills = scenery.hills[scenery.hills.length - 1]!;
+    const crest = nearHills.base * STAGE.wallHeight + nearHills.amplitude;
+    for (const name of WALL_NAMES) {
+      const head = Math.min(...windowOpenings(name).map((o) => o.y1));
+      const sill = Math.max(...windowOpenings(name).map((o) => o.y0));
+      for (const radius of [scenery.sun.radius, scenery.moon.radius]) {
+        expect(horizon * STAGE.wallHeight).toBeGreaterThan(crest);
+        expect(horizon * STAGE.wallHeight).toBeGreaterThan(sill);
+        expect((horizon + rise) * STAGE.wallHeight + radius).toBeLessThan(head);
+      }
+      // At noon the sun stands at the peak, at the world height the arc says.
+      const mouth = sceneryMouth(name);
+      expect(bodyAt(mouth, celestial(0.5).sun, scenery.sun.radius)[1] + mouth.centre[1]).toBeCloseTo((horizon + rise) * STAGE.wallHeight, 9);
+    }
+  });
+
   it('stands in front of the back panel and behind the hills', () => {
     expect(scenery.sun.depth).toBeLessThan(scenery.depth - scenery.backlight.gap);
     expect(scenery.sun.depth).toBeGreaterThan(Math.max(...scenery.hills.map((h) => h.depth)));

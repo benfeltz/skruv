@@ -110,7 +110,9 @@ export const STAGE = {
     // The sun and moon: discs on a layer just in front of the back panel, on one arc over the horizon.
     sun: { radius: 0.12, depth: 1.1 },
     moon: { radius: 0.1, depth: 1.1 },
-    arc: { horizon: 0.5, rise: 0.42 },
+    // Its arc runs through the windows' visible band: from the horizon, just above the near hills' line, up to a peak
+    // that clears the head of the opening.
+    arc: { horizon: 0.5, rise: 0.2 },
     // Segments round a disc's rim, and how far an outline stands in front of its fill so the two never fight for depth.
     discSegments: 32,
     inkLift: 0.002,
