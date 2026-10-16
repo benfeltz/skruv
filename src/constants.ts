@@ -112,17 +112,75 @@ export const STAGE = {
       { at: 0.88, level: 0 },
       { at: 0.95, level: 1 },
     ],
-    // Pinholes: how many per tile, their radius in metres, the tile's side in metres (the mask repeats every tile), the
-    // mask's side in texels, the generator's seed, and each wall's offset into the tile as a fraction.
+    // The night sky is one texture of two stacked strips, one per wall (`strip`), each covering the wall's face: `sky`
+    // metres wide and high (the room's width by the wall height, floor at the strip's bottom), `texels` wide. Every
+    // panel samples its own strip once, so a constellation appears once and not repeated.
+    // A star is a pinhole: a disc, or for the brightest a four-point plus. Positions are metres from the strip's
+    // lower left; radii are metres.
     stars: {
-      count: 150,
-      radius: 0.025,
-      tile: 2.6,
-      texels: 512,
-      seed: 1913,
-      offset: { left: 0.37, back: 0 },
+      sky: { width: 6, height: 3 },
+      texels: 1024,
+      strip: { back: 0, left: 1 },
       // The alpha a texel needs to be paper rather than hole.
       alphaTest: 0.5,
+      // The scattered field: a seeded generator, how many stars a strip gets, their closest spacing and the clear space
+      // kept round a constellation's star. Most are tiny (`dim` radii, skewed small by `skew`); a few (`brightShare`)
+      // are bright plus-shaped ones.
+      seed: 1913,
+      count: 150,
+      spacing: 0.08,
+      clearance: 0.14,
+      dim: { min: 0.005, max: 0.011 },
+      skew: 2.5,
+      brightShare: 0.06,
+      bright: { min: 0.016, max: 0.024 },
+      // A plus: its core as a share of the radius, its arms' length and thickness as multiples of the radius.
+      plus: { core: 0.5, arm: 2.6, thickness: 0.4 },
+      // Constellations in their real patterns: each star as its angular offset in degrees east and north of a datum (a
+      // star of the pattern), laid out `metresPerDegree` on the sky from `at`. A `bright` star is a plus.
+      constellations: [
+        {
+          name: 'Big Dipper',
+          strip: 'back',
+          at: [3.55, 1.75],
+          metresPerDegree: 0.04,
+          stars: [
+            { dx: 0, dy: 5.8, bright: true }, // Dubhe
+            { dx: -0.25, dy: 0.4, bright: false }, // Merak
+            { dx: 7.06, dy: -2.3, bright: false }, // Phecda
+            { dx: 10.1, dy: 1.0, bright: false }, // Megrez
+            { dx: 15.5, dy: 0, bright: true }, // Alioth
+            { dx: 19.7, dy: -1.1, bright: false }, // Mizar
+            { dx: 23.0, dy: -6.7, bright: true }, // Alkaid
+          ],
+        },
+        {
+          name: 'Cassiopeia',
+          strip: 'back',
+          at: [1.7, 1.7],
+          metresPerDegree: 0.05,
+          stars: [
+            { dx: 0, dy: 0, bright: false }, // Caph
+            { dx: 4.0, dy: -2.6, bright: true }, // Schedar
+            { dx: 6.0, dy: 1.6, bright: false }, // Gamma
+            { dx: 9.6, dy: 1.1, bright: false }, // Ruchbah
+            { dx: 13.2, dy: 4.6, bright: false }, // Segin
+          ],
+        },
+        {
+          name: "Orion's belt",
+          strip: 'left',
+          at: [2.8, 1.8],
+          metresPerDegree: 0.2,
+          stars: [
+            { dx: 0, dy: 0, bright: true }, // Mintaka
+            { dx: 1.05, dy: -0.9, bright: true }, // Alnilam
+            { dx: 2.25, dy: -1.64, bright: true }, // Alnitak
+          ],
+        },
+      ] satisfies { name: string; strip: 'back' | 'left'; at: [number, number]; metresPerDegree: number; stars: { dx: number; dy: number; bright: boolean }[] }[],
+      // A constellation star's radius: dim ones, and bright (plus) ones.
+      constellationRadius: { dim: 0.013, bright: 0.02 },
     },
   },
   // The sky beyond the windows turns on game time (src/game/skyCycle.ts), colour only: the stage's light,

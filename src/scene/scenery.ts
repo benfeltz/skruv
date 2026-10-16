@@ -16,9 +16,9 @@ import {
   openSegments,
   sceneryBox,
   starlightAt,
-  starMask,
 } from '../game/scenery.js';
 import type { BoxFace, Point } from '../game/scenery.js';
+import { SKY_TEXELS, skyTexture, skyUv } from '../game/starSky.js';
 import type { WallName } from '../game/stageBoxes.js';
 
 /** One inner face as a plane in box-local coordinates, its +z normal turned into the box. */
@@ -26,21 +26,14 @@ function faceGeometry({ centre, width, height, rotation }: BoxFace) {
   return new THREE.PlaneGeometry(width, height).rotateX(rotation[0]).rotateY(rotation[1]).translate(...centre);
 }
 
-const CHANNELS = 4;
-
 /**
- * Pierces the sky material with the pinhole mask, once: the mask is the alpha (a hole discards), so the backlight
- * behind the back panel shows through. A no-op when the material already has it, so every box shares the one sky.
+ * Pierces the sky material with the night sky's pinhole mask, once: the mask is the alpha (a hole discards), so the
+ * backlight behind the back panel shows through. A no-op when the material already has it, so every box shares the one sky.
  */
 function pierceSky(skyMaterial: THREE.MeshBasicMaterial) {
   if (skyMaterial.alphaMap) return;
-  const { texels, alphaTest } = STAGE.scenery.stars;
-  const mask = starMask();
-  // The alpha map reads the green channel, so the mask goes in all four.
-  const data = new Uint8Array(mask.length * CHANNELS);
-  mask.forEach((v, i) => data.fill(v, i * CHANNELS, (i + 1) * CHANNELS));
-  const texture = new THREE.DataTexture(data, texels, texels, THREE.RGBAFormat);
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  // The alpha map reads the green channel, which the sky texture carries.
+  const texture = new THREE.DataTexture(skyTexture(), SKY_TEXELS.width, SKY_TEXELS.height, THREE.RGBAFormat);
   // Mipmapped, so a hole shrinks steadily with distance instead of flickering across the alpha test; a hole too small
   // for the screen averages away to paper in the same way every frame.
   texture.magFilter = THREE.LinearFilter;
@@ -48,16 +41,15 @@ function pierceSky(skyMaterial: THREE.MeshBasicMaterial) {
   texture.generateMipmaps = true;
   texture.needsUpdate = true;
   skyMaterial.alphaMap = texture;
-  skyMaterial.alphaTest = alphaTest;
+  skyMaterial.alphaTest = STAGE.scenery.stars.alphaTest;
   skyMaterial.needsUpdate = true;
 }
 
-/** The panel's UVs in tiles of the mask, so a pinhole is the same size on every wall, the wall's own offset along. */
-function tileUvs(geometry: THREE.PlaneGeometry, width: number, height: number, offset: number) {
-  const { tile } = STAGE.scenery.stars;
+/** The panel's UVs on the wall's strip of the sky texture, so each constellation stands once where its wall shows it. */
+function skyUvs(geometry: THREE.PlaneGeometry, name: WallName, height: number) {
   const position = geometry.getAttribute('position');
   const uv = geometry.getAttribute('uv');
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, (position.getX(i) + width / 2) / tile + offset, (position.getY(i) + height / 2) / tile);
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, ...skyUv(name, position.getX(i), position.getY(i), height));
 }
 
 /** Flat x, y segment endpoints on the plane z, as x, y, z triples. */
@@ -97,7 +89,7 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
 
   pierceSky(skyMaterial);
   const panelGeometry = new THREE.PlaneGeometry(mouth.width, mouth.height);
-  tileUvs(panelGeometry, mouth.width, mouth.height, STAGE.scenery.stars.offset[name]);
+  skyUvs(panelGeometry, name, mouth.height);
   const panel = new THREE.Mesh(panelGeometry, skyMaterial);
   panel.name = `${name}SceneryPanel`;
   panel.position.z = -box.panelDepth;

@@ -12,9 +12,7 @@ import {
   hillSkyline,
   openSegments,
   sceneryBox,
-  starField,
   starlightAt,
-  starMask,
 } from '../src/game/scenery.js';
 import { WALL_NAMES, sceneryMouth, windowOpenings } from '../src/game/stageBoxes.js';
 
@@ -194,27 +192,6 @@ describe('the stars', () => {
     expect(starlightAt(1)).toBe(starlightAt(0));
     expect(starlightAt(0.9)).toBeGreaterThan(0);
     expect(starlightAt(0.9)).toBeLessThan(1);
-  });
-
-  it('are the same for the same seed and inside the tile', () => {
-    expect(starField(7, 20)).toEqual(starField(7, 20));
-    expect(starField(7, 20)).not.toEqual(starField(8, 20));
-    expect(starField(7, scenery.stars.count)).toHaveLength(scenery.stars.count);
-    for (const [u, v] of starField(7, 200)) {
-      expect(u).toBeGreaterThanOrEqual(0);
-      expect(u).toBeLessThan(1);
-      expect(v).toBeGreaterThanOrEqual(0);
-      expect(v).toBeLessThan(1);
-    }
-  });
-
-  it('pierce a mask of paper with holes, a small share of it', () => {
-    const mask = starMask();
-    expect(mask).toHaveLength(scenery.stars.texels ** 2);
-    const holes = mask.filter((v) => v === 0).length;
-    expect(holes).toBeGreaterThan(scenery.stars.count);
-    expect(holes / mask.length).toBeLessThan(0.05);
-    expect(mask.every((v) => v === 0 || v === 255)).toBe(true);
   });
 });
 
