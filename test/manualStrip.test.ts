@@ -291,6 +291,28 @@ describe('opening it with a mouse or a key: click to open, click the page to clo
   });
 });
 
+describe("the manual's open page prints no arrows, so it lays no hit zones over its corners", () => {
+  it('has only the page in its frame — a tap in a lower corner closes it, as anywhere on the page', () => {
+    const { manual, centre, view } = mountStrip();
+    down(centre());
+    up(centre());
+    const frame = view.children[0];
+    expect(frame.children).toHaveLength(1);
+    down(frame.children[0]);
+    up(frame.children[0]);
+    expect(manual.expanded).toBe(false);
+  });
+
+  it('keeps focus on the strip when it opens, and names the page for a screen reader', () => {
+    const { manual, centre } = mountStrip();
+    centre().focus();
+    centre().fire('click', { detail: 0 });
+    expect(manual.expanded).toBe(true);
+    expect(dom.focused).toBe(centre());
+    expect(manual.element.children[2].textContent).toBe(`Page 1 of ${COUNT}`);
+  });
+});
+
 describe('it never blocks the room', () => {
   it('builds no scrim and swallows nothing: the page takes input only on itself', () => {
     const { manual } = mountStrip();

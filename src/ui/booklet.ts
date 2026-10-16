@@ -335,11 +335,11 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   view.className = 'booklet-page';
   const viewCanvas = pageCanvas(pageW, pageH);
   viewCanvas.setAttribute('role', 'img');
-  // The arrows are printed in the page's corners. They ride on the canvas in a frame of its
-  // own, with the page's control, if it has one. `showAction` shows the open page's control,
-  // or hides it.
-  const arrows = cornerArrows();
-  const { prev, next } = arrows;
+  // The arrows are printed in the page's corners — the catalog's. The manual's pages print
+  // none (the strip flips them), so it lays no hit zones over its corners. They ride on the
+  // canvas in a frame of its own, with the page's control, if it has one. `showAction` shows
+  // the open page's control, or hides it.
+  const arrows = cornerArrows(!stripped);
   let showAction = () => {};
   const frame = document.createElement('div');
   frame.className = 'booklet-frame';
@@ -357,7 +357,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
       actionButton.setAttribute('aria-label', control?.label ?? '');
     };
   }
-  frame.append(prev, next);
+  if (arrows.prev && arrows.next) frame.append(arrows.prev, arrows.next);
   view.append(frame);
 
   // Over the head of the page, after the page itself, so the view's children keep their places.
@@ -423,9 +423,10 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     showScrim(open, byRoomTap ? BOOKLET_UI.scrimLingerMs : 0);
     render();
     // Onto the page's next arrow (aria-disabled at the last page, never `disabled`, so focus
-    // is not lost there), back to the docked form on close — unless the close was a tap.
+    // is not lost there; a strip's page has none, and focus stays on the strip), back to the
+    // docked form on close — unless the close was a tap.
     if (byRoomTap) return;
-    (open ? next : (carousel?.centre() ?? thumb)).focus({ preventScroll: true });
+    (open ? arrows.next : (carousel?.centre() ?? thumb))?.focus({ preventScroll: true });
   }
 
   // The tap that puts the booklet down. Captured, so a finger that slides onto the sheet
@@ -469,8 +470,8 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
 
   if (!stripped) thumb.addEventListener('click', () => setOpen(true));
   close.addEventListener('click', () => setOpen(false));
-  prev.addEventListener('click', () => flip(-1));
-  next.addEventListener('click', () => flip(1));
+  arrows.prev?.addEventListener('click', () => flip(-1));
+  arrows.next?.addEventListener('click', () => flip(1));
 
   // Swipe on the page: across flips, down closes.
   let swipe: { id: number; x: number; y: number } | null = null;
@@ -740,17 +741,21 @@ function overlay(control: HTMLElement, [x, y, w, h]: readonly [number, number, n
 /**
  * The page's controls: a clear button over each arrow printed in a lower corner of the
  * page (CATALOG.page.prevHit / .nextHit, src/scene/catalogPages.ts draws the arrows), none
- * of its own to show, and a live region for the page's number, which is printed, not text. At an end the arrow is not drawn but its button stays, inert (aria-disabled): a tap
+ * of its own to show — unless the page `printed` none (the manual's) — and a live region for
+ * the page's number, which is printed, not text. At an end the arrow is not drawn but its button stays, inert (aria-disabled): a tap
  * there is the button's own, never a tap on the page that would put the catalog down, and
  * focus on it is not lost. The page's own marks say which (src/game/catalogLayout.ts `pageMarks`).
  */
-function cornerArrows() {
+function cornerArrows(printed: boolean) {
   const { prevHit, nextHit } = CATALOG.page;
-  const prev = button('', CATALOG.words.prev);
-  const next = button('', CATALOG.words.next);
-  for (const [control, rect] of [[prev, prevHit], [next, nextHit]] as const) {
-    control.className = 'booklet-action';
-    overlay(control, rect, 0);
+  // A page that prints no arrows has no hit zones to put over them.
+  const prev = printed ? button('', CATALOG.words.prev) : null;
+  const next = printed ? button('', CATALOG.words.next) : null;
+  if (prev && next) {
+    for (const [control, rect] of [[prev, prevHit], [next, nextHit]] as const) {
+      control.className = 'booklet-action';
+      overlay(control, rect, 0);
+    }
   }
   const status = document.createElement('span');
   status.className = 'booklet-status';
@@ -761,8 +766,8 @@ function cornerArrows() {
     next,
     paint(page: number, total: number) {
       const marks = pageMarks(page, total);
-      prev.setAttribute('aria-disabled', String(!marks.prev));
-      next.setAttribute('aria-disabled', String(!marks.next));
+      prev?.setAttribute('aria-disabled', String(!marks.prev));
+      next?.setAttribute('aria-disabled', String(!marks.next));
       status.textContent = `Page ${page + 1} of ${total}`;
     },
   };

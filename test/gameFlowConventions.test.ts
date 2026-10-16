@@ -113,7 +113,7 @@ describe('booklet focus (PR #12 review)', () => {
   const setOpen = booklet.slice(booklet.indexOf('function setOpen('), booklet.indexOf("thumb.addEventListener('click'"));
 
   it('opens onto the next arrow, which is only ever aria-disabled — focus is never lost at the last page', () => {
-    expect(setOpen).toMatch(/\(open \? next : \(carousel\?\.centre\(\) \?\? thumb\)\)\.focus/);
+    expect(setOpen).toMatch(/\(open \? arrows\.next : \(carousel\?\.centre\(\) \?\? thumb\)\)\?\.focus/);
     expect(booklet).not.toMatch(/\.disabled\s*=/);
   });
 });
