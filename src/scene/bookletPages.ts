@@ -4,7 +4,8 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { BOOKLET, COLORS } from '../constants.js';
 import { createBooklet, gamePagesFor } from '../game/bookletModel.js';
-import { explodeStep, floatOut } from '../game/explode.js';
+import { explodeStep, floatOut, insetsFor } from '../game/explode.js';
+import type { Inset } from '../game/explode.js';
 import { createPageCache, FAINT, font, INK, newPage, PAPER } from './pagePaper.js';
 import { rowsFor } from '../game/controlsPage.js';
 import { ITEM_ID, itemById } from '../game/item.js';
@@ -17,8 +18,8 @@ import type { Quat, Size, Vec3 } from '../../tools/validate/lib/geometry.js';
 
 // The booklet's pages, drawn from the same part models the room uses, so a page can never
 // disagree with the geometry. Wordless, as the real thing is: a big step numeral, an
-// outline drawing (this page's parts bold, what is already built pale), hardware count
-// bubbles with their part numbers, and pictogram warning pages with faceless figures. The
+// outline drawing (this page's parts bold, what is already built pale, new parts pulled out
+// of their holes), a detail inset per fastener type with its count and part number, and pictogram warning pages with faceless figures. The
 // game's own controls page, before the back cover, is the one with words: a pictogram and
 // a short label per row.
 // WHAT each page shows is src/game/bookletModel.ts's; this module only draws. Branding is
@@ -209,29 +210,61 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     ctx.font = font(BOOKLET.numeralSize, 800);
     ctx.fillText(String(page.number), m - 6, m + BOOKLET.numeralSize * 0.78);
 
-    // Count bubbles along the top, right of the numeral; the tool in hand after them.
-    const r = BOOKLET.bubbleRadius;
-    let bx = m + 190 + r;
-    for (const { type, count, partNumber } of page.hardware) {
-      bubble(ctx, bx, m + r, r);
-      views.draw(ctx, [single(type)], [bx - r * 0.62, m + r * 0.28, r * 1.24, r * 0.95]);
+    // Detail insets along the top, right of the numeral: one circle per fastener type, a tight
+    // view of one joint with the fastener floating out, its count and part number beneath;
+    // the tool in hand sits in the first. A thin tail runs from each to its joint below.
+    const insets = insetsFor(page, layout, item.partTypes);
+    const { radius: maxRadius, gap } = BOOKLET.inset;
+    const left = m + 190;
+    const slots = Math.max(insets.length, 1);
+    const r = Math.min(maxRadius, (pageW - m - left - gap * (slots - 1)) / (2 * slots));
+    const cy = m + maxRadius;
+    const centres = insets.map((_, i): [number, number] => [left + r + i * (2 * r + gap), cy]);
+    const orientation = page.pose === 'parts' ? UPRIGHT : ORIENTATION[page.pose];
+    insets.forEach(({ type, count, partNumber, items, leader, focus, axis }, i) => {
+      const [cx] = centres[i];
+      const d = Math.round(2 * r);
+      const { canvas } = views.render(
+        items.map((it) => ({ ...it, weight: it.type === type ? 'bold' : 'faint' })),
+        d,
+        d,
+        // Turned so the fastener floats up off a face the viewer sees, whatever the page's pose.
+        new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(...axis), new THREE.Vector3(...BOOKLET.inset.lift).normalize()),
+        { frame: focus, lines: [leader] },
+      );
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+      ctx.clip();
+      ctx.drawImage(canvas, cx - r, cy - r, 2 * r, 2 * r);
+      ctx.restore();
+      ring(ctx, cx, cy, r);
       ctx.fillStyle = INK;
       ctx.textAlign = 'center';
       ctx.font = font(28, 800);
-      ctx.fillText(`${count}×`, bx, m + 2 * r + 34);
+      ctx.fillText(`${count}×`, cx, cy + r + 34);
       ctx.font = font(17, 500);
-      ctx.fillText(partNumber, bx, m + 2 * r + 56);
+      ctx.fillText(partNumber, cx, cy + r + 56);
       ctx.textAlign = 'left';
-      bx += 2 * r + 28;
-    }
+    });
     if (page.tool) {
-      bubble(ctx, bx, m + r, r);
-      views.draw(ctx, [single(page.tool)], [bx - r * 0.7, m + r * 0.3, r * 1.4, r * 1.4]);
+      // In the first inset's lower right; alone in the first slot when the step fastens nothing.
+      const [cx] = centres[0] ?? [left + BOOKLET.inset.toolOnly, cy];
+      const rad = insets.length ? r * BOOKLET.inset.tool : BOOKLET.inset.toolOnly;
+      const [tx, ty] = insets.length ? [cx + r * 0.6, cy + r * 0.6] : [cx, cy];
+      ctx.fillStyle = PAPER;
+      ctx.beginPath();
+      ctx.arc(tx, ty, rad, 0, 2 * Math.PI);
+      ctx.fill();
+      ring(ctx, tx, ty, rad);
+      views.draw(ctx, [single(page.tool)], [tx - rad * 0.7, ty - rad * 0.7, rad * 1.4, rad * 1.4]);
     }
 
-    const frame: Rect = [m, m + 2 * r + 80, pageW - 2 * m, pageH - (2 * m + 2 * r + 80)];
-    const { items, lines } = drawingOf(page);
-    views.draw(ctx, items, frame, page.pose === 'parts' ? UPRIGHT : ORIENTATION[page.pose], { lines });
+    const top = m + 2 * maxRadius + 80;
+    const frame: Rect = [m, top, pageW - 2 * m, pageH - m - top];
+    const { items, lines, anchorOf } = drawingOf(page);
+    const project = views.draw(ctx, items, frame, orientation, { lines });
+    insets.forEach((inset, i) => tail(ctx, centres[i], r, project(anchorOf(inset))));
     if (page.turns.length) turnArrow(ctx, frame[0] + frame[2] - 80, frame[1] + 70, 46);
     if (page.tip) {
       // Two people tip it up together: an arc over the drawing, a figure at each side.
@@ -281,11 +314,20 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
 
   // What a step page's frame draws: its new parts and fasteners pulled apart along their holes
   // (src/game/explode.ts), with leader lines back; a loose-parts page keeps its fan.
-  function drawingOf(page: BuildStep): { items: ViewItem[]; lines: [Vec3, Vec3][] } {
+  // `anchorOf(inset)` is where the inset's joint is in that drawing, for its tail.
+  function drawingOf(page: BuildStep): { items: ViewItem[]; lines: [Vec3, Vec3][]; anchorOf: (inset: Inset) => Vec3 } {
     if (page.pose === 'parts') return looseParts(page);
     const bold = page.tip ? new Set<InstanceId>() : boldOf(page);
-    const { items, leaders } = explodeStep(page, layout, item.partTypes);
-    return { items: items.map((it) => ({ ...it, weight: bold.has(it.id) ? 'bold' : 'faint' })), lines: leaders };
+    const { items, leaders, offsets } = explodeStep(page, layout, item.partTypes);
+    return {
+      items: items.map((it) => ({ ...it, weight: bold.has(it.id) ? 'bold' : 'faint' })),
+      lines: leaders,
+      // The hole goes with its host when the host is pulled away.
+      anchorOf: ({ joint, anchor }) => {
+        const [dx, dy, dz] = offsets.get(layout.joints[joint].host) ?? [0, 0, 0];
+        return [anchor[0] + dx, anchor[1] + dy, anchor[2] + dz];
+      },
+    };
   }
 
   // A loose-parts page: each panel the page works on laid flat with its own hardware in it,
@@ -297,6 +339,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     );
     const items: ViewItem[] = [];
     const lines: [Vec3, Vec3][] = [];
+    const placers = new Map<InstanceId, (v: Vec3) => Vec3>();
     const pose = new THREE.Matrix4();
     const local = new THREE.Matrix4();
     const inverse = new THREE.Matrix4();
@@ -312,11 +355,15 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
       inverse.compose(p.set(...panel.position), q.set(...panel.rotation), s.set(1, 1, 1)).invert();
       // The assembled frame to this panel's place in the fan.
       toFlat.makeRotationFromQuaternion(flat).multiply(inverse);
-      const place = (v: Vec3): Vec3 => p.set(...v).applyMatrix4(toFlat).add(s.set(0, 0, offset)).toArray();
       const joints = page.joints.map((i) => layout.joints[i]).filter((j) => j.host === id);
       // Flat extent across the fan: this panel starts half of it past the last one's edge.
       const depth = Math.min(...size.filter((d) => d !== Math.min(...size)));
       offset += depth / 2;
+      // Kept for the tails, after the scratch matrices have moved on to the next panel.
+      const flatten = toFlat.clone();
+      const z = offset;
+      const place = (v: Vec3): Vec3 => new THREE.Vector3(...v).applyMatrix4(flatten).add(new THREE.Vector3(0, 0, z)).toArray();
+      placers.set(id, place);
       items.push({ ...panel, ...flatPose(panel.position, panel.rotation), weight: 'bold' });
       for (const joint of joints) {
         const hardware = partById.get(joint.hardware)!;
@@ -334,7 +381,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
         return { position: [p.x, p.y, p.z + offset] as Vec3, rotation: q.toArray() as Quat };
       }
     }
-    return { items, lines };
+    return { items, lines, anchorOf: ({ joint, anchor }: Inset) => placers.get(layout.joints[joint].host)!(anchor) };
   }
 
   const single = (type: string): ViewItem & { id: string } => ({ id: type, type, position: [0, 0, 0], rotation: [0, 0, 0, 1], weight: 'bold' });
@@ -543,12 +590,34 @@ function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: numb
   ctx.roundRect(x, y, w, h, r);
 }
 
-function bubble(ctx: Ctx, x: number, y: number, r: number) {
+function ring(ctx: Ctx, x: number, y: number, r: number) {
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = BOOKLET.inset.ringLine;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, 2 * Math.PI);
   ctx.stroke();
+}
+
+// A thin tail from an inset's ring (centre `from`, radius `r`) to its joint `to` in the
+// drawing: a shallow bow, a dot at the joint.
+function tail(ctx: Ctx, from: [number, number], r: number, to: [number, number]) {
+  const [dx, dy] = [to[0] - from[0], to[1] - from[1]];
+  const length = Math.hypot(dx, dy);
+  // The joint lies inside the ring: nothing to run.
+  if (length <= r) return;
+  const [ux, uy] = [dx / length, dy / length];
+  const start: [number, number] = [from[0] + ux * r, from[1] + uy * r];
+  const bow = (length - r) * BOOKLET.inset.tailBow;
+  ctx.strokeStyle = INK;
+  ctx.fillStyle = INK;
+  ctx.lineWidth = BOOKLET.inset.tailLine;
+  ctx.beginPath();
+  ctx.moveTo(...start);
+  ctx.quadraticCurveTo((start[0] + to[0]) / 2 - uy * bow, (start[1] + to[1]) / 2 + ux * bow, ...to);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(to[0], to[1], BOOKLET.inset.tailDot, 0, 2 * Math.PI);
+  ctx.fill();
 }
 
 // A ticked or crossed circle: the do / don't marks.

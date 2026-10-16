@@ -36,6 +36,8 @@ export interface Inset extends PartCount {
   leader: Leader;
   /** The box the inset frames — the hole mouth and where the fastener floats — in the main drawing's frame. */
   focus: { min: Vec3; max: Vec3 };
+  /** The hole's world axis, out of its mouth: the way the fastener floats. */
+  axis: Vec3;
   /** The hole's world position: where the inset's tail lands in the main drawing. */
   anchor: Vec3;
 }
@@ -113,7 +115,7 @@ export function separation(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'>, l
 
 /**
  * The page's drawing: every part of `step.shown` at its pose with its separation offset,
- * and the leaders from floated fasteners back to their holes.
+ * the leaders from floated fasteners back to their holes, and each displaced part's offset.
  */
 export function explodeStep(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'>, layout: ExplodeLayout, partTypes: PartTypes) {
   const { offsets, leaders } = separation(step, layout, partTypes);
@@ -122,7 +124,7 @@ export function explodeStep(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'>, 
     const { type, position, rotation } = part(id);
     return { id, type, position: add(position, offsets.get(id) ?? ZERO), rotation };
   });
-  return { items, leaders };
+  return { items, leaders, offsets };
 }
 
 /**
@@ -151,7 +153,7 @@ export function insetsFor(step: Pick<BuildStep, 'joints' | 'hardware'>, layout: 
     const [from, to] = floatOut(joint, layout, partTypes);
     const host = part(joint.host);
     const fastener = part(joint.hardware);
-    const anchor = hole(joint).position;
+    const { position: anchor, axis } = hole(joint);
     // The hole mouth and the spot the fastener floats to, each with `focus` to spare.
     const spots = [anchor, add(anchor, add(to, scale(from, -1)))];
     const box = (pick: (a: number, b: number) => number, sign: number): Vec3 => [0, 1, 2].map((k) => pick(...(spots.map((s) => s[k] + sign * BOOKLET.inset.focus) as [number, number]))) as Vec3;
@@ -164,6 +166,7 @@ export function insetsFor(step: Pick<BuildStep, 'joints' | 'hardware'>, layout: 
       ],
       leader: [from, to],
       focus: { min: box(Math.min, -1), max: box(Math.max, 1) },
+      axis,
       anchor,
     });
   }

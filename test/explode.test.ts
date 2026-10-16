@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BOOKLET } from '../src/constants.js';
+import { createBuildSteps } from '../src/game/bookletModel.js';
+import { ITEM_IDS, itemById } from '../src/game/item.js';
 import { explodeStep, floatOut, insetsFor, separation } from '../src/game/explode.js';
 import type { ExplodeLayout } from '../src/game/explode.js';
 import type { Joint } from '../src/game/item.js';
@@ -142,5 +144,41 @@ describe('insetsFor', () => {
 
   it('gives a step with no hardware no insets', () => {
     expect(insetsFor({ joints: [2], hardware: [] }, layout, partTypes)).toEqual([]);
+  });
+});
+
+// Every item's own pages: the insets match the count bubbles they replace, and nothing a
+// page did not add is pulled out of place.
+describe.each(ITEM_IDS)('%s: every step page', (id) => {
+  const item = itemById(id);
+  const layout = item.assembled;
+  const steps = createBuildSteps(item.manual.pages, { layout, partTypes: item.partTypes, resolve: item.resolve });
+
+  it('has one inset per fastener type it adds, with the same count and part number', () => {
+    for (const step of steps) {
+      const insets = insetsFor(step, layout, item.partTypes);
+      expect(insets.map(({ type, count, partNumber }) => ({ type, count, partNumber })), `step ${step.number}`).toEqual(step.hardware);
+      for (const inset of insets) {
+        expect(layout.joints[inset.joint].mover, `step ${step.number}`).toBe(layout.joints[inset.joint].hardware);
+        for (const k of [0, 1, 2]) {
+          expect(inset.anchor[k]).toBeGreaterThanOrEqual(inset.focus.min[k]);
+          expect(inset.anchor[k]).toBeLessThanOrEqual(inset.focus.max[k]);
+        }
+      }
+    }
+  });
+
+  it('moves only what the page adds: its movers, and hardware seated in them', () => {
+    for (const step of steps) {
+      const movers = new Set(step.joints.map((i) => layout.joints[i].mover));
+      const { offsets } = separation(step, layout, item.partTypes);
+      const panels = layout.parts.filter((p) => p.role !== 'hardware').map((p) => p.id);
+      for (const panel of panels) if (offsets.has(panel)) expect(movers.has(panel), `${panel} on step ${step.number}`).toBe(true);
+      // Every fastener a page pushes in floats; nothing else but riders moves.
+      for (const i of step.joints) {
+        const joint = layout.joints[i];
+        if (joint.mover === joint.hardware) expect(offsets.has(joint.hardware), joint.hardware).toBe(true);
+      }
+    }
   });
 });

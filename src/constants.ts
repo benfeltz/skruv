@@ -142,7 +142,6 @@ export const BOOKLET = {
   // Room between loose panels fanned out on a loose-parts page, in metres of the drawing.
   fanGap: 0.12,
   numeralSize: 150,
-  bubbleRadius: 64,
   // Exploded step drawings (src/game/explode.ts), in metres of the drawing along a hole's
   // axis: how far hardware floats out of its hole, how far a part pressed onto hardware is
   // pulled away, and (sub-assembly install pages, PR 2) a built assembly held off its place.
@@ -151,8 +150,21 @@ export const BOOKLET = {
   // Detail insets (src/scene/bookletPages.ts `step`), page-canvas pixels except `focus`: one
   // circle per fastener type across the top, shrunk to fit the row. `focus` is the half-size
   // in metres of the box round a hole mouth each inset frames. `tool` is the tool's share of
-  // the circle, drawn in its lower right.
-  inset: { radius: 72, gap: 24, focus: 0.06, ringLine: 3, tailLine: 2, tailDot: 5, tailBow: 0.18, tool: 0.52, toolOnly: 64 },
+  // the circle, drawn in its lower right; `toolOnly` its radius when a step fastens nothing.
+  inset: {
+    radius: 72,
+    gap: 24,
+    focus: 0.03,
+    ringLine: 3,
+    tailLine: 2,
+    tailDot: 5,
+    tailBow: 0.18,
+    tool: 0.46,
+    toolOnly: 64,
+    // The way an inset turns its hole's axis on the page: up, a little towards the viewer, so
+    // the fastener always floats up off a face the viewer sees.
+    lift: [0, 1, 0.35] satisfies Vec3,
+  },
   font: 'system-ui, -apple-system, "Segoe UI", sans-serif',
   // The controls page (src/game/controlsPage.ts): a title, then rows in columns — each a
   // square pictogram, drawn on a 100-unit grid at `pictogramLine`, and its label beside it,
