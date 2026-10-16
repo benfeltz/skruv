@@ -1,12 +1,18 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
 import { COLORS, ROOM, STAGE } from '../src/constants.js';
+import { sceneryMouth } from '../src/game/stageBoxes.js';
 import { createRoom } from '../src/scene/room.js';
 
 // A stand-in renderer: the room only asks it for the drawing buffer's size.
 const renderer = (width = 800, height = 600) => ({ getSize: (target: THREE.Vector2) => target.set(width, height) }) as unknown as THREE.WebGLRenderer;
 const at = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const bounds = (object: THREE.Object3D) => new THREE.Box3().setFromObject(object);
+
+const uvsOf = (mesh: THREE.Mesh) => Array.from(mesh.geometry.getAttribute('uv').array);
+const panelUvs = (room: ReturnType<typeof createRoom>) => uvsOf(room.backWall.getObjectByName('backSceneryPanel') as THREE.Mesh);
+const backlightUvs = (room: ReturnType<typeof createRoom>) => uvsOf(room.backWall.getObjectByName('backSceneryBacklight') as THREE.Mesh);
+const sceneryHalfWidth = () => sceneryMouth('back').width / 2;
 
 describe('the room as built', () => {
   const { group, pieces, leftWall, backWall } = createRoom();
@@ -20,26 +26,45 @@ describe('the room as built', () => {
     expect(group.children).toContain(backWall);
   });
 
-  it('holds a wall, its window trim, its ink and a sky per window in the wall\'s one group', () => {
-    expect(names(leftWall)).toEqual(['leftSky0', 'leftWallInk', 'leftWallMesh', 'leftWindowTrim']);
-    expect(names(backWall)).toEqual(['backSky0', 'backSky1', 'backWallInk', 'backWallMesh', 'backWindowTrim']);
+  it('draws a wall\'s scenery in a handful of meshes, not one per cutout', () => {
+    const meshes: THREE.Object3D[] = [];
+    backWall.getObjectByName('backScenery')!.traverse((o) => { if ((o as THREE.Mesh).isMesh || (o as { isLineSegments2?: boolean }).isLineSegments2) meshes.push(o); });
+    expect(meshes.length).toBeLessThanOrEqual(12);
   });
 
-  it('draws each sky unlit, outside its wall, without ink and not above the wall top', () => {
-    const skies = [leftWall.getObjectByName('leftSky0')!, backWall.getObjectByName('backSky0')!, backWall.getObjectByName('backSky1')!] as THREE.Mesh[];
-    for (const sky of skies) {
-      expect(sky.material).toBeInstanceOf(THREE.MeshBasicMaterial);
-      expect(sky.children).toHaveLength(0);
-      expect(bounds(sky).max.y).toBeLessThanOrEqual(STAGE.wallHeight + 1e-6);
+  it('holds a wall, its window trim, its ink and one scenery box in the wall\'s one group', () => {
+    expect(names(leftWall)).toEqual(['leftScenery', 'leftWallInk', 'leftWallMesh', 'leftWindowTrim']);
+    expect(names(backWall)).toEqual(['backScenery', 'backWallInk', 'backWallMesh', 'backWindowTrim']);
+  });
+
+  it('opens each box on its wall\'s outer face and reaches back behind it, never above the wall top', () => {
+    for (const [wall, name, across, sign] of [[leftWall, 'left', 'x', -1], [backWall, 'back', 'z', -1]] as const) {
+      const scenery = wall.getObjectByName(`${name}Scenery`)!;
+      const box = bounds(scenery);
+      expect(box.max.y).toBeLessThanOrEqual(STAGE.wallHeight + 1e-6);
+      expect(box.min.y).toBeGreaterThanOrEqual(-1e-6);
+      const edge = sign * (across === 'x' ? ROOM.width : ROOM.depth) / 2 - STAGE.wallThickness;
+      expect(box.max[across]).toBeCloseTo(edge, 6);
+      expect(box.min[across]).toBeCloseTo(edge - STAGE.scenery.depth, 6);
     }
-    expect(skies[0].position.x).toBeLessThan(-ROOM.width / 2 - STAGE.wallThickness);
-    expect(skies[1].position.z).toBeLessThan(-ROOM.depth / 2 - STAGE.wallThickness);
   });
 
-  it('turns each sky to face the room', () => {
+  it('paints each box\'s back panel with the one sky material, inside facing the room', () => {
     const normal = (object: THREE.Object3D) => new THREE.Vector3(0, 0, 1).applyQuaternion(object.getWorldQuaternion(new THREE.Quaternion()));
-    expect(normal(leftWall.getObjectByName('leftSky0')!).x).toBeCloseTo(1, 6);
-    expect(normal(backWall.getObjectByName('backSky0')!).z).toBeCloseTo(1, 6);
+    const panels = [leftWall.getObjectByName('leftSceneryPanel')!, backWall.getObjectByName('backSceneryPanel')!] as THREE.Mesh[];
+    expect(new Set(panels.map((p) => p.material)).size).toBe(1);
+    expect(panels[0]!.material).toBeInstanceOf(THREE.MeshBasicMaterial);
+    expect(normal(panels[0]!).x).toBeCloseTo(1, 6);
+    expect(normal(panels[1]!).z).toBeCloseTo(1, 6);
+  });
+
+  it('draws the box\'s outside in the void\'s colour, back faces only, so it vanishes from outside', () => {
+    for (const [wall, name] of [[leftWall, 'left'], [backWall, 'back']] as const) {
+      const skin = wall.getObjectByName(`${name}ScenerySkin`) as THREE.Mesh;
+      const material = skin.material as THREE.MeshBasicMaterial;
+      expect(material.side).toBe(THREE.BackSide);
+      expect(material.color.getHex()).toBe(COLORS.background);
+    }
   });
 
   it('draws one ink per wall: its outline, the openings and the trim, not each piece', () => {
@@ -108,21 +133,18 @@ describe('the room per frame', () => {
     expect([backWall.visible, leftWall.visible]).toEqual([false, false]);
   });
 
-  it('hides each wall\'s windows and skies with it, as one group', () => {
+  it('hides each wall\'s windows and scenery box with it, as one group', () => {
     const { leftWall, backWall, update } = createRoom();
-    const parts = (wall: THREE.Group, name: string, skies: number) => [
-      wall.getObjectByName(`${name}WindowTrim`)!,
-      ...Array.from({ length: skies }, (_, i) => wall.getObjectByName(`${name}Sky${i}`)!),
-    ];
-    const left = parts(leftWall, 'left', 1);
-    const back = parts(backWall, 'back', 2);
+    const parts = (wall: THREE.Group, name: string) => [wall.getObjectByName(`${name}WindowTrim`)!, wall.getObjectByName(`${name}Scenery`)!];
+    const left = parts(leftWall, 'left');
+    const back = parts(backWall, 'back');
     update(at(0, 2, 3), renderer(), 0);
-    expect([...left, ...back].map(shown)).toEqual([true, true, true, true, true]);
+    expect([...left, ...back].map(shown)).toEqual([true, true, true, true]);
     update(at(-ROOM.width, 2, 0), renderer(), 0);
     expect(left.map(shown)).toEqual([false, false]);
-    expect(back.map(shown)).toEqual([true, true, true]);
+    expect(back.map(shown)).toEqual([true, true]);
     update(at(0, 2, -ROOM.depth), renderer(), 0);
-    expect(back.map(shown)).toEqual([false, false, false]);
+    expect(back.map(shown)).toEqual([false, false]);
     expect(left.map(shown)).toEqual([true, true]);
   });
 
@@ -158,14 +180,190 @@ describe('the room per frame', () => {
 
 describe('the sky turns', () => {
   const skyMeshes = (room: ReturnType<typeof createRoom>) =>
-    [room.leftWall.getObjectByName('leftSky0'), room.backWall.getObjectByName('backSky0'), room.backWall.getObjectByName('backSky1')] as THREE.Mesh[];
+    [room.leftWall.getObjectByName('leftSceneryPanel'), room.backWall.getObjectByName('backSceneryPanel')] as THREE.Mesh[];
   const skyColour = (room: ReturnType<typeof createRoom>) => (skyMeshes(room)[0]!.material as THREE.MeshBasicMaterial).color.clone();
   const saved = { ...STAGE.sky };
   afterEach(() => { STAGE.sky.phase = saved.phase; STAGE.sky.cycleMinutes = saved.cycleMinutes; });
 
-  it('shares one material across every sky plane', () => {
+  it('shares one material across every back panel', () => {
     const materials = new Set(skyMeshes(createRoom()).map((m) => m.material));
     expect(materials.size).toBe(1);
+  });
+
+  it('pierces the one sky material with the pinhole mask, a hole where a star shows', () => {
+    const [panel] = skyMeshes(createRoom());
+    const material = panel!.material as THREE.MeshBasicMaterial;
+    expect(material.alphaMap).not.toBeNull();
+    expect(material.alphaTest).toBe(STAGE.scenery.stars.alphaTest);
+    // Mipmapped, so a pinhole fades with distance rather than flickering under the alpha test.
+    expect(material.alphaMap!.generateMipmaps).toBe(true);
+    expect(material.alphaMap!.minFilter).toBe(THREE.LinearMipmapLinearFilter);
+  });
+
+  it('lights the backlight to the stars at night and to nothing but the sky\'s own colour at noon', () => {
+    const room = createRoom();
+    const backlight = room.backWall.getObjectByName('backSceneryBacklight') as THREE.Mesh;
+    const uniforms = (backlight.material as THREE.ShaderMaterial).uniforms as Record<string, { value: number & THREE.Color }>;
+    // The knob starts on noon, where a room built at another hour is not scrubbed: move it off and back.
+    STAGE.sky.phase = 0.4;
+    room.update(at(0, 2, 3), renderer(), 0);
+    STAGE.sky.phase = 0.5;
+    room.update(at(0, 2, 3), renderer(), 0);
+    expect(uniforms.uLevel!.value).toBe(0);
+    expect(uniforms.uSkyColour!.value.equals(skyColour(room))).toBe(true);
+    STAGE.sky.phase = 0;
+    room.update(at(0, 2, 3), renderer(), 0);
+    expect(uniforms.uLevel!.value).toBe(1);
+    expect(uniforms.uStarColour!.value.getHex()).toBe(COLORS.starlight);
+    STAGE.sky.phase = 0.75;
+    room.update(at(0, 2, 3), renderer(), 0);
+    expect(uniforms.uLevel!.value).toBe(0);
+  });
+
+  it('runs the twinkle on the room\'s clock, from the sky texture the pinholes are cut from', () => {
+    const room = createRoom();
+    const backlight = room.backWall.getObjectByName('backSceneryBacklight') as THREE.Mesh;
+    const uniforms = (backlight.material as THREE.ShaderMaterial).uniforms as Record<string, { value: number | THREE.Texture }>;
+    const panel = room.backWall.getObjectByName('backSceneryPanel') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+    expect(uniforms.uSky!.value).toBe(panel.material.alphaMap);
+    expect(uniforms.uPeriod!.value).toBe(STAGE.scenery.stars.twinkle.period);
+    expect(uniforms.uDepth!.value).toBe(STAGE.scenery.stars.twinkle.depth);
+    const before = uniforms.uTime!.value as number;
+    room.update(at(0, 2, 3), renderer(), 2.5);
+    room.update(at(0, 2, 3), renderer(), 1);
+    expect((uniforms.uTime!.value as number) - before).toBeCloseTo(3.5, 9);
+    // The backlight shares the panel's coordinates, so a hole finds its own star's twinkle behind it.
+    expect(backlightUvs(room)).toEqual(panelUvs(room));
+  });
+
+  it('dims and cools the box\'s paper and clouds with the night, keeps the ink black and the moon bright', () => {
+    const room = createRoom();
+    const run = (phase: number) => {
+      STAGE.sky.phase = phase;
+      room.update(at(0, 2, 3), renderer(), 0);
+    };
+    const wall = room.backWall;
+    const paper = (wall.getObjectByName('backSceneryPaper') as THREE.Mesh).material as THREE.MeshBasicMaterial;
+    const cloud = ((wall.getObjectByName('backSceneryCloud0') as THREE.Group).children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
+    const ink = (wall.getObjectByName('backSceneryInk') as unknown as { material: { color: THREE.Color } }).material.color;
+    const inkNoon = ink.getHex();
+    const disc = ((wall.getObjectByName('backSceneryBody') as THREE.Group).children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
+    run(0.4);
+    run(0.5);
+    expect(paper.color.toArray()).toEqual([1, 1, 1]);
+    expect(cloud.color.getHex()).toBe(COLORS.sceneryPaper);
+    const lum = (c: THREE.Color) => c.r + c.g + c.b;
+    const noonCloud = lum(cloud.color);
+    run(0);
+    // A quarter-bright, cool tint on the paper (vertex colours carry the tones), and on the clouds.
+    expect(paper.color.b).toBeCloseTo(STAGE.scenery.nightLevel, 2);
+    expect(paper.color.b).toBeGreaterThan(paper.color.r);
+    expect(lum(cloud.color)).toBeLessThan(noonCloud / 2);
+    expect(cloud.color.b).toBeGreaterThan(cloud.color.r * 1.2);
+    // The ink stays black, and the moon is its own light: untinted, in the moon's own tone.
+    expect(ink.getHex()).toBe(inkNoon);
+    expect(ink.getHex()).toBe(COLORS.stageInk);
+    expect(disc.color.getHex()).toBe(COLORS.sceneryFaint);
+  });
+
+  it('leaves the room\'s own materials and lights alone through the whole day', () => {
+    const room = createRoom();
+    const owned = () => {
+      const colours: string[] = [];
+      room.group.traverse((o) => {
+        expect(o).not.toBeInstanceOf(THREE.Light);
+        const material = (o as THREE.Mesh).material as (THREE.Material & { color?: THREE.Color }) | undefined;
+        if (material?.color && !/Scenery/.test(o.name) && !/Scenery/.test(o.parent?.name ?? '')) colours.push(`${o.name}:${material.color.getHex()}`);
+      });
+      return colours;
+    };
+    const before = owned();
+    for (const phase of [0.4, 0, 0.25, 0.75]) {
+      STAGE.sky.phase = phase;
+      room.update(at(0, 2, 3), renderer(), 0);
+    }
+    expect(owned()).toEqual(before);
+    expect(before.length).toBeGreaterThan(0);
+  });
+
+  it('shows one disc: the sun by day and the moon, smaller and fainter, by night, wholly inside its box', () => {
+    const room = createRoom();
+    const body = room.backWall.getObjectByName('backSceneryBody')!;
+    const tone = () => ((body.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial).color.getHex();
+    const at_ = (phase: number) => {
+      STAGE.sky.phase = phase;
+      room.update(at(0, 2, 3), renderer(), 0);
+    };
+    at_(0.4);
+    at_(0.5);
+    expect([body.visible, tone(), body.scale.x]).toEqual([true, COLORS.sceneryPaper, 1]);
+    at_(0);
+    expect(body.visible).toBe(true);
+    expect(tone()).toBe(COLORS.sceneryFaint);
+    expect(body.scale.x).toBeCloseTo(STAGE.scenery.moon.radius / STAGE.scenery.sun.radius, 9);
+    at_(0.25);
+    expect(body.visible).toBe(false);
+    for (const phase of [0.3, 0.5, 0.7, 0.05, 0.95]) {
+      at_(phase);
+      const disc = bounds(body);
+      const box = bounds(room.backWall.getObjectByName('backScenery')!);
+      expect(disc.min.x).toBeGreaterThanOrEqual(box.min.x - 1e-6);
+      expect(disc.max.x).toBeLessThanOrEqual(box.max.x + 1e-6);
+      expect(disc.max.y).toBeLessThanOrEqual(box.max.y + 1e-6);
+    }
+  });
+
+  it('clips every drifting cloud layer to its box\'s sides, fill and ink', () => {
+    const room = createRoom();
+    for (const layer of [0, 1]) {
+      const cloud = room.backWall.getObjectByName(`backSceneryCloud${layer}`)!;
+      const planes = (cloud.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>).material.clippingPlanes;
+      expect(planes).toHaveLength(2);
+      expect((cloud.children[1] as unknown as { material: THREE.Material }).material.clippingPlanes).toHaveLength(2);
+    }
+  });
+
+  it('drifts the layers at their own rates', () => {
+    const room = createRoom();
+    const layers = [0, 1].map((i) => room.backWall.getObjectByName(`backSceneryCloud${i}`)!);
+    room.update(at(0, 2, 3), renderer(), 10);
+    const [a, b] = layers.map((l) => l.position.x) as [number, number];
+    expect(a).toBeCloseTo(10 * STAGE.scenery.clouds.layers[0]!.drift, 6);
+    expect(b).toBeCloseTo(10 * STAGE.scenery.clouds.layers[1]!.drift, 6);
+    expect(b).toBeGreaterThan(a);
+  });
+
+  it('keeps the cloud\'s clip planes on the box\'s sides wherever the room stands', () => {
+    const room = createRoom();
+    room.group.position.set(5, 1, -2);
+    room.group.rotation.y = 0.7;
+    room.update(at(0, 2, 3), renderer(), 1);
+    const cloud = room.backWall.getObjectByName('backSceneryCloud0')!;
+    const scenery = room.backWall.getObjectByName('backScenery')!;
+    const planes = (cloud.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>).material.clippingPlanes!;
+    room.group.updateMatrixWorld(true);
+    const edges = [new THREE.Vector3(-1, 0, 0), new THREE.Vector3(1, 0, 0)].map((v) => v.multiplyScalar(sceneryHalfWidth()).applyMatrix4(scenery.matrixWorld));
+    // Each side's own edge lies on its plane, and the box's middle is inside both.
+    edges.forEach((edge, i) => expect(planes[i]!.distanceToPoint(edge)).toBeCloseTo(0, 6));
+    expect(planes.every((p) => p.distanceToPoint(scenery.getWorldPosition(new THREE.Vector3())) > 0)).toBe(true);
+  });
+
+  it('merges the box\'s inside, the hills into one paper mesh, all inside the box', () => {
+    const { backWall, leftWall } = createRoom();
+    for (const wall of [backWall, leftWall]) {
+      wall.updateMatrixWorld(true);
+      const name = wall === backWall ? 'back' : 'left';
+      const box = bounds(wall.getObjectByName(`${name}Scenery`)!);
+      const parts = [`${name}SceneryPaper`].map((n) => wall.getObjectByName(n)!);
+      for (const part of parts) {
+        const b = bounds(part);
+        expect(b.min.distanceTo(b.max)).toBeGreaterThan(0);
+        for (const axis of ['x', 'y', 'z'] as const) {
+          expect(b.min[axis]).toBeGreaterThanOrEqual(box.min[axis] - 1e-6);
+          expect(b.max[axis]).toBeLessThanOrEqual(box.max[axis] + 1e-6);
+        }
+      }
+    }
   });
 
   it('moves the colour when game time passes', () => {
@@ -201,7 +399,9 @@ describe('the sky turns', () => {
       room.group.traverse((o) => {
         expect(o).not.toBeInstanceOf(THREE.Light);
         const material = (o as THREE.Mesh).material as THREE.Material & { color?: THREE.Color } | undefined;
-        if (material?.color && material !== sky) colours.push([o.name, material.color.getHex()]);
+        // The backlight behind a back panel and the sun-or-moon disc follow the sky too; everything else holds still.
+        const follows = /Scenery(Backlight|Paper)$/.test(o.name) || /Scenery(Body|Cloud\d)$/.test(o.parent?.name ?? '');
+        if (material?.color && material !== sky && !follows) colours.push([o.name, material.color.getHex()]);
       });
       return colours;
     };

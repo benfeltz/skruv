@@ -10,6 +10,8 @@ import { clampPixelRatio } from './clamp.js';
  */
 export function createScene(container: HTMLElement) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
+  // The scenery's drifting clouds are clipped to its box by planes on its own materials.
+  renderer.localClippingEnabled = true;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   container.appendChild(renderer.domElement);

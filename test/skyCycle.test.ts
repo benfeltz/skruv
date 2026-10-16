@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COLORS, STAGE } from '../src/constants.js';
-import { advance, hexToRgb, loopOf, phaseFromClock, skyColourAt } from '../src/game/skyCycle.js';
+import { advance, closedLoop, hexToRgb, loopOf, phaseFromClock, segmentAt, skyColourAt, sortedKeyframes } from '../src/game/skyCycle.js';
 
 const rgbOf = hexToRgb;
 const { keyframes } = STAGE.sky;
@@ -63,5 +63,23 @@ describe('keyframes that do not start at 0', () => {
     expect(() => loopOf([])).toThrow(/at least one/);
     expect(() => loopOf([{ at: 0.2, color: 0 }, { at: 0.2, color: 1 }])).toThrow(/share phase/);
     expect(() => loopOf([{ at: 1, color: 0 }])).toThrow(/outside/);
+  });
+});
+
+describe('the loop machinery any keyframed value shares', () => {
+  it('sorts keyframes and refuses ones that would divide by zero, naming what they are', () => {
+    expect(sortedKeyframes([{ at: 0.6 }, { at: 0.1 }], 'x').map((k) => k.at)).toEqual([0.1, 0.6]);
+    expect(() => sortedKeyframes([], 'starlight')).toThrow('the starlight needs at least one keyframe');
+    expect(() => sortedKeyframes([{ at: 0.2 }, { at: 0.2 }], 'starlight')).toThrow('two starlight keyframes share phase 0.2');
+    expect(() => sortedKeyframes([{ at: 1 }], 'starlight')).toThrow('starlight keyframe at 1 is outside [0, 1)');
+  });
+
+  it('closes a loop on its first stop and finds the segment round a phase', () => {
+    const loop = closedLoop([{ at: 0.1, v: 0 }, { at: 0.6, v: 1 }]);
+    expect(loop.map((s) => s.at)).toEqual([0.1, 0.6, 1.1]);
+    expect(segmentAt(loop, 0.35).t).toBeCloseTo(0.5, 9);
+    expect(segmentAt(loop, 0.85).from.v).toBe(1);
+    expect(segmentAt(loop, 0.85).t).toBeCloseTo(0.5, 9);
+    expect(segmentAt(loop, 0.05).t).toBeCloseTo(0.9, 9);
   });
 });

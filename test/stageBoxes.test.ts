@@ -4,7 +4,7 @@ import {
   WALL_NAMES,
   colliderBoxes,
   sizeAndCentre,
-  skyRects,
+  sceneryMouth,
   stageBoxes,
   wallBox,
   wallPieces,
@@ -181,22 +181,42 @@ describe('the windows', () => {
     expect(reach).toBeLessThan(Math.min(...second.map((b) => b.min[0])));
   });
 
-  it('stand each in front of a sky outside the wall, facing the room, not above the wall top', () => {
+  it('open each wall\'s scenery box on the wall\'s outer face, facing the room, over every opening, not above the wall top', () => {
     for (const name of WALL_NAMES) {
-      const { across, inner } = AXES[name];
-      const skies = skyRects(name);
-      expect(skies).toHaveLength(win.count[name]);
-      for (const sky of skies) {
-        expect(sky.centre[across]).toBeLessThan(inner - STAGE.wallThickness);
-        expect(sky.centre[1] + sky.height / 2).toBeLessThanOrEqual(STAGE.wallHeight + 1e-9);
-        expect(sky.centre[1] - sky.height / 2).toBeGreaterThanOrEqual(0);
-        expect(sky.width).toBeGreaterThan(win.width);
+      const { across, along, inner } = AXES[name];
+      const mouth = sceneryMouth(name);
+      const openings = windowOpenings(name);
+      expect(mouth.centre[across]).toBeCloseTo(inner - STAGE.wallThickness, 9);
+      expect(mouth.centre[1] + mouth.height / 2).toBeLessThanOrEqual(STAGE.wallHeight + 1e-9);
+      expect(mouth.centre[1] - mouth.height / 2).toBeGreaterThanOrEqual(0);
+      for (const o of openings) {
+        expect(mouth.centre[along] - mouth.width / 2).toBeLessThan(o.a0);
+        expect(mouth.centre[along] + mouth.width / 2).toBeGreaterThan(o.a1);
+        expect(mouth.centre[1] - mouth.height / 2).toBeLessThan(o.y0);
+        expect(mouth.centre[1] + mouth.height / 2).toBeGreaterThanOrEqual(o.y1);
+      }
+      expect(mouth.centre[along]).toBeCloseTo(mouth.alongCentre, 9);
+    }
+  });
+
+  it('spans each wall\'s whole face, so the box reaches far past every opening', () => {
+    expect(sceneryMouth('back').width).toBeCloseTo(ROOM.width, 9);
+    expect(sceneryMouth('left').width).toBeCloseTo(ROOM.depth, 9);
+    for (const name of WALL_NAMES) {
+      const mouth = sceneryMouth(name);
+      expect(mouth.height).toBe(STAGE.wallHeight);
+      expect(mouth.centre[1]).toBeCloseTo(STAGE.wallHeight / 2, 9);
+      // The whole wall is open to the box beyond each opening: at least a metre of box to either side.
+      for (const o of windowOpenings(name)) {
+        expect(o.a0 - (mouth.alongCentre - mouth.width / 2)).toBeGreaterThan(0.5);
+        expect(mouth.alongCentre + mouth.width / 2 - o.a1).toBeGreaterThan(0.5);
       }
     }
   });
 
-  it('reach far enough past the opening to cover the steepest view the reveal lets through', () => {
-    expect(win.skyMargin).toBeGreaterThanOrEqual(win.skyGap * (win.width / STAGE.wallThickness) - 1e-9);
+  it('runs a mouth\'s x along the wall axis the way its turn carries it', () => {
+    expect(sceneryMouth('back').alongSign).toBe(1);
+    expect(sceneryMouth('left').alongSign).toBe(-1);
   });
 
   it('are rejected when they do not fit the walls', () => {

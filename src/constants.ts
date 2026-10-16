@@ -23,6 +23,14 @@ export const CLOCK = {
 // The sky beyond the window by day: the day keyframe of STAGE.sky and COLORS.sky.
 const SKY_DAY = 0x9ec9e8;
 
+// The box's daylight in the dark: about a quarter of its midday brightness, dim but readable.
+const NIGHT_LEVEL = 0.25;
+
+// The scenery's paper tones (COLORS.scenery*): faint for the far hills, paper for the near ones, one between.
+const SCENERY_FAINT = 0xd0d0d0;
+const SCENERY_MID = 0xe2e0dc;
+const SCENERY_PAPER = 0xf1eee6;
+
 // The diorama stage (src/game/stageBoxes.ts, built by src/scene/room.ts and mirrored by
 // src/physics/world.ts): a base slab under the floor, two walls (back and left, with windows) and a low
 // lip on the open front and right edges — every collider stands outside the floor's footprint,
@@ -60,10 +68,150 @@ export const STAGE = {
     frame: 0.04,
     frameDepth: 0.04,
     rail: 0.04,
-    // The fixed sky: how far outside the wall it stands, and how far it reaches past the opening on every side
-    // (margin ≥ gap × width / wallThickness, so no grazing view through the reveal leaves it).
-    skyGap: 0.05,
-    skyMargin: 0.5,
+  },
+  // The paper theatre behind each wall's windows (src/game/scenery.ts, built by src/scene/scenery.ts): a closed box
+  // `depth` deep, its mouth on the wall's outer face. Lengths are metres; `base`, `horizon` and `rise` are fractions of
+  // STAGE.wallHeight above the floor; every `depth` is metres behind the mouth.
+  scenery: {
+    depth: 1.2,
+    // Three layers of rolling hills, far to near, each further back lower in amplitude and fainter in tone. Each: a
+    // paper tone, a baseline (a fraction of the wall height), an amplitude and wavelength (metres), a phase, and a
+    // second, finer wave (`ratio` of the wavelength, `weight` of the profile).
+    hills: [
+      { depth: 1.0, tone: SCENERY_FAINT, base: 0.52, amplitude: 0.07, wavelength: 3.0, phase: 1.0, ratio: 0.5, weight: 0.2 },
+      { depth: 0.8, tone: SCENERY_MID, base: 0.46, amplitude: 0.1, wavelength: 2.6, phase: 0, ratio: 0.5, weight: 0.2 },
+      { depth: 0.6, tone: SCENERY_PAPER, base: 0.4, amplitude: 0.14, wavelength: 2.4, phase: 2.1, ratio: 0.5, weight: 0.2 },
+    ],
+    // How many times a layer's phase the finer wave is turned by.
+    hillPhaseScale: 2,
+    // Samples along a hill's profile per metre of box width: fine enough that a smooth hill shows no corners.
+    hillSamplesPerMetre: 40,
+    // Drifting clouds, in layers at different depths and speeds so they move at different rates. A layer drifts as one
+    // sheet: `drift` metres per second of game time, its clouds each at a fraction `at` across the box (a layer's
+    // pattern repeats once a box width, so a cloud wraps round to the far side), a `height` up the wall as a fraction
+    // of its height, and a `width` in metres. The fractions put at least one cloud in view of every window at the
+    // start and the layers pass every window in turn. `outline` is a cloud's silhouette in unit width (x centred, y up
+    // from its flat bottom).
+    clouds: {
+      layers: [
+        {
+          depth: 0.9,
+          drift: 0.02,
+          clouds: [{ at: 0.1, height: 0.66, width: 0.8 }, { at: 0.45, height: 0.6, width: 0.6 }, { at: 0.78, height: 0.64, width: 0.9 }],
+        },
+        {
+          depth: 0.7,
+          drift: 0.035,
+          clouds: [{ at: 0.28, height: 0.68, width: 0.5 }, { at: 0.62, height: 0.62, width: 0.7 }, { at: 0.9, height: 0.66, width: 0.55 }],
+        },
+      ],
+      outline: [
+        [-0.5, 0], [0.5, 0], [0.5, 0.06], [0.4, 0.12], [0.36, 0.22], [0.24, 0.26], [0.16, 0.38], [0.04, 0.42],
+        [-0.06, 0.36], [-0.14, 0.3], [-0.26, 0.3], [-0.34, 0.22], [-0.42, 0.14], [-0.5, 0.08],
+      ] satisfies [number, number][],
+    },
+    // The sun and moon: discs on a layer just in front of the back panel, on one arc over the horizon.
+    sun: { radius: 0.12, depth: 1.1 },
+    moon: { radius: 0.1, depth: 1.1 },
+    // Its arc runs through the windows' visible band: from the horizon, just above the near hills' line, up to a peak
+    // that clears the head of the opening.
+    arc: { horizon: 0.5, rise: 0.2 },
+    // Segments round a disc's rim, and how far an outline stands in front of its fill so the two never fight for depth.
+    discSegments: 32,
+    inkLift: 0.002,
+    // The back panel stands this far in front of the backlight behind it.
+    backlight: { gap: 0.03 },
+    // The box's daylight at each phase, 0 to 1 (1 at midday, `NIGHT_LEVEL` in the dark); the loop closes on the first.
+    // One curve, two uses: the box's contents are dimmed by it, and the starlight behind the pinholes is its inverse,
+    // so the two never drift apart. Stars need dark: none above `starsBelow`, rising to full at `nightLevel`. Pinned
+    // here: none at dusk (0.75 to 0.88) or dawn (0.12 to 0.25), fading in 0.88 to 0.95 and out 0.05 to 0.12.
+    nightLevel: NIGHT_LEVEL,
+    starsBelow: 0.5,
+    daylight: [
+      { at: 0, level: NIGHT_LEVEL },
+      { at: 0.05, level: NIGHT_LEVEL },
+      { at: 0.12, level: 0.5 },
+      { at: 0.25, level: 0.65 },
+      { at: 0.5, level: 1 },
+      { at: 0.75, level: 0.65 },
+      { at: 0.88, level: 0.5 },
+      { at: 0.95, level: NIGHT_LEVEL },
+    ],
+    // The night sky is one texture of two stacked strips, one per wall (`strip`), each covering the wall's face: `sky`
+    // metres wide and high (the room's width by the wall height, floor at the strip's bottom), `texels` wide. Every
+    // panel samples its own strip once, so a constellation appears once and not repeated.
+    // A star is a pinhole: a disc, or for the brightest a four-point plus. Positions are metres from the strip's
+    // lower left; radii are metres.
+    stars: {
+      sky: { width: 6, height: 3 },
+      texels: 1024,
+      strip: { back: 0, left: 1 },
+      // The alpha a texel needs to be paper rather than hole.
+      alphaTest: 0.5,
+      // The scattered field: a seeded generator, how many stars a strip gets, their closest spacing and the clear space
+      // kept round a constellation's star. Most are tiny (`dim` radii, skewed small by `skew`); a few (`brightShare`)
+      // are bright plus-shaped ones.
+      seed: 1913,
+      count: 150,
+      spacing: 0.08,
+      clearance: 0.14,
+      dim: { min: 0.005, max: 0.011 },
+      skew: 2.5,
+      brightShare: 0.06,
+      bright: { min: 0.016, max: 0.024 },
+      // A plus: its core as a share of the radius, its arms' length and thickness as multiples of the radius.
+      plus: { core: 0.5, arm: 2.6, thickness: 0.4 },
+      // Constellations in their real patterns: each star as its angular offset in degrees east and north of a datum (a
+      // star of the pattern), laid out `metresPerDegree` on the sky from `at`. A `bright` star is a plus.
+      constellations: [
+        {
+          name: 'Big Dipper',
+          strip: 'back',
+          at: [3.55, 1.75],
+          metresPerDegree: 0.04,
+          stars: [
+            { dx: 0, dy: 5.8, bright: true }, // Dubhe
+            { dx: -0.25, dy: 0.4, bright: false }, // Merak
+            { dx: 7.06, dy: -2.3, bright: false }, // Phecda
+            { dx: 10.1, dy: 1.0, bright: false }, // Megrez
+            { dx: 15.5, dy: 0, bright: true }, // Alioth
+            { dx: 19.7, dy: -1.1, bright: false }, // Mizar
+            { dx: 23.0, dy: -6.7, bright: true }, // Alkaid
+          ],
+        },
+        {
+          name: 'Cassiopeia',
+          strip: 'back',
+          at: [1.7, 1.7],
+          metresPerDegree: 0.05,
+          stars: [
+            { dx: 0, dy: 0, bright: false }, // Caph
+            { dx: 4.0, dy: -2.6, bright: true }, // Schedar
+            { dx: 6.0, dy: 1.6, bright: false }, // Gamma
+            { dx: 9.6, dy: 1.1, bright: false }, // Ruchbah
+            { dx: 13.2, dy: 4.6, bright: false }, // Segin
+          ],
+        },
+        {
+          name: "Orion's belt",
+          strip: 'left',
+          at: [2.8, 1.8],
+          metresPerDegree: 0.2,
+          stars: [
+            { dx: 0, dy: 0, bright: true }, // Mintaka
+            { dx: 1.05, dy: -0.9, bright: true }, // Alnilam
+            { dx: 2.25, dy: -1.64, bright: true }, // Alnitak
+          ],
+        },
+      ] satisfies { name: string; strip: 'back' | 'left'; at: [number, number]; metresPerDegree: number; stars: { dx: number; dy: number; bright: boolean }[] }[],
+      // A constellation star's radius: dim ones, and bright (plus) ones.
+      constellationRadius: { dim: 0.013, bright: 0.02 },
+      // Twinkle: only `share` of the stars twinkle. A twinkling star's light swings between full and `1 - depth` of it
+      // (never out, its size unchanged) over `period` seconds, from its own random phase so none pulse together; each
+      // has its own swing, a `minSwing` to full share of `depth`. The backlight carries each star's phase and swing in a
+      // zone `margin` metres wider than its hole, so a slanted view through the hole still finds them.
+      twinkle: { share: 0.4, period: 4, depth: 0.45, minSwing: 0.4, margin: 0.05 },
+    },
   },
   // The sky beyond the windows turns on game time (src/game/skyCycle.ts), colour only: the stage's light,
   // the room's colours and the camera do not follow it.
@@ -94,6 +242,12 @@ export const COLORS = {
   // The sky beyond the window by day — the day keyframe of STAGE.sky; the cycle animates it.
   sky: SKY_DAY,
   skyLight: 0xffffff,
+  // Scenery (src/scene/scenery.ts): the box's inside, the paper cutouts (far, near hills), and the backlight at night.
+  sceneryBoxInside: 0x2c2a33,
+  sceneryFaint: SCENERY_FAINT,
+  sceneryMid: SCENERY_MID,
+  sceneryPaper: SCENERY_PAPER,
+  starlight: 0xffffff,
   groundLight: 0x8a7a66,
   sunLight: 0xffffff,
   // Parts — keyed by the catalog's `color` field.

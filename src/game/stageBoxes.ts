@@ -182,25 +182,36 @@ export function windowBoxes(name: WallName): StageBox<WindowBoxName>[] {
   });
 }
 
+/** The mouth of a wall's scenery box: a rectangle on the wall's outer face, turned to face the room. */
+export interface SceneryMouth {
+  /** The mouth's centre in the room's frame. */
+  centre: Vec3;
+  width: number;
+  height: number;
+  yaw: number;
+  /** The wall-axis coordinate (world) of the centre, and +1 or -1 by which way the mouth's x runs along that axis. */
+  alongCentre: number;
+  alongSign: 1 | -1;
+}
+
 /**
- * The fixed sky behind one opening: a plane outside it facing the room, by centre, size and
- * yaw. It stands `skyGap` behind the wall and reaches `skyMargin` past the opening: a ray
- * through the reveal runs at most width/wallThickness sideways per metre, so margin ≥ gap ×
- * that keeps the dark background out of the window at any view the reveal lets through.
+ * The mouth of the scenery box behind a wall's windows: one rectangle on the wall's outer face over the wall's whole
+ * face — the room's extent along it, the floor to the wall top — so the box reaches well past every opening and its
+ * side faces never show at a normal angle through a window. The windows of a wall share the box.
  */
-export function skyRects(name: WallName): { centre: Vec3; width: number; height: number; yaw: number }[] {
+export function sceneryMouth(name: WallName): SceneryMouth {
   const wall = wallSpec(name);
-  const { skyGap, skyMargin } = STAGE.window;
-  const x = wall.inner - STAGE.wallThickness - skyGap;
-  return windowOpenings(name).map((o) => {
-    // Never above the wall's top (a band hovering over the wall) nor below the floor.
-    const top = Math.min(o.y1 + skyMargin, STAGE.wallHeight);
-    const bottom = Math.max(o.y0 - skyMargin, 0);
-    const centre: Vec3 = [0, (top + bottom) / 2, 0];
-    centre[wall.across] = x;
-    centre[wall.along] = (o.a0 + o.a1) / 2;
-    return { centre, width: o.a1 - o.a0 + 2 * skyMargin, height: top - bottom, yaw: wall.yaw };
-  });
+  const a0 = -wall.span / 2;
+  const a1 = wall.span / 2;
+  const top = STAGE.wallHeight;
+  const bottom = 0;
+  const alongCentre = (a0 + a1) / 2;
+  const centre: Vec3 = [0, (top + bottom) / 2, 0];
+  centre[wall.across] = wall.inner - STAGE.wallThickness;
+  centre[wall.along] = alongCentre;
+  // A plane turned by `yaw` about y carries its x axis to (cos yaw, 0, -sin yaw).
+  const alongSign = Math.round(wall.along === 0 ? Math.cos(wall.yaw) : -Math.sin(wall.yaw)) as 1 | -1;
+  return { centre, width: a1 - a0, height: top - bottom, yaw: wall.yaw, alongCentre, alongSign };
 }
 
 /** The box grown on its outward side until it is `thickness` thick there — where nothing is drawn. */
