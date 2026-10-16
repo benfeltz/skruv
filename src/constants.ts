@@ -122,7 +122,7 @@ export const STAGE = {
     // mask's side in texels, the generator's seed, and each wall's offset into the tile as a fraction.
     stars: {
       count: 150,
-      radius: 0.012,
+      radius: 0.025,
       tile: 2.6,
       texels: 512,
       seed: 1913,

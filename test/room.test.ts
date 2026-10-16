@@ -183,6 +183,9 @@ describe('the sky turns', () => {
     const material = panel!.material as THREE.MeshBasicMaterial;
     expect(material.alphaMap).not.toBeNull();
     expect(material.alphaTest).toBe(STAGE.scenery.stars.alphaTest);
+    // Mipmapped, so a pinhole fades with distance rather than flickering under the alpha test.
+    expect(material.alphaMap!.generateMipmaps).toBe(true);
+    expect(material.alphaMap!.minFilter).toBe(THREE.LinearMipmapLinearFilter);
   });
 
   it('lights the backlight to the stars at night and to the sky\'s own colour at noon', () => {

@@ -42,7 +42,11 @@ function pierceSky(skyMaterial: THREE.MeshBasicMaterial) {
   mask.forEach((v, i) => data.fill(v, i * CHANNELS, (i + 1) * CHANNELS));
   const texture = new THREE.DataTexture(data, texels, texels, THREE.RGBAFormat);
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.magFilter = texture.minFilter = THREE.LinearFilter;
+  // Mipmapped, so a hole shrinks steadily with distance instead of flickering across the alpha test; a hole too small
+  // for the screen averages away to paper in the same way every frame.
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
   texture.needsUpdate = true;
   skyMaterial.alphaMap = texture;
   skyMaterial.alphaTest = alphaTest;
