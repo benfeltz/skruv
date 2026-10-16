@@ -6,7 +6,7 @@
 // kind, mover, through, captured }`, connectors as indices into the part's list. Order is
 // deterministic — assembled order, then connector index.
 
-import { connectorInWorld, contains } from './geometry.js';
+import { connectorInWorld, contains, sub } from './geometry.js';
 import type { Frame, Vec3 } from './geometry.js';
 import type { AssembledPart, InstanceId, Pack, PartType } from './pack.js';
 import { canPassInto, COMPATIBLE, CONNECTOR, CONTRACT, isFastenerEnd, KIND, kindOf, passesThrough } from './vocabulary.js';
@@ -33,7 +33,6 @@ export interface PosedItem {
   assembled: Pack['assembled'];
 }
 
-const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const distance = (a: Vec3, b: Vec3) => Math.hypot(...sub(a, b));
 

@@ -12,7 +12,7 @@
 // Any fit seats; which one is where the panel goes is ranked apart (rankFits).
 
 import { areCompatible, canPassInto } from '../../tools/validate/lib/vocabulary.js';
-import { multiplyQuaternions, normalizeQuaternion, rotateVector } from '../../tools/validate/lib/geometry.js';
+import { add, multiplyQuaternions, normalizeQuaternion, rotateVector, scale, sub } from '../../tools/validate/lib/geometry.js';
 import { applyTransform, findSnap } from './snapMath.js';
 import type { Pose, Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
 import type { ConnectorType } from '../../tools/validate/lib/vocabulary.js';
@@ -46,9 +46,6 @@ export interface FitWindow {
   matchAngle: number;
 }
 
-const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const scale = (a: Vec3, s: number): Vec3 => [a[0] * s, a[1] * s, a[2] * s];
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const length = (a: Vec3) => Math.sqrt(dot(a, a));

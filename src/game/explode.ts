@@ -4,7 +4,7 @@
 // distance is BOOKLET.explode / BOOKLET.inset.
 
 import { BOOKLET } from '../constants.js';
-import { connectorInWorld } from '../../tools/validate/lib/geometry.js';
+import { add, connectorInWorld, scale, sub } from '../../tools/validate/lib/geometry.js';
 import type { Pose, Vec3 } from '../../tools/validate/lib/geometry.js';
 import type { BuildStep, PartCount } from './bookletModel.js';
 import type { Connector, GamePartType, InstanceId, Joint } from './item.js';
@@ -42,8 +42,6 @@ export interface Inset extends PartCount {
   anchor: Vec3;
 }
 
-const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const scale = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
 const ZERO: Vec3 = [0, 0, 0];
 const EPSILON = 1e-9;
 
@@ -155,14 +153,14 @@ export function insetsFor(step: Pick<BuildStep, 'joints' | 'hardware'>, layout: 
     const fastener = part(joint.hardware);
     const { position: anchor, axis } = hole(joint);
     // The hole mouth and the spot the fastener floats to, each with `focus` to spare.
-    const spots = [anchor, add(anchor, add(to, scale(from, -1)))];
+    const spots = [anchor, add(anchor, sub(to, from))];
     const box = (pick: (a: number, b: number) => number, sign: number): Vec3 => [0, 1, 2].map((k) => pick(...(spots.map((s) => s[k] + sign * BOOKLET.inset.focus) as [number, number]))) as Vec3;
     insets.push({
       ...count,
       joint: index,
       items: [
         { id: host.id, type: host.type, position: host.position, rotation: host.rotation },
-        { id: fastener.id, type: fastener.type, position: add(fastener.position, add(to, scale(from, -1))), rotation: fastener.rotation },
+        { id: fastener.id, type: fastener.type, position: add(fastener.position, sub(to, from)), rotation: fastener.rotation },
       ],
       leader: [from, to],
       focus: { min: box(Math.min, -1), max: box(Math.max, 1) },

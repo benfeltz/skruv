@@ -18,7 +18,7 @@
 import { FASTENER } from '../constants.js';
 import { PART_TYPES } from './item.js';
 import { COMPATIBLE, CONTRACT, KIND, kindOf, passesThrough } from '../../tools/validate/lib/vocabulary.js';
-import { connectorInWorld, multiplyQuaternions, rotateVector, rotationBetween } from '../../tools/validate/lib/geometry.js';
+import { add, connectorInWorld, multiplyQuaternions, rotateVector, rotationBetween, scale, sub } from '../../tools/validate/lib/geometry.js';
 import {
   canRelease as fastenersRelease,
   createFastener,
@@ -182,9 +182,6 @@ export interface Head {
   position: Vec3;
 }
 
-const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const scale = (a: Vec3, s: number): Vec3 => [a[0] * s, a[1] * s, a[2] * s];
 const negate = (a: Vec3) => scale(a, -1);
 const conjugate = ([x, y, z, w]: Quat): Quat => [-x, -y, -z, w];
 const distance = (a: Vec3, b: Vec3) => Math.hypot(...sub(a, b));

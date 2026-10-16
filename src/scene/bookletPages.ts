@@ -14,6 +14,7 @@ import type { BuildStep, PartCount } from '../game/bookletModel.js';
 import type { PictogramId, Scheme } from '../game/controlsPage.js';
 import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { Sheet } from './pagePaper.js';
+import { add, sub } from '../../tools/validate/lib/geometry.js';
 import type { Quat, Size, Vec3 } from '../../tools/validate/lib/geometry.js';
 
 // The booklet's pages, drawn from the same part models the room uses, so a page can never
@@ -323,10 +324,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
       items: items.map((it) => ({ ...it, weight: bold.has(it.id) ? 'bold' : 'faint' })),
       lines: leaders,
       // The hole goes with its host when the host is pulled away.
-      anchorOf: ({ joint, anchor }) => {
-        const [dx, dy, dz] = offsets.get(layout.joints[joint].host) ?? [0, 0, 0];
-        return [anchor[0] + dx, anchor[1] + dy, anchor[2] + dz];
-      },
+      anchorOf: ({ joint, anchor }) => add(anchor, offsets.get(layout.joints[joint].host) ?? [0, 0, 0]),
     };
   }
 
@@ -368,8 +366,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
       for (const joint of joints) {
         const hardware = partById.get(joint.hardware)!;
         const [from, to] = joint.mover === joint.hardware ? floatOut(joint, layout, item.partTypes) : [hardware.position, hardware.position];
-        const float: Vec3 = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
-        items.push({ ...hardware, ...flatPose([hardware.position[0] + float[0], hardware.position[1] + float[1], hardware.position[2] + float[2]], hardware.rotation), weight: 'bold' });
+        items.push({ ...hardware, ...flatPose(add(hardware.position, sub(to, from)), hardware.rotation), weight: 'bold' });
         if (joint.mover === joint.hardware) lines.push([place(from), place(to)]);
       }
       offset += depth / 2 + BOOKLET.fanGap;
