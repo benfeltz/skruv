@@ -465,6 +465,7 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
     const root = new THREE.Group();
     root.quaternion.copy(orientation);
     scene.add(root);
+    const placed: { part: THREE.Group; type: string }[] = [];
     for (const { type, position, rotation, weight } of items) {
       const { box, edges } = geometryOf(type);
       const part = new THREE.Group();
@@ -472,6 +473,7 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
       part.quaternion.set(...rotation);
       part.add(new THREE.Mesh(box, fill), new LineSegments2(edges, lines[weight]));
       root.add(part);
+      placed.push({ part, type });
     }
     // Extra segments (leader lines), in the drawing's own frame, faint.
     const extraGeometry = extra.length ? new LineSegmentsGeometry().setPositions(extra.flat(2)) : null;
@@ -484,13 +486,7 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
     camera.up.set(0, 1, 0);
     camera.lookAt(0, 0, 0);
     camera.updateMatrixWorld(true);
-    const boxes = root.children.flatMap((part) => {
-      // Each part's first child is its box; the extra lines have none.
-      const box = part.children[0] as THREE.Mesh<THREE.BoxGeometry> | undefined;
-      if (!box) return [];
-      const { width: w, height: h, depth: d } = box.geometry.parameters;
-      return [{ matrix: part.matrixWorld, half: new THREE.Vector3(w / 2, h / 2, d / 2) }];
-    });
+    const boxes = placed.map(({ part, type }) => ({ matrix: part.matrixWorld, half: new THREE.Vector3(...sizeOf(type)).multiplyScalar(0.5) }));
     const frameBox = frame
       ? [{
           matrix: new THREE.Matrix4().multiplyMatrices(root.matrixWorld, new THREE.Matrix4().makeTranslation(...mid(frame))),
