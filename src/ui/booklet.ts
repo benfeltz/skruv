@@ -201,9 +201,9 @@ function injectStyle() {
       aspect-ratio: ${pageW} / ${pageH};
       padding: 0;
       border: 2px solid ${css(COLORS.uiText)}33;
-      border-radius: 6px;
+      border-radius: ${strip.radius}px;
       background: ${css(COLORS.bookletPaper)};
-      box-shadow: 0 4px 14px #0006;
+      box-shadow: ${strip.shadow};
       overflow: hidden;
       cursor: pointer;
       touch-action: none;
@@ -222,9 +222,9 @@ function injectStyle() {
       padding: 0;
       border: 2px solid ${css(COLORS.uiText)}33;
       border-radius: ${strip.arrow / 2}px;
-      background: ${css(COLORS.uiSurface)}e6;
+      background: ${css(COLORS.uiSurface)}${strip.arrowAlpha};
       color: ${css(COLORS.uiText)};
-      font: 600 22px/1 system-ui, -apple-system, sans-serif;
+      font: 600 ${strip.arrowGlyph}px/1 system-ui, -apple-system, sans-serif;
       cursor: pointer;
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;

@@ -163,7 +163,24 @@ export const BOOKLET_UI = {
   // touch rests on the centre page before it pops open (a touch that moves past the tap
   // distance first is a swipe, never a peek).
   // `openGap` is the space between the strip and the open page above it.
-  strip: { breakpoint: 600, narrow: 3, wide: 5, centreWidth: 120, sideWidth: 72, gap: 8, arrow: 44, inset: 12, openGap: 12, peekDelayMs: 280 },
+  // Its look: a slot's corner `radius` (px) and `shadow`; the arrows' glyph size (px) and the
+  // hex alpha of their surface, so the room shows faintly through.
+  strip: {
+    breakpoint: 600,
+    narrow: 3,
+    wide: 5,
+    centreWidth: 120,
+    sideWidth: 72,
+    gap: 8,
+    arrow: 44,
+    inset: 12,
+    openGap: 12,
+    peekDelayMs: 280,
+    radius: 6,
+    shadow: '0 4px 14px #0006',
+    arrowGlyph: 22,
+    arrowAlpha: 'e6',
+  },
   // ...and on a short viewport (a phone held sideways: `maxHeight` CSS px or less) the strip
   // draws smaller, so the open page above it keeps a readable size.
   stripShort: { maxHeight: 480, centreWidth: 72, sideWidth: 44 },
