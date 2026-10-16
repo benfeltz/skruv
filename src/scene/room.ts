@@ -3,7 +3,8 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { COLORS, STAGE } from '../constants.js';
-import { LEFT_WALL_PIECES, sizeAndCentre, skyRect, stageBoxes, windowBoxes } from '../game/stageBoxes.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { leftWallBox, leftWallPieces, sizeAndCentre, skyRect, stageBoxes, windowBoxes, windowOpeningBox } from '../game/stageBoxes.js';
 import type { StageBox, StageBoxName } from '../game/stageBoxes.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 import { STAGE_WALLS, wallHidden } from './stageCutaway.js';
@@ -21,42 +22,48 @@ export function createRoom() {
   const floor = new THREE.MeshStandardMaterial({ color: COLORS.floor });
   const wall = new THREE.MeshStandardMaterial({ color: COLORS.wall });
   const trim = new THREE.MeshStandardMaterial({ color: COLORS.trim });
-  const materials: Record<StageBoxName, THREE.Material> = {
-    slab: floor,
-    backWall: wall,
-    leftWallBelow: wall,
-    leftWallAbove: wall,
-    leftWallFront: wall,
-    leftWallBack: wall,
-    frontLip: wall,
-    rightLip: wall,
+
+  const boxGeometry = (box: StageBox<string>) => {
+    const { size, centre } = sizeAndCentre(box);
+    return new THREE.BoxGeometry(...size).translate(...centre);
   };
+  const edgesOf = (geometry: THREE.BufferGeometry) => new THREE.EdgesGeometry(geometry);
 
   // One group per box: the mesh and its ink travel together, so hiding it hides both.
-  const inked = (box: StageBox<string>, material: THREE.Material) => {
-    const { size, centre } = sizeAndCentre(box);
-    const geometry = new THREE.BoxGeometry(...size);
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.receiveShadow = true;
-    const edges = new LineSegments2(new LineSegmentsGeometry().fromEdgesGeometry(new THREE.EdgesGeometry(geometry)), ink);
-    const piece = new THREE.Group();
-    piece.name = box.name;
-    piece.position.set(...centre);
-    piece.add(mesh, edges);
-    return piece;
-  };
-
-  // The left wall is one group — its four pieces, the window's trim and the sky — so the
-  // cutaway hides them together.
-  const leftWall = new THREE.Group();
-  leftWall.name = 'leftWall';
   const pieces = new Map<StageBoxName, THREE.Group>();
   for (const box of stageBoxes()) {
-    const piece = inked(box, materials[box.name]);
+    if (box.name.startsWith('leftWall')) continue;
+    const geometry = boxGeometry(box);
+    const mesh = new THREE.Mesh(geometry, box.name === 'slab' ? floor : wall);
+    mesh.receiveShadow = true;
+    const edges = new LineSegments2(new LineSegmentsGeometry().fromEdgesGeometry(edgesOf(geometry)), ink);
+    const piece = new THREE.Group();
+    piece.name = box.name;
+    piece.add(mesh, edges);
     pieces.set(box.name, piece);
-    ((LEFT_WALL_PIECES as readonly string[]).includes(box.name) ? leftWall : group).add(piece);
+    group.add(piece);
   }
-  for (const box of windowBoxes()) leftWall.add(inked(box, trim));
+
+  // The left wall is one group — its pieces merged into one mesh, the trim into another,
+  // one ink for the whole, and the sky — so the cutaway hides them together and the stage
+  // costs a handful of draws. The ink is the wall's outline plus the opening's edges and
+  // the trim's own edges, not each piece's: no seams where the pieces meet.
+  const leftWall = new THREE.Group();
+  leftWall.name = 'leftWall';
+  const wallGeometry = mergeGeometries(leftWallPieces().map(boxGeometry))!;
+  const trimGeometry = mergeGeometries(windowBoxes().map(boxGeometry))!;
+  const wallMesh = new THREE.Mesh(wallGeometry, wall);
+  wallMesh.name = 'leftWallMesh';
+  const trimMesh = new THREE.Mesh(trimGeometry, trim);
+  trimMesh.name = 'windowTrim';
+  for (const mesh of [wallMesh, trimMesh]) mesh.receiveShadow = true;
+  const inkGeometry = mergeGeometries([
+    edgesOf(boxGeometry(leftWallBox())),
+    edgesOf(boxGeometry(windowOpeningBox())),
+    edgesOf(trimGeometry),
+  ])!;
+  const leftInk = new LineSegments2(new LineSegmentsGeometry().setPositions(inkGeometry.getAttribute('position').array as Float32Array), ink);
+  leftInk.name = 'leftWallInk';
 
   // The sky: a flat unlit plane outside the opening facing the room (+x), no ink.
   const sky = skyRect();
@@ -64,7 +71,7 @@ export function createRoom() {
   skyMesh.name = 'sky';
   skyMesh.rotation.y = Math.PI / 2;
   skyMesh.position.set(...sky.centre);
-  leftWall.add(skyMesh);
+  leftWall.add(wallMesh, trimMesh, leftInk, skyMesh);
   group.add(leftWall);
 
   const backWall = pieces.get('backWall')!;

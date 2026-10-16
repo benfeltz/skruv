@@ -14,8 +14,11 @@ export const ROOM = {
 
 // The diorama stage (src/game/stageBoxes.ts, built by src/scene/room.ts and mirrored by
 // src/physics/world.ts): a base slab under the floor, two walls (back and left) and a low
-// lip on the open front and right edges — all standing outside the floor's footprint, so
-// every clamp that reads ROOM is unchanged. `ROOM.height` stays the lift ceiling.
+// lip on the open front and right edges — every collider stands outside the floor's footprint,
+// so every clamp that reads ROOM is unchanged. `ROOM.height` stays the lift ceiling. The
+// window's casing, sill and apron are the one visual-only exception: up to casingProud +
+// sillDepth inside the footprint at window height, with no colliders (a part pushed against
+// the wall there draws through the trim).
 export const STAGE = {
   wallThickness: 0.1,
   wallHeight: 2.5,
@@ -42,8 +45,9 @@ export const STAGE = {
     frame: 0.04,
     frameDepth: 0.04,
     rail: 0.04,
-    // The fixed sky: how far outside the wall it stands, and how far it reaches past the opening on every side.
-    skyGap: 0.3,
+    // The fixed sky: how far outside the wall it stands, and how far it reaches past the opening on every side
+    // (margin ≥ gap × width / wallThickness, so no grazing view through the reveal leaves it).
+    skyGap: 0.05,
     skyMargin: 0.5,
   },
 };

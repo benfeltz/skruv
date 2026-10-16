@@ -1,9 +1,11 @@
 // Pure geometry of the diorama stage — no Three, no Rapier — so the drawn room and its
 // colliders are built from the same boxes and Vitest covers them headlessly.
 //
-// Everything stands OUTSIDE the floor's footprint (|x| <= width/2, |z| <= depth/2), except
-// the slab under y = 0, so the clamps that read ROOM (drag, lift, snap, respawn) are
-// unchanged: the floor's top face is the slab's top face, at y = 0.
+// Every box with a collider stands OUTSIDE the floor's footprint (|x| <= width/2,
+// |z| <= depth/2), except the slab under y = 0, so the clamps that read ROOM (drag, lift,
+// snap, respawn) are unchanged: the floor's top face is the slab's top face, at y = 0.
+// The one exception is the window's trim (`windowBoxes`): visual only, no colliders, it
+// stands up to casingProud + sillDepth inside the footprint at window height.
 
 import { ROOM, STAGE } from '../constants.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
@@ -22,6 +24,9 @@ export type WindowBoxName =
 /** What the physics world holds: the left wall's pieces are one solid `leftWall` there. */
 export type ColliderName = Exclude<StageBoxName, LeftWallPiece> | 'leftWall';
 
+/** The stage's boxes that are not the left wall. */
+type RestName = Exclude<StageBoxName, LeftWallPiece>;
+
 /** An axis-aligned box by its corners. `outward` is the way its invisible side may be thickened. */
 export interface StageBox<Name extends string = StageBoxName> {
   name: Name;
@@ -36,28 +41,68 @@ export function windowOpening() {
   return { z0: -width / 2, z1: width / 2, y0: sill, y1: sill + height };
 }
 
+/** What stops the window fitting in the wall — empty when it fits. Pure, so a tuned size is caught by a test. */
+export function windowProblems(
+  win: typeof STAGE.window = STAGE.window,
+  wallHeight: number = STAGE.wallHeight,
+  depth: number = ROOM.depth,
+): string[] {
+  const problems: string[] = [];
+  const top = win.sill + win.height;
+  if (win.width / 2 + win.casing > depth / 2) problems.push('the casing runs past the wall\'s ends');
+  if (top + win.casing > wallHeight) problems.push('the casing head rises above the wall top');
+  if (win.sill - win.sillThickness - win.apron < 0) problems.push('the apron reaches below the floor');
+  if (2 * win.frame + win.rail >= win.height || 2 * win.frame >= win.width) problems.push('the frame leaves no room for the sashes');
+  return problems;
+}
+
+/** The left wall before the opening is cut: one box on the room's left edge, inner face at x = −width/2. */
+export function leftWallBox(): StageBox<'leftWall'> {
+  const w = ROOM.width / 2;
+  const d = ROOM.depth / 2;
+  const { wallThickness: wt, wallHeight, lipThickness: lt } = STAGE;
+  return { name: 'leftWall', min: [-w - wt, 0, -d], max: [-w, wallHeight, d + lt], outward: [-1, 0, 0] };
+}
+
+/** The opening through the wall's thickness, as a box — the edges the ink draws round the hole. */
+export function windowOpeningBox(): StageBox<'opening'> {
+  const { z0, z1, y0, y1 } = windowOpening();
+  const { min, max } = leftWallBox();
+  return { name: 'opening', min: [min[0], y0, z0], max: [max[0], y1, z1], outward: [0, 0, 0] };
+}
+
+/** The left wall as the four boxes round the opening, tiling `leftWallBox` minus `windowOpeningBox`. */
+export function leftWallPieces(): StageBox<LeftWallPiece>[] {
+  const { min, max, outward } = leftWallBox();
+  const { z0, z1, y0, y1 } = windowOpening();
+  const piece = (name: LeftWallPiece, zMin: number, zMax: number, yMin: number, yMax: number): StageBox<LeftWallPiece> => ({
+    name,
+    min: [min[0], yMin, zMin],
+    max: [max[0], yMax, zMax],
+    outward,
+  });
+  return [
+    piece('leftWallBelow', min[2], max[2], min[1], y0),
+    piece('leftWallAbove', min[2], max[2], y1, max[1]),
+    piece('leftWallFront', z1, max[2], y0, y1),
+    piece('leftWallBack', min[2], z0, y0, y1),
+  ];
+}
+
 /** The six boxes of the stage (the left wall as four pieces), in metres, floor top at y = 0. */
 export function stageBoxes(): StageBox[] {
+  const problems = windowProblems();
+  if (problems.length > 0) throw new Error(`STAGE.window does not fit the wall: ${problems.join('; ')}`);
   const w = ROOM.width / 2;
   const d = ROOM.depth / 2;
   const { wallThickness: wt, wallHeight, slabThickness: st, lipHeight, lipThickness: lt } = STAGE;
-  const { z0, z1, y0, y1 } = windowOpening();
-  const left = (name: LeftWallPiece, zMin: number, zMax: number, yMin: number, yMax: number): StageBox => ({
-    name,
-    min: [-w - wt, yMin, zMin],
-    max: [-w, yMax, zMax],
-    outward: [-1, 0, 0],
-  });
-  return [
+  const rest: StageBox<RestName>[] = [
     { name: 'slab', min: [-w - wt, -st, -d - wt], max: [w + lt, 0, d + lt], outward: [0, -1, 0] },
     { name: 'backWall', min: [-w - wt, 0, -d - wt], max: [w + lt, wallHeight, -d], outward: [0, 0, -1] },
-    left('leftWallBelow', -d, d + lt, 0, y0),
-    left('leftWallAbove', -d, d + lt, y1, wallHeight),
-    left('leftWallFront', z1, d + lt, y0, y1),
-    left('leftWallBack', -d, z0, y0, y1),
     { name: 'frontLip', min: [-w, 0, d], max: [w + lt, lipHeight, d + lt], outward: [0, 0, 0] },
     { name: 'rightLip', min: [w, 0, -d], max: [w + lt, lipHeight, d], outward: [0, 0, 0] },
   ];
+  return [...rest, ...leftWallPieces()];
 }
 
 /**
@@ -96,15 +141,23 @@ export function windowBoxes(): StageBox<WindowBoxName>[] {
   ];
 }
 
-/** The fixed sky: a plane outside the opening facing the room (+x), by its centre and size. */
+/**
+ * The fixed sky: a plane outside the opening facing the room (+x), by its centre and size.
+ * It stands `skyGap` behind the wall and reaches `skyMargin` past the opening: a ray through
+ * the reveal runs at most width/wallThickness sideways per metre, so margin ≥ gap × that
+ * keeps the dark background out of the window at any view the reveal lets through.
+ */
 export function skyRect(): { centre: Vec3; width: number; height: number } {
   const { skyGap, skyMargin } = STAGE.window;
   const { z0, z1, y0, y1 } = windowOpening();
   const x = -ROOM.width / 2 - STAGE.wallThickness - skyGap;
+  // Never above the wall's top (a band hovering over the wall) nor below the floor.
+  const top = Math.min(y1 + skyMargin, STAGE.wallHeight);
+  const bottom = Math.max(y0 - skyMargin, 0);
   return {
-    centre: [x, (y0 + y1) / 2, (z0 + z1) / 2],
+    centre: [x, (top + bottom) / 2, (z0 + z1) / 2],
     width: z1 - z0 + 2 * skyMargin,
-    height: y1 - y0 + 2 * skyMargin,
+    height: top - bottom,
   };
 }
 
@@ -123,31 +176,19 @@ export function thickened<Name extends string>({ min, max, outward, ...rest }: S
  * across the window's opening: the window is closed and its trim has no colliders.
  */
 export function colliderBoxes(thickness: number): StageBox<ColliderName>[] {
-  const wall = (box: StageBox): StageBox => {
+  const wall = <Name extends string>(box: StageBox<Name>): StageBox<Name> => {
     const solid = thickened(box, thickness);
     return { ...solid, max: [solid.max[0], ROOM.height, solid.max[2]] };
   };
-  const boxes = stageBoxes();
-  const pieces = boxes.filter((box) => (LEFT_WALL_PIECES as readonly string[]).includes(box.name));
-  // The pieces' bounding box: the wall as it was before the opening was cut.
-  const leftWall: StageBox<ColliderName> = {
-    ...wall({
-      name: pieces[0].name,
-      min: pieces.reduce((lo, p) => lo.map((v, i) => Math.min(v, p.min[i])) as Vec3, pieces[0].min),
-      max: pieces.reduce((hi, p) => hi.map((v, i) => Math.max(v, p.max[i])) as Vec3, pieces[0].max),
-      outward: pieces[0].outward,
-    }),
-    name: 'leftWall',
-  };
-  return [
-    ...boxes.filter((box) => !pieces.includes(box)).map((box): StageBox<ColliderName> => {
-      const name = box.name as Exclude<StageBoxName, LeftWallPiece>;
-      if (name === 'slab') return { ...thickened(box, thickness), name };
-      if (name === 'backWall') return { ...wall(box), name };
-      return { ...box, name };
-    }),
-    leftWall,
-  ];
+  return stageBoxes().flatMap((box): StageBox<ColliderName>[] => {
+    switch (box.name) {
+      case 'slab': return [thickened({ ...box, name: box.name }, thickness)];
+      case 'backWall': return [wall({ ...box, name: box.name })];
+      case 'frontLip':
+      case 'rightLip': return [{ ...box, name: box.name }];
+      default: return [];
+    }
+  }).concat(wall(leftWallBox()));
 }
 
 /** `[size, centre]` of a box. */

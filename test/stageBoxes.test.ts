@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PHYSICS, ROOM, STAGE } from '../src/constants.js';
-import { LEFT_WALL_PIECES, colliderBoxes, sizeAndCentre, skyRect, stageBoxes, windowBoxes, windowOpening } from '../src/game/stageBoxes.js';
+import { LEFT_WALL_PIECES, colliderBoxes, leftWallBox, sizeAndCentre, skyRect, stageBoxes, windowBoxes, windowOpening, windowProblems } from '../src/game/stageBoxes.js';
 import type { StageBox } from '../src/game/stageBoxes.js';
 
 const by = <N extends string>(boxes: StageBox<N>[], name: string) => boxes.find((box) => box.name === name)!;
@@ -115,10 +115,34 @@ describe('the window', () => {
   it('puts the sky outside the opening, centred on it, facing the room', () => {
     const sky = skyRect();
     expect(sky.centre[0]).toBeLessThan(-w - STAGE.wallThickness);
-    expect(sky.centre[1]).toBe((y0 + y1) / 2);
     expect(sky.centre[2]).toBe(0);
     expect(sky.width).toBeGreaterThan(z1 - z0);
     expect(sky.height).toBeGreaterThan(y1 - y0);
+  });
+
+  it('keeps the sky\'s top at the wall top, not above it', () => {
+    const sky = skyRect();
+    expect(sky.centre[1] + sky.height / 2).toBeLessThanOrEqual(STAGE.wallHeight + 1e-9);
+    expect(sky.centre[1] - sky.height / 2).toBeGreaterThanOrEqual(0);
+  });
+
+  it('reaches far enough past the opening to cover the steepest view the reveal lets through', () => {
+    const steepest = (z1 - z0) / STAGE.wallThickness;
+    expect(win.skyMargin).toBeGreaterThanOrEqual(win.skyGap * steepest - 1e-9);
+  });
+
+  it('is the wall box minus the opening, and its own box is the collider\'s source', () => {
+    const wallBox = leftWallBox();
+    expect(wallBox.max[0]).toBe(-w);
+    expect(by(colliderBoxes(PHYSICS.roomColliderThickness), 'leftWall').min[2]).toBe(wallBox.min[2]);
+  });
+
+  it('is rejected when it does not fit the wall', () => {
+    expect(windowProblems()).toEqual([]);
+    expect(windowProblems({ ...win, height: 1.8 })).toContain('the casing head rises above the wall top');
+    expect(windowProblems({ ...win, width: 5 })).toContain('the casing runs past the wall\'s ends');
+    expect(windowProblems({ ...win, sill: 0.05 })).toContain('the apron reaches below the floor');
+    expect(windowProblems({ ...win, frame: 0.5 })).toContain('the frame leaves no room for the sashes');
   });
 });
 
