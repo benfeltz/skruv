@@ -203,6 +203,40 @@ export function skyRects(name: WallName): { centre: Vec3; width: number; height:
   });
 }
 
+/** The mouth of a wall's scenery box: a rectangle on the wall's outer face, turned to face the room. */
+export interface SceneryMouth {
+  /** The mouth's centre in the room's frame. */
+  centre: Vec3;
+  width: number;
+  height: number;
+  yaw: number;
+  /** The wall-axis coordinate (world) of the centre, and +1 or -1 by which way the mouth's x runs along that axis. */
+  alongCentre: number;
+  alongSign: 1 | -1;
+}
+
+/**
+ * The mouth of the scenery box behind a wall's windows: one rectangle on the wall's outer face spanning every opening
+ * and `skyMargin` past them, never above the wall's top nor below the floor. The windows of a wall share the box.
+ */
+export function sceneryMouth(name: WallName): SceneryMouth {
+  const wall = wallSpec(name);
+  const { skyMargin } = STAGE.window;
+  const openings = windowOpenings(name);
+  const a0 = Math.min(...openings.map((o) => o.a0)) - skyMargin;
+  const a1 = Math.max(...openings.map((o) => o.a1)) + skyMargin;
+  // Never above the wall's top (a band hovering over the wall) nor below the floor.
+  const top = Math.min(Math.max(...openings.map((o) => o.y1)) + skyMargin, STAGE.wallHeight);
+  const bottom = Math.max(Math.min(...openings.map((o) => o.y0)) - skyMargin, 0);
+  const alongCentre = (a0 + a1) / 2;
+  const centre: Vec3 = [0, (top + bottom) / 2, 0];
+  centre[wall.across] = wall.inner - STAGE.wallThickness;
+  centre[wall.along] = alongCentre;
+  // A plane turned by `yaw` about y carries its x axis to (cos yaw, 0, -sin yaw).
+  const alongSign = Math.round(wall.along === 0 ? Math.cos(wall.yaw) : -Math.sin(wall.yaw)) as 1 | -1;
+  return { centre, width: a1 - a0, height: top - bottom, yaw: wall.yaw, alongCentre, alongSign };
+}
+
 /** The box grown on its outward side until it is `thickness` thick there — where nothing is drawn. */
 export function thickened<Name extends string>({ min, max, outward, ...rest }: StageBox<Name>, thickness: number): StageBox<Name> {
   const lo = min.map((v, i) => (outward[i] < 0 ? Math.min(v, max[i] - thickness) : v)) as Vec3;

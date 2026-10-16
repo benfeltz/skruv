@@ -61,9 +61,75 @@ export const STAGE = {
     frameDepth: 0.04,
     rail: 0.04,
     // The fixed sky: how far outside the wall it stands, and how far it reaches past the opening on every side
-    // (margin ≥ gap × width / wallThickness, so no grazing view through the reveal leaves it).
+    // (margin ≥ gap × width / wallThickness, so no grazing view through the reveal leaves it). The scenery box's mouth
+    // reaches `skyMargin` past the openings too.
     skyGap: 0.05,
     skyMargin: 0.5,
+  },
+  // The paper theatre behind each wall's windows (src/game/scenery.ts, built by src/scene/scenery.ts): a closed box
+  // `depth` deep, its mouth on the wall's outer face. Lengths are metres; `base`, `horizon` and `rise` are fractions of
+  // STAGE.wallHeight above the floor; every `depth` is metres behind the mouth.
+  scenery: {
+    depth: 1.2,
+    // Rolling hills, far then near: a baseline, two sines (the second `detail` times finer), a phase apart.
+    hills: [
+      { depth: 1.0, base: 0.55, amplitude: 0.12, wavelength: 1.6, phase: 0 },
+      { depth: 0.6, base: 0.4, amplitude: 0.18, wavelength: 1.1, phase: 2.1 },
+    ],
+    // How fine the second sine is against the first, and how much of the profile it carries.
+    hillDetail: { ratio: 0.43, weight: 0.35 },
+    // Samples along a hill's profile per metre of box width.
+    hillSamplesPerMetre: 8,
+    // The trees stand on the near hill, in front of that layer, `at` along each wall (world metres, the wall's own axis,
+    // so each in view through a window); `outline` is the silhouette in unit height (x centred, y up).
+    tree: {
+      depth: 0.5,
+      height: 0.6,
+      at: { back: [-1.1, 0.9], left: [0.3] },
+      outline: [
+        [-0.04, 0], [0.04, 0], [0.04, 0.3], [0.2, 0.34], [0.26, 0.46], [0.2, 0.56], [0.14, 0.62], [0.16, 0.74],
+        [0.1, 0.88], [0, 1], [-0.1, 0.88], [-0.16, 0.74], [-0.14, 0.62], [-0.2, 0.56], [-0.26, 0.46], [-0.2, 0.34],
+      ] satisfies [number, number][],
+    },
+    // A drifting cloud: its layer, its height up the wall, its width, its drift in metres per second of game time,
+    // and its silhouette in unit width (x centred, y up from its flat bottom).
+    cloud: {
+      depth: 0.8,
+      height: 0.7,
+      width: 0.7,
+      drift: 0.01,
+      outline: [
+        [-0.5, 0], [0.5, 0], [0.5, 0.06], [0.4, 0.12], [0.36, 0.22], [0.24, 0.26], [0.16, 0.38], [0.04, 0.42],
+        [-0.06, 0.36], [-0.14, 0.3], [-0.26, 0.3], [-0.34, 0.22], [-0.42, 0.14], [-0.5, 0.08],
+      ] satisfies [number, number][],
+    },
+    // The sun and moon: discs on a layer just in front of the back panel, on one arc over the horizon.
+    sun: { radius: 0.12, depth: 1.1 },
+    moon: { radius: 0.1, depth: 1.1 },
+    arc: { horizon: 0.5, rise: 0.42 },
+    // Segments round a disc's rim.
+    discSegments: 32,
+    // The back panel stands this far in front of the backlight behind it.
+    backlight: { gap: 0.03 },
+    // How lit the backlight is at each phase (0 the sky's own colour, 1 full starlight); the loop closes on the first.
+    starlight: [
+      { at: 0, level: 1 },
+      { at: 0.25, level: 0.4 },
+      { at: 0.5, level: 0 },
+      { at: 0.75, level: 0.4 },
+    ],
+    // Pinholes: how many per tile, their radius in metres, the tile's side in metres (the mask repeats every tile), the
+    // mask's side in texels, the generator's seed, and each wall's offset into the tile as a fraction.
+    stars: {
+      count: 150,
+      radius: 0.012,
+      tile: 2.6,
+      texels: 512,
+      seed: 1913,
+      offset: { left: 0.37, back: 0 },
+      // The alpha a texel needs to be paper rather than hole.
+      alphaTest: 0.5,
+    },
   },
   // The sky beyond the windows turns on game time (src/game/skyCycle.ts), colour only: the stage's light,
   // the room's colours and the camera do not follow it.
@@ -94,6 +160,12 @@ export const COLORS = {
   // The sky beyond the window by day — the day keyframe of STAGE.sky; the cycle animates it.
   sky: SKY_DAY,
   skyLight: 0xffffff,
+  // Scenery (src/scene/scenery.ts): the box's inside, the paper cutouts (far, near, tree), and the backlight at night.
+  sceneryBoxInside: 0x2c2a33,
+  sceneryFaint: 0xd6d6d6,
+  sceneryPaper: 0xf1eee6,
+  sceneryDark: 0x8d9094,
+  starlight: 0xffffff,
   groundLight: 0x8a7a66,
   sunLight: 0xffffff,
   // Parts — keyed by the catalog's `color` field.
