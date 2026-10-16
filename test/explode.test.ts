@@ -125,22 +125,23 @@ describe('insetsFor', () => {
     expect(insets[0]).toMatchObject({ type: 'dowel', count: 2, partNumber: 'D', joint: 0 });
   });
 
-  it('shows the host at its pose and the fastener floated out, with its leader', () => {
+  it('shows the host at its pose and the fastener floated out by a fraction of its own length, with its leader', () => {
     const [inset] = insetsFor({ joints: [0, 1], hardware }, layout, partTypes);
+    const float = 0.04 * BOOKLET.inset.float;
     expect(inset.items.map((i) => i.id)).toEqual(['plate', 'd1']);
-    expect(inset.items[1].position[1]).toBeCloseTo(0.01 + BOOKLET.explode.hardware);
-    expect(inset.leader[1][1] - inset.leader[0][1]).toBeCloseTo(BOOKLET.explode.hardware);
+    expect(inset.items[1].position[1]).toBeCloseTo(0.01 + float);
+    expect(inset.leader[1][1] - inset.leader[0][1]).toBeCloseTo(float);
   });
 
-  it('frames the floated fastener, filling the circle, and anchors the tail at the hole', () => {
+  it('frames both the hole mouth and the floated fastener, and anchors the tail at the hole', () => {
     const [inset] = insetsFor({ joints: [0, 1], hardware }, layout, partTypes);
     expect(inset.anchor).toEqual([0.1, 0.01, 0]);
-    // The dowel's centre floats to y = 0.01 + hardware; its longest side is 0.04.
     const reach = 0.04 * BOOKLET.inset.focus;
-    const y = 0.01 + BOOKLET.explode.hardware;
+    const y = 0.01 + 0.04 * BOOKLET.inset.float;
     expect(inset.focus.min[0]).toBeCloseTo(0.1 - reach);
     expect(inset.focus.max[0]).toBeCloseTo(0.1 + reach);
-    expect(inset.focus.min[1]).toBeCloseTo(y - reach);
+    // From the hole mouth (y 0.01) up to the floated centre, each with `reach` to spare.
+    expect(inset.focus.min[1]).toBeCloseTo(0.01 - reach);
     expect(inset.focus.max[1]).toBeCloseTo(y + reach);
   });
 
@@ -167,11 +168,12 @@ describe.each(ITEM_IDS)('%s: every step page', (id) => {
       const insets = insetsFor(step, layout, item.partTypes);
       expect(insets.map(({ type, count, partNumber }) => ({ type, count, partNumber })), `step ${step.number}`).toEqual(step.hardware);
       for (const inset of insets) {
-        // The floated fastener sits inside its own frame.
-        const fastener = inset.items[1].position;
-        for (const k of [0, 1, 2]) {
-          expect(fastener[k]).toBeGreaterThan(inset.focus.min[k]);
-          expect(fastener[k]).toBeLessThan(inset.focus.max[k]);
+        // The hole mouth and the floated fastener both sit inside the frame.
+        for (const point of [inset.anchor, inset.items[1].position]) {
+          for (const k of [0, 1, 2]) {
+            expect(point[k], `step ${step.number}`).toBeGreaterThan(inset.focus.min[k]);
+            expect(point[k], `step ${step.number}`).toBeLessThan(inset.focus.max[k]);
+          }
         }
       }
     }

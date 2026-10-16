@@ -32,9 +32,9 @@ export interface Inset extends PartCount {
   joint: number;
   /** The host part at its pose and the fastener floating out of it. */
   items: ExplodedItem[];
-  /** The line from the fastener's seated spot to where it floats. */
+  /** The line from the fastener's seated spot to where it floats in the inset. */
   leader: Leader;
-  /** The box the inset frames — the floated fastener, filling the circle — in the main drawing's frame. */
+  /** The box the inset frames — the hole mouth and the floated fastener — in the main drawing's frame. */
   focus: { min: Vec3; max: Vec3 };
   /** The hole's world axis, out of its mouth: the way the fastener floats. */
   axis: Vec3;
@@ -148,7 +148,8 @@ export function floatOut(joint: Joint, layout: ExplodeLayout, partTypes: PartTyp
 /**
  * One detail inset per fastener type the page adds, in `step.hardware`'s order: its count
  * and part number, the first joint of that type the page seats (one it pushes the fastener in by, if any), the host at its pose with
- * the fastener floated out of it, and the box round the fastener to frame.
+ * the fastener floated out of it (by its own length's fraction, `BOOKLET.inset.float`), and
+ * the box round the hole mouth and the floated fastener to frame.
  */
 export function insetsFor(step: Pick<BuildStep, 'joints' | 'hardware'>, layout: ExplodeLayout, partTypes: PartTypes): Inset[] {
   const { part, hole, end } = lookups(layout, partTypes);
@@ -164,12 +165,18 @@ export function insetsFor(step: Pick<BuildStep, 'joints' | 'hardware'>, layout: 
     const host = part(joint.host);
     const fastener = part(joint.hardware);
     const { position: anchor, axis } = hole(joint);
-    const lift = scale(axis, BOOKLET.explode.hardware);
+    // The inset floats the fastener a short way of its own, in its own length, not the page's
+    // `explode.hardware`: close enough that the fastener and the host round the hole fill the
+    // circle between them.
+    const longest = Math.max(...partTypes[fastener.type].size);
+    const lift = scale(axis, longest * BOOKLET.inset.float);
     const from = end(joint);
-    // The floated fastener, framed so it fills the circle: `focus` of its longest side each way.
     const floated = add(fastener.position, lift);
-    const reach = Math.max(...partTypes[fastener.type].size) * BOOKLET.inset.focus;
-    const focus = { min: add(floated, [-reach, -reach, -reach]), max: add(floated, [reach, reach, reach]) };
+    // Frame the hole mouth and the floated fastener, `focus` of the fastener's length to spare.
+    const reach = longest * BOOKLET.inset.focus;
+    const spots = [anchor, floated];
+    const box = (pick: (...values: number[]) => number, sign: number): Vec3 => [0, 1, 2].map((k) => pick(...spots.map((spot) => spot[k] + sign * reach))) as Vec3;
+    const focus = { min: box(Math.min, -1), max: box(Math.max, 1) };
     insets.push({
       ...count,
       joint: index,
