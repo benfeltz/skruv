@@ -236,6 +236,56 @@ describe('the sky turns', () => {
     expect(backlightUvs(room)).toEqual(panelUvs(room));
   });
 
+  it('dims and cools the box\'s paper and clouds with the night, keeps the ink black and the moon bright', () => {
+    const room = createRoom();
+    const run = (phase: number) => {
+      STAGE.sky.phase = phase;
+      room.update(at(0, 2, 3), renderer(), 0);
+    };
+    const wall = room.backWall;
+    const paper = (wall.getObjectByName('backSceneryPaper') as THREE.Mesh).material as THREE.MeshBasicMaterial;
+    const cloud = ((wall.getObjectByName('backSceneryCloud0') as THREE.Group).children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
+    const ink = (wall.getObjectByName('backSceneryInk') as unknown as { material: { color: THREE.Color } }).material.color;
+    const inkNoon = ink.getHex();
+    const disc = ((wall.getObjectByName('backSceneryBody') as THREE.Group).children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
+    run(0.4);
+    run(0.5);
+    expect(paper.color.toArray()).toEqual([1, 1, 1]);
+    expect(cloud.color.getHex()).toBe(COLORS.sceneryPaper);
+    const lum = (c: THREE.Color) => c.r + c.g + c.b;
+    const noonCloud = lum(cloud.color);
+    run(0);
+    // A quarter-bright, cool tint on the paper (vertex colours carry the tones), and on the clouds.
+    expect(paper.color.b).toBeCloseTo(STAGE.scenery.nightLevel, 2);
+    expect(paper.color.b).toBeGreaterThan(paper.color.r);
+    expect(lum(cloud.color)).toBeLessThan(noonCloud / 2);
+    expect(cloud.color.b).toBeGreaterThan(cloud.color.r * 1.2);
+    // The ink stays black, and the moon is its own light: untinted, in the moon's own tone.
+    expect(ink.getHex()).toBe(inkNoon);
+    expect(ink.getHex()).toBe(COLORS.stageInk);
+    expect(disc.color.getHex()).toBe(COLORS.sceneryFaint);
+  });
+
+  it('leaves the room\'s own materials and lights alone through the whole day', () => {
+    const room = createRoom();
+    const owned = () => {
+      const colours: string[] = [];
+      room.group.traverse((o) => {
+        expect(o).not.toBeInstanceOf(THREE.Light);
+        const material = (o as THREE.Mesh).material as (THREE.Material & { color?: THREE.Color }) | undefined;
+        if (material?.color && !/Scenery/.test(o.name) && !/Scenery/.test(o.parent?.name ?? '')) colours.push(`${o.name}:${material.color.getHex()}`);
+      });
+      return colours;
+    };
+    const before = owned();
+    for (const phase of [0.4, 0, 0.25, 0.75]) {
+      STAGE.sky.phase = phase;
+      room.update(at(0, 2, 3), renderer(), 0);
+    }
+    expect(owned()).toEqual(before);
+    expect(before.length).toBeGreaterThan(0);
+  });
+
   it('shows one disc: the sun by day and the moon, smaller and fainter, by night, wholly inside its box', () => {
     const room = createRoom();
     const body = room.backWall.getObjectByName('backSceneryBody')!;
@@ -350,7 +400,7 @@ describe('the sky turns', () => {
         expect(o).not.toBeInstanceOf(THREE.Light);
         const material = (o as THREE.Mesh).material as THREE.Material & { color?: THREE.Color } | undefined;
         // The backlight behind a back panel and the sun-or-moon disc follow the sky too; everything else holds still.
-        const follows = o.name.endsWith('SceneryBacklight') || o.parent?.name.endsWith('SceneryBody');
+        const follows = /Scenery(Backlight|Paper)$/.test(o.name) || /Scenery(Body|Cloud\d)$/.test(o.parent?.name ?? '');
         if (material?.color && material !== sky && !follows) colours.push([o.name, material.color.getHex()]);
       });
       return colours;

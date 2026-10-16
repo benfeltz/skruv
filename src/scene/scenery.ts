@@ -6,6 +6,7 @@ import type { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { COLORS, STAGE } from '../constants.js';
 import {
   bodyAt,
+  boxTint,
   celestial,
   closedSegments,
   cloudLayerOffset,
@@ -18,6 +19,8 @@ import {
   starlightAt,
 } from '../game/scenery.js';
 import type { BoxFace, Point } from '../game/scenery.js';
+import { skyColourAt } from '../game/skyCycle.js';
+import type { Rgb } from '../game/skyCycle.js';
 import { SKY_TEXELS, skyTexture, skyUv } from '../game/starSky.js';
 import type { WallName } from '../game/stageBoxes.js';
 
@@ -178,7 +181,10 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
     // Only the skyline is inked: the polygon's floor and sides lie in the box's own faces.
     staticInk.push(...onPlane(openSegments(hillSkyline(name, layer)), inkLift - hill.depth));
   });
-  const paperMesh = new THREE.Mesh(mergeGeometries(cutouts)!, new THREE.MeshBasicMaterial({ vertexColors: true }));
+  // Its material's colour is the tint `update` writes each frame (the vertex colours carry the tones), so the hills and
+  // the box's inside dim and cool with the night; the ink does not.
+  const paperMaterial = new THREE.MeshBasicMaterial({ vertexColors: true });
+  const paperMesh = new THREE.Mesh(mergeGeometries(cutouts)!, paperMaterial);
   paperMesh.name = `${name}SceneryPaper`;
   const staticLines = new LineSegments2(new LineSegmentsGeometry().setPositions(staticInk), ink);
   staticLines.name = `${name}SceneryInk`;
@@ -215,12 +221,16 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
     (sheet.fill.material as THREE.MeshBasicMaterial).clippingPlanes = clips;
     return sheet;
   });
+  // The clouds take the box's tint like the hills; the sun and moon do not: the moon is a light of its own.
+  const cloudPaper = new THREE.Color(COLORS.sceneryPaper);
 
   let lit = NaN;
   let elapsed = 0;
   // Reused every frame, so the loop allocates nothing.
   const bodies = celestial(0);
   const spot: Point = [0, 0];
+  const skyRgb: Rgb = [0, 0, 0];
+  const tint: Rgb = [0, 0, 0];
   return {
     group,
     /** Per frame: `phase` of the day and `delta` seconds of game time, after the sky material is painted for `phase`. */
@@ -235,6 +245,10 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
       lit = phase;
       backlightLook.uniforms.uSkyColour!.value.copy(skyMaterial.color);
       backlightLook.uniforms.uLevel!.value = starlightAt(phase);
+      boxTint(phase, skyColourAt(phase, skyRgb), tint);
+      // A multiplier, so linear: the daylight itself, not a colour to be gamma-lifted.
+      paperMaterial.color.setRGB(tint[0], tint[1], tint[2], THREE.LinearSRGBColorSpace);
+      for (const sheet of sheets) (sheet.fill.material as THREE.MeshBasicMaterial).color.copy(cloudPaper).multiply(paperMaterial.color);
       celestial(phase, bodies);
       const up = bodies.sun.visible ? bodies.sun : bodies.moon;
       const radius = bodies.sun.visible ? scenery.sun.radius : scenery.moon.radius;

@@ -8,6 +8,7 @@
 
 import { STAGE } from '../constants.js';
 import { closedLoop, segmentAt, sortedKeyframes } from './skyCycle.js';
+import type { Rgb } from './skyCycle.js';
 import { sceneryMouth } from './stageBoxes.js';
 import type { SceneryMouth, WallName } from './stageBoxes.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
@@ -159,10 +160,31 @@ export function bodyAt(mouth: SceneryMouth, body: Body, radius: number, out: Poi
   return out;
 }
 
-const STARLIGHT_LOOP = closedLoop(sortedKeyframes(scenery.starlight, 'starlight'));
+const DAYLIGHT_LOOP = closedLoop(sortedKeyframes(scenery.daylight, 'daylight'));
 
-/** How lit the backlight is at `phase`, 0 to 1: the sky's own colour by day, full starlight by night. */
-export function starlightAt(phase: number): number {
-  const { from, to, t } = segmentAt(STARLIGHT_LOOP, phase);
+/** The box's daylight at `phase`, 0 to 1: 1 at midday, `nightLevel` in the dark. */
+export function daylightAt(phase: number): number {
+  const { from, to, t } = segmentAt(DAYLIGHT_LOOP, phase);
   return from.level + (to.level - from.level) * t;
+}
+
+/**
+ * How lit the backlight is at `phase`, 0 to 1: the inverse of the daylight, kept to the dark — none while the box's
+ * daylight is above `starsBelow`, full once it is down to `nightLevel`.
+ */
+export function starlightAt(phase: number): number {
+  const { starsBelow, nightLevel } = scenery;
+  return Math.min(Math.max((starsBelow - daylightAt(phase)) / (starsBelow - nightLevel), 0), 1);
+}
+
+/**
+ * The colour everything in the box is multiplied by at `phase`, written into `out`: the daylight, tinted by the sky —
+ * white at midday, and as the light fades the sky's own hue (its colour taken to full brightness) a share
+ * `1 - daylight` of the way in, so the box goes cool and moonlit with the night sky and warms with its dusk and dawn.
+ */
+export function boxTint(phase: number, sky: Rgb, out: Rgb): Rgb {
+  const light = daylightAt(phase);
+  const brightest = Math.max(sky[0], sky[1], sky[2], Number.EPSILON);
+  for (let c = 0; c < 3; c++) out[c] = light * (light + (1 - light) * (sky[c]! / brightest));
+  return out;
 }

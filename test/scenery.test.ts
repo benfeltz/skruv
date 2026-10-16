@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { STAGE } from '../src/constants.js';
 import {
   bodyAt,
+  boxTint,
+  daylightAt,
   celestial,
   cloudLayerOffset,
   cloudLayerPolygons,
@@ -15,6 +17,7 @@ import {
   starlightAt,
 } from '../src/game/scenery.js';
 import { WALL_NAMES, sceneryMouth, windowOpenings } from '../src/game/stageBoxes.js';
+import { skyColourAt } from '../src/game/skyCycle.js';
 
 const { scenery } = STAGE;
 const near = scenery.hills.length - 1;
@@ -275,6 +278,111 @@ describe('the stars', () => {
     expect(starlightAt(1)).toBe(starlightAt(0));
     expect(starlightAt(0.9)).toBeGreaterThan(0);
     expect(starlightAt(0.9)).toBeLessThan(1);
+  });
+});
+
+describe('the box\'s daylight', () => {
+  const phases = Array.from({ length: 101 }, (_, i) => i / 100);
+
+  it('is full at midday and down to the night level in the dark, never outside them', () => {
+    expect(daylightAt(0.5)).toBe(1);
+    expect(daylightAt(0)).toBe(scenery.nightLevel);
+    expect(daylightAt(0.97)).toBe(scenery.nightLevel);
+    for (const phase of phases) {
+      expect(daylightAt(phase)).toBeGreaterThanOrEqual(scenery.nightLevel);
+      expect(daylightAt(phase)).toBeLessThanOrEqual(1);
+    }
+    expect(daylightAt(1)).toBe(daylightAt(0));
+  });
+
+  it('is dim but readable at night: about a quarter of midday', () => {
+    expect(scenery.nightLevel).toBeGreaterThan(0.15);
+    expect(scenery.nightLevel).toBeLessThanOrEqual(0.3);
+  });
+
+  it('is the one curve the starlight is the inverse of: more daylight, never more stars', () => {
+    const pairs = phases.map((p) => [daylightAt(p), starlightAt(p)] as const).sort((a, b) => a[0] - b[0]);
+    for (let i = 1; i < pairs.length; i++) expect(pairs[i]![1]).toBeLessThanOrEqual(pairs[i - 1]![1] + 1e-12);
+    for (const phase of phases) {
+      const expected = Math.min(Math.max((scenery.starsBelow - daylightAt(phase)) / (scenery.starsBelow - scenery.nightLevel), 0), 1);
+      expect(starlightAt(phase)).toBeCloseTo(expected, 12);
+      if (daylightAt(phase) >= scenery.starsBelow) expect(starlightAt(phase)).toBe(0);
+    }
+  });
+});
+
+describe('the hills over the stars', () => {
+  const { strip } = scenery.stars;
+  const inside = (polygon: [number, number][], [x, y]: [number, number]) => {
+    let hit = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const [xi, yi] = polygon[i]!;
+      const [xj, yj] = polygon[j]!;
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
+    }
+    return hit;
+  };
+
+  it('stand in front of the back panel and the backlight, so a pinhole behind a hill is never in view', () => {
+    const panel = scenery.depth - scenery.backlight.gap;
+    for (const hill of scenery.hills) expect(hill.depth).toBeLessThan(panel);
+  });
+
+  it('cover every pinhole below the far skyline: the far hill\'s polygon holds each one, and none above it', async () => {
+    const { skyStars } = await import('../src/game/starSky.js');
+    for (const name of WALL_NAMES) {
+      const mouth = sceneryMouth(name);
+      const farthest = hillPolyline(name, 0);
+      let covered = 0;
+      let open = 0;
+      for (const star of skyStars().filter((s) => s.strip === strip[name])) {
+        // The star as a point on the panel in box-local coordinates, its x within the box.
+        const local: [number, number] = [star.x - scenery.stars.sky.width / 2, star.y - mouth.height / 2];
+        if (Math.abs(local[0]) > mouth.width / 2) continue;
+        const skyline = Math.max(...farthest.filter(([x]) => Math.abs(x - local[0]) < 0.03).map(([, y]) => y));
+        const hidden = local[1] < skyline - 0.02;
+        const shown = local[1] > skyline + 0.02;
+        if (hidden) {
+          covered++;
+          expect(inside(farthest, local), `star at ${star.x},${star.y} behind the hill`).toBe(true);
+        } else if (shown) {
+          open++;
+          expect(inside(farthest, local), `star at ${star.x},${star.y} above the hill`).toBe(false);
+        }
+      }
+      expect(covered, name).toBeGreaterThan(0);
+      expect(open, name).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('the box\'s tint', () => {
+  const tintAt = (phase: number) => boxTint(phase, skyColourAt(phase), [0, 0, 0]);
+
+  it('is plain white at midday, so the day is the paper as drawn', () => {
+    expect(tintAt(0.5)).toEqual([1, 1, 1]);
+  });
+
+  it('is a dim, cool moonlit blue at night, about a quarter bright', () => {
+    const [r, g, b] = tintAt(0);
+    expect(b).toBeGreaterThan(g);
+    expect(g).toBeGreaterThan(r);
+    expect(b).toBeCloseTo(scenery.nightLevel, 2);
+    expect(r).toBeGreaterThan(0.05);
+  });
+
+  it('warms toward the dusk and dawn sky as it fades and returns, and dims between', () => {
+    for (const phase of [0.25, 0.75]) {
+      const [r, , b] = tintAt(phase);
+      expect(r, `phase ${phase}`).toBeGreaterThan(b);
+    }
+    const noon = Math.max(...tintAt(0.5));
+    for (const phase of [0.1, 0.25, 0.75, 0.9, 0]) expect(Math.max(...tintAt(phase)), `phase ${phase}`).toBeLessThan(noon);
+  });
+
+  it('writes into the buffer it is given', () => {
+    const out: [number, number, number] = [0, 0, 0];
+    expect(boxTint(0.3, skyColourAt(0.3), out)).toBe(out);
   });
 });
 

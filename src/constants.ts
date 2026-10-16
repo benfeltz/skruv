@@ -23,6 +23,9 @@ export const CLOCK = {
 // The sky beyond the window by day: the day keyframe of STAGE.sky and COLORS.sky.
 const SKY_DAY = 0x9ec9e8;
 
+// The box's daylight in the dark: about a quarter of its midday brightness, dim but readable.
+const NIGHT_LEVEL = 0.25;
+
 // The scenery's paper tones (COLORS.scenery*): faint for the far hills, paper for the near ones, one between.
 const SCENERY_FAINT = 0xd0d0d0;
 const SCENERY_MID = 0xe2e0dc;
@@ -118,15 +121,21 @@ export const STAGE = {
     inkLift: 0.002,
     // The back panel stands this far in front of the backlight behind it.
     backlight: { gap: 0.03 },
-    // How lit the backlight is at each phase (0 the sky's own colour, 1 full starlight); the loop closes on the first.
-    // Stars come up only once dusk has gone (the sky near its darkest, from 0.88) and are gone before dawn begins to
-    // lighten it (by 0.12), fading smoothly at each end; none by day, at dawn or at dusk.
-    starlight: [
-      { at: 0, level: 1 },
-      { at: 0.05, level: 1 },
-      { at: 0.12, level: 0 },
-      { at: 0.88, level: 0 },
-      { at: 0.95, level: 1 },
+    // The box's daylight at each phase, 0 to 1 (1 at midday, `NIGHT_LEVEL` in the dark); the loop closes on the first.
+    // One curve, two uses: the box's contents are dimmed by it, and the starlight behind the pinholes is its inverse,
+    // so the two never drift apart. Stars need dark: none above `starsBelow`, rising to full at `nightLevel`. Pinned
+    // here: none at dusk (0.75 to 0.88) or dawn (0.12 to 0.25), fading in 0.88 to 0.95 and out 0.05 to 0.12.
+    nightLevel: NIGHT_LEVEL,
+    starsBelow: 0.5,
+    daylight: [
+      { at: 0, level: NIGHT_LEVEL },
+      { at: 0.05, level: NIGHT_LEVEL },
+      { at: 0.12, level: 0.5 },
+      { at: 0.25, level: 0.65 },
+      { at: 0.5, level: 1 },
+      { at: 0.75, level: 0.65 },
+      { at: 0.88, level: 0.5 },
+      { at: 0.95, level: NIGHT_LEVEL },
     ],
     // The night sky is one texture of two stacked strips, one per wall (`strip`), each covering the wall's face: `sky`
     // metres wide and high (the room's width by the wall height, floor at the strip's bottom), `texels` wide. Every
