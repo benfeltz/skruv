@@ -23,6 +23,10 @@ export const CLOCK = {
 // The sky beyond the window by day: the day keyframe of STAGE.sky and COLORS.sky.
 const SKY_DAY = 0x9ec9e8;
 
+// The scenery's paper tones (COLORS.scenery*): faint for the far hills, paper for the near ones.
+const SCENERY_FAINT = 0xd6d6d6;
+const SCENERY_PAPER = 0xf1eee6;
+
 // The diorama stage (src/game/stageBoxes.ts, built by src/scene/room.ts and mirrored by
 // src/physics/world.ts): a base slab under the floor, two walls (back and left, with windows) and a low
 // lip on the open front and right edges — every collider stands outside the floor's footprint,
@@ -68,13 +72,14 @@ export const STAGE = {
   // STAGE.wallHeight above the floor; every `depth` is metres behind the mouth.
   scenery: {
     depth: 1.2,
-    // Rolling hills, far then near: a baseline, two sines (the second `detail` times finer), a phase apart.
+    // Rolling hills, far then near: a paper tone, a baseline, and two sines (the second finer, see `hillDetail`).
     hills: [
-      { depth: 1.0, base: 0.55, amplitude: 0.12, wavelength: 1.6, phase: 0 },
-      { depth: 0.6, base: 0.4, amplitude: 0.18, wavelength: 1.1, phase: 2.1 },
+      { depth: 1.0, tone: SCENERY_FAINT, base: 0.55, amplitude: 0.12, wavelength: 1.6, phase: 0 },
+      { depth: 0.6, tone: SCENERY_PAPER, base: 0.4, amplitude: 0.18, wavelength: 1.1, phase: 2.1 },
     ],
-    // How fine the second sine is against the first, and how much of the profile it carries.
-    hillDetail: { ratio: 0.43, weight: 0.35 },
+    // The second sine of a hill's profile: how much finer it is than the first, how much of the profile it carries, and
+    // how many times the layer's phase it is turned by.
+    hillDetail: { ratio: 0.43, weight: 0.35, phaseScale: 2 },
     // Samples along a hill's profile per metre of box width.
     hillSamplesPerMetre: 8,
     // The trees stand on the near hill, in front of that layer, `at` along each wall (world metres, the wall's own axis,
@@ -162,8 +167,8 @@ export const COLORS = {
   skyLight: 0xffffff,
   // Scenery (src/scene/scenery.ts): the box's inside, the paper cutouts (far, near, tree), and the backlight at night.
   sceneryBoxInside: 0x2c2a33,
-  sceneryFaint: 0xd6d6d6,
-  sceneryPaper: 0xf1eee6,
+  sceneryFaint: SCENERY_FAINT,
+  sceneryPaper: SCENERY_PAPER,
   sceneryDark: 0x8d9094,
   starlight: 0xffffff,
   groundLight: 0x8a7a66,

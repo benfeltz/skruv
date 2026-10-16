@@ -75,9 +75,6 @@ const cutout = (polygons: readonly (readonly Point[])[], material: THREE.Materia
     material,
   );
 
-/** Hill layers' paper tones, far to near; the tree is darker, the sun paper, the moon faint. */
-const HILL_TONES = [COLORS.sceneryFaint, COLORS.sceneryPaper];
-
 /**
  * One wall's diorama box, behind the mouth on the wall's outer face: a closed shoebox whose inside is a dark paper
  * tone with the sky at its back and whose outside is the void's colour, so from anywhere but the room's side of its
@@ -136,7 +133,7 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
   const unlit = (color: number) => new THREE.MeshBasicMaterial({ color });
   scenery.hills.forEach((hill, layer) => {
     const polygon = hillPolyline(name, layer);
-    const mesh = cutout([polygon], unlit(HILL_TONES[layer]!));
+    const mesh = cutout([polygon], unlit(hill.tone));
     mesh.name = `${name}SceneryHill${layer}`;
     mesh.position.z = -hill.depth;
     group.add(mesh);

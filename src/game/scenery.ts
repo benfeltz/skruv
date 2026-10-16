@@ -57,15 +57,15 @@ export function sceneryBox(name: WallName): SceneryBox {
 /** The world height (metres above the floor) of hill layer `layer` at `along`, a world position on the wall's axis. */
 export function hillHeight(along: number, layer: number): number {
   const hill = scenery.hills[layer]!;
-  const { ratio, weight } = scenery.hillDetail;
+  const { ratio, weight, phaseScale } = scenery.hillDetail;
   const swell = (1 - weight) * Math.sin((TAU * along) / hill.wavelength + hill.phase)
-    + weight * Math.sin((TAU * along) / (hill.wavelength * ratio) + 2 * hill.phase);
+    + weight * Math.sin((TAU * along) / (hill.wavelength * ratio) + phaseScale * hill.phase);
   return hill.base * STAGE.wallHeight + hill.amplitude * swell;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 
-/** Box-local x for a world position along the wall, and back. */
+/** Box-local x of a world position along the wall. */
 const localX = (mouth: SceneryMouth, along: number) => mouth.alongSign * (along - mouth.alongCentre);
 
 /**
