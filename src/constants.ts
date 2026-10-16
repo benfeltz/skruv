@@ -162,7 +162,8 @@ export const BOOKLET_UI = {
   // `inset` the strip's distance from the screen's bottom edge. `peekDelayMs` is how long a
   // touch rests on the centre page before it pops open (a touch that moves past the tap
   // distance first is a swipe, never a peek).
-  strip: { breakpoint: 600, narrow: 3, wide: 5, centreWidth: 120, sideWidth: 72, gap: 8, arrow: 44, inset: 12, peekDelayMs: 280 },
+  // `openGap` is the space between the strip and the open page above it.
+  strip: { breakpoint: 600, narrow: 3, wide: 5, centreWidth: 120, sideWidth: 72, gap: 8, arrow: 44, inset: 12, openGap: 12, peekDelayMs: 280 },
 };
 
 // The catalog (1.9.1): the game's front door, a second booklet of items to build

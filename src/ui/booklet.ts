@@ -1,16 +1,24 @@
 import { BOOKLET, BOOKLET_UI, CATALOG, COLORS, GESTURE } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
+import { centreSlot, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
+import { peekNext } from '../game/peekGesture.js';
+import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 
 // One sheet module for both booklets (the catalog and the manual), in the one page look:
-// the page alone — no surface, handle or control bar — centred over the room, its frame
-// shadowed, its number and arrows printed on it. Docked it is a thumbnail the page grows out
-// of and shrinks back to; tapped, it opens: one page at a time, flipped by a horizontal
-// swipe, the corner arrows or the arrow keys, put down by a tap on the page, a swipe down,
-// or Escape. It flips freely, front to back and back again: reference, never a checklist.
-// A blocking sheet (the catalog) puts a scrim over the room while it is open, which takes
-// any tap outside the page, puts the booklet down with it and swallows it whole; a
-// non-blocking one has no scrim, so the room keeps every gesture. Follows the src/ui
-// pattern (own element, own style, colours from COLORS).
+// the page alone — no surface, handle or control bar — over the room, its frame shadowed, its
+// number and arrows printed on it. It differs between the two only in how it is docked and
+// whether it blocks the room. Docked as a thumb (the catalog, upper left) it is a thumbnail
+// the page grows out of and shrinks back to; docked as a strip (the manual, bottom centre)
+// it is a carousel of three or five pages, the centre one larger and current, an arrow at
+// each end, and the page grows out of the centre slot. It flips freely, front to back and
+// back again: reference, never a checklist. Open, a page is flipped by a horizontal swipe,
+// the corner arrows or the arrow keys, and put down by a tap on the page, a swipe down, or
+// Escape; the strip is moved by a swipe, its arrows, a tap on a side page or the arrow keys,
+// opened by a click on the centre page (a mouse) or by holding it (a touch: the release puts
+// it back). A blocking sheet puts a scrim over the room while it is open, which takes any
+// tap outside the page, puts the booklet down with it and swallows it whole; a non-blocking
+// one has no scrim, so only the strip and the open page take input and the room keeps every
+// gesture. Follows the src/ui pattern (own element, own style, colours from COLORS).
 
 const STYLE_ID = 'skruv-booklet';
 const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
@@ -21,6 +29,9 @@ function injectStyle() {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   const { shadow, gutter, growMs, radius } = BOOKLET_UI.page;
+  const { strip } = BOOKLET_UI;
+  // What the strip and the gap above it take off the bottom of the screen (CSS pixels).
+  const stripReserve = strip.inset + Math.round((strip.centreWidth * pageH) / pageW) + strip.openGap;
   style.textContent = `
     .booklet-thumb {
       position: fixed;
@@ -159,20 +170,86 @@ function injectStyle() {
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
     }
+    /* The strip: the manual's docked form, along the bottom centre — under the scrim (2) and
+       the open page (3), over nothing but the room's lower edge. Its own box only takes
+       input; the touch-action is none so a swipe along it is ours, not the browser's. */
+    .booklet-strip {
+      position: fixed;
+      left: 50%;
+      bottom: calc(${strip.inset}px + env(safe-area-inset-bottom));
+      z-index: 1;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: flex-end;
+      gap: ${strip.gap}px;
+      max-width: calc(100vw - ${2 * strip.gap}px);
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .booklet-slots { display: flex; align-items: flex-end; justify-content: center; gap: ${strip.gap}px; min-width: 0; }
+    .booklet-slot {
+      flex: 0 1 ${strip.sideWidth}px;
+      min-width: 0;
+      aspect-ratio: ${pageW} / ${pageH};
+      padding: 0;
+      border: 2px solid ${css(COLORS.uiText)}33;
+      border-radius: 6px;
+      background: ${css(COLORS.bookletPaper)};
+      box-shadow: 0 4px 14px #0006;
+      overflow: hidden;
+      cursor: pointer;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .booklet-slot[data-centre='true'] {
+      flex: 0 0 ${strip.centreWidth}px;
+      border-color: ${css(COLORS.uiAccent)};
+    }
+    .booklet-slot[data-empty='true'] { visibility: hidden; }
+    .booklet-slot canvas { display: block; width: 100%; height: 100%; }
+    .booklet-arrow {
+      flex: none;
+      width: ${strip.arrow}px;
+      height: ${strip.arrow}px;
+      padding: 0;
+      border: 2px solid ${css(COLORS.uiText)}33;
+      border-radius: ${strip.arrow / 2}px;
+      background: ${css(COLORS.uiSurface)}e6;
+      color: ${css(COLORS.uiText)};
+      font: 600 22px/1 system-ui, -apple-system, sans-serif;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .booklet-arrow[aria-disabled='true'] { opacity: 0.3; cursor: default; }
+    .booklet-strip button:focus-visible {
+      outline: 2px solid ${css(COLORS.uiAccent)};
+      outline-offset: 3px;
+    }
+    /* A manual page opens above its strip, resting on it, as wide as the room above allows. */
+    .booklet-leaf[data-docked='strip'] {
+      top: auto;
+      bottom: calc(${stripReserve}px + env(safe-area-inset-bottom));
+      width: min(calc(100vw - ${2 * gutter}px), ${pageW}px, calc((100dvh - ${stripReserve + gutter}px - env(safe-area-inset-bottom)) * ${pageW} / ${pageH}));
+    }
   `;
   document.head.append(style);
 }
 
-// Every sheet on the page (the catalog and the current manual): one is open at a time. While
-// any is open, every docked thumb is inert — out of the tab order and deaf to clicks — so the
-// keyboard can't open a second sheet under the first's scrim, and a key never drives two.
-type LiveSheet = { isOpen(): boolean; thumb: HTMLButtonElement };
+// Every sheet on the page (the catalog and the current manual): one is open at a time — the
+// catalog wins, putting an open manual page down as it opens. A docked thumb is inert (out of
+// the tab order and deaf to clicks) while its own page is open or another sheet that blocks
+// the room is, so the keyboard can't open a second sheet under the first's scrim and a key
+// never drives two. A strip stays live under its own open page (it is how the page is
+// flipped) and under a non-blocking one.
+type LiveSheet = { isOpen(): boolean; thumb: HTMLElement; blocking: boolean; strip: boolean; close(): void };
 const sheets = new Set<LiveSheet>();
 /** Whether any live sheet but `except` is open. */
 const anyOpen = (except?: LiveSheet) => [...sheets].some((sheet) => sheet !== except && sheet.isOpen());
+const inertFor = (sheet: LiveSheet) => [...sheets].some((other) => other.isOpen() && (other === sheet ? !sheet.strip : other.blocking));
 function syncSheets() {
-  const inert = anyOpen();
-  for (const { thumb } of sheets) thumb.inert = inert;
+  for (const sheet of sheets) sheet.thumb.inert = inertFor(sheet);
 }
 
 /** A control laid over a page — the catalog's BUILD IT: what it is called, and what it does. */
@@ -188,6 +265,8 @@ export interface BookletSheetOptions<Blocking extends boolean = boolean> {
   name?: string;
   /** Whether it starts open, on its cover (default) — or docked as a thumb. */
   open?: boolean;
+  /** How it is docked: 'thumb' (default) — a thumbnail in a corner — or 'strip', the manual's carousel along the bottom centre: 3 or 5 pages (src/game/carouselModel.ts), the centre one larger and current, an arrow at each end. */
+  docked?: 'thumb' | 'strip';
   /** Whether it takes the room's taps while open (default): a scrim over the room, and a tap on it puts the booklet down. False: no scrim, so the room keeps every gesture around the page. */
   blocking?: Blocking;
   /** Which screen corner its docked thumb sits in: 'bottomLeft' (default) or 'topLeft'. */
@@ -209,8 +288,9 @@ export interface BookletSheetOptions<Blocking extends boolean = boolean> {
  * Starts open on page 0, the cover, unless told otherwise — or another sheet is open: one
  * sheet is open at a time. State is the module's own and read-only outside it.
  */
-export function createBookletSheet<Blocking extends boolean = true>({ pages, name = 'instructions', open: startsOpen = true, canClose = () => true, action, thumbShows = 'page', corner = 'bottomLeft', blocking = true as Blocking }: BookletSheetOptions<Blocking>) {
+export function createBookletSheet<Blocking extends boolean = true>({ pages, name = 'instructions', open: startsOpen = true, canClose = () => true, action, thumbShows = 'page', corner = 'bottomLeft', docked = 'thumb', blocking = true as Blocking }: BookletSheetOptions<Blocking>) {
   injectStyle();
+  const stripped = docked === 'strip';
   const listeners = new Set<(state: { page: number; expanded: boolean }) => void>();
   let page = 0;
   let open = startsOpen;
@@ -226,17 +306,24 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     scrim.setAttribute('aria-hidden', 'true');
   }
 
-  const thumb = document.createElement('button');
-  thumb.type = 'button';
-  thumb.className = 'booklet-thumb';
-  thumb.setAttribute('aria-label', `Open the ${name}`);
-  thumb.dataset.corner = corner;
+  // The docked form: a thumbnail button, or the strip of pages. `thumb` is the element to
+  // mount either way; `anchor()` is the box the open page grows out of and shrinks back to.
+  const thumb: HTMLElement = document.createElement(stripped ? 'div' : 'button');
+  thumb.className = stripped ? 'booklet-strip' : 'booklet-thumb';
+  if (!stripped) {
+    (thumb as HTMLButtonElement).type = 'button';
+    thumb.setAttribute('aria-label', `Open the ${name}`);
+    thumb.dataset.corner = corner;
+  }
   // Full page resolution: hovered, the thumbnail is read at up to a quarter of the screen.
   const thumbCanvas = pageCanvas(pageW, pageH);
-  thumb.append(thumbCanvas);
+  if (!stripped) thumb.append(thumbCanvas);
+  const carousel = stripped ? createStrip(name, pages.count, thumb) : null;
+  const anchor = () => carousel?.centre() ?? thumb;
 
   const element = document.createElement('section');
   element.className = 'booklet-leaf';
+  element.dataset.docked = docked;
   element.setAttribute('aria-label', name[0].toUpperCase() + name.slice(1));
 
   const close = document.createElement('button');
@@ -287,11 +374,14 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     notice.hidden = text === null;
   }
 
+  // A canvas always gives a 2D context the first time it is asked.
+  const drawer = (target: HTMLCanvasElement, index: number) => target.getContext('2d')!.drawImage(pages.canvas(index), 0, 0, target.width, target.height);
+
   function render() {
-    // A canvas always gives a 2D context the first time it is asked.
-    const draw = (target: HTMLCanvasElement, index: number) => target.getContext('2d')!.drawImage(pages.canvas(index), 0, 0, target.width, target.height);
+    const draw = drawer;
     if (open) draw(viewCanvas, page);
-    draw(thumbCanvas, thumbShows === 'cover' ? 0 : page);
+    if (carousel) carousel.paint(page, draw, open);
+    else draw(thumbCanvas, thumbShows === 'cover' ? 0 : page);
     viewCanvas.setAttribute('aria-label', `Page ${page + 1} of ${pages.count}`);
     arrows.paint(page, pages.count);
     element.dataset.open = String(open);
@@ -321,17 +411,21 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
 
   function setOpen(value: boolean, { byRoomTap = false } = {}) {
     if (open === value || (!value && !canClose())) return;
-    // One sheet open at a time: another one open keeps this one docked.
-    if (value && anyOpen(self)) return;
-    if (value) dock();
+    if (value) {
+      // The catalog wins: a blocking sheet puts an open non-blocking page down first, without
+      // moving focus. Any other sheet open keeps this one docked (one open at a time).
+      if (blocking) for (const other of sheets) if (other !== self && !other.blocking && other.isOpen()) other.close();
+      if (anyOpen(self)) return;
+      dock();
+    }
     open = value;
     notify(null);
     showScrim(open, byRoomTap ? BOOKLET_UI.scrimLingerMs : 0);
     render();
     // Onto the page's next arrow (aria-disabled at the last page, never `disabled`, so focus
-    // is not lost there), back to the thumb on close — unless the close was a tap.
+    // is not lost there), back to the docked form on close — unless the close was a tap.
     if (byRoomTap) return;
-    (open ? next : thumb).focus({ preventScroll: true });
+    (open ? next : (carousel?.centre() ?? thumb)).focus({ preventScroll: true });
   }
 
   // The tap that puts the booklet down. Captured, so a finger that slides onto the sheet
@@ -373,7 +467,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   element.addEventListener('pointerup', endSheetPress);
   element.addEventListener('pointercancel', endSheetPress);
 
-  thumb.addEventListener('click', () => setOpen(true));
+  if (!stripped) thumb.addEventListener('click', () => setOpen(true));
   close.addEventListener('click', () => setOpen(false));
   prev.addEventListener('click', () => flip(-1));
   next.addEventListener('click', () => flip(1));
@@ -398,11 +492,82 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   view.addEventListener('pointerup', endSwipe);
   view.addEventListener('pointercancel', endSwipe);
 
+  // The strip's own gestures. A press on a slot (or a gap) is tracked from its down to its up
+  // or cancel: past the tap distance it is a swipe — one page, never a peek or a tap;
+  // within it, on a side slot it moves there, on the centre slot a mouse toggles the page
+  // and a touch holds it open: the peek state machine (src/game/peekGesture.ts) times that,
+  // and its release puts the page back. The strip's arrows are plain buttons with their own
+  // click; a keyboard's click on a slot (detail 0 — a pointer's was handled here) does what a
+  // tap does.
+  let peek: PeekState = 'idle';
+  let peekTimer: ReturnType<typeof setTimeout> | null = null;
+  const peekSend = (event: PeekEvent) => {
+    const from = peek;
+    peek = peekNext(from, event, GESTURE.tapMaxDistance);
+    if (peek === from) return;
+    clearTimeout(peekTimer ?? undefined);
+    if (peek === 'pressing') peekTimer = setTimeout(() => peekSend({ type: 'delay' }), BOOKLET_UI.strip.peekDelayMs);
+    if (peek === 'peeking') setOpen(true);
+    if (from === 'peeking') setOpen(false);
+  };
+  const slotWindow = () => windowOf(page, pages.count, carousel!.visible());
+  const tapSlot = (slot: number, touch: boolean) => {
+    const meaning = tapOn(slotWindow(), slot);
+    if (meaning === 'centre') {
+      // A touch's hold is the peek's; a mouse or a key toggles.
+      if (!touch) setOpen(!open);
+    } else if (meaning !== null) flip(meaning - page);
+  };
+  if (carousel) {
+    let stripPress: { id: number; x: number; y: number; slot: number | null; touch: boolean } | null = null;
+    thumb.addEventListener('pointerdown', (event) => {
+      const control = (event.target as Element).closest('button');
+      const slot = control?.dataset.slot;
+      // The arrows keep their own job; a right button or a second finger starts nothing.
+      if (event.button !== 0 || stripPress || (control && slot === undefined)) return;
+      const touch = event.pointerType !== 'mouse';
+      stripPress = { id: event.pointerId, x: event.clientX, y: event.clientY, slot: slot === undefined ? null : Number(slot), touch };
+      thumb.setPointerCapture(event.pointerId);
+      if (touch && stripPress.slot === centreSlot(carousel.visible())) peekSend({ type: 'press' });
+    });
+    thumb.addEventListener('pointermove', (event) => {
+      if (!stripPress || event.pointerId !== stripPress.id) return;
+      peekSend({ type: 'move', distance: Math.hypot(event.clientX - stripPress.x, event.clientY - stripPress.y) });
+    });
+    const endStripPress = (event: PointerEvent) => {
+      if (!stripPress || event.pointerId !== stripPress.id) return;
+      const { x, y, slot, touch } = stripPress;
+      stripPress = null;
+      const wasPeeking = peek === 'peeking';
+      if (touch) peekSend({ type: 'release' });
+      if (event.type !== 'pointerup' || wasPeeking) return;
+      const dx = event.clientX - x;
+      const dy = event.clientY - y;
+      if (Math.hypot(dx, dy) <= GESTURE.tapMaxDistance) {
+        if (slot !== null) tapSlot(slot, touch);
+      } else if (Math.abs(dx) >= BOOKLET_UI.swipeDistance && Math.abs(dx) > Math.abs(dy)) flip(dx < 0 ? 1 : -1);
+    };
+    thumb.addEventListener('pointerup', endStripPress);
+    thumb.addEventListener('pointercancel', endStripPress);
+    thumb.addEventListener('click', (event) => {
+      const slot = (event.target as Element).closest('button')?.dataset.slot;
+      if (event.detail === 0 && slot !== undefined) tapSlot(Number(slot), false);
+    });
+    carousel.prev.addEventListener('click', () => flip(-1));
+    carousel.next.addEventListener('click', () => flip(1));
+  }
+
   function onKey(event: KeyboardEvent) {
-    if (!open) return;
+    // A slider or a field has its own use of the arrow keys.
+    if ((event.target as Element | null)?.closest('input, textarea, select')) return;
+    if (event.key === 'Escape') {
+      if (open) setOpen(false);
+      return;
+    }
+    // A strip steps on the arrow keys docked too, unless another sheet is the one in hand.
+    if (!open && !(stripped && !anyOpen(self))) return;
     if (event.key === 'ArrowLeft') flip(-1);
     else if (event.key === 'ArrowRight') flip(1);
-    else if (event.key === 'Escape') setOpen(false);
   }
   window.addEventListener('keydown', onKey);
 
@@ -413,7 +578,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   // the docked pose on before an open, so the transition has a start even for a page first
   // opened from a sheet that was built before it was mounted.
   const dockedPose = () => {
-    const { left, top, width: thumbWidth } = thumb.getBoundingClientRect();
+    const { left, top, width: thumbWidth } = anchor().getBoundingClientRect();
     // The layout box, before any transform: a hidden or unmounted element has none.
     const width = element.offsetWidth || 0;
     const scale = width > 0 ? thumbWidth / width : 1;
@@ -425,19 +590,26 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     element.getBoundingClientRect();
   };
   const settle = () => {
-    element.style.transform = open ? 'translate(-50%, -50%)' : dockedPose();
+    // A thumb's page is centred over the room; a strip's rests on the strip, centred across.
+    element.style.transform = open ? (stripped ? 'translate(-50%, 0)' : 'translate(-50%, -50%)') : dockedPose();
   };
-  // A resize or a turn of the phone moves both boxes; the docked page follows.
-  window.addEventListener('resize', settle);
+  // A resize or a turn of the phone moves both boxes (and may change how many pages the strip
+  // shows); the docked page follows.
+  const onResize = () => {
+    carousel?.paint(page, drawer, open);
+    settle();
+  };
+  window.addEventListener('resize', onResize);
 
-  const self: LiveSheet = { isOpen: () => open, thumb };
+  const self: LiveSheet = { isOpen: () => open, thumb, blocking, strip: stripped, close: () => setOpen(false, { byRoomTap: true }) };
   sheets.add(self);
 
   /** Takes the booklet off the page: its elements, its place among the live sheets, its window key listener and any lingering scrim timer. */
   function dispose() {
     clearTimeout(lingering ?? undefined);
     window.removeEventListener('keydown', onKey);
-    window.removeEventListener('resize', settle);
+    window.removeEventListener('resize', onResize);
+    clearTimeout(peekTimer ?? undefined);
     sheets.delete(self);
     syncSheets();
     listeners.clear();
@@ -468,6 +640,10 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     get expanded() {
       return open;
     },
+    /** Puts focus on its docked form: the thumb, or the strip's centre page. */
+    focus() {
+      (carousel?.centre() ?? thumb).focus({ preventScroll: true });
+    },
     /** Opens it, or docks it — as its own controls do, focus and all; `canClose` still holds. */
     setOpen(value: boolean) {
       setOpen(value);
@@ -478,6 +654,70 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
       return () => listeners.delete(fn);
     },
     dispose,
+  };
+}
+
+/**
+ * The strip's DOM: an arrow at each end and, between them, a slot for each page the viewport
+ * has room for (src/game/carouselModel.ts) — rebuilt when that count changes. `paint(page,
+ * draw, open)` shows the pages round `page`, redrawing only a slot whose page changed.
+ */
+function createStrip(name: string, count: number, root: HTMLElement) {
+  const prev = button('‹', 'Previous page');
+  const next = button('›', 'Next page');
+  prev.className = next.className = 'booklet-arrow';
+  const box = document.createElement('div');
+  box.className = 'booklet-slots';
+  root.setAttribute('role', 'group');
+  root.setAttribute('aria-label', `${name[0].toUpperCase()}${name.slice(1)} pages`);
+  root.append(prev, box, next);
+
+  let slots: { button: HTMLButtonElement; canvas: HTMLCanvasElement; shows: number | null | undefined }[] = [];
+  const visible = () => visibleCount(window.innerWidth);
+  function rebuild(total: number) {
+    for (const { button: old } of slots) old.remove();
+    slots = Array.from({ length: total }, (_, index) => {
+      const slot = button('', '');
+      slot.className = 'booklet-slot';
+      slot.dataset.slot = String(index);
+      slot.dataset.centre = String(index === centreSlot(total));
+      slot.tabIndex = index === centreSlot(total) ? 0 : -1;
+      const canvas = pageCanvas(pageW, pageH);
+      slot.append(canvas);
+      box.append(slot);
+      return { button: slot, canvas, shows: undefined };
+    });
+  }
+
+  return {
+    prev,
+    next,
+    visible,
+    /** The centre slot's button: the page that is current, and what the open page grows from. */
+    centre() {
+      if (slots.length === 0) rebuild(visible());
+      return slots[centreSlot(slots.length)].button;
+    },
+    paint(page: number, draw: (target: HTMLCanvasElement, index: number) => void, open: boolean) {
+      const total = visible();
+      if (total !== slots.length) rebuild(total);
+      const shown = windowOf(page, count, total);
+      shown.forEach((index, at) => {
+        const slot = slots[at];
+        slot.button.dataset.empty = String(index === null);
+        slot.button.setAttribute('aria-hidden', String(index === null));
+        if (index === null) {
+          slot.button.removeAttribute('aria-label');
+        } else {
+          slot.button.setAttribute('aria-label', at === centreSlot(total) ? `Page ${index + 1} of ${count}, ${open ? 'close' : 'open'} it` : `Go to page ${index + 1} of ${count}`);
+        }
+        if (at === centreSlot(total)) slot.button.setAttribute('aria-expanded', String(open));
+        if (index !== null && slot.shows !== index) draw(slot.canvas, index);
+        slot.shows = index;
+      });
+      prev.setAttribute('aria-disabled', String(page === 0));
+      next.setAttribute('aria-disabled', String(page === count - 1));
+    },
   };
 }
 

@@ -111,7 +111,7 @@ describe('booklet focus (PR #12 review)', () => {
   const setOpen = booklet.slice(booklet.indexOf('function setOpen('), booklet.indexOf("thumb.addEventListener('click'"));
 
   it('opens onto the next arrow, which is only ever aria-disabled — focus is never lost at the last page', () => {
-    expect(setOpen).toMatch(/\(open \? next : thumb\)\.focus/);
+    expect(setOpen).toMatch(/\(open \? next : \(carousel\?\.centre\(\) \?\? thumb\)\)\.focus/);
     expect(booklet).not.toMatch(/\.disabled\s*=/);
   });
 });
@@ -155,7 +155,7 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
   // nor take a tap meant for BUILD IT: laid over the head of the page, out of the flow, deaf
   // to the pointer — and clear of the tag's rows even on a small phone held sideways.
   it('lays the notice over the head of the page, out of the flow, never over BUILD IT', () => {
-    const notice = booklet.slice(booklet.indexOf('.booklet-notice {'), booklet.indexOf('`;', booklet.indexOf('.booklet-notice {')));
+    const notice = booklet.slice(booklet.indexOf('.booklet-notice {'), booklet.indexOf('\n    }', booklet.indexOf('.booklet-notice {')));
     expect(booklet.slice(booklet.indexOf('.booklet-page {'), booklet.indexOf('.booklet-page canvas {'))).toMatch(/position: relative;/);
     expect(notice).toMatch(/position: absolute;/);
     expect(notice).toMatch(/top: \$\{BOOKLET_UI\.notice\.inset\}px;/);
