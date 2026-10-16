@@ -9,6 +9,9 @@ const renderer = (width = 800, height = 600) => ({ getSize: (target: THREE.Vecto
 const at = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const bounds = (object: THREE.Object3D) => new THREE.Box3().setFromObject(object);
 
+const uvsOf = (mesh: THREE.Mesh) => Array.from(mesh.geometry.getAttribute('uv').array);
+const panelUvs = (room: ReturnType<typeof createRoom>) => uvsOf(room.backWall.getObjectByName('backSceneryPanel') as THREE.Mesh);
+const backlightUvs = (room: ReturnType<typeof createRoom>) => uvsOf(room.backWall.getObjectByName('backSceneryBacklight') as THREE.Mesh);
 const sceneryHalfWidth = () => sceneryMouth('back').width / 2;
 
 describe('the room as built', () => {
@@ -197,19 +200,40 @@ describe('the sky turns', () => {
     expect(material.alphaMap!.minFilter).toBe(THREE.LinearMipmapLinearFilter);
   });
 
-  it('lights the backlight to the stars at night and to the sky\'s own colour at noon', () => {
+  it('lights the backlight to the stars at night and to nothing but the sky\'s own colour at noon', () => {
     const room = createRoom();
     const backlight = room.backWall.getObjectByName('backSceneryBacklight') as THREE.Mesh;
-    const colour = () => (backlight.material as THREE.MeshBasicMaterial).color.clone();
+    const uniforms = (backlight.material as THREE.ShaderMaterial).uniforms as Record<string, { value: number & THREE.Color }>;
     // The knob starts on noon, where a room built at another hour is not scrubbed: move it off and back.
     STAGE.sky.phase = 0.4;
     room.update(at(0, 2, 3), renderer(), 0);
     STAGE.sky.phase = 0.5;
     room.update(at(0, 2, 3), renderer(), 0);
-    expect(colour().equals(skyColour(room))).toBe(true);
+    expect(uniforms.uLevel!.value).toBe(0);
+    expect(uniforms.uSkyColour!.value.equals(skyColour(room))).toBe(true);
     STAGE.sky.phase = 0;
     room.update(at(0, 2, 3), renderer(), 0);
-    expect(colour().getHex()).toBe(COLORS.starlight);
+    expect(uniforms.uLevel!.value).toBe(1);
+    expect(uniforms.uStarColour!.value.getHex()).toBe(COLORS.starlight);
+    STAGE.sky.phase = 0.75;
+    room.update(at(0, 2, 3), renderer(), 0);
+    expect(uniforms.uLevel!.value).toBe(0);
+  });
+
+  it('runs the twinkle on the room\'s clock, from the sky texture the pinholes are cut from', () => {
+    const room = createRoom();
+    const backlight = room.backWall.getObjectByName('backSceneryBacklight') as THREE.Mesh;
+    const uniforms = (backlight.material as THREE.ShaderMaterial).uniforms as Record<string, { value: number | THREE.Texture }>;
+    const panel = room.backWall.getObjectByName('backSceneryPanel') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+    expect(uniforms.uSky!.value).toBe(panel.material.alphaMap);
+    expect(uniforms.uPeriod!.value).toBe(STAGE.scenery.stars.twinkle.period);
+    expect(uniforms.uDepth!.value).toBe(STAGE.scenery.stars.twinkle.depth);
+    const before = uniforms.uTime!.value as number;
+    room.update(at(0, 2, 3), renderer(), 2.5);
+    room.update(at(0, 2, 3), renderer(), 1);
+    expect((uniforms.uTime!.value as number) - before).toBeCloseTo(3.5, 9);
+    // The backlight shares the panel's coordinates, so a hole finds its own star's twinkle behind it.
+    expect(backlightUvs(room)).toEqual(panelUvs(room));
   });
 
   it('shows one disc: the sun by day and the moon, smaller and fainter, by night, wholly inside its box', () => {

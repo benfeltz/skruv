@@ -45,6 +45,52 @@ function pierceSky(skyMaterial: THREE.MeshBasicMaterial) {
   skyMaterial.needsUpdate = true;
 }
 
+const BACKLIGHT_VERTEX = `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+// The light behind the pinholes: the sky's own colour mixed toward starlight by `uLevel`, each star's share dimmed by
+// its own slow swing — phase in the sky texture's red, swing in its blue (see twinkleAt in src/game/starSky.ts).
+const BACKLIGHT_FRAGMENT = `
+  uniform sampler2D uSky;
+  uniform vec3 uSkyColour;
+  uniform vec3 uStarColour;
+  uniform float uLevel;
+  uniform float uTime;
+  uniform float uPeriod;
+  uniform float uDepth;
+  varying vec2 vUv;
+  void main() {
+    vec4 star = texture2D(uSky, vUv);
+    float swing = 0.5 + 0.5 * sin(6.28318530718 * (uTime / uPeriod + star.r));
+    float light = uLevel * (1.0 - uDepth * star.b * swing);
+    gl_FragColor = vec4(mix(uSkyColour, uStarColour, light), 1.0);
+    #include <colorspace_fragment>
+  }
+`;
+
+/** The backlight's material: the sky texture it reads the twinkle from, and the colours and clock `update` moves. */
+function backlightMaterial(sky: THREE.Texture) {
+  const { period, depth } = STAGE.scenery.stars.twinkle;
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uSky: { value: sky },
+      uSkyColour: { value: new THREE.Color() },
+      uStarColour: { value: new THREE.Color(COLORS.starlight) },
+      uLevel: { value: 0 },
+      uTime: { value: 0 },
+      uPeriod: { value: period },
+      uDepth: { value: depth },
+    },
+    vertexShader: BACKLIGHT_VERTEX,
+    fragmentShader: BACKLIGHT_FRAGMENT,
+  });
+}
+
 /** The panel's UVs on the wall's strip of the sky texture, so each constellation stands once where its wall shows it. */
 function skyUvs(geometry: THREE.PlaneGeometry, name: WallName, height: number) {
   const position = geometry.getAttribute('position');
@@ -109,10 +155,12 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
   });
 
   // The light behind the back panel: the sky's own colour by day, so the pinholes vanish, starlight by night.
-  const backlight = new THREE.Mesh(new THREE.PlaneGeometry(mouth.width, mouth.height), new THREE.MeshBasicMaterial());
+  const backlightGeometry = new THREE.PlaneGeometry(mouth.width, mouth.height);
+  skyUvs(backlightGeometry, name, mouth.height);
+  const backlightLook = backlightMaterial(skyMaterial.alphaMap!);
+  const backlight = new THREE.Mesh(backlightGeometry, backlightLook);
   backlight.name = `${name}SceneryBacklight`;
   backlight.position.z = -depth;
-  const starlight = new THREE.Color(COLORS.starlight);
 
   group.add(backlight, panel, skin);
 
@@ -172,13 +220,15 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
     /** Per frame: `phase` of the day and `delta` seconds of game time, after the sky material is painted for `phase`. */
     update(phase: number, delta: number) {
       elapsed += delta;
+      backlightLook.uniforms.uTime!.value = elapsed;
       cloud.moving.position.x = cloudX(mouth, elapsed);
       group.updateWorldMatrix(true, false);
       clips.forEach((clip, i) => clip.copy(sidePlanes[i]!).applyMatrix4(group.matrixWorld));
       cloudInk.resolution.copy(ink.resolution);
       if (phase === lit) return;
       lit = phase;
-      (backlight.material as THREE.MeshBasicMaterial).color.copy(skyMaterial.color).lerp(starlight, starlightAt(phase));
+      backlightLook.uniforms.uSkyColour!.value.copy(skyMaterial.color);
+      backlightLook.uniforms.uLevel!.value = starlightAt(phase);
       celestial(phase, bodies);
       const up = bodies.sun.visible ? bodies.sun : bodies.moon;
       const radius = bodies.sun.visible ? scenery.sun.radius : scenery.moon.radius;

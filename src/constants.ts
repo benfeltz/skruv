@@ -181,6 +181,11 @@ export const STAGE = {
       ] satisfies { name: string; strip: 'back' | 'left'; at: [number, number]; metresPerDegree: number; stars: { dx: number; dy: number; bright: boolean }[] }[],
       // A constellation star's radius: dim ones, and bright (plus) ones.
       constellationRadius: { dim: 0.013, bright: 0.02 },
+      // Twinkle: only `share` of the stars twinkle. A twinkling star's light swings between full and `1 - depth` of it
+      // (never out, its size unchanged) over `period` seconds, from its own random phase so none pulse together; each
+      // has its own swing, a `minSwing` to full share of `depth`. The backlight carries each star's phase and swing in a
+      // zone `margin` metres wider than its hole, so a slanted view through the hole still finds them.
+      twinkle: { share: 0.4, period: 4, depth: 0.45, minSwing: 0.4, margin: 0.05 },
     },
   },
   // The sky beyond the windows turns on game time (src/game/skyCycle.ts), colour only: the stage's light,

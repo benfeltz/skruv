@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { STAGE } from '../src/constants.js';
 import { sceneryMouth, windowOpenings } from '../src/game/stageBoxes.js';
 import type { WallName } from '../src/game/stageBoxes.js';
-import { SKY_TEXELS, STRIP_TEXELS, TEXELS_PER_METRE, constellationStars, skyStars, skyTexture, skyUv } from '../src/game/starSky.js';
+import { SKY_TEXELS, STRIP_TEXELS, TEXELS_PER_METRE, constellationStars, skyStars, skyTexture, skyUv, twinkleAt } from '../src/game/starSky.js';
 import type { Star } from '../src/game/starSky.js';
 
 const { stars } = STAGE.scenery;
@@ -159,5 +159,58 @@ describe('a panel\'s coordinates in the sky', () => {
     expect(left[0]).toBeCloseTo(0.5, 9);
     expect(left[1]).toBeCloseTo(0.5, 9);
     expect(skyUv('left', 0, height / 2, height)[1]).toBeCloseTo(1, 9);
+  });
+});
+
+describe('the twinkle', () => {
+  const all = skyStars();
+  const twinkling = all.filter((s) => s.twinkle.swing > 0);
+  const { period, depth, share, minSwing, margin } = stars.twinkle;
+
+  it('is on only some of the stars, from phases spread round the cycle so none pulse together', () => {
+    expect(twinkling.length / all.length).toBeGreaterThan(share / 2);
+    expect(twinkling.length / all.length).toBeLessThan(share * 1.6);
+    const phases = twinkling.map((s) => s.twinkle.phase);
+    expect(Math.min(...phases)).toBeLessThan(0.15);
+    expect(Math.max(...phases)).toBeGreaterThan(0.85);
+    expect(new Set(phases.map((p) => p.toFixed(3))).size).toBeGreaterThan(twinkling.length * 0.9);
+    expect(twinkling.every((s) => s.twinkle.swing >= minSwing && s.twinkle.swing <= 1)).toBe(true);
+    expect(all.filter((s) => s.twinkle.swing === 0).length).toBeGreaterThan(all.length / 2);
+  });
+
+  it('is subtle and slow: a star dims by at most `depth`, never out, and swings once a period', () => {
+    expect(depth).toBeLessThanOrEqual(0.5);
+    for (const s of twinkling) {
+      const seen = Array.from({ length: 200 }, (_, i) => twinkleAt((i * period) / 200, s.twinkle));
+      expect(Math.min(...seen)).toBeGreaterThanOrEqual(1 - depth - 1e-9);
+      expect(Math.max(...seen)).toBeLessThanOrEqual(1 + 1e-9);
+      expect(twinkleAt(0, s.twinkle)).toBeCloseTo(twinkleAt(period, s.twinkle), 9);
+    }
+    expect(period).toBeGreaterThanOrEqual(2);
+  });
+
+  it('leaves a steady star at full light always, and two stars at different phases apart', () => {
+    const steady = all.find((s) => s.twinkle.swing === 0)!;
+    for (const t of [0, 1.3, 2.7, 9]) expect(twinkleAt(t, steady.twinkle)).toBe(1);
+    const [a, b] = twinkling.slice(0, 2) as [Star, Star];
+    const gaps = Array.from({ length: 40 }, (_, i) => Math.abs(twinkleAt(i * 0.1, a.twinkle) - twinkleAt(i * 0.1, b.twinkle)));
+    expect(Math.max(...gaps)).toBeGreaterThan(0.01);
+  });
+
+  it('is drawn into the sky texture: each star\'s own phase and swing at its hole, in a zone wider than the hole', () => {
+    const data = skyTexture();
+    const at = (x: number, y: number) => (y * SKY_TEXELS.width + x) * 4;
+    const centreOf = (s: Star) => [Math.round(s.x * TEXELS_PER_METRE), Math.round(s.strip * STRIP_TEXELS + s.y * TEXELS_PER_METRE)] as const;
+    for (const s of all) {
+      const [x, y] = centreOf(s);
+      expect(data[at(x, y)], `phase of star at ${s.x}`).toBe(Math.round(s.twinkle.phase * 255));
+      expect(data[at(x, y) + 2], `swing of star at ${s.x}`).toBe(Math.round(s.twinkle.swing * 255));
+    }
+    // Beyond its hole by the margin, a slanted view through the hole still finds its star's twinkle.
+    const wide = twinkling.find((s) => !s.plus && centreOf(s)[0] > 40 && s.x < stars.sky.width - 0.5)!;
+    const [x, y] = centreOf(wide);
+    const offset = Math.ceil(wide.radius * TEXELS_PER_METRE) + Math.floor((margin * TEXELS_PER_METRE) / 2);
+    expect(data[at(x + offset, y)]).toBeGreaterThan(0);
+    expect(data[at(x + offset, y) + 2]).toBeGreaterThan(0);
   });
 });
