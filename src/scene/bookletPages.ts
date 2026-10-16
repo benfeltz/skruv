@@ -4,6 +4,8 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { BOOKLET, COLORS } from '../constants.js';
 import { createBooklet, gamePagesFor } from '../game/bookletModel.js';
+import { explodeStep, floatOut, insetsFor } from '../game/explode.js';
+import type { Inset } from '../game/explode.js';
 import { createPageCache, FAINT, font, INK, newPage, PAPER } from './pagePaper.js';
 import { rowsFor } from '../game/controlsPage.js';
 import { ITEM_ID, itemById } from '../game/item.js';
@@ -12,12 +14,13 @@ import type { BuildStep, PartCount } from '../game/bookletModel.js';
 import type { PictogramId, Scheme } from '../game/controlsPage.js';
 import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { Sheet } from './pagePaper.js';
+import { add, sub } from '../../tools/validate/lib/geometry.js';
 import type { Quat, Size, Vec3 } from '../../tools/validate/lib/geometry.js';
 
 // The booklet's pages, drawn from the same part models the room uses, so a page can never
 // disagree with the geometry. Wordless, as the real thing is: a big step numeral, an
-// outline drawing (this page's parts bold, what is already built pale), hardware count
-// bubbles with their part numbers, and pictogram warning pages with faceless figures. The
+// outline drawing (this page's parts bold, what is already built pale, new parts pulled out
+// of their holes), a detail inset per fastener type with its count and part number, and pictogram warning pages with faceless figures. The
 // game's own controls page, before the back cover, is the one with words: a pictogram and
 // a short label per row.
 // WHAT each page shows is src/game/bookletModel.ts's; this module only draws. Branding is
@@ -208,29 +211,63 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     ctx.font = font(BOOKLET.numeralSize, 800);
     ctx.fillText(String(page.number), m - 6, m + BOOKLET.numeralSize * 0.78);
 
-    // Count bubbles along the top, right of the numeral; the tool in hand after them.
-    const r = BOOKLET.bubbleRadius;
-    let bx = m + 190 + r;
-    for (const { type, count, partNumber } of page.hardware) {
-      bubble(ctx, bx, m + r, r);
-      views.draw(ctx, [single(type)], [bx - r * 0.62, m + r * 0.28, r * 1.24, r * 0.95]);
+    // Detail insets along the top, right of the numeral: one circle per fastener type, a tight
+    // view of one joint with the fastener floating out, its count and part number beneath;
+    // the tool in hand sits in the first. A thin tail runs from each to its joint below.
+    const insets = insetsFor(page, layout, item.partTypes);
+    const { radius: maxRadius, gap } = BOOKLET.inset;
+    const left = m + 190;
+    const slots = Math.max(insets.length, 1);
+    const r = Math.min(maxRadius, (pageW - m - left - gap * (slots - 1)) / (2 * slots));
+    const cy = m + maxRadius;
+    const centres = insets.map((_, i): [number, number] => [left + r + i * (2 * r + gap), cy]);
+    const orientation = page.pose === 'parts' ? UPRIGHT : ORIENTATION[page.pose];
+    insets.forEach(({ count, partNumber, items, leader, focus, axis }, i) => {
+      const [cx] = centres[i];
+      const d = Math.round(2 * r);
+      const { canvas } = views.render(
+        items.map((it) => ({ ...it, weight: 'bold' as const })),
+        d,
+        d,
+        // Turned so the fastener floats up off a face the viewer sees, whatever the page's pose.
+        new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(...axis), new THREE.Vector3(...BOOKLET.inset.lift).normalize()),
+        { frame: focus, lines: [leader] },
+      );
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+      ctx.clip();
+      ctx.drawImage(canvas, cx - r, cy - r, 2 * r, 2 * r);
+      ctx.restore();
+      ring(ctx, cx, cy, r);
       ctx.fillStyle = INK;
       ctx.textAlign = 'center';
       ctx.font = font(28, 800);
-      ctx.fillText(`${count}×`, bx, m + 2 * r + 34);
+      ctx.fillText(`${count}×`, cx, cy + r + BOOKLET.inset.countDrop);
       ctx.font = font(17, 500);
-      ctx.fillText(partNumber, bx, m + 2 * r + 56);
+      ctx.fillText(partNumber, cx, cy + r + BOOKLET.inset.partDrop);
       ctx.textAlign = 'left';
-      bx += 2 * r + 28;
-    }
+    });
     if (page.tool) {
-      bubble(ctx, bx, m + r, r);
-      views.draw(ctx, [single(page.tool)], [bx - r * 0.7, m + r * 0.3, r * 1.4, r * 1.4]);
+      // In the first inset's lower right; alone in the first slot when the step fastens nothing.
+      const [cx] = centres[0] ?? [left + BOOKLET.inset.toolOnly, cy];
+      const rad = insets.length ? r * BOOKLET.inset.tool : BOOKLET.inset.toolOnly;
+      const [tx, ty] = insets.length ? [cx + r * BOOKLET.inset.toolAt, cy + r * BOOKLET.inset.toolAt] : [cx, cy];
+      ctx.fillStyle = PAPER;
+      ctx.beginPath();
+      ctx.arc(tx, ty, rad, 0, 2 * Math.PI);
+      ctx.fill();
+      ring(ctx, tx, ty, rad);
+      const fill = rad * BOOKLET.inset.toolFill;
+      views.draw(ctx, [single(page.tool)], [tx - fill, ty - fill, 2 * fill, 2 * fill]);
     }
 
-    const frame: Rect = [m, m + 2 * r + 80, pageW - 2 * m, pageH - (2 * m + 2 * r + 80)];
-    if (page.pose === 'parts') views.draw(ctx, looseParts(page), frame);
-    else views.draw(ctx, itemsFor(new Set(page.shown), page.tip ? new Set() : boldOf(page)), frame, ORIENTATION[page.pose]);
+    const top = m + 2 * maxRadius + 80;
+    const frame: Rect = [m, top, pageW - 2 * m, pageH - m - top];
+    const { items, lines, anchorOf } = drawingOf(page);
+    const project = views.draw(ctx, items, frame, orientation, { lines });
+    // From under the labels, so the line never crosses the count or the part number.
+    insets.forEach((inset, i) => tail(ctx, [centres[i][0], cy + r + BOOKLET.inset.tailFrom], project(anchorOf(inset))));
     if (page.turns.length) turnArrow(ctx, frame[0] + frame[2] - 80, frame[1] + 70, 46);
     if (page.tip) {
       // Two people tip it up together: an arc over the drawing, a figure at each side.
@@ -278,16 +315,35 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     });
   }
 
+  // What a step page's frame draws: its new parts and fasteners pulled apart along their holes
+  // (src/game/explode.ts), with leader lines back; a loose-parts page keeps its fan.
+  // `anchorOf(inset)` is where the inset's joint is in that drawing, for its tail.
+  function drawingOf(page: BuildStep): { items: ViewItem[]; lines: [Vec3, Vec3][]; anchorOf: (inset: Inset) => Vec3 } {
+    if (page.pose === 'parts') return looseParts(page);
+    const bold = page.tip ? new Set<InstanceId>() : boldOf(page);
+    const { items, leaders, offsets } = explodeStep(page, layout, item.partTypes);
+    return {
+      items: items.map((it) => ({ ...it, weight: bold.has(it.id) ? 'bold' : 'faint' })),
+      lines: leaders,
+      // The hole goes with its host when the host is pulled away.
+      anchorOf: ({ joint, anchor }) => add(anchor, offsets.get(layout.joints[joint].host) ?? [0, 0, 0]),
+    };
+  }
+
   // A loose-parts page: each panel the page works on laid flat with its own hardware in it,
-  // the panels fanned out one behind another.
+  // the panels fanned out one behind another. Hardware the page pushes in floats out of its
+  // hole, in the panel's flat frame, with a leader back.
   function looseParts(page: BuildStep) {
     const panels = [...new Set(page.joints.map((i) => layout.joints[i].host)), ...page.parts].filter(
       (id, i, all) => all.indexOf(id) === i,
     );
     const items: ViewItem[] = [];
+    const lines: [Vec3, Vec3][] = [];
+    const placers = new Map<InstanceId, (v: Vec3) => Vec3>();
     const pose = new THREE.Matrix4();
     const local = new THREE.Matrix4();
     const inverse = new THREE.Matrix4();
+    const toFlat = new THREE.Matrix4();
     const p = new THREE.Vector3();
     const q = new THREE.Quaternion();
     const s = new THREE.Vector3();
@@ -297,19 +353,34 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
       const size = item.partTypes[panel.type].size;
       const flat = LAY_FLAT[size.indexOf(Math.min(...size))];
       inverse.compose(p.set(...panel.position), q.set(...panel.rotation), s.set(1, 1, 1)).invert();
-      const hardware = page.joints.map((i) => layout.joints[i]).filter((j) => j.host === id).map((j) => partById.get(j.hardware)!);
+      // The assembled frame to this panel's place in the fan.
+      toFlat.makeRotationFromQuaternion(flat).multiply(inverse);
+      const joints = page.joints.map((i) => layout.joints[i]).filter((j) => j.host === id);
       // Flat extent across the fan: this panel starts half of it past the last one's edge.
       const depth = Math.min(...size.filter((d) => d !== Math.min(...size)));
       offset += depth / 2;
-      for (const part of [panel, ...hardware]) {
-        local.compose(p.set(...part.position), q.set(...part.rotation), s.set(1, 1, 1));
-        pose.makeRotationFromQuaternion(flat).multiply(inverse).multiply(local);
-        pose.decompose(p, q, s);
-        items.push({ ...part, position: [p.x, p.y, p.z + offset], rotation: q.toArray(), weight: 'bold' });
+      // Kept for the tails, after the scratch matrices have moved on to the next panel.
+      const flatten = toFlat.clone();
+      const z = offset;
+      const place = (v: Vec3): Vec3 => new THREE.Vector3(...v).applyMatrix4(flatten).add(new THREE.Vector3(0, 0, z)).toArray();
+      placers.set(id, place);
+      items.push({ ...panel, ...flatPose(panel.position, panel.rotation), weight: 'bold' });
+      for (const joint of joints) {
+        const hardware = partById.get(joint.hardware)!;
+        const [from, to] = joint.mover === joint.hardware ? floatOut(joint, layout, item.partTypes) : [hardware.position, hardware.position];
+        items.push({ ...hardware, ...flatPose(add(hardware.position, sub(to, from)), hardware.rotation), weight: 'bold' });
+        if (joint.mover === joint.hardware) lines.push([place(from), place(to)]);
       }
       offset += depth / 2 + BOOKLET.fanGap;
+
+      // `position` and `rotation` (assembled frame) carried into this panel's flat frame.
+      function flatPose(position: Vec3, rotation: Quat) {
+        local.compose(p.set(...position), q.set(...rotation), s.set(1, 1, 1));
+        pose.copy(toFlat).multiply(local).decompose(p, q, s);
+        return { position: [p.x, p.y, p.z + offset] as Vec3, rotation: q.toArray() as Quat };
+      }
     }
-    return items;
+    return { items, lines, anchorOf: ({ joint, anchor }: Inset) => placers.get(layout.joints[joint].host)!(anchor) };
   }
 
   const single = (type: string): ViewItem & { id: string } => ({ id: type, type, position: [0, 0, 0], rotation: [0, 0, 0, 1], weight: 'bold' });
@@ -331,11 +402,36 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
   return { count: pages.length, pages, ...createPageCache(pages.length, draw, views.dispose) };
 }
 
+/** What `render` and `draw` take beyond the parts: line segments, and a box to frame on. */
+export interface Extras {
+  /** Segments `[from, to]` in the drawing's frame, drawn faint (leader lines). */
+  lines?: [Vec3, Vec3][];
+  /** The world box to fit the camera to, in place of the parts' own boxes. */
+  frame?: { min: Vec3; max: Vec3 };
+}
+
+const mid = ({ min, max }: { min: Vec3; max: Vec3 }): Vec3 => [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+
+// The camera-space extent of the corners of `boxes` ({ pose matrix, half sizes }).
+function viewOf(boxes: { matrix: THREE.Matrix4; half: THREE.Vector3 }[], worldToCamera: THREE.Matrix4) {
+  const view = new THREE.Box3();
+  const corner = new THREE.Vector3();
+  for (const { matrix, half } of boxes) {
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+      corner.set(sx * half.x, sy * half.y, sz * half.z);
+      view.expandByPoint(corner.applyMatrix4(matrix).applyMatrix4(worldToCamera));
+    }
+  }
+  return view;
+}
+
 /**
  * Hidden-line outline renders: every part a white box (faces hide what lies behind) with
  * its edges drawn as fat lines, bold or faint, sized by `sizeOf(type)`. Geometry is built
- * once per part type. `render(items, width, height, orientation)` returns a canvas of the
- * drawing framed to fit, `draw(ctx, items, rect, orientation)` puts one on a page; `dispose()` frees the geometry and materials. Shared with the catalog's pages (src/scene/catalogPages.ts).
+ * once per part type. `render(items, width, height, orientation, extras)` returns `{ canvas,
+ * project }` — the drawing framed to fit (or on `extras.frame`), with `extras.lines` drawn
+ * faint, and the projector from world points to canvas pixels; `draw(ctx, items, rect,
+ * orientation, extras)` puts one on a page and returns the projector in page pixels; `dispose()` frees the geometry and materials. Shared with the catalog's pages (src/scene/catalogPages.ts).
  */
 export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type: string) => Size) {
   const fill = new THREE.MeshBasicMaterial({
@@ -360,14 +456,16 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
   };
   const camera = new THREE.OrthographicCamera();
   const direction = new THREE.Vector3(...BOOKLET.viewDirection).normalize();
+  const leaderMaterial = new LineMaterial({ color: COLORS.bookletFaint, linewidth: BOOKLET.explode.leaderLine });
   const corner = new THREE.Vector3();
   const clearColor = new THREE.Color();
 
-  function render(items: ViewItem[], width: number, height: number, orientation = UPRIGHT) {
+  function render(items: ViewItem[], width: number, height: number, orientation = UPRIGHT, { lines: extra = [], frame }: Extras = {}) {
     const scene = new THREE.Group();
     const root = new THREE.Group();
     root.quaternion.copy(orientation);
     scene.add(root);
+    const placed: { part: THREE.Group; type: string }[] = [];
     for (const { type, position, rotation, weight } of items) {
       const { box, edges } = geometryOf(type);
       const part = new THREE.Group();
@@ -375,23 +473,28 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
       part.quaternion.set(...rotation);
       part.add(new THREE.Mesh(box, fill), new LineSegments2(edges, lines[weight]));
       root.add(part);
+      placed.push({ part, type });
     }
+    // Extra segments (leader lines), in the drawing's own frame, faint.
+    const extraGeometry = extra.length ? new LineSegmentsGeometry().setPositions(extra.flat(2)) : null;
+    if (extraGeometry) root.add(new LineSegments2(extraGeometry, leaderMaterial));
     scene.updateMatrixWorld(true);
 
-    // Frame the drawing: every box corner in the camera's view, padded, at the frame's aspect.
+    // Frame the drawing: the corners of the boxes in view (every part's, or `frame`'s), padded,
+    // at the frame's aspect. Depth always spans every part, so a tight frame clips nothing.
     camera.position.copy(direction).multiplyScalar(50);
     camera.up.set(0, 1, 0);
     camera.lookAt(0, 0, 0);
     camera.updateMatrixWorld(true);
-    const view = new THREE.Box3();
-    for (const part of root.children) {
-      // Each part's first child is its box.
-      const half = (part.children[0] as THREE.Mesh<THREE.BoxGeometry>).geometry.parameters;
-      for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
-        corner.set((sx * half.width) / 2, (sy * half.height) / 2, (sz * half.depth) / 2);
-        view.expandByPoint(corner.applyMatrix4(part.matrixWorld).applyMatrix4(camera.matrixWorldInverse));
-      }
-    }
+    const boxes = placed.map(({ part, type }) => ({ matrix: part.matrixWorld, half: new THREE.Vector3(...sizeOf(type)).multiplyScalar(0.5) }));
+    const frameBox = frame
+      ? [{
+          matrix: new THREE.Matrix4().multiplyMatrices(root.matrixWorld, new THREE.Matrix4().makeTranslation(...mid(frame))),
+          half: new THREE.Vector3(...frame.max).sub(new THREE.Vector3(...frame.min)).multiplyScalar(0.5),
+        }]
+      : boxes;
+    const view = viewOf(frameBox, camera.matrixWorldInverse);
+    const depth = viewOf(boxes.length ? boxes : frameBox, camera.matrixWorldInverse);
     const centre = view.getCenter(new THREE.Vector3());
     const size = view.getSize(new THREE.Vector3());
     const pad = 1 + 2 * BOOKLET.framePadding;
@@ -401,11 +504,11 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
       right: centre.x + (span * width) / 2,
       top: centre.y + (span * height) / 2,
       bottom: centre.y - (span * height) / 2,
-      near: -view.max.z - 1,
-      far: -view.min.z + 1,
+      near: -Math.max(view.max.z, depth.max.z) - 1,
+      far: -Math.min(view.min.z, depth.min.z) + 1,
     });
     camera.updateProjectionMatrix();
-    for (const material of Object.values(lines)) material.resolution.set(width, height);
+    for (const material of [...Object.values(lines), leaderMaterial]) material.resolution.set(width, height);
 
     const target = new THREE.WebGLRenderTarget(width, height, { samples: 4 });
     const previous = renderer.getRenderTarget();
@@ -437,12 +540,28 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
       }
     }
     out.getContext('2d')!.putImageData(image, 0, 0);
-    return out;
+    extraGeometry?.dispose();
+    // Where a world point (the drawing's frame, before `orientation`) lands on this canvas.
+    const toCanvas = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(root.matrixWorld);
+    const project = (point: Vec3): [number, number] => {
+      const ndc = corner.set(...point).applyMatrix4(toCanvas);
+      return [((ndc.x + 1) / 2) * width, ((1 - ndc.y) / 2) * height];
+    };
+    return { canvas: out, project };
   }
 
-  /** Draws `items` into the rectangle [x, y, w, h] of a page's `ctx`, framed to fit. */
-  function draw(ctx: Ctx, items: ViewItem[], [x, y, w, h]: Rect, orientation = UPRIGHT) {
-    ctx.drawImage(render(items, Math.round(w), Math.round(h), orientation), x, y, w, h);
+  /**
+   * Draws `items` into the rectangle [x, y, w, h] of a page's `ctx`, framed to fit (or on
+   * `extras.frame`). Returns the projector from world points to page pixels.
+   */
+  function draw(ctx: Ctx, items: ViewItem[], [x, y, w, h]: Rect, orientation = UPRIGHT, extras: Extras = {}) {
+    const [rw, rh] = [Math.round(w), Math.round(h)];
+    const { canvas, project } = render(items, rw, rh, orientation, extras);
+    ctx.drawImage(canvas, x, y, w, h);
+    return (point: Vec3): [number, number] => {
+      const [px, py] = project(point);
+      return [x + (px * w) / rw, y + (py * h) / rh];
+    };
   }
 
   /** Frees every geometry and material it built — the pages it drew are plain canvases and stay. */
@@ -453,7 +572,7 @@ export function createViewRenderer(renderer: THREE.WebGLRenderer, sizeOf: (type:
     }
     geometries.clear();
     fill.dispose();
-    for (const material of Object.values(lines)) material.dispose();
+    for (const material of [...Object.values(lines), leaderMaterial]) material.dispose();
   }
 
   return { render, draw, dispose };
@@ -466,12 +585,30 @@ function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: numb
   ctx.roundRect(x, y, w, h, r);
 }
 
-function bubble(ctx: Ctx, x: number, y: number, r: number) {
+function ring(ctx: Ctx, x: number, y: number, r: number) {
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = BOOKLET.inset.ringLine;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, 2 * Math.PI);
   ctx.stroke();
+}
+
+// A thin tail from `from` (under an inset's labels) to its joint `to` in the drawing: a
+// shallow bow, a dot at the joint.
+function tail(ctx: Ctx, from: [number, number], to: [number, number]) {
+  const [dx, dy] = [to[0] - from[0], to[1] - from[1]];
+  const bow = Math.hypot(dx, dy) * BOOKLET.inset.tailBow;
+  const length = Math.hypot(dx, dy) || 1;
+  ctx.strokeStyle = INK;
+  ctx.fillStyle = INK;
+  ctx.lineWidth = BOOKLET.inset.tailLine;
+  ctx.beginPath();
+  ctx.moveTo(...from);
+  ctx.quadraticCurveTo((from[0] + to[0]) / 2 - (dy / length) * bow, (from[1] + to[1]) / 2 + (dx / length) * bow, ...to);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(to[0], to[1], BOOKLET.inset.tailDot, 0, 2 * Math.PI);
+  ctx.fill();
 }
 
 // A ticked or crossed circle: the do / don't marks.

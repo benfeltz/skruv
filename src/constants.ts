@@ -168,7 +168,41 @@ export const BOOKLET = {
   // Room between loose panels fanned out on a loose-parts page, in metres of the drawing.
   fanGap: 0.12,
   numeralSize: 150,
-  bubbleRadius: 64,
+  // Exploded step drawings (src/game/explode.ts), in metres of the drawing along a hole's
+  // axis: how far hardware floats out of its hole, how far a part pressed onto hardware is
+  // pulled away, and (sub-assembly install pages, PR 2) a built assembly held off its place.
+  // `leaderLine` is the weight of the faint line back from a floated fastener to its hole.
+  // `cancel` is the length below which a part's pulls from opposing joints count as none.
+  explode: { hardware: 0.05, part: 0.2, assembly: 0.35, leaderLine: 1, cancel: 1e-9 },
+  // Detail insets (src/scene/bookletPages.ts `step`), page-canvas pixels except `focus`: one
+  // circle per fastener type across the top, shrunk to fit the row. `float` is how far an inset
+  // floats its fastener out of the hole, and `focus` how far it frames beyond the hole mouth and
+  // the floated fastener, both as multiples of the fastener's longest side. `tool` is the tool's share of
+  // the circle, drawn in its lower right; `toolOnly` its radius when a step fastens nothing.
+  inset: {
+    radius: 72,
+    gap: 24,
+    float: 0.5,
+    focus: 0.55,
+    ringLine: 3,
+    tailLine: 2,
+    tailDot: 5,
+    tailBow: 0.12,
+    tool: 0.46,
+    toolOnly: 64,
+    // Where the tool sits in the first inset, as a fraction of its radius from the centre, and
+    // how much of the tool's own disc its drawing fills.
+    // Below the ring's foot: the count's and the part number's baselines, and where a tail starts
+    // (under both, so it never crosses them).
+    countDrop: 34,
+    partDrop: 56,
+    tailFrom: 68,
+    toolAt: 0.6,
+    toolFill: 0.7,
+    // The way an inset turns its hole's axis on the page: up, a little towards the viewer, so
+    // the fastener always floats up off a face the viewer sees.
+    lift: [0, 1, 0.35] satisfies Vec3,
+  },
   font: 'system-ui, -apple-system, "Segoe UI", sans-serif',
   // The controls page (src/game/controlsPage.ts): a title, then rows in columns — each a
   // square pictogram, drawn on a 100-unit grid at `pictogramLine`, and its label beside it,
