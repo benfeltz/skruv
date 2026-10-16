@@ -119,10 +119,12 @@ describe('the sky texture', () => {
 
   it('is paper (255) with holes (0) where the stars are, and a small share of it holes', () => {
     let holes = 0;
+    let neither = 0;
     for (let i = 1; i < data.length; i += 4) {
-      expect(data[i] === 0 || data[i] === 255).toBe(true);
       if (data[i] === 0) holes++;
+      else if (data[i] !== 255) neither++;
     }
+    expect(neither).toBe(0);
     expect(holes).toBeGreaterThan(skyStars().length);
     expect(holes / (data.length / 4)).toBeLessThan(0.02);
     for (const s of skyStars()) expect(alpha(...centre(s)), `star at ${s.x},${s.y}`).toBe(0);
