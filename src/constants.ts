@@ -83,13 +83,25 @@ export const STAGE = {
     hillPhaseScale: 2,
     // Samples along a hill's profile per metre of box width: fine enough that a smooth hill shows no corners.
     hillSamplesPerMetre: 40,
-    // A drifting cloud: its layer, its height up the wall, its width, its drift in metres per second of game time,
-    // and its silhouette in unit width (x centred, y up from its flat bottom).
-    cloud: {
-      depth: 0.7,
-      height: 0.7,
-      width: 0.7,
-      drift: 0.01,
+    // Drifting clouds, in layers at different depths and speeds so they move at different rates. A layer drifts as one
+    // sheet: `drift` metres per second of game time, its clouds each at a fraction `at` across the box (a layer's
+    // pattern repeats once a box width, so a cloud wraps round to the far side), a `height` up the wall as a fraction
+    // of its height, and a `width` in metres. The fractions put at least one cloud in view of every window at the
+    // start and the layers pass every window in turn. `outline` is a cloud's silhouette in unit width (x centred, y up
+    // from its flat bottom).
+    clouds: {
+      layers: [
+        {
+          depth: 0.9,
+          drift: 0.02,
+          clouds: [{ at: 0.1, height: 0.66, width: 0.8 }, { at: 0.45, height: 0.6, width: 0.6 }, { at: 0.78, height: 0.64, width: 0.9 }],
+        },
+        {
+          depth: 0.7,
+          drift: 0.035,
+          clouds: [{ at: 0.28, height: 0.68, width: 0.5 }, { at: 0.62, height: 0.62, width: 0.7 }, { at: 0.9, height: 0.66, width: 0.55 }],
+        },
+      ],
       outline: [
         [-0.5, 0], [0.5, 0], [0.5, 0.06], [0.4, 0.12], [0.36, 0.22], [0.24, 0.26], [0.16, 0.38], [0.04, 0.42],
         [-0.06, 0.36], [-0.14, 0.3], [-0.26, 0.3], [-0.34, 0.22], [-0.42, 0.14], [-0.5, 0.08],

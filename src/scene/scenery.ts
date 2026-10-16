@@ -8,8 +8,8 @@ import {
   bodyAt,
   celestial,
   closedSegments,
-  cloudPolygon,
-  cloudX,
+  cloudLayerOffset,
+  cloudLayerPolygons,
   discPolygon,
   hillPolyline,
   hillSkyline,
@@ -166,7 +166,7 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
 
   // The paper theatre: the box's inside and the static cutouts at their depths merge into one vertex-coloured mesh,
   // and their outlines (the box's edges, the hills' skylines) into one ink draw; only the sun or moon
-  // and the cloud move, each its own fill and ink.
+  // and each cloud layer move, each its own fill and ink.
   const { scenery } = STAGE;
   const { inkLift } = scenery;
   const staticInk = [...edges];
@@ -185,9 +185,12 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
   group.add(paperMesh, staticLines);
 
   // A moving cutout: a fill and its ink in one group that `update` slides.
-  const mover = (label: string, polygon: readonly Point[], color: number, depth: number, material: LineMaterial) => {
-    const fill = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(polygon.map(([x, y]) => new THREE.Vector2(x, y)))), new THREE.MeshBasicMaterial({ color }));
-    const outline = new LineSegments2(new LineSegmentsGeometry().setPositions(inkPositions(polygon, inkLift)), material);
+  const mover = (label: string, polygons: readonly (readonly Point[])[], color: number, depth: number, material: LineMaterial) => {
+    const fill = new THREE.Mesh(
+      mergeGeometries(polygons.map((polygon) => new THREE.ShapeGeometry(new THREE.Shape(polygon.map(([x, y]) => new THREE.Vector2(x, y))))))!,
+      new THREE.MeshBasicMaterial({ color }),
+    );
+    const outline = new LineSegments2(new LineSegmentsGeometry().setPositions(polygons.flatMap((polygon) => inkPositions(polygon, inkLift))), material);
     const moving = new THREE.Group();
     moving.name = `${name}Scenery${label}`;
     moving.position.z = -depth;
@@ -197,18 +200,21 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
   };
   // One disc serves the sun by day and the moon by night — they are never up together — recoloured and scaled to
   // whichever is up.
-  const body = mover('Body', discPolygon(scenery.sun.radius), COLORS.sceneryPaper, scenery.sun.depth, ink);
+  const body = mover('Body', [discPolygon(scenery.sun.radius)], COLORS.sceneryPaper, scenery.sun.depth, ink);
   const moonScale = scenery.moon.radius / scenery.sun.radius;
 
-  // The cloud drifts across and wraps, so it is clipped to the box's sides: a cloud half past the edge must not show
+  // The clouds drift across and wrap, so they are clipped to the box's sides: a cloud half past the edge must not show
   // outside the box. The planes are the box's sides in its own frame, carried to world space each frame from the
   // group's matrix, so they follow the room wherever it stands.
   const sidePlanes = [new THREE.Plane(new THREE.Vector3(1, 0, 0), mouth.width / 2), new THREE.Plane(new THREE.Vector3(-1, 0, 0), mouth.width / 2)];
   const clips = sidePlanes.map((plane) => plane.clone());
   const cloudInk = ink.clone();
   cloudInk.clippingPlanes = clips;
-  const cloud = mover('Cloud', cloudPolygon(name), COLORS.sceneryPaper, scenery.cloud.depth, cloudInk);
-  (cloud.fill.material as THREE.MeshBasicMaterial).clippingPlanes = clips;
+  const sheets = scenery.clouds.layers.map((layer, i) => {
+    const sheet = mover(`Cloud${i}`, cloudLayerPolygons(name, i), COLORS.sceneryPaper, layer.depth, cloudInk);
+    (sheet.fill.material as THREE.MeshBasicMaterial).clippingPlanes = clips;
+    return sheet;
+  });
 
   let lit = NaN;
   let elapsed = 0;
@@ -221,7 +227,7 @@ export function createScenery(name: WallName, { ink, skyMaterial }: { ink: LineM
     update(phase: number, delta: number) {
       elapsed += delta;
       backlightLook.uniforms.uTime!.value = elapsed;
-      cloud.moving.position.x = cloudX(mouth, elapsed);
+      sheets.forEach((sheet, i) => { sheet.moving.position.x = cloudLayerOffset(mouth, i, elapsed); });
       group.updateWorldMatrix(true, false);
       clips.forEach((clip, i) => clip.copy(sidePlanes[i]!).applyMatrix4(group.matrixWorld));
       cloudInk.resolution.copy(ink.resolution);

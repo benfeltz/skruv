@@ -3,8 +3,8 @@ import { STAGE } from '../src/constants.js';
 import {
   bodyAt,
   celestial,
-  cloudPolygon,
-  cloudX,
+  cloudLayerOffset,
+  cloudLayerPolygons,
   closedSegments,
   discPolygon,
   hillHeight,
@@ -118,15 +118,71 @@ describe('the hills', () => {
   });
 });
 
-describe('the cloud', () => {
-  it('drifts at its speed and wraps once clear of the mouth', () => {
-    const name = 'back';
-    const reach = sceneryMouth(name).width + scenery.cloud.width;
-    expect(cloudX(sceneryMouth(name), 0)).toBeCloseTo(-reach / 2, 9);
-    expect(cloudX(sceneryMouth(name), 100) - cloudX(sceneryMouth(name), 0)).toBeCloseTo(100 * scenery.cloud.drift, 9);
-    expect(cloudX(sceneryMouth(name), reach / scenery.cloud.drift)).toBeCloseTo(cloudX(sceneryMouth(name), 0), 6);
-    const mouth = sceneryMouth(name);
-    expect(cloudPolygon(name).every(([, y]) => Math.abs(y) <= mouth.height / 2)).toBe(true);
+describe('the clouds', () => {
+  const { layers } = scenery.clouds;
+  const spanOf = (polygon: [number, number][]) => [Math.min(...polygon.map(([x]) => x)), Math.max(...polygon.map(([x]) => x))] as const;
+
+  it('are several, in layers at different depths and speeds, none on a hill\'s depth', () => {
+    expect(layers.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(layers.map((l) => l.depth)).size).toBe(layers.length);
+    expect(new Set(layers.map((l) => l.drift)).size).toBe(layers.length);
+    const hills = scenery.hills.map((h) => h.depth);
+    for (const layer of layers) {
+      expect(hills).not.toContain(layer.depth);
+      expect(layer.depth).toBeLessThan(scenery.depth - scenery.backlight.gap);
+      expect(layer.clouds.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('put at least one cloud in view of every window at the start', () => {
+    for (const name of WALL_NAMES) {
+      const mouth = sceneryMouth(name);
+      for (const o of windowOpenings(name)) {
+        const lo = mouth.alongSign * (o.a0 - mouth.alongCentre);
+        const hi = mouth.alongSign * (o.a1 - mouth.alongCentre);
+        const [a, b] = [Math.min(lo, hi), Math.max(lo, hi)];
+        const seen = layers.some((_, layer) => cloudLayerPolygons(name, layer).some((p) => spanOf(p)[1] > a && spanOf(p)[0] < b));
+        expect(seen, `${name} window`).toBe(true);
+      }
+    }
+  });
+
+  it('drift at their own speeds and wrap once a box width', () => {
+    const mouth = sceneryMouth('back');
+    expect(cloudLayerOffset(mouth, 0, 0)).toBe(0);
+    layers.forEach((layer, i) => {
+      expect(cloudLayerOffset(mouth, i, 100)).toBeCloseTo(100 * layer.drift, 9);
+      expect(cloudLayerOffset(mouth, i, mouth.width / layer.drift)).toBeCloseTo(0, 6);
+      expect(cloudLayerOffset(mouth, i, 1e6)).toBeLessThan(mouth.width);
+    });
+    expect(cloudLayerOffset(mouth, 0, 50)).not.toBeCloseTo(cloudLayerOffset(mouth, 1, 50), 3);
+  });
+
+  it('cover the whole box all through a drift: a copy a width behind fills in for what leaves', () => {
+    const mouth = sceneryMouth('back');
+    for (let layer = 0; layer < layers.length; layer++) {
+      const polygons = cloudLayerPolygons('back', layer);
+      expect(polygons).toHaveLength(2 * layers[layer]!.clouds.length);
+      const spans = polygons.map(spanOf);
+      // The pattern is a box width long: every cloud has its twin exactly one width to the left.
+      const half = polygons.length / 2;
+      for (let i = 0; i < half; i++) expect(spans[i]![0]).toBeCloseTo(spans[half + i]![0] - mouth.width, 9);
+      for (const [, hi] of spans.slice(half)) expect(hi).toBeLessThanOrEqual(mouth.width / 2 + 1e-9);
+    }
+  });
+
+  it('stand up the wall within the window\'s band and inside the box vertically', () => {
+    for (const name of WALL_NAMES) {
+      const mouth = sceneryMouth(name);
+      const [o] = windowOpenings(name);
+      for (let layer = 0; layer < layers.length; layer++) {
+        for (const polygon of cloudLayerPolygons(name, layer)) {
+          const ys = polygon.map(([, y]) => y + mouth.centre[1]);
+          expect(Math.min(...ys)).toBeGreaterThan(o!.y0);
+          expect(Math.max(...ys)).toBeLessThanOrEqual(o!.y1);
+        }
+      }
+    }
   });
 });
 

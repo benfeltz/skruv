@@ -82,19 +82,25 @@ export function hillPolyline(name: WallName, layer: number): Point[] {
   return [[-mouth.width / 2, -half], ...profile, [mouth.width / 2, -half]];
 }
 
-/** The cloud's silhouette in box-local coordinates, centred on x = 0 at its height. */
-export function cloudPolygon(name: WallName): Point[] {
+/**
+ * A cloud layer's silhouettes in box-local coordinates at the start of its drift: its clouds, and a copy a box width
+ * to the left, so that as the layer drifts right by up to a box width the whole box stays covered.
+ */
+export function cloudLayerPolygons(name: WallName, layer: number): Point[][] {
   const mouth = sceneryMouth(name);
-  const { outline, width, height } = scenery.cloud;
-  const base = height * STAGE.wallHeight - mouth.centre[1];
-  return outline.map(([u, v]): Point => [u * width, base + v * width]);
+  const { outline, layers } = scenery.clouds;
+  return [-1, 0].flatMap((copy) =>
+    layers[layer]!.clouds.map(({ at, height, width }) => {
+      const x = (at - 0.5) * mouth.width + copy * mouth.width;
+      const base = height * STAGE.wallHeight - mouth.centre[1];
+      return outline.map(([u, v]): Point => [x + u * width, base + v * width]);
+    }),
+  );
 }
 
-/** Where the cloud's centre is after `seconds` of game time: drifting left to right, wrapping once clear of the mouth. */
-export function cloudX(mouth: SceneryMouth, seconds: number): number {
-  const reach = mouth.width + scenery.cloud.width;
-  const travelled = (((scenery.cloud.drift * seconds) % reach) + reach) % reach;
-  return -reach / 2 + travelled;
+/** How far a cloud layer has drifted right after `seconds` of game time, wrapping once a box width. */
+export function cloudLayerOffset(mouth: SceneryMouth, layer: number, seconds: number): number {
+  return (((scenery.clouds.layers[layer]!.drift * seconds) % mouth.width) + mouth.width) % mouth.width;
 }
 
 /** A circle as a polygon of `segments` points. */

@@ -29,7 +29,7 @@ describe('the room as built', () => {
   it('draws a wall\'s scenery in a handful of meshes, not one per cutout', () => {
     const meshes: THREE.Object3D[] = [];
     backWall.getObjectByName('backScenery')!.traverse((o) => { if ((o as THREE.Mesh).isMesh || (o as { isLineSegments2?: boolean }).isLineSegments2) meshes.push(o); });
-    expect(meshes.length).toBeLessThanOrEqual(10);
+    expect(meshes.length).toBeLessThanOrEqual(12);
   });
 
   it('holds a wall, its window trim, its ink and one scenery box in the wall\'s one group', () => {
@@ -263,11 +263,24 @@ describe('the sky turns', () => {
     }
   });
 
-  it('clips the drifting cloud to its box\'s sides, fill and ink', () => {
-    const cloud = createRoom().backWall.getObjectByName('backSceneryCloud')!;
-    const planes = (cloud.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>).material.clippingPlanes;
-    expect(planes).toHaveLength(2);
-    expect((cloud.children[1] as unknown as { material: THREE.Material }).material.clippingPlanes).toHaveLength(2);
+  it('clips every drifting cloud layer to its box\'s sides, fill and ink', () => {
+    const room = createRoom();
+    for (const layer of [0, 1]) {
+      const cloud = room.backWall.getObjectByName(`backSceneryCloud${layer}`)!;
+      const planes = (cloud.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>).material.clippingPlanes;
+      expect(planes).toHaveLength(2);
+      expect((cloud.children[1] as unknown as { material: THREE.Material }).material.clippingPlanes).toHaveLength(2);
+    }
+  });
+
+  it('drifts the layers at their own rates', () => {
+    const room = createRoom();
+    const layers = [0, 1].map((i) => room.backWall.getObjectByName(`backSceneryCloud${i}`)!);
+    room.update(at(0, 2, 3), renderer(), 10);
+    const [a, b] = layers.map((l) => l.position.x) as [number, number];
+    expect(a).toBeCloseTo(10 * STAGE.scenery.clouds.layers[0]!.drift, 6);
+    expect(b).toBeCloseTo(10 * STAGE.scenery.clouds.layers[1]!.drift, 6);
+    expect(b).toBeGreaterThan(a);
   });
 
   it('keeps the cloud\'s clip planes on the box\'s sides wherever the room stands', () => {
@@ -275,7 +288,7 @@ describe('the sky turns', () => {
     room.group.position.set(5, 1, -2);
     room.group.rotation.y = 0.7;
     room.update(at(0, 2, 3), renderer(), 1);
-    const cloud = room.backWall.getObjectByName('backSceneryCloud')!;
+    const cloud = room.backWall.getObjectByName('backSceneryCloud0')!;
     const scenery = room.backWall.getObjectByName('backScenery')!;
     const planes = (cloud.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>).material.clippingPlanes!;
     room.group.updateMatrixWorld(true);
