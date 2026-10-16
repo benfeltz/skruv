@@ -13,7 +13,7 @@ export const ROOM = {
 };
 
 // The diorama stage (src/game/stageBoxes.ts, built by src/scene/room.ts and mirrored by
-// src/physics/world.ts): a base slab under the floor, two walls (back and left) and a low
+// src/physics/world.ts): a base slab under the floor, two walls (back and left, with windows) and a low
 // lip on the open front and right edges — every collider stands outside the floor's footprint,
 // so every clamp that reads ROOM is unchanged. `ROOM.height` stays the lift ceiling. The
 // window's casing, sill and apron are the one visual-only exception: up to casingProud +
@@ -21,14 +21,18 @@ export const ROOM = {
 // the wall there draws through the trim).
 export const STAGE = {
   wallThickness: 0.1,
-  wallHeight: 2.5,
+  // Equal to the lift ceiling (ROOM.height): the walls stand as high as a lifted part can go.
+  wallHeight: 3,
   slabThickness: 0.1,
   lipHeight: 0.03,
   lipThickness: 0.03,
   // The ink edges' width in CSS pixels (LineMaterial linewidth, against the canvas's CSS size).
   inkWidth: 3,
-  // The one double-hung window in the left wall, centred along it (z = 0). All in metres.
+  // The double-hung windows, all one design, spaced evenly along their wall: one in the left
+  // wall (centred, z = 0) and two in the long back wall. All in metres.
   window: {
+    // How many windows each wall carries.
+    count: { left: 1, back: 2 },
     // The opening: its width along the wall, its height, and the height of its bottom edge.
     width: 1.0,
     height: 1.6,

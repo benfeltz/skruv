@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ROOM } from '../src/constants.js';
-import { LEFT_WALL_PIECES, stageBoxes } from '../src/game/stageBoxes.js';
+import { wallPieces } from '../src/game/stageBoxes.js';
 import { STAGE_WALLS, wallHidden } from '../src/scene/stageCutaway.js';
 
 const { back, left } = STAGE_WALLS;
@@ -12,11 +12,13 @@ describe('the stage walls', () => {
     expect(left).toEqual({ point: [-ROOM.width / 2, 0, 0], inward: [1, 0, 0] });
   });
 
-  it('read the left wall as one plane: every piece\'s inner face is the same x', () => {
-    for (const piece of LEFT_WALL_PIECES) {
-      const box = stageBoxes().find((b) => b.name === piece)!;
-      expect(box.max[0], piece).toBe(left.point[0]);
-      expect(box.outward, piece).toEqual([-1, 0, 0]);
+  it('read each wall as one plane: every piece\'s inner face is the wall\'s', () => {
+    for (const [name, wall] of [['left', left], ['back', back]] as const) {
+      for (const piece of wallPieces(name)) {
+        expect(piece.outward, piece.name).toEqual(wall.inward.map((v) => 0 - v));
+        const axis = wall.inward.findIndex((v) => v !== 0);
+        expect(piece.max[axis], piece.name).toBe(wall.point[axis]);
+      }
     }
   });
 });

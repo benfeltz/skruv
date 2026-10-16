@@ -4,8 +4,8 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { COLORS, STAGE } from '../constants.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { leftWallBox, leftWallPieces, sizeAndCentre, skyRect, stageBoxes, windowBoxes, windowOpeningBox } from '../game/stageBoxes.js';
-import type { StageBox, StageBoxName } from '../game/stageBoxes.js';
+import { sizeAndCentre, skyRects, stageBoxes, wallBox, wallPieces, windowBoxes, windowOpeningBoxes } from '../game/stageBoxes.js';
+import type { StageBox, StageBoxName, WallName } from '../game/stageBoxes.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 import { STAGE_WALLS, wallHidden } from './stageCutaway.js';
 
@@ -32,7 +32,7 @@ export function createRoom() {
   // One group per box: the mesh and its ink travel together, so hiding it hides both.
   const pieces = new Map<StageBoxName, THREE.Group>();
   for (const box of stageBoxes()) {
-    if (box.name.startsWith('leftWall')) continue;
+    if (box.name.includes('Wall')) continue;
     const geometry = boxGeometry(box);
     const mesh = new THREE.Mesh(geometry, box.name === 'slab' ? floor : wall);
     mesh.receiveShadow = true;
@@ -44,37 +44,41 @@ export function createRoom() {
     group.add(piece);
   }
 
-  // The left wall is one group — its pieces merged into one mesh, the trim into another,
-  // one ink for the whole, and the sky — so the cutaway hides them together and the stage
-  // costs a handful of draws. The ink is the wall's outline plus the opening's edges and
+  // Each wall is one group — its pieces merged into one mesh, the trim into another, one ink
+  // for the whole, and a sky behind each window — so the cutaway hides them together and a
+  // wall costs a handful of draws. The ink is the wall's outline plus the openings' edges and
   // the trim's own edges, not each piece's: no seams where the pieces meet.
-  const leftWall = new THREE.Group();
-  leftWall.name = 'leftWall';
-  const wallGeometry = mergeGeometries(leftWallPieces().map(boxGeometry))!;
-  const trimGeometry = mergeGeometries(windowBoxes().map(boxGeometry))!;
-  const wallMesh = new THREE.Mesh(wallGeometry, wall);
-  wallMesh.name = 'leftWallMesh';
-  const trimMesh = new THREE.Mesh(trimGeometry, trim);
-  trimMesh.name = 'windowTrim';
-  for (const mesh of [wallMesh, trimMesh]) mesh.receiveShadow = true;
-  const inkGeometry = mergeGeometries([
-    edgesOf(boxGeometry(leftWallBox())),
-    edgesOf(boxGeometry(windowOpeningBox())),
-    edgesOf(trimGeometry),
-  ])!;
-  const leftInk = new LineSegments2(new LineSegmentsGeometry().setPositions(inkGeometry.getAttribute('position').array as Float32Array), ink);
-  leftInk.name = 'leftWallInk';
+  const buildWall = (name: WallName) => {
+    const side = new THREE.Group();
+    side.name = `${name}Wall`;
+    const wallMesh = new THREE.Mesh(mergeGeometries(wallPieces(name).map(boxGeometry))!, wall);
+    wallMesh.name = `${name}WallMesh`;
+    const trimGeometry = mergeGeometries(windowBoxes(name).map(boxGeometry))!;
+    const trimMesh = new THREE.Mesh(trimGeometry, trim);
+    trimMesh.name = `${name}WindowTrim`;
+    for (const mesh of [wallMesh, trimMesh]) mesh.receiveShadow = true;
+    const inkGeometry = mergeGeometries([
+      edgesOf(boxGeometry(wallBox(name))),
+      ...windowOpeningBoxes(name).map((box) => edgesOf(boxGeometry(box))),
+      edgesOf(trimGeometry),
+    ])!;
+    const wallInk = new LineSegments2(new LineSegmentsGeometry().setPositions(inkGeometry.getAttribute('position').array as Float32Array), ink);
+    wallInk.name = `${name}WallInk`;
+    side.add(wallMesh, trimMesh, wallInk);
+    // The skies: flat unlit planes outside the openings facing the room, no ink.
+    skyRects(name).forEach((sky, i) => {
+      const skyMesh = new THREE.Mesh(new THREE.PlaneGeometry(sky.width, sky.height), new THREE.MeshBasicMaterial({ color: COLORS.sky }));
+      skyMesh.name = `${name}Sky${i}`;
+      skyMesh.rotation.y = sky.yaw;
+      skyMesh.position.set(...sky.centre);
+      side.add(skyMesh);
+    });
+    group.add(side);
+    return side;
+  };
+  const backWall = buildWall('back');
+  const leftWall = buildWall('left');
 
-  // The sky: a flat unlit plane outside the opening facing the room (+x), no ink.
-  const sky = skyRect();
-  const skyMesh = new THREE.Mesh(new THREE.PlaneGeometry(sky.width, sky.height), new THREE.MeshBasicMaterial({ color: COLORS.sky }));
-  skyMesh.name = 'sky';
-  skyMesh.rotation.y = Math.PI / 2;
-  skyMesh.position.set(...sky.centre);
-  leftWall.add(wallMesh, trimMesh, leftInk, skyMesh);
-  group.add(leftWall);
-
-  const backWall = pieces.get('backWall')!;
   // Reused every frame: the eye as a tuple and the canvas size, so the loop allocates nothing.
   const eyeAt: Vec3 = [0, 0, 0];
   const size = new THREE.Vector2();
@@ -82,6 +86,7 @@ export function createRoom() {
     group,
     pieces,
     leftWall,
+    backWall,
     /**
      * Per frame: hide the walls the eye is behind; keep the ink's resolution at the canvas's
      * CSS size, so `STAGE.inkWidth` is the same on screen at any pixel ratio.
