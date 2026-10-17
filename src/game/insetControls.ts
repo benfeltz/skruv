@@ -53,3 +53,14 @@ export function bubbleOverhang({ radius }: InsetFrame) {
   const { centre: [x], radius: r } = bubbleOf({ centre: [0, 0], radius });
   return Math.max(0, x + r - radius);
 }
+
+/**
+ * The tail from a bubble to the joint it works, as the manual's insets tail to theirs: a straight line from the point
+ * of the bubble's edge nearest the joint to the joint itself. Null with no joint on screen, or one under the bubble.
+ */
+export function bubbleTail({ centre, radius }: Bubble, joint: ScreenPoint | null): { from: ScreenPoint; to: ScreenPoint } | null {
+  if (!joint) return null;
+  const reach = Math.hypot(joint[0] - centre[0], joint[1] - centre[1]);
+  if (reach <= radius) return null;
+  return { from: [centre[0] + ((joint[0] - centre[0]) / reach) * radius, centre[1] + ((joint[1] - centre[1]) / reach) * radius], to: joint };
+}
