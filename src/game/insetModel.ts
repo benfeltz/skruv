@@ -4,7 +4,7 @@
 //
 //   hidden     nothing to show
 //   offered    carried hardware is inside the aim zone of a workable seat: faint, framing that seat
-//   active     parts engaged (a tool on a head, a dowel or fitting seated, not yet pressed home)
+//   active     parts engaged (a tool on a head, a dowel or fitting seated), or a dowel just pressed home that stays
 //   dismissed  put away by a tap outside; a tap on an engaged part brings it back
 
 import type { PartId } from './assembly.js';
@@ -26,6 +26,13 @@ export interface InsetSubject {
   tool: PartId | null;
   centre: Vec3;
   axis: Vec3;
+  /** How far in the fastener is, 0..1: a tool turn's least-advanced joint; a tap kind's 0 (seated) or 1 (pressed home). */
+  progress: number;
+  /** A tool turn can still tighten / loosen (false both for a tap kind and an offered seat). */
+  tighten: boolean;
+  loosen: boolean;
+  /** A tap kind pressed home. */
+  pressed: boolean;
 }
 
 /** What the router reports each frame. */
@@ -34,6 +41,11 @@ export interface InsetInput {
   offered: InsetSubject | null;
   /** Every seated tool turn's joint and every seated, not-yet-pressed tap-kind joint. */
   engaged: readonly InsetSubject[];
+  /**
+   * The subject of a pressed-home tap-kind joint, by joint id, or null: asked only of the joint on show, so a pressed
+   * dowel keeps the inset it was shown in but is never picked fresh, and no frame builds one per dowel in the build.
+   */
+  settled(joint: number): InsetSubject | null;
 }
 
 const keyOf = (s: InsetSubject) => (s.joint >= 0 ? `joint:${s.joint}` : `seat:${s.hardware}>${s.host}`);
@@ -58,10 +70,15 @@ export function createInsetModel() {
     order = [...order.filter((key) => engaged.has(key)), ...[...engaged.keys()].filter((key) => !order.includes(key))];
   }
 
-  // The most recently engaged of the subjects not put away, or null.
-  const latest = (engaged: ReadonlyMap<string, InsetSubject>) => {
+  // The subject on show, if it has since been pressed home: it stays while nothing engaged outranks it, so a dowel
+  // just pressed home keeps its push arrow to be backed out, yet a finished build's pressed dowels are never picked fresh.
+  const settledNow = (settled: InsetInput['settled']) => (subject && subject.joint >= 0 ? settled(subject.joint) : null);
+
+  // The most recently engaged of the subjects not put away, else the settled one that stays, or null.
+  const latest = (engaged: ReadonlyMap<string, InsetSubject>, stay: InsetSubject | null) => {
     const key = order.findLast((k) => !away.has(k));
-    return key === undefined ? null : (engaged.get(key) ?? null);
+    if (key !== undefined) return engaged.get(key) ?? null;
+    return stay && !away.has(keyOf(stay)) ? stay : null;
   };
 
   return {
@@ -76,12 +93,13 @@ export function createInsetModel() {
      * what is engaged; otherwise the most recently engaged shows. What was put away stays away
      * until it ends, and once all of it has the inset hides, so the next approach offers it again.
      */
-    step({ offered, engaged }: InsetInput) {
+    step({ offered, engaged, settled }: InsetInput) {
       const engagedByKey = new Map(engaged.map((s) => [keyOf(s), s]));
-      known = new Map(offered ? [[keyOf(offered), offered], ...engagedByKey] : engagedByKey);
+      const stay = settledNow(settled);
+      known = new Map([...(offered ? [[keyOf(offered), offered] as const] : []), ...(stay ? [[keyOf(stay), stay] as const] : []), ...engagedByKey]);
       for (const key of away) if (!known.has(key)) away.delete(key);
       remember(engagedByKey);
-      const next = latest(engagedByKey);
+      const next = latest(engagedByKey, stay);
       if (offered && !away.has(keyOf(offered))) [state, subject] = ['offered', offered];
       else if (next) [state, subject] = ['active', next];
       else if (away.size > 0) [state, subject] = ['dismissed', known.get(order.findLast((k) => away.has(k)) ?? [...away][0]) ?? null];

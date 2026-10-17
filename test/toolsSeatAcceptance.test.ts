@@ -236,10 +236,10 @@ describe('JOHNNY\'s tool steps by touch, in build order (1.8.2.1 acceptance)', (
     expect(b.assembly.get(b.camSeat.id)).toMatchObject({ captured: 'camLockBolt-1', fastener: { state: STATE.LOCKED } });
   });
 
-  it('never lights the screwed bolt for the Allen key once it is home', () => {
+  it('lights the screwed bolt for the Allen key once it is home, so it can be loosened', () => {
     const b = bench({ boltSeated: true });
     b.assembly.drive(b.boltSeat()!.id);
     const drop = b.carry(b.on(b.key), HEAD);
-    expect(drop.lit.some((ring) => b.near(ring, HEAD))).toBe(false);
+    expect(drop.lit.some((ring) => b.near(ring, HEAD))).toBe(true);
   });
 });

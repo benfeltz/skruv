@@ -1,5 +1,6 @@
-// Automated half of 1.8.2.2's acceptance (tools drive): JOHNNY's two tool steps driven by
-// the turn ring and hold-to-drive, through the real router over a recording physics stub,
+// Automated half of 1.8.2.2's acceptance (tools drive), re-pinned for 1.10.0.2: JOHNNY's two tool steps driven by
+// a drag on the tool and hold-to-drive (the turn ring is the inset's now, no dial in the main view; a tool comes
+// off by itself at full seat), through the real router over a recording physics stub,
 // with the haptics wired as src/main.ts wires them into a fake buzzer. A cam bolt stands
 // seated in a side panel's cam-bolt hole; a shelf lies recess-up with a cam lock seated in
 // it, its recess within capture reach of that bolt's head. The Allen key and the
@@ -9,12 +10,12 @@ import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { connectorInWorld } from '../tools/validate/lib/geometry.js';
-import { FASTENER, GESTURE, TURN_RING } from '../src/constants.js';
+import { FASTENER, GESTURE } from '../src/constants.js';
 import { createAssembly } from '../src/game/assembly.js';
 import { STATE } from '../src/game/fasteners.js';
 import { createHaptics, CUE, cueFor, homeCue } from '../src/game/haptics.js';
 import { PART_TYPES } from '../src/game/item.js';
-import { ANY, createBus } from '../src/game/events.js';
+import { ANY, createBus, EVENT } from '../src/game/events.js';
 import { createGestureRouter } from '../src/scene/gestureRouter.js';
 import type { Cue } from '../src/game/haptics.js';
 import type { Part } from '../src/game/partMesh.js';
@@ -99,6 +100,8 @@ function bench({ boltSeated = true } = {}) {
   const cues: Cue[] = [];
   const haptics = createHaptics({ buzzer: (cue) => cues.push(cue) });
   const events = createBus();
+  const log: { type: string }[] = [];
+  events.on(EVENT.UNSEAT, (event) => log.push(event));
   events.on(ANY, (event) => {
     const cue = cueFor(event);
     if (cue) haptics.cue(cue);
@@ -170,69 +173,71 @@ function bench({ boltSeated = true } = {}) {
     fire('pointerup', at);
   };
   const toolOn = (tool: Part) => assembly.all().find((j) => j.kind === KIND.TOOL && j.hardware === tool.id) ?? null;
-  const shownNow = () => dials.at(-1) ?? null;
-  return { router, assembly, key, driver, bolt, cam, boltSeat, camSeat, cues, dials, fire, screen, on, frames, carry, tap, toolOn, shownNow };
+  return { router, assembly, key, driver, bolt, cam, boltSeat, camSeat, cues, dials, log, fire, screen, on, frames, carry, tap, toolOn };
 }
 
 // Consecutive ticks read as one run: how many frames ticked is the ratchet's business.
 const runs = (cues: Cue[]) => cues.filter((cue, i) => cue !== CUE.TICK || cues[i - 1] !== CUE.TICK);
 
+
 const TAP_FRAMES = Math.ceil(GESTURE.tapMaxMs / 1000 / FRAME);
 const DRIVE_FRAMES = Math.ceil(FASTENER.driveSeconds / FRAME) + 5;
-const FLASH_FRAMES = Math.ceil(TURN_RING.flashMs / 1000 / FRAME) + 2;
+const KEY_END: Vec3 = [-0.025, 0, 0];
+// Where a driver's end stands up from the slot, clear of the slot's own centre.
+const DRIVER_END: Vec3 = [0, 0.05, 0];
 
-describe("JOHNNY's tool steps by ring and hold (1.8.2.2 acceptance)", () => {
-  it('a hold drives the bolt home under the Allen key, then a drag on the ring locks the cam under the screwdriver — every moment buzzing in order', () => {
+type Bench = ReturnType<typeof bench>;
+const unseats = (b: Bench) => b.log.filter((e) => e.type === EVENT.UNSEAT).length;
+
+// Pressed at `from`, then swept `degrees` round the world point `centre` on screen, `radius` px out (clockwise
+// tightens, from above; `sense` -1 loosens), a frame per 10°, and let go.
+function circle(b: Bench, from: { clientX: number; clientY: number }, centre: Vec3, degrees: number, { radius = 60, sense = 1 } = {}) {
+  const c = b.screen(centre);
+  const at = (deg: number) => {
+    const a = (sense * deg * Math.PI) / 180;
+    return { clientX: c.clientX + radius * Math.cos(a), clientY: c.clientY + radius * Math.sin(a) };
+  };
+  b.fire('pointerdown', from);
+  b.fire('pointermove', at(0));
+  for (let deg = 10; deg <= degrees; deg += 10) {
+    b.fire('pointermove', at(deg));
+    b.frames(1);
+  }
+  b.fire('pointerup', at(degrees));
+}
+
+// A still press on `at` held until the fastener is home.
+function hold(b: Bench, at: { clientX: number; clientY: number }) {
+  b.fire('pointerdown', at);
+  b.frames(TAP_FRAMES + DRIVE_FRAMES);
+  b.fire('pointerup', at);
+}
+
+describe("JOHNNY's tool steps by drag and hold (1.8.2.2 acceptance, 1.10.0.2)", () => {
+  it('a hold drives the bolt home and the Allen key drops, then a drag on the screwdriver locks the cam and it drops — every moment buzzing in order', () => {
     const b = bench();
 
-    // The Allen key let go onto the seated bolt's head: it engages, and its dial shows.
+    // The Allen key let go onto the seated bolt's head: it engages, and no dial shows in the main view.
     b.carry(b.on(b.key), HEAD);
     expect(b.toolOn(b.key)).toMatchObject({ host: 'camLockBolt-1' });
-    expect(b.shownNow()).toMatchObject([{ progress: 0, flashing: false }]);
-
-    // A still hold on the key drives the bolt home and stops; letting go leaves the key on.
-    const keyEnd: Vec3 = [-0.025, 0, 0];
-    const press = b.on(b.key, keyEnd);
-    b.fire('pointerdown', press);
-    b.frames(TAP_FRAMES + DRIVE_FRAMES);
-    expect(b.assembly.get(b.boltSeat!.id)!.fastener).toMatchObject({ state: STATE.SCREWED, progress: 1 });
-    b.fire('pointerup', press);
-    expect(b.toolOn(b.key)).not.toBeNull();
-
-    // Home: the dial flashes, then stays full while the key is on.
-    expect(b.shownNow()).toMatchObject([{ progress: 1, flashing: true }]);
-    b.frames(FLASH_FRAMES);
-    expect(b.shownNow()).toMatchObject([{ progress: 1, flashing: false, stalled: false }]);
-
-    // A tap on the key takes it off, and its dial with it.
-    b.tap(b.on(b.key, keyEnd));
-    expect(b.toolOn(b.key)).toBeNull();
     b.frames(1);
-    expect(b.shownNow()).toBeNull();
+    expect(b.dials.every((d) => d === null)).toBe(true);
 
-    // The screwdriver onto the cam lock's slot: it engages, and its dial shows.
+    // A still hold on the key drives the bolt home and stops; the key comes off by itself.
+    hold(b, b.on(b.key, KEY_END));
+    expect(b.assembly.get(b.boltSeat!.id)!.fastener).toMatchObject({ state: STATE.SCREWED, progress: 1 });
+    expect(b.toolOn(b.key)).toBeNull();
+    expect(unseats(b)).toBe(1);
+
+    // The screwdriver onto the cam lock's slot: it engages.
     b.carry(b.on(b.driver), SLOT);
     expect(b.toolOn(b.driver)).toMatchObject({ host: 'camLock-1' });
-    const [dial] = b.shownNow()!;
-    expect(dial).toMatchObject({ progress: 0, flashing: false });
 
-    // A drag round the ring, the way its arrows point, locks the cam onto the screwed bolt.
-    // Pressed below the slot on screen, clear of the screwdriver standing up from it.
-    const sense = dial.clockwise ? 1 : -1;
-    const at = (deg: number) => {
-      const a = Math.PI / 2 + (sense * deg * Math.PI) / 180;
-      return { clientX: dial.centre[0] + TURN_RING.radius * Math.cos(a), clientY: dial.centre[1] + TURN_RING.radius * Math.sin(a) };
-    };
-    b.fire('pointerdown', at(0));
-    for (let deg = 10; deg <= 150; deg += 10) {
-      b.fire('pointermove', at(deg));
-      b.frames(1);
-    }
-    b.fire('pointerup', at(150));
+    // A drag round the slot, clockwise, locks the cam onto the screwed bolt; the driver comes off too.
+    circle(b, b.on(b.driver, DRIVER_END), SLOT, 150);
     expect(b.assembly.get(b.camSeat.id)).toMatchObject({ captured: 'camLockBolt-1', fastener: { state: STATE.LOCKED } });
-    expect(b.toolOn(b.driver)).not.toBeNull();
-    b.frames(FLASH_FRAMES);
-    expect(b.shownNow()).toMatchObject([{ progress: 1, flashing: false, stalled: false }]);
+    expect(b.toolOn(b.driver)).toBeNull();
+    expect(b.dials.every((d) => d === null)).toBe(true);
 
     // engage, ticks, home; engage, ticks, lock — the last tick before each home.
     expect(runs(b.cues)).toEqual([CUE.ENGAGE, CUE.TICK, CUE.HOME, CUE.ENGAGE, CUE.TICK, CUE.LOCK]);
@@ -240,29 +245,20 @@ describe("JOHNNY's tool steps by ring and hold (1.8.2.2 acceptance)", () => {
   });
 });
 
-// Review round 1: JOHNNY's cam recess sits a centimetre from the bolt head, so the
-// screwdriver's ring lies across most of the Allen key. A press on the key is the key's.
-describe("a neighbouring tool's ring never takes a press on a seated tool (review round 1)", () => {
-  // The bolt driven home under the key, then the screwdriver seated on the unlocked cam: both
-  // dials show — the key's full on the home bolt, the screwdriver's empty on the cam.
+// Review round 1: JOHNNY's cam recess sits a centimetre from the bolt head, so the two tools stand close.
+// A press on the key is the key's, whatever the screwdriver stands near.
+describe("a neighbouring tool never takes a press on a seated tool (review round 1)", () => {
+  // The bolt driven home under the key (which stays on: nothing turned it home), then the screwdriver seated on the unlocked cam.
   function bothSeated() {
     const b = bench();
     b.carry(b.on(b.key), HEAD);
     b.assembly.drive(b.boltSeat!.id);
-    b.frames(FLASH_FRAMES);
+    b.frames(2);
     b.carry(b.on(b.driver), SLOT);
     expect(b.toolOn(b.key)).not.toBeNull();
     expect(b.toolOn(b.driver)).toMatchObject({ host: 'camLock-1' });
-    const slot = b.screen(SLOT);
-    // The screwdriver's dial: the one round the slot on screen.
-    const dial = b.shownNow()!.find((d) => Math.hypot(d.centre[0] - slot.clientX, d.centre[1] - slot.clientY) < 1)!;
-    expect(dial).toMatchObject({ progress: 0, flashing: false });
-    expect(b.shownNow()).toHaveLength(2);
-    const press = b.on(b.key, [-0.025, 0, 0]);
-    // The press on the key lies in the screwdriver's ring band.
-    const reach = Math.hypot(press.clientX - dial.centre[0], press.clientY - dial.centre[1]);
-    expect(Math.abs(reach - TURN_RING.radius)).toBeLessThanOrEqual(TURN_RING.band);
-    return { ...b, press, dial };
+    expect(b.dials.every((d) => d === null)).toBe(true);
+    return { ...b, press: b.on(b.key, KEY_END) };
   }
 
   it('takes the key off on a tap on it', () => {
@@ -274,47 +270,27 @@ describe("a neighbouring tool's ring never takes a press on a seated tool (revie
 
   it('never turns the cam from a hold on the key', () => {
     const b = bothSeated();
-    b.fire('pointerdown', b.press);
-    b.frames(TAP_FRAMES + DRIVE_FRAMES);
-    b.fire('pointerup', b.press);
+    hold(b, b.press);
     expect(b.assembly.get(b.camSeat.id)!.fastener).toMatchObject({ state: STATE.SEATED, progress: 0 });
     expect(b.toolOn(b.key)).not.toBeNull();
   });
 });
 
 // Test plan (1.8.2.2): the regression risks and ACs pinned end to end, beside the flow above.
-describe('the ring and the hold leave the rest of the gesture alone (1.8.2.2 test plan)', () => {
-  // The Allen key let go onto the seated bolt's head; its dial live.
+describe('the drag and the hold leave the rest of the gesture alone (1.8.2.2 test plan)', () => {
+  // The Allen key let go onto the seated bolt's head.
   function keyOn() {
     const b = bench();
     b.carry(b.on(b.key), HEAD);
-    const [dial] = b.shownNow()!;
-    return { ...b, dial };
-  }
-
-  // Pressed on the key's end, then swept clockwise (the dial's tighten way) `degrees` round
-  // the head, `radius` px out, a frame per 10°, and let go.
-  function circleAt(b: ReturnType<typeof keyOn>, radius: number, degrees: number) {
-    const sense = b.dial.clockwise ? 1 : -1;
-    const at = (deg: number) => {
-      const a = (sense * deg * Math.PI) / 180;
-      return { clientX: b.dial.centre[0] + radius * Math.cos(a), clientY: b.dial.centre[1] + radius * Math.sin(a) };
-    };
-    b.fire('pointerdown', b.on(b.key, [-0.025, 0, 0]));
-    b.fire('pointermove', at(0));
-    for (let deg = 10; deg <= degrees; deg += 10) {
-      b.fire('pointermove', at(deg));
-      b.frames(1);
-    }
-    b.fire('pointerup', at(degrees));
+    return b;
   }
 
   it.each([
     ['inside the ring', FASTENER.crankDeadzone + 10],
-    ['well outside it', TURN_RING.radius + TURN_RING.band + 80],
+    ['well outside it', 200],
   ])('still cranks from circling %s', (_where, radius) => {
     const b = keyOn();
-    circleAt(b, radius, 180);
+    circle(b, b.on(b.key, KEY_END), HEAD, 180, { radius });
     const progress = b.assembly.get(b.boltSeat!.id)!.fastener.progress;
     expect(progress).toBeGreaterThan(0.2);
     expect(progress).toBeLessThan(0.3);
@@ -322,7 +298,7 @@ describe('the ring and the hold leave the rest of the gesture alone (1.8.2.2 tes
 
   it('stops driving when the press is cancelled, and the key stays on', () => {
     const b = keyOn();
-    const press = b.on(b.key, [-0.025, 0, 0]);
+    const press = b.on(b.key, KEY_END);
     b.fire('pointerdown', press);
     b.frames(TAP_FRAMES + 20);
     const driven = b.assembly.get(b.boltSeat!.id)!.fastener.progress;
@@ -335,7 +311,7 @@ describe('the ring and the hold leave the rest of the gesture alone (1.8.2.2 tes
 
   it('drives home in driveSeconds at 30 fps as at 60', () => {
     const b = keyOn();
-    b.fire('pointerdown', b.on(b.key, [-0.025, 0, 0]));
+    b.fire('pointerdown', b.on(b.key, KEY_END));
     const slow = 1 / 30;
     let seconds = 0;
     while (b.assembly.get(b.boltSeat!.id)!.fastener.progress < 1 && seconds < 10) {
@@ -346,14 +322,11 @@ describe('the ring and the hold leave the rest of the gesture alone (1.8.2.2 tes
     expect(seconds).toBeLessThan(FASTENER.driveSeconds + GESTURE.tapMaxMs / 1000 + 2 * slow);
   });
 
-  it('turns nothing from a hold on a key whose bolt is home, and the release leaves it on', () => {
+  it('turns nothing from a hold on a key put on a home bolt, and the release leaves it on', () => {
     const b = keyOn();
     b.assembly.drive(b.boltSeat!.id);
     const before = b.cues.length;
-    const press = b.on(b.key, [-0.025, 0, 0]);
-    b.fire('pointerdown', press);
-    b.frames(TAP_FRAMES + DRIVE_FRAMES);
-    b.fire('pointerup', press);
+    hold(b, b.on(b.key, KEY_END));
     expect(b.toolOn(b.key)).not.toBeNull();
     expect(b.cues.slice(before)).toEqual([]);
   });
@@ -367,177 +340,101 @@ describe('the ring and the hold leave the rest of the gesture alone (1.8.2.2 tes
   });
 });
 
-// Review round 3: with every seated tool keeping its dial, the key's full ring on the home
-// bolt all but covers the screwdriver's — a press on the screwdriver's ring is the cam's.
-describe("the screwdriver's ring turns the cam with the key still on its home bolt (review round 3)", () => {
+// Review round 3: with the key still on its home bolt, the screwdriver standing near it turns the cam by a drag or a hold on it.
+describe('the screwdriver turns the cam with the key still on its home bolt (review round 3)', () => {
   function bothSeated() {
     const b = bench();
     b.carry(b.on(b.key), HEAD);
     b.assembly.drive(b.boltSeat!.id);
-    b.frames(FLASH_FRAMES);
+    b.frames(2);
     b.carry(b.on(b.driver), SLOT);
-    const slot = b.screen(SLOT);
-    const dial = b.shownNow()!.find((d) => Math.hypot(d.centre[0] - slot.clientX, d.centre[1] - slot.clientY) < 1)!;
-    return { ...b, dial };
+    return b;
   }
-
-  // Bearings on screen (radians, clockwise from three o'clock) round the slot, a tool's
-  // middle from its dial's centre — presses within 50° of one land on the tool itself.
-  const bearing = (b: ReturnType<typeof bothSeated>, part: Part) => {
-    const at = b.on(part);
-    return Math.atan2(at.clientY - b.dial.centre[1], at.clientX - b.dial.centre[0]);
-  };
-  const apart = (a: number, c: number) => Math.abs(Math.atan2(Math.sin(a - c), Math.cos(a - c)));
-  const ringAt = (b: ReturnType<typeof bothSeated>, angle: number) => ({
-    clientX: b.dial.centre[0] + TURN_RING.radius * Math.cos(angle),
-    clientY: b.dial.centre[1] + TURN_RING.radius * Math.sin(angle),
+  const lockedWithKeyOn = (b: Bench) => ({
+    cam: b.assembly.get(b.camSeat.id)!.fastener.state,
+    bolt: b.assembly.get(b.boltSeat!.id)!.fastener,
+    keyOn: !!b.toolOn(b.key),
+    driverOn: !!b.toolOn(b.driver),
   });
-  // Twelve angles round the ring, 30° apart, less those within 50° of either tool's bearing.
-  function clearAngles() {
+  const expected = { cam: STATE.LOCKED, bolt: expect.objectContaining({ state: STATE.SCREWED, progress: 1 }), keyOn: true, driverOn: false };
+
+  it('locks the cam from a drag on the screwdriver, which then drops', () => {
     const b = bothSeated();
-    const tools = [bearing(b, b.key), bearing(b, b.driver)];
-    return Array.from({ length: 12 }, (_, i) => (i * Math.PI) / 6).filter((a) => tools.every((t) => apart(a, t) > (50 * Math.PI) / 180));
-  }
-  // The cam and the bolt after `press` on a fresh bench, from each clear angle in turn.
-  function fromEveryAngle(press: (b: ReturnType<typeof bothSeated>, angle: number) => void) {
-    const angles = clearAngles();
-    expect(angles.length).toBeGreaterThanOrEqual(4);
-    return angles.map((angle) => {
-      const b = bothSeated();
-      press(b, angle);
-      return {
-        deg: Math.round((angle * 180) / Math.PI),
-        cam: b.assembly.get(b.camSeat.id)!.fastener.state,
-        bolt: b.assembly.get(b.boltSeat!.id)!.fastener,
-        toolsOn: !!b.toolOn(b.key) && !!b.toolOn(b.driver),
-      };
-    });
-  }
-  const locked = (deg: number) => ({ deg, cam: STATE.LOCKED, bolt: expect.objectContaining({ state: STATE.SCREWED, progress: 1 }), toolsOn: true });
-
-  it('locks the cam from a drag round its ring, pressed anywhere clear of the tools', () => {
-    const results = fromEveryAngle((b, start) => {
-      const sense = b.dial.clockwise ? 1 : -1;
-      const at = (deg: number) => ringAt(b, start + (sense * deg * Math.PI) / 180);
-      b.fire('pointerdown', at(0));
-      for (let deg = 10; deg <= 150; deg += 10) {
-        b.fire('pointermove', at(deg));
-        b.frames(1);
-      }
-      b.fire('pointerup', at(150));
-    });
-    expect(results).toEqual(results.map(({ deg }) => locked(deg)));
+    circle(b, b.on(b.driver, DRIVER_END), SLOT, 150);
+    expect(lockedWithKeyOn(b)).toEqual(expected);
   });
 
-  it('locks the cam from a hold on its ring, anywhere clear of the tools', () => {
-    const results = fromEveryAngle((b, angle) => {
-      b.fire('pointerdown', ringAt(b, angle));
-      b.frames(TAP_FRAMES + DRIVE_FRAMES);
-      b.fire('pointerup', ringAt(b, angle));
-    });
-    expect(results).toEqual(results.map(({ deg }) => locked(deg)));
+  it('locks the cam from a hold on the screwdriver, which then drops', () => {
+    const b = bothSeated();
+    hold(b, b.on(b.driver, DRIVER_END));
+    expect(lockedWithKeyOn(b)).toEqual(expected);
   });
 });
 
-// Review round 4: a bolt backed off partway on its ring reads screwed until it is all the way
-// out, so driving it back fires no FASTEN — yet arriving home buzzes as the first time did.
+// Review round 4: a bolt backed off partway reads screwed until it is all the way out, so driving it back fires no
+// FASTEN — yet arriving home buzzes as the first time did. The key drops at each arrival, so it is set on again to back off.
 describe('a bolt backed off and driven home again buzzes home again (review round 4)', () => {
-  it('engage, ticks, home; then ticks backing off and driving back, and home again', () => {
+  it('engage, ticks, home; then engage, ticks backing off and driving back, and home again', () => {
     const b = bench();
     b.carry(b.on(b.key), HEAD);
-    const keyEnd: Vec3 = [-0.025, 0, 0];
-    const press = b.on(b.key, keyEnd);
-    b.fire('pointerdown', press);
-    b.frames(TAP_FRAMES + DRIVE_FRAMES);
-    b.fire('pointerup', press);
-    b.frames(FLASH_FRAMES);
+    hold(b, b.on(b.key, KEY_END));
+    expect(b.toolOn(b.key)).toBeNull();
 
-    // Backed off 120° on the key's ring, pressed on the side away from the key.
-    const [dial] = b.shownNow()!;
-    const k = b.on(b.key);
-    const away = Math.atan2(k.clientY - dial.centre[1], k.clientX - dial.centre[0]) + Math.PI;
-    const sense = dial.clockwise ? -1 : 1;
-    const at = (deg: number) => {
-      const a = away + (sense * deg * Math.PI) / 180;
-      return { clientX: dial.centre[0] + TURN_RING.radius * Math.cos(a), clientY: dial.centre[1] + TURN_RING.radius * Math.sin(a) };
-    };
-    b.fire('pointerdown', at(0));
-    for (let deg = 10; deg <= 120; deg += 10) {
-      b.fire('pointermove', at(deg));
-      b.frames(1);
-    }
-    b.fire('pointerup', at(120));
+    // Set on the home bolt again: it stays on, and a drag the loosening way backs it off 120°.
+    b.carry(b.on(b.key), HEAD);
+    expect(b.toolOn(b.key)).not.toBeNull();
+    circle(b, b.on(b.key, KEY_END), HEAD, 120, { sense: -1 });
     expect(b.assembly.get(b.boltSeat!.id)!.fastener).toMatchObject({ state: STATE.SCREWED });
     expect(b.assembly.get(b.boltSeat!.id)!.fastener.progress).toBeLessThan(1);
+    expect(b.toolOn(b.key)).not.toBeNull();
 
-    b.fire('pointerdown', press);
-    b.frames(TAP_FRAMES + DRIVE_FRAMES);
-    b.fire('pointerup', press);
+    hold(b, b.on(b.key, KEY_END));
     expect(b.assembly.get(b.boltSeat!.id)!.fastener.progress).toBe(1);
-    expect(runs(b.cues)).toEqual([CUE.ENGAGE, CUE.TICK, CUE.HOME, CUE.TICK, CUE.HOME]);
+    expect(b.toolOn(b.key)).toBeNull();
+    expect(runs(b.cues)).toEqual([CUE.ENGAGE, CUE.TICK, CUE.HOME, CUE.ENGAGE, CUE.TICK, CUE.HOME]);
   });
 });
 
-// Test plan (1.8.2.2, after review rounds 3–5): the cam's side of re-homing, and a home dial
-// still taking a press where no other ring lies under it.
-describe('re-homing and home dials, end to end (1.8.2.2 test plan, round 5)', () => {
-  // The bolt home under the key, the key off, the screwdriver on the cam and the cam locked by a hold.
+// Test plan (1.8.2.2, after review rounds 3–5): the cam's side of re-homing, and a key set on a home bolt backing it out.
+describe('re-homing and full removal, end to end (1.8.2.2 test plan, round 5)', () => {
+  // The bolt home under the key, the screwdriver on the cam and the cam locked by a hold: the driver drops.
   function camLocked() {
     const b = bench();
     b.assembly.drive(b.boltSeat!.id);
     b.carry(b.on(b.driver), SLOT);
-    const press = b.on(b.driver, [0, 0.05, 0]);
-    b.fire('pointerdown', press);
-    b.frames(TAP_FRAMES + DRIVE_FRAMES);
-    b.fire('pointerup', press);
-    b.frames(FLASH_FRAMES);
+    hold(b, b.on(b.driver, DRIVER_END));
     expect(b.assembly.get(b.camSeat.id)!.fastener.state).toBe(STATE.LOCKED);
-    const [dial] = b.shownNow()!;
-    return { ...b, dial, press };
+    expect(b.toolOn(b.driver)).toBeNull();
+    return b;
   }
 
-  // Swept `degrees` round `dial` from `from` (radians), the loosening way when `loosen`.
-  function sweep(b: ReturnType<typeof camLocked>, from: number, degrees: number, loosen: boolean) {
-    const sense = (b.dial.clockwise ? 1 : -1) * (loosen ? -1 : 1);
-    const at = (deg: number) => {
-      const a = from + (sense * deg * Math.PI) / 180;
-      return { clientX: b.dial.centre[0] + TURN_RING.radius * Math.cos(a), clientY: b.dial.centre[1] + TURN_RING.radius * Math.sin(a) };
-    };
-    b.fire('pointerdown', at(0));
-    for (let deg = 10; deg <= degrees; deg += 10) {
-      b.fire('pointermove', at(deg));
-      b.frames(1);
-    }
-    b.fire('pointerup', at(degrees));
-  }
-
-  it('buzzes lock again for a cam backed off partway on its ring and locked again', () => {
+  it('buzzes lock again for a cam backed off partway and locked again', () => {
     const b = camLocked();
-    // Below the slot on screen, clear of the screwdriver standing up from it.
-    sweep(b, Math.PI / 2, 40, true);
+    // Set on the locked cam again: it stays on, and a drag the loosening way backs it off partway.
+    b.carry(b.on(b.driver), SLOT);
+    expect(b.toolOn(b.driver)).not.toBeNull();
+    circle(b, b.on(b.driver, DRIVER_END), SLOT, 40, { sense: -1 });
     const cam = b.assembly.get(b.camSeat.id)!.fastener;
     expect(cam.state).toBe(STATE.LOCKED);
     expect(cam.progress).toBeLessThan(1);
     expect(cam.progress).toBeGreaterThan(0);
-    b.fire('pointerdown', b.press);
-    b.frames(TAP_FRAMES + DRIVE_FRAMES);
-    b.fire('pointerup', b.press);
+    hold(b, b.on(b.driver, DRIVER_END));
     expect(b.assembly.get(b.camSeat.id)!.fastener.progress).toBe(1);
-    expect(runs(b.cues)).toEqual([CUE.ENGAGE, CUE.TICK, CUE.LOCK, CUE.TICK, CUE.LOCK]);
+    expect(runs(b.cues)).toEqual([CUE.ENGAGE, CUE.TICK, CUE.LOCK, CUE.ENGAGE, CUE.TICK, CUE.LOCK]);
   });
 
-  it("turns a home bolt back from its full ring where no other ring lies, with only the key on", () => {
+  it('turns a home bolt back with only the key on, and backed all the way out the bolt and the key both drop', () => {
     const b = bench();
     b.carry(b.on(b.key), HEAD);
     b.assembly.drive(b.boltSeat!.id);
-    b.frames(FLASH_FRAMES);
-    const shown = b.shownNow()!;
-    expect(shown).toMatchObject([{ progress: 1, flashing: false, stalled: false }]);
-    const [dial] = shown;
-    const k = b.on(b.key);
-    const away = Math.atan2(k.clientY - dial.centre[1], k.clientX - dial.centre[0]) + Math.PI;
-    sweep({ ...b, dial, press: k }, away, 90, true);
+    b.frames(2);
+    circle(b, b.on(b.key, KEY_END), HEAD, 90, { sense: -1 });
     expect(b.assembly.get(b.boltSeat!.id)!.fastener.progress).toBeLessThan(1);
     expect(b.toolOn(b.key)).not.toBeNull();
+    // All the way out (three turns more is plenty): the bolt's seat and the key's both go.
+    circle(b, b.on(b.key, KEY_END), HEAD, 3 * 360, { sense: -1 });
+    expect(b.assembly.get(b.boltSeat!.id)).toBeNull();
+    expect(b.toolOn(b.key)).toBeNull();
+    expect(unseats(b)).toBe(2);
   });
 });

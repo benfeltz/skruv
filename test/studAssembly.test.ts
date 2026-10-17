@@ -101,14 +101,14 @@ describe("a stud's hex as a tool target", () => {
   }
   const turned = (assembly: ReturnType<typeof bench>): TurnedBy => (c) => assembly.turnedFrom(c.part.id, c.index);
 
-  it('is a seat target only once the stud is seated, workable until it is screwed home', () => {
+  it('is a seat target only once the stud is seated, workable at any depth, screwed home too (to loosen)', () => {
     const assembly = bench();
     expect(isSeatTarget(hex(HEX_AT_LEG_END), seatedHardware(assembly.all()))).toBe(false);
     const joint = assembly.seat({ partA: 'doubleEndedStud-1', connectorA: 0, partB: 'top-1', connectorB: 0, mover: 'doubleEndedStud-1' });
     expect(isSeatTarget(hex(HEX_AT_LEG_END), seatedHardware(assembly.all()))).toBe(true);
     expect(isWorkable(hex(HEX_AT_LEG_END), { captured: none, turnedBy: turned(assembly) })).toBe(true);
     assembly.drive(joint.id);
-    expect(isWorkable(hex(HEX_AT_LEG_END), { captured: none, turnedBy: turned(assembly) })).toBe(false);
+    expect(isWorkable(hex(HEX_AT_LEG_END), { captured: none, turnedBy: turned(assembly) })).toBe(true);
   });
 
   // Review: a hex at an end that is itself seated is buried — in the top, in the leg — and

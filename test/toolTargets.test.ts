@@ -63,11 +63,11 @@ describe('seat targets (the loose-bolt fix)', () => {
 });
 
 describe('workable targets', () => {
-  it('a seated, unscrewed bolt is workable; a screwed one is not; a loose one is not', () => {
+  it('a seated bolt is workable, screwed home too (to loosen); a loose one is not', () => {
     const open = build().assembly;
     expect(isWorkable(head('camLockBolt-1'), { captured: catching(open, NEAR), turnedBy: turned(open) })).toBe(true);
     const screwed = build({ screwed: true }).assembly;
-    expect(isWorkable(head('camLockBolt-1'), { captured: catching(screwed, NEAR), turnedBy: turned(screwed) })).toBe(false);
+    expect(isWorkable(head('camLockBolt-1'), { captured: catching(screwed, NEAR), turnedBy: turned(screwed) })).toBe(true);
     const loose = build({ boltSeated: false }).assembly;
     expect(isWorkable(head('camLockBolt-1'), { captured: catching(loose, NEAR), turnedBy: turned(loose) })).toBe(false);
   });
@@ -81,17 +81,28 @@ describe('workable targets', () => {
     expect(isWorkable(slot('camLock-1'), { captured: catching(ready, NEAR), turnedBy: turned(ready) })).toBe(true);
   });
 
-  it('a locked cam lock is not workable; a loose one never is', () => {
+  it('a locked cam lock is workable (to loosen); a loose one never is', () => {
     const { assembly, cam } = build({ screwed: true });
     assembly.drive(cam!.id, { captured: 'camLockBolt-1' });
-    expect(isWorkable(slot('camLock-1'), { captured: catching(assembly, NEAR), turnedBy: turned(assembly) })).toBe(false);
+    expect(isWorkable(slot('camLock-1'), { captured: catching(assembly, NEAR), turnedBy: turned(assembly) })).toBe(true);
     const loose = build({ screwed: true, camSeated: false }).assembly;
     expect(isWorkable(slot('camLock-1'), { captured: catching(loose, NEAR), turnedBy: turned(loose) })).toBe(false);
   });
 
+  // Review round 1: a screwed bolt whose head a locked cam holds can neither tighten nor loosen.
+  it('a bolt a locked cam holds is not workable, home or not', () => {
+    const { assembly, cam } = build({ screwed: true });
+    const probe = { captured: catching(assembly, NEAR), turnedBy: turned(assembly), held: (bolt: string) => assembly.isHeld(bolt) };
+    expect(isWorkable(head('camLockBolt-1'), probe)).toBe(true);
+    assembly.drive(cam!.id, { captured: 'camLockBolt-1' });
+    expect(isWorkable(head('camLockBolt-1'), probe)).toBe(false);
+    // A probe that does not say what is held leaves it as it was.
+    expect(isWorkable(head('camLockBolt-1'), { captured: probe.captured, turnedBy: probe.turnedBy })).toBe(true);
+  });
+
   // 1.9.3.1: a screw's slot is the screwdriver's as a bolt's head is the key's — workable
   // while the screw is not driven home, with no bolt to catch.
-  it('a seated screw\'s drive slot is workable until it is screwed, and asks for no capture', () => {
+  it('a seated screw\'s drive slot is workable, screwed home too (to loosen), and asks for no capture', () => {
     const assembly = createAssembly(typeOf);
     const screw = assembly.seat({ partA: 'woodScrew-1', connectorA: SCREW_THREAD, partB: 'rail-1', connectorB: RAIL_HOLE, mover: 'woodScrew-1' });
     const driveSlot: TargetConnector = { type: CONNECTOR.DRIVE_SLOT, part: { id: 'woodScrew-1' }, index: SCREW_SLOT };
@@ -100,7 +111,7 @@ describe('workable targets', () => {
     };
     expect(isWorkable(driveSlot, { captured: noCapture, turnedBy: turned(assembly) })).toBe(true);
     assembly.drive(screw.id);
-    expect(isWorkable(driveSlot, { captured: noCapture, turnedBy: turned(assembly) })).toBe(false);
+    expect(isWorkable(driveSlot, { captured: noCapture, turnedBy: turned(assembly) })).toBe(true);
   });
 
   // Plan amendment (Ben, 2026-10-10): fasteners light holes too, with no extra rule.

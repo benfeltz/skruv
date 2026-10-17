@@ -299,6 +299,8 @@ export const COLORS = {
   bookletPaper: 0xffffff,
   bookletInk: 0x1c1c1c,
   bookletFaint: 0xbdbdbd,
+  // Placeholder green for the inset's controls (the turn ring's fill, a seated push arrow): the game is ink on paper, so this changes.
+  insetFill: 0x2e9e4f,
   // Per-page highlight (src/scene/highlight.ts): the warm accent, glowing softly.
   highlight: 0xe0a64a,
   // Target rings on the fasteners a carried tool can work (src/scene/targetRings.ts).
@@ -900,6 +902,17 @@ export const INSET = {
   // The render target's multisampling, and the circle's rim segments.
   samples: 4,
   segments: 64,
+  // The controls beside the circle (src/game/insetControls.ts, src/ui/insetControls.ts): the turn ring (its drawn
+  // radius, ring and arc widths, arrowhead size and the grab band either side of the ring, CSS px), the push arrow
+  // (its shaft length and width, head size and the grab band round it), the gap between a control and the circle's rim, the gap kept from the
+  // control cluster, and which slots each layout offers, in preference order (portrait's `below` is the last resort, where a phone is too narrow to have either side clear).
+  controls: {
+    ring: { radius: 44, width: 4, arcWidth: 8, arrowSize: 16, band: 28 },
+    arrow: { length: 64, width: 14, head: 22, band: 20 },
+    gap: 20,
+    clusterGap: 12,
+    slots: { portrait: ['left', 'right', 'below'], landscape: ['left', 'below'] },
+  },
 };
 
 // Hole markings (src/game/decals.ts, drawn by src/game/partMesh.ts). Radii are keyed by

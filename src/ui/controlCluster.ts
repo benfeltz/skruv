@@ -8,12 +8,15 @@ import { CLUSTER } from '../constants.js';
 
 const STYLE_ID = 'skruv-control-cluster';
 
+/** The cluster's class, which the detail inset's panel finds it by to keep its controls clear. */
+export const CLUSTER_CLASS = 'control-cluster';
+
 function injectStyle() {
   if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = `
-    .control-cluster {
+    .${CLUSTER_CLASS} {
       position: fixed;
       right: calc(${CLUSTER.inset}px + env(safe-area-inset-right));
       top: calc(${CLUSTER.inset}px + env(safe-area-inset-top));
@@ -30,7 +33,7 @@ function injectStyle() {
 export function createControlCluster() {
   injectStyle();
   const element = document.createElement('div');
-  element.className = 'control-cluster';
+  element.className = CLUSTER_CLASS;
   return {
     element,
     add(control: HTMLElement) {

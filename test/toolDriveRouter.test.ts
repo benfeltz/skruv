@@ -214,49 +214,34 @@ function harness({ engaged = true, progress: start = 0 } = {}) {
   return { ...m, key, bolt, boltSeat, toolJoint, progress, centre, ringAt, keyBearing, awayFromKey, sweep };
 }
 
-describe('the turn ring shows on a seated tool (1.8.2.2 step 5)', () => {
-  it('draws one dial round the head while the bolt is not home', () => {
-    const h = harness();
+describe('a seated tool draws no dial in the main view (1.10.0.2)', () => {
+  // The ring is worked from beside the inset now (src/ui/insetControls.ts); hand turns keep theirs.
+  it.each([
+    ['not turned', 0],
+    ['half turned', 0.5],
+    ['fully screwed', 1],
+  ])('shows nothing round the head of a %s bolt', (_state, start) => {
+    const h = harness({ progress: start });
     expect(h.toolJoint()).toMatchObject({ host: 'camLockBolt-1' });
-    h.hold(1);
-    const shown = h.dials.at(-1)!;
-    expect(shown).toHaveLength(1);
-    expect(shown[0].centre[0]).toBeCloseTo(h.centre().clientX, 6);
-    expect(shown[0].centre[1]).toBeCloseTo(h.centre().clientY, 6);
-    expect(shown[0]).toMatchObject({ progress: 0, flashing: false, stalled: false });
+    h.hold(3);
+    expect(h.dials.every((d) => d === null)).toBe(true);
   });
 
-  it('flashes as the bolt goes home, then stays full for as long as the key is on', () => {
-    const h = harness();
-    h.hold(1);
-    h.assembly.drive(h.boltSeat.id);
-    h.hold(1);
-    expect(h.dials.at(-1)).toMatchObject([{ progress: 1, flashing: true, stalled: false }]);
-    h.hold(Math.ceil(TURN_RING.flashMs / 1000 / FRAME) + 1);
-    expect(h.dials.at(-1)).toMatchObject([{ progress: 1, flashing: false, stalled: false }]);
-    h.tap(h.screen(h.key.mesh.position));
-    h.hold(1);
-    expect(h.dials.at(-1)).toBeNull();
-  });
-
-  // Review round 3: a screwed bolt stays screwed until it is all the way out, but backed off
-  // partway it is no longer home — a hold drives it back, and arriving flashes again.
-  it('drives a bolt backed off with the ring back home on a hold, and flashes as it arrives', () => {
+  // A screwed bolt stays screwed until it is all the way out, but backed off partway it is no longer
+  // home — a hold drives it back, and arriving home drops the key.
+  it('drives a bolt backed off home again on a hold, buzzing home once, and the key drops', () => {
     const h = harness({ progress: 1 });
-    h.hold(Math.ceil(TURN_RING.flashMs / 1000 / FRAME) + 2);
     const start = h.awayFromKey();
-    h.sweep(h.ringAt(start), start, -150);
+    h.sweep(h.screen(h.key.mesh.position), start, -150);
     const backed = h.progress();
     expect(backed).toBeLessThan(1);
     expect(h.assembly.get(h.boltSeat.id)!.fastener.state).toBe(STATE.SCREWED);
-    h.dials.length = 0;
     const at = h.screen(h.key.mesh.position);
     h.canvas.fire('pointerdown', at);
     h.hold(TAP_FRAMES + DRIVE_FRAMES);
     h.canvas.fire('pointerup', at);
     expect(h.progress()).toBe(1);
-    expect(h.dials.some((d) => d?.[0]?.flashing)).toBe(true);
-    expect(h.toolJoint()).not.toBeNull();
+    expect(h.toolJoint()).toBeNull();
     // Arriving home again is reported once, for the buzz, and never as a second FASTEN.
     expect(h.rehomes).toEqual([KIND.BOLT]);
     expect(h.fastens()).toEqual([]);
@@ -273,17 +258,6 @@ describe('the turn ring shows on a seated tool (1.8.2.2 step 5)', () => {
     expect(h.rehomes).toEqual([]);
   });
 
-  // Ben's phone test: a tool put on a fastener already partly or fully in shows where it stands.
-  it.each([
-    ['fully screwed', 1],
-    ['half turned', 0.5],
-  ])('shows a key put on a %s bolt with its arc filled to match, and no flash', (_state, start) => {
-    const h = harness({ progress: start });
-    expect(h.toolJoint()).toMatchObject({ host: 'camLockBolt-1' });
-    h.hold(1);
-    expect(h.dials.at(-1)).toMatchObject([{ progress: start, flashing: false, stalled: false }]);
-  });
-
   it('shows nothing with no tool seated', () => {
     const h = harness({ engaged: false });
     h.hold(2);
@@ -291,56 +265,35 @@ describe('the turn ring shows on a seated tool (1.8.2.2 step 5)', () => {
   });
 });
 
-describe('the turn ring takes presses (1.8.2.2 step 5)', () => {
-  it('cranks the bolt from a drag on the ring, as circling from the key does', () => {
-    const ring = harness();
-    const start = ring.awayFromKey();
-    expect(ring.sweep(ring.ringAt(start), start, 180)).toBe('crank');
+describe('the key cranks the bolt, with no ring to press (1.10.0.2)', () => {
+  it('cranks the bolt from a drag on the key, by exactly the sweep its crank saw', () => {
     const viaKey = harness();
-    expect(viaKey.sweep(viaKey.screen(viaKey.key.mesh.position), start, 180)).toBe('crank');
-    // Each turns the bolt by exactly the sweep its crank saw, over the bolt's two turns: from
-    // the key, all 180°; from the ring, whose press is already on the circle, 170° — its
-    // first 10° step is what takes it past the tap distance.
+    expect(viaKey.sweep(viaKey.screen(viaKey.key.mesh.position), viaKey.awayFromKey(), 180)).toBe('crank');
     const span = (FASTENER.boltRadians * 180) / Math.PI;
     expect(viaKey.progress()).toBeCloseTo(180 / span, 9);
-    expect(ring.progress()).toBeCloseTo(170 / span, 9);
   });
 
-  it('takes a press anywhere on the band, never inside it', () => {
-    const h = harness();
-    const start = h.awayFromKey();
-    h.canvas.fire('pointerdown', h.ringAt(start, TURN_RING.radius + TURN_RING.band - 1));
-    h.canvas.fire('pointermove', h.ringAt(start + 0.5, TURN_RING.radius + TURN_RING.band - 1));
-    expect(h.router.dragging?.mode).toBe('crank');
-    h.canvas.fire('pointerup', h.ringAt(start + 0.5));
-  });
-
-  it('leaves the tool seated after a tap on the ring', () => {
+  it('leaves the tool seated after a tap where the ring used to be: the tap is on the panel under it', () => {
     const h = harness();
     h.tap(h.ringAt(h.awayFromKey()));
     expect(h.toolJoint()).not.toBeNull();
     expect(h.log.filter((e) => e.type === EVENT.UNSEAT)).toEqual([]);
-    expect(h.taps).toEqual([]);
+  });
+
+  it('a key put on a home bolt stays on, and a drag the other way backs the bolt out', () => {
+    const h = harness({ progress: 1 });
+    expect(h.toolJoint()).not.toBeNull();
+    h.hold(3);
+    expect(h.sweep(h.screen(h.key.mesh.position), h.awayFromKey(), -180)).toBe('crank');
+    // Backed off a quarter of the way: it reads screwed until it is all the way out.
+    expect(h.progress()).toBeLessThan(1);
+    expect(h.progress()).toBeGreaterThan(0);
   });
 
   it('still takes the tool off on a tap on the tool', () => {
     const h = harness();
     h.tap(h.screen(h.key.mesh.position));
     expect(h.toolJoint()).toBeNull();
-  });
-
-  it('keeps the ring once the bolt is home: a tap on it does nothing, a drag the other way backs the bolt out', () => {
-    const h = harness();
-    h.assembly.drive(h.boltSeat.id);
-    h.hold(Math.ceil(TURN_RING.flashMs / 1000 / FRAME) + 2);
-    h.tap(h.ringAt(h.awayFromKey()));
-    expect(h.taps).toEqual([]);
-    expect(h.toolJoint()).not.toBeNull();
-    const start = h.awayFromKey();
-    expect(h.sweep(h.ringAt(start), start, -180)).toBe('crank');
-    // Backed off a quarter of the way: it reads screwed until it is all the way out.
-    expect(h.progress()).toBeLessThan(1);
-    expect(h.progress()).toBeGreaterThan(0);
   });
 
   it('leaves hit-testing as it was with no tool seated: a tap there is on the panel under it', () => {
@@ -368,7 +321,7 @@ const TAP_FRAMES = Math.ceil(GESTURE.tapMaxMs / 1000 / FRAME);
 const DRIVE_FRAMES = Math.ceil(FASTENER.driveSeconds / FRAME) + 5;
 
 describe('a still hold drives the fastener home (1.8.2.2 step 6)', () => {
-  it('drives a seated bolt to screwed and stops there, and the key stays on after', () => {
+  it('drives a seated bolt to screwed and stops there, and the key drops at home', () => {
     const h = harness();
     const at = h.screen(h.key.mesh.position);
     h.canvas.fire('pointerdown', at);
@@ -378,18 +331,9 @@ describe('a still hold drives the fastener home (1.8.2.2 step 6)', () => {
     expect(h.progress()).toBe(1);
     expect(h.fastens()).toHaveLength(1);
     h.canvas.fire('pointerup', at);
-    expect(h.toolJoint()).not.toBeNull();
-    expect(h.log.filter((e) => e.type === EVENT.UNSEAT)).toEqual([]);
-  });
-
-  it('drives from a hold on the ring too', () => {
-    const h = harness();
-    const at = h.ringAt(h.awayFromKey());
-    h.canvas.fire('pointerdown', at);
-    h.hold(TAP_FRAMES + DRIVE_FRAMES);
-    expect(h.progress()).toBe(1);
-    h.canvas.fire('pointerup', at);
-    expect(h.toolJoint()).not.toBeNull();
+    // Home: the key came off by itself and dropped, once.
+    expect(h.toolJoint()).toBeNull();
+    expect(h.log.filter((e) => e.type === EVENT.UNSEAT)).toHaveLength(1);
   });
 
   it('takes nothing for a press let go before a tap is up: it taps the key off', () => {
@@ -408,8 +352,8 @@ describe('a still hold drives the fastener home (1.8.2.2 step 6)', () => {
     c.hold(TAP_FRAMES + DRIVE_FRAMES);
     expect(c.assembly.get(c.camSeat.id)!.fastener).toMatchObject({ state: STATE.SEATED, progress: 1 });
     expect(c.fastens()).toEqual([]);
-    // Its dial stays, full but stalled — never a home flash.
-    expect(c.dials.at(-1)).toMatchObject([{ progress: 1, flashing: false, stalled: true }]);
+    // Full but stalled, not home: the driver stays on.
+    expect(c.assembly.all().some((j) => j.kind === KIND.TOOL)).toBe(true);
   });
 
   it('only ever tightens', () => {
@@ -428,7 +372,7 @@ describe('a still hold drives the fastener home (1.8.2.2 step 6)', () => {
   it('hands over to the crank once the press moves', () => {
     const h = harness();
     const start = h.awayFromKey();
-    h.canvas.fire('pointerdown', h.ringAt(start));
+    h.canvas.fire('pointerdown', h.screen(h.key.mesh.position));
     h.hold(TAP_FRAMES + 10);
     const driven = h.progress();
     expect(driven).toBeGreaterThan(0);
@@ -455,7 +399,7 @@ describe('the ratchet ticks every eighth of a turn (1.8.2.2 step 7)', () => {
 
   it("clicks 16 times over a bolt's two turns, cranked", () => {
     const h = harness();
-    h.circle(h.ringAt(h.awayFromKey()), HEAD, 3 * 360, h.awayFromKey());
+    h.circle(h.screen(h.key.mesh.position), HEAD, 3 * 360, h.awayFromKey());
     expect(h.progress()).toBe(1);
     expect(h.clicks()).toBe(16);
   });
@@ -478,7 +422,7 @@ describe('the ratchet ticks every eighth of a turn (1.8.2.2 step 7)', () => {
     const h = harness();
     h.assembly.apply(h.boltSeat.id, { type: 'crank', radians: FASTENER.boltRadians / 2 });
     const before = h.progress() * FASTENER.boltRadians;
-    h.circle(h.ringAt(h.awayFromKey()), HEAD, -120, h.awayFromKey());
+    h.circle(h.screen(h.key.mesh.position), HEAD, -120, h.awayFromKey());
     const after = h.progress() * FASTENER.boltRadians;
     expect(after).toBeLessThan(before);
     expect(h.clicks()).toBeGreaterThan(0);
@@ -489,7 +433,7 @@ describe('the ratchet ticks every eighth of a turn (1.8.2.2 step 7)', () => {
     const h = harness();
     const bearing = h.awayFromKey();
     // Straight out along one bearing from the head: no sweep, no turn.
-    h.canvas.fire('pointerdown', h.ringAt(bearing));
+    h.canvas.fire('pointerdown', h.screen(h.key.mesh.position));
     for (let r = TURN_RING.radius + 5; r <= TURN_RING.radius + 60; r += 5) {
       h.canvas.fire('pointermove', h.ringAt(bearing, r));
       h.hold(1);
@@ -502,7 +446,7 @@ describe('the ratchet ticks every eighth of a turn (1.8.2.2 step 7)', () => {
 
   it('puts nothing on the bus for a click', () => {
     const h = harness();
-    h.circle(h.ringAt(h.awayFromKey()), HEAD, 90, h.awayFromKey());
+    h.circle(h.screen(h.key.mesh.position), HEAD, 90, h.awayFromKey());
     expect(h.clicks()).toBeGreaterThan(0);
     expect(h.log.map((e) => e.type)).toEqual([EVENT.GRAB]);
   });

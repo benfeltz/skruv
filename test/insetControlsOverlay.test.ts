@@ -1,0 +1,241 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { GESTURE, INSET } from '../src/constants.js';
+import { arcLength } from '../src/game/turnRing.js';
+import { createInsetControls } from '../src/ui/insetControls.js';
+
+// The real inset controls (src/ui/insetControls.ts) on a minimal fake DOM (1.10.0.2 step 5): what they draw for the
+// look they are given, and what the gestures made on them report. How they look and grab on a phone is manual.
+
+type Listener = (event: object) => void;
+
+class FakeElement {
+  tag: string;
+  children: FakeElement[] = [];
+  attributes: Record<string, string> = {};
+  listeners = new Map<string, Listener[]>();
+  textContent = '';
+  declare id?: string; // set on the style element
+  captured: number[] = [];
+
+  constructor(tag: string) {
+    this.tag = tag;
+  }
+  setAttribute(name: string, value: string) {
+    this.attributes[name] = value;
+  }
+  removeAttribute(name: string) {
+    delete this.attributes[name];
+  }
+  hasAttribute(name: string) {
+    return name in this.attributes;
+  }
+  append(...nodes: FakeElement[]) {
+    this.children.push(...nodes);
+  }
+  addEventListener(type: string, fn: Listener) {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]);
+  }
+  setPointerCapture(id: number) {
+    this.captured.push(id);
+  }
+  fire(type: string, init: object = {}) {
+    for (const fn of this.listeners.get(type) ?? []) fn({ type, pointerId: 1, target: this, ...init });
+  }
+  all(className: string): FakeElement[] {
+    return this.children.flatMap((child) => [...((child.attributes.class ?? '').split(' ').includes(className) ? [child] : []), ...child.all(className)]);
+  }
+}
+
+let head: FakeElement;
+let body: FakeElement;
+
+beforeEach(() => {
+  head = new FakeElement('head');
+  body = new FakeElement('body');
+  vi.stubGlobal('document', {
+    head,
+    createElement: (tag: string) => new FakeElement(tag),
+    createElementNS: (_ns: string, tag: string) => new FakeElement(tag),
+    getElementById: (id: string) => head.children.find((node) => node.id === id) ?? null,
+  });
+});
+afterEach(() => vi.unstubAllGlobals());
+
+const { ring, arrow } = INSET.controls;
+
+function mount() {
+  const turns: number[] = [];
+  const calls = { push: 0, pull: 0 };
+  const controls = createInsetControls(body as unknown as HTMLElement, { onTurn: (r) => turns.push(r), onPush: () => calls.push++, onPull: () => calls.pull++ });
+  const svg = body.children[0];
+  const turn = svg.all('inset-controls__turn')[0];
+  const push = svg.all('inset-controls__push')[0];
+  const heads = turn.all('inset-controls__head');
+  const total = () => turns.reduce((sum, r) => sum + r, 0);
+  return { controls, svg, turn, push, heads, turns, calls, total };
+}
+
+const lookTurn = (over = {}) => ({ progress: 0, tighten: true, loosen: true, ...over });
+const CENTRE: [number, number] = [200, 300];
+const onRing = (degrees: number, r: number = ring.radius) => ({ clientX: CENTRE[0] + r * Math.cos((degrees * Math.PI) / 180), clientY: CENTRE[1] + r * Math.sin((degrees * Math.PI) / 180) });
+
+function sweep(turn: FakeElement, from: number, to: number) {
+  turn.fire('pointerdown', onRing(from));
+  const step = Math.sign(to - from) * 10;
+  for (let d = from + step; step > 0 ? d <= to : d >= to; d += step) turn.fire('pointermove', onRing(d));
+  turn.fire('pointerup', onRing(to));
+}
+
+describe('the inset controls overlay', () => {
+  it('starts hidden, with neither control shown, and keeps out of the accessibility tree', () => {
+    const { svg, turn, push } = mount();
+    expect(svg.tag).toBe('svg');
+    expect(svg.hasAttribute('hidden')).toBe(true);
+    expect(svg.attributes['aria-hidden']).toBe('true');
+    expect(turn.hasAttribute('hidden') && push.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('is invisible to the pointer itself, and takes it on its two controls only', () => {
+    mount();
+    const css = head.children[0].textContent;
+    expect(css).toMatch(/\.inset-controls \{[^}]*pointer-events: none/);
+    expect(css).toMatch(/\.inset-controls__control \{[^}]*pointer-events: auto/);
+  });
+
+  describe('the turn ring', () => {
+    it('shows at its centre with the arc at the progress, the arrow away', () => {
+      const { controls, svg, turn, push } = mount();
+      controls.showTurn(CENTRE, lookTurn({ progress: 0.25 }));
+      expect(svg.hasAttribute('hidden')).toBe(false);
+      expect(turn.hasAttribute('hidden')).toBe(false);
+      expect(push.hasAttribute('hidden')).toBe(true);
+      expect(turn.attributes.transform).toBe('translate(200 300)');
+      const arc = turn.all('inset-controls__arc')[0];
+      expect(Number(arc.attributes['stroke-dasharray'].split(' ')[0])).toBeCloseTo(arcLength(0.25, ring.radius), 6);
+      expect(turn.all('inset-controls__grab')[0].attributes.r).toBe(String(ring.radius + ring.band));
+    });
+
+    it('hides each arrowhead whose way is at its stop', () => {
+      const { controls, heads } = mount();
+      const [tighten, loosen] = heads;
+      controls.showTurn(CENTRE, lookTurn());
+      expect([tighten.hasAttribute('hidden'), loosen.hasAttribute('hidden')]).toEqual([false, false]);
+      controls.showTurn(CENTRE, lookTurn({ progress: 1, tighten: false }));
+      expect([tighten.hasAttribute('hidden'), loosen.hasAttribute('hidden')]).toEqual([true, false]);
+      controls.showTurn(CENTRE, lookTurn({ loosen: false }));
+      expect([tighten.hasAttribute('hidden'), loosen.hasAttribute('hidden')]).toEqual([false, true]);
+    });
+
+    it('a clockwise quarter turn reports positive radians summing to about a quarter turn', () => {
+      const { controls, turn, turns, total } = mount();
+      controls.showTurn(CENTRE, lookTurn());
+      sweep(turn, 0, 90);
+      expect(turns.every((r) => r > 0)).toBe(true);
+      expect(total()).toBeCloseTo(Math.PI / 2, 1);
+      expect(turn.captured).toEqual([1]);
+    });
+
+    it('anticlockwise reports negative radians', () => {
+      const { controls, turn, turns, total } = mount();
+      controls.showTurn(CENTRE, lookTurn());
+      sweep(turn, 0, -90);
+      expect(turns.every((r) => r < 0)).toBe(true);
+      expect(total()).toBeCloseTo(-Math.PI / 2, 1);
+    });
+
+    it('turns only from a press on the band: one in the middle, or past the band, does nothing', () => {
+      const { controls, turn, turns } = mount();
+      controls.showTurn(CENTRE, lookTurn());
+      for (const start of [onRing(0, 0), onRing(0, ring.radius + ring.band + 4)]) {
+        turn.fire('pointerdown', start);
+        turn.fire('pointermove', onRing(40));
+        turn.fire('pointermove', onRing(80));
+        turn.fire('pointerup', onRing(80));
+      }
+      expect(turns).toEqual([]);
+      expect(turn.captured).toEqual([]);
+      // Still turns from the band's inner and outer edges.
+      sweep(turn, 0, 30);
+      expect(turns.length).toBeGreaterThan(0);
+    });
+
+    it('reports nothing once the finger has lifted, and nothing for a press with no sweep', () => {
+      const { controls, turn, turns } = mount();
+      controls.showTurn(CENTRE, lookTurn());
+      turn.fire('pointerdown', onRing(0));
+      turn.fire('pointerup', onRing(0));
+      turn.fire('pointermove', onRing(40));
+      expect(turns).toEqual([]);
+    });
+
+    it('follows the ring when it moves: the sweep is about the centre it was last shown at', () => {
+      const { controls, turn, total } = mount();
+      controls.showTurn([500, 500], lookTurn());
+      turn.fire('pointerdown', { clientX: 500 + ring.radius, clientY: 500 });
+      turn.fire('pointermove', { clientX: 500, clientY: 500 + ring.radius });
+      expect(total()).toBeCloseTo(Math.PI / 2, 5);
+    });
+  });
+
+  describe('the push arrow', () => {
+    it('shows black with its head in while seated, the ring away', () => {
+      const { controls, turn, push } = mount();
+      controls.showPush(CENTRE, { seated: false, head: 'in' });
+      expect(push.hasAttribute('hidden')).toBe(false);
+      expect(turn.hasAttribute('hidden')).toBe(true);
+      expect(push.attributes['data-seated']).toBe('false');
+      expect(push.attributes.transform).toBe('translate(200 300)');
+    });
+
+    it('shows green with its head flipped once pressed home', () => {
+      const { controls, push } = mount();
+      controls.showPush(CENTRE, { seated: true, head: 'out' });
+      expect(push.attributes['data-seated']).toBe('true');
+      expect(push.attributes.transform).toContain('scale(1 -1)');
+      expect(head.children[0].textContent).toMatch(/data-seated='true'\] \.inset-controls__shaft/);
+    });
+
+    it('a tap calls onPush while the head is in, onPull once it is out', () => {
+      const { controls, push, calls } = mount();
+      controls.showPush(CENTRE, { seated: false, head: 'in' });
+      push.fire('pointerdown', { clientX: 200, clientY: 300 });
+      push.fire('pointerup', { clientX: 200, clientY: 300 });
+      expect(calls).toEqual({ push: 1, pull: 0 });
+      controls.showPush(CENTRE, { seated: true, head: 'out' });
+      push.fire('pointerdown', { clientX: 200, clientY: 300 });
+      push.fire('pointerup', { clientX: 201, clientY: 301 });
+      expect(calls).toEqual({ push: 1, pull: 1 });
+    });
+
+    it('a press that moves past the tap distance calls nothing, and nor does a cancelled one', () => {
+      const { controls, push, calls } = mount();
+      controls.showPush(CENTRE, { seated: false, head: 'in' });
+      push.fire('pointerdown', { clientX: 200, clientY: 300 });
+      push.fire('pointerup', { clientX: 200, clientY: 300 + GESTURE.tapMaxDistance + 5 });
+      push.fire('pointerdown', { clientX: 200, clientY: 300 });
+      push.fire('pointercancel', {});
+      push.fire('pointerup', { clientX: 200, clientY: 300 });
+      expect(calls).toEqual({ push: 0, pull: 0 });
+    });
+
+    it('a pointerup with no press before it calls nothing', () => {
+      const { controls, push, calls } = mount();
+      controls.showPush(CENTRE, { seated: false, head: 'in' });
+      push.fire('pointerup', { clientX: 200, clientY: 300 });
+      expect(calls.push).toBe(0);
+    });
+
+    it('draws a hit box wider than the arrow itself, from constants', () => {
+      const { push } = mount();
+      const grab = push.all('inset-controls__grab')[0];
+      expect(Number(grab.attributes.width)).toBe(Math.max(arrow.width, arrow.head) + 2 * arrow.band);
+    });
+  });
+
+  it('hide() hides the whole overlay', () => {
+    const { controls, svg } = mount();
+    controls.showTurn(CENTRE, lookTurn());
+    controls.hide();
+    expect(svg.hasAttribute('hidden')).toBe(true);
+  });
+});

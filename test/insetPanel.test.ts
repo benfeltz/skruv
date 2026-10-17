@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { INSET } from '../src/constants.js';
 import { insetFrame } from '../src/game/insetView.js';
 import { createInsetPanel } from '../src/scene/insetPanel.js';
 import type { InsetSubject } from '../src/game/insetModel.js';
@@ -15,6 +16,7 @@ class FakeElement {
   style: Record<string, string> = {};
   textContent = '';
   parent: FakeElement | null = null;
+  listeners = new Map<string, ((event: object) => void)[]>();
   setAttribute(name: string, value: string) {
     this.attributes[name] = value;
   }
@@ -25,6 +27,17 @@ class FakeElement {
     for (const node of nodes) node.parent = this;
     this.children.push(...nodes);
   }
+  addEventListener(type: string, fn: (event: object) => void) {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]);
+  }
+  setPointerCapture() {}
+  fire(type: string, init: object = {}) {
+    for (const fn of this.listeners.get(type) ?? []) fn({ type, pointerId: 1, target: this, ...init });
+  }
+  // Every descendant with `className` among its classes.
+  all(className: string): FakeElement[] {
+    return this.children.flatMap((child) => [...((child.attributes.class ?? '').split(' ').includes(className) ? [child] : []), ...child.all(className)]);
+  }
   remove() {
     if (this.parent) this.parent.children = this.parent.children.filter((node) => node !== this);
     this.parent = null;
@@ -32,7 +45,12 @@ class FakeElement {
 }
 
 const resizeListeners = new Set<() => void>();
+// The boxes of what the controls keep clear of (the control cluster, a booklet's docked thumb), as
+// document.querySelectorAll finds them: none by default.
+type Box = { left: number; top: number; right: number; bottom: number };
+let obstacleBoxes: Box[] = [];
 beforeEach(() => {
+  obstacleBoxes = [];
   resizeListeners.clear();
   vi.stubGlobal('window', {
     addEventListener: (type: string, fn: () => void) => type === 'resize' && resizeListeners.add(fn),
@@ -44,6 +62,7 @@ beforeEach(() => {
     createElement: () => new FakeElement(),
     createElementNS: () => new FakeElement(),
     getElementById: () => null,
+    querySelectorAll: () => obstacleBoxes.map((box) => ({ getBoundingClientRect: () => ({ ...box, width: box.right - box.left, height: box.bottom - box.top }) })),
   });
   vi.stubGlobal('getComputedStyle', () => ({ paddingTop: '47px', paddingRight: '0px' }));
 });
@@ -57,8 +76,15 @@ const subject = (over: Partial<InsetSubject> = {}): InsetSubject => ({
   tool: null,
   centre: [0, 0, 0],
   axis: [0, -1, 0],
+  progress: 0,
+  tighten: false,
+  loosen: false,
+  pressed: false,
   ...over,
 });
+const nothing = () => null;
+// The router's lookup of a pressed-home joint's subject.
+const pressedOf = (...subjects: InsetSubject[]) => (joint: number) => subjects.find((s) => s.joint === joint) ?? null;
 const part = (id: string) => ({ id }) as Part;
 
 function mount(initial = { left: 0, top: 0, width: 390, height: 844 }) {
@@ -89,17 +115,21 @@ function mount(initial = { left: 0, top: 0, width: 390, height: 844 }) {
   const scene = new THREE.Scene();
   const frame = () => insetFrame({ width: rect.width, height: rect.height }, { top: 47, right: 0 });
   const svg = container.children[0];
+  // After the ring's overlay and the safe-area probe.
+  const controls = container.children[2];
+  const turn = () => controls.all('inset-controls__turn')[0];
+  const push = () => controls.all('inset-controls__push')[0];
   const resize = (next: typeof rect) => {
     rect = next;
     for (const fn of resizeListeners) fn();
   };
-  return { panel, renderer, renders, scene, frame, svg, container, resize, reads: () => reads };
+  return { panel, renderer, renders, scene, frame, svg, controls, turn, push, container, resize, reads: () => reads };
 }
 
 describe('the inset panel', () => {
   it('draws nothing while nothing is offered or engaged', () => {
     const { panel, renderer, renders, scene, svg } = mount();
-    panel.hook.candidates(null, []);
+    panel.hook.candidates(null, [], nothing);
     panel.update();
     panel.render(renderer, scene);
     expect(renders).toEqual([]);
@@ -108,7 +138,7 @@ describe('the inset panel', () => {
 
   it('draws the extra pass and inks the ring once something is offered, faint', () => {
     const { panel, renderer, renders, scene, svg } = mount();
-    panel.hook.candidates(subject({ joint: -1 }), []);
+    panel.hook.candidates(subject({ joint: -1 }), [], nothing);
     panel.update();
     panel.render(renderer, scene);
     expect(renders).toHaveLength(2);
@@ -119,14 +149,14 @@ describe('the inset panel', () => {
 
   it('goes active, full ink, when the parts engage', () => {
     const { panel, svg } = mount();
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
     expect(svg.attributes['data-state']).toBe('active');
   });
 
   it('keeps the circle clear of the safe-area inset', () => {
     const { panel, svg, frame } = mount();
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
     const ring = svg.children[0].children[0];
     expect(Number(ring.attributes.cy) - Number(ring.attributes.r)).toBeGreaterThanOrEqual(47);
@@ -135,7 +165,7 @@ describe('the inset panel', () => {
 
   it('a tap outside the circle dismisses it, which stops drawing; a tap inside does not', () => {
     const { panel, renderer, renders, scene, frame } = mount();
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
     const { centre } = frame();
     expect(panel.hook.tapOutside(centre)).toBe(false);
@@ -147,7 +177,7 @@ describe('the inset panel', () => {
 
   it('while dismissed, a tap on an engaged part reopens it and is consumed; one on another part is not', () => {
     const { panel, renderer, renders, scene, svg } = mount();
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
     panel.hook.tapOutside([10, 800]);
     panel.update();
@@ -161,19 +191,19 @@ describe('the inset panel', () => {
 
   it('while showing, the engaged part’s tap is not the inset’s', () => {
     const { panel } = mount();
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
     expect(panel.hook.tapOn(part('dowel-1'))).toBe(false);
   });
 
   it('hides when the engagement ends, and a repack hides it at once', () => {
     const { panel, svg } = mount();
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
-    panel.hook.candidates(null, []);
+    panel.hook.candidates(null, [], nothing);
     panel.update();
     expect(svg.attributes.hidden).toBe('');
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
     panel.reset();
     expect(svg.attributes.hidden).toBe('');
@@ -181,7 +211,7 @@ describe('the inset panel', () => {
 
   it('reads layout only when the window is resized, not every frame', () => {
     const { panel, svg, reads, resize } = mount();
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], nothing);
     for (let i = 0; i < 5; i++) panel.update();
     expect(reads()).toBe(1);
     resize({ left: 0, top: 0, width: 844, height: 390 });
@@ -193,11 +223,148 @@ describe('the inset panel', () => {
     expect(Number(ring.attributes.cx)).toBeGreaterThan(422);
   });
 
-  it('takes its overlay and probe off the page on dispose', () => {
+  it('takes its overlay, probe and controls off the page on dispose', () => {
     const { panel, container } = mount();
-    expect(container.children.length).toBe(2);
+    expect(container.children.length).toBe(3);
     panel.dispose();
     expect(container.children.length).toBe(0);
     expect(resizeListeners.size).toBe(0);
+  });
+});
+
+describe('the inset panel’s controls (1.10.0.2)', () => {
+  const tool = (over: Partial<InsetSubject> = {}) => subject({ kind: 'tool', tool: 'key-1', hardware: 'key-1', host: 'bolt-1', ...over });
+  // Where a control's group sits, from its transform.
+  const at = (group: FakeElement): [number, number] => {
+    const [x, y] = /translate\(([-\d.e]+) ([-\d.e]+)\)/.exec(group.attributes.transform)!.slice(1).map(Number);
+    return [x, y];
+  };
+
+  // A tablet-wide portrait screen, where either side of the circle has room.
+  const WIDE = { left: 0, top: 0, width: 800, height: 1000 };
+  const half = Math.max(INSET.controls.ring.radius + INSET.controls.ring.band, INSET.controls.arrow.length / 2 + INSET.controls.arrow.band);
+
+  it('shows the turn ring beside the circle for an active tool, never inside it', () => {
+    const { panel, controls, turn, push, frame } = mount(WIDE);
+    panel.hook.candidates(null, [tool({ progress: 0.5, tighten: true, loosen: true })], nothing);
+    panel.update();
+    expect(controls.attributes.hidden).toBeUndefined();
+    expect(turn().attributes.hidden).toBeUndefined();
+    expect(push().attributes.hidden).toBe('');
+    const { centre, radius } = frame();
+    const [x, y] = at(turn());
+    expect(y).toBe(centre[1]);
+    expect(Math.abs(x - centre[0])).toBeGreaterThanOrEqual(radius + INSET.controls.gap + half);
+  });
+
+  it('puts the control below the circle on a phone too narrow for either side, wholly on screen', () => {
+    const { panel, turn, frame } = mount();
+    panel.hook.candidates(null, [tool()], nothing);
+    panel.update();
+    const [x, y] = at(turn());
+    expect(x).toBe(frame().centre[0]);
+    expect(y).toBeGreaterThanOrEqual(frame().centre[1] + frame().radius + INSET.controls.gap + half);
+    expect(x - half).toBeGreaterThanOrEqual(0);
+    expect(x + half).toBeLessThanOrEqual(390);
+    expect(y + half).toBeLessThanOrEqual(844);
+  });
+
+  it('shows the push arrow for a dowel, black while seated, green once it is pressed home and stays', () => {
+    const { panel, controls, push } = mount();
+    panel.hook.candidates(null, [subject()], nothing);
+    panel.update();
+    expect(push().attributes['data-seated']).toBe('false');
+    panel.hook.candidates(null, [], pressedOf(subject({ pressed: true, progress: 1 })));
+    panel.update();
+    expect(controls.attributes.hidden).toBeUndefined();
+    expect(push().attributes['data-seated']).toBe('true');
+  });
+
+  it('shows no control while the seat is only offered, nor once dismissed, nor while hidden', () => {
+    const { panel, controls } = mount();
+    panel.hook.candidates(subject({ joint: -1 }), [], nothing);
+    panel.update();
+    expect(controls.attributes.hidden).toBe('');
+    panel.hook.candidates(null, [tool()], nothing);
+    panel.update();
+    expect(controls.attributes.hidden).toBeUndefined();
+    panel.hook.tapOutside([5, 700]);
+    panel.update();
+    expect(controls.attributes.hidden).toBe('');
+    panel.hook.candidates(null, [], nothing);
+    panel.update();
+    expect(controls.attributes.hidden).toBe('');
+  });
+
+  it('moves to the next slot when the control cluster covers the first', () => {
+    const first = mount(WIDE);
+    first.panel.hook.candidates(null, [tool()], nothing);
+    first.panel.update();
+    const [x, y] = at(first.turn());
+    first.panel.dispose();
+    obstacleBoxes = [{ left: x - 10, top: y - 10, right: x + 10, bottom: y + 10 }];
+    const { panel, turn, frame } = mount(WIDE);
+    panel.hook.candidates(null, [tool()], nothing);
+    panel.update();
+    const moved = at(turn());
+    expect(Math.sign(moved[0] - frame().centre[0])).toBe(-Math.sign(x - frame().centre[0]));
+  });
+
+  // Review round 2: the catalog's thumb sits upper left; the control must not cover it or take its taps.
+  it('keeps clear of a booklet’s docked thumb too, and ignores one with no box on screen', () => {
+    const first = mount(WIDE);
+    first.panel.hook.candidates(null, [tool()], nothing);
+    first.panel.update();
+    const [x, y] = at(first.turn());
+    first.panel.dispose();
+    obstacleBoxes = [
+      { left: x - 20, top: y - 20, right: x + 20, bottom: y + 20 },
+      { left: 0, top: 0, right: 0, bottom: 0 },
+    ];
+    const { panel, turn, frame } = mount(WIDE);
+    panel.hook.candidates(null, [tool()], nothing);
+    panel.update();
+    expect(Math.sign(at(turn())[0] - frame().centre[0])).toBe(-Math.sign(x - frame().centre[0]));
+  });
+
+  it('drives the connected router: a sweep of the ring turns the tool, taps press and pull the dowel', () => {
+    const { panel, turn, push } = mount();
+    const calls: unknown[][] = [];
+    panel.connect({ turnGrip: (...args) => !!calls.push(['turn', ...args]), pressJoint: (...args) => !!calls.push(['press', ...args]), pullJoint: (...args) => !!calls.push(['pull', ...args]) });
+    panel.hook.candidates(null, [tool({ joint: 7 })], nothing);
+    panel.update();
+    const [cx, cy] = at(turn());
+    const r = INSET.controls.ring.radius;
+    turn().fire('pointerdown', { clientX: cx + r, clientY: cy });
+    turn().fire('pointermove', { clientX: cx, clientY: cy + r });
+    expect(calls).toEqual([['turn', 'key-1', expect.closeTo(Math.PI / 2, 5)]]);
+    calls.length = 0;
+    panel.hook.candidates(null, [subject({ joint: 9 })], nothing);
+    panel.update();
+    push().fire('pointerdown', { clientX: 1, clientY: 1 });
+    push().fire('pointerup', { clientX: 1, clientY: 1 });
+    panel.hook.candidates(null, [], pressedOf(subject({ joint: 9, pressed: true, progress: 1 })));
+    panel.update();
+    push().fire('pointerdown', { clientX: 1, clientY: 1 });
+    push().fire('pointerup', { clientX: 1, clientY: 1 });
+    expect(calls).toEqual([['press', 9], ['pull', 9]]);
+  });
+
+  it('does nothing from a control before the router is connected', () => {
+    const { panel, turn } = mount();
+    panel.hook.candidates(null, [tool()], nothing);
+    panel.update();
+    const [cx, cy] = at(turn());
+    expect(() => {
+      turn().fire('pointerdown', { clientX: cx + INSET.controls.ring.radius, clientY: cy });
+      turn().fire('pointermove', { clientX: cx, clientY: cy + INSET.controls.ring.radius });
+    }).not.toThrow();
+  });
+
+  it('removes the controls with the panel', () => {
+    const { panel, container } = mount();
+    expect(container.children).toHaveLength(3);
+    panel.dispose();
+    expect(container.children).toHaveLength(0);
   });
 });
