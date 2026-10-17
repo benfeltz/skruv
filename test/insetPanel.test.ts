@@ -57,6 +57,10 @@ const subject = (over: Partial<InsetSubject> = {}): InsetSubject => ({
   tool: null,
   centre: [0, 0, 0],
   axis: [0, -1, 0],
+  progress: 0,
+  tighten: false,
+  loosen: false,
+  pressed: false,
   ...over,
 });
 const part = (id: string) => ({ id }) as Part;
@@ -99,7 +103,7 @@ function mount(initial = { left: 0, top: 0, width: 390, height: 844 }) {
 describe('the inset panel', () => {
   it('draws nothing while nothing is offered or engaged', () => {
     const { panel, renderer, renders, scene, svg } = mount();
-    panel.hook.candidates(null, []);
+    panel.hook.candidates(null, [], []);
     panel.update();
     panel.render(renderer, scene);
     expect(renders).toEqual([]);
@@ -108,7 +112,7 @@ describe('the inset panel', () => {
 
   it('draws the extra pass and inks the ring once something is offered, faint', () => {
     const { panel, renderer, renders, scene, svg } = mount();
-    panel.hook.candidates(subject({ joint: -1 }), []);
+    panel.hook.candidates(subject({ joint: -1 }), [], []);
     panel.update();
     panel.render(renderer, scene);
     expect(renders).toHaveLength(2);
@@ -119,14 +123,14 @@ describe('the inset panel', () => {
 
   it('goes active, full ink, when the parts engage', () => {
     const { panel, svg } = mount();
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], []);
     panel.update();
     expect(svg.attributes['data-state']).toBe('active');
   });
 
   it('keeps the circle clear of the safe-area inset', () => {
     const { panel, svg, frame } = mount();
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], []);
     panel.update();
     const ring = svg.children[0].children[0];
     expect(Number(ring.attributes.cy) - Number(ring.attributes.r)).toBeGreaterThanOrEqual(47);
@@ -135,7 +139,7 @@ describe('the inset panel', () => {
 
   it('a tap outside the circle dismisses it, which stops drawing; a tap inside does not', () => {
     const { panel, renderer, renders, scene, frame } = mount();
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], []);
     panel.update();
     const { centre } = frame();
     expect(panel.hook.tapOutside(centre)).toBe(false);
@@ -147,7 +151,7 @@ describe('the inset panel', () => {
 
   it('while dismissed, a tap on an engaged part reopens it and is consumed; one on another part is not', () => {
     const { panel, renderer, renders, scene, svg } = mount();
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], []);
     panel.update();
     panel.hook.tapOutside([10, 800]);
     panel.update();
@@ -161,19 +165,19 @@ describe('the inset panel', () => {
 
   it('while showing, the engaged part’s tap is not the inset’s', () => {
     const { panel } = mount();
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], []);
     panel.update();
     expect(panel.hook.tapOn(part('dowel-1'))).toBe(false);
   });
 
   it('hides when the engagement ends, and a repack hides it at once', () => {
     const { panel, svg } = mount();
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], []);
     panel.update();
-    panel.hook.candidates(null, []);
+    panel.hook.candidates(null, [], []);
     panel.update();
     expect(svg.attributes.hidden).toBe('');
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], []);
     panel.update();
     panel.reset();
     expect(svg.attributes.hidden).toBe('');
@@ -181,7 +185,7 @@ describe('the inset panel', () => {
 
   it('reads layout only when the window is resized, not every frame', () => {
     const { panel, svg, reads, resize } = mount();
-    panel.hook.candidates(null, [subject()]);
+    panel.hook.candidates(null, [subject()], []);
     for (let i = 0; i < 5; i++) panel.update();
     expect(reads()).toBe(1);
     resize({ left: 0, top: 0, width: 844, height: 390 });

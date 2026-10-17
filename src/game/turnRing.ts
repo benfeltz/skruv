@@ -47,12 +47,12 @@ export function arcLength(progress: number, radius: number = TURN_RING.radius) {
 export const tightensClockwise = (intoHole: number[], viewDirection: number[]) => tightenSign(intoHole, viewDirection) > 0;
 
 /**
- * Whether a turn's dial is drawn. A seated tool's, whenever it has something to turn, home or
- * not — it is the tool's own ring, grabbed to crank it. A part circled by hand shows its ring
- * only while the finger is on the part (`pressed`): the part itself is what is circled, and a
- * built table's legs carry no rings. A turn with nothing to turn (a key on a buried hex) has none.
+ * Whether a turn's dial is drawn in the main view. A part circled by hand shows its ring only
+ * while the finger is on the part (`pressed`): the part itself is what is circled, and a built
+ * table's legs carry no rings. A tool's turn has none — it is worked from the ring beside the
+ * detail inset (src/ui/insetControls.ts) — nor has a turn with nothing to turn (a key on a buried hex).
  */
-export const isDrawn = (turn: Turn, pressed: boolean) => turn.joints.length > 0 && (turn.grip.kind === 'tool' || pressed);
+export const isDrawn = (turn: Turn, pressed: boolean) => turn.joints.length > 0 && turn.grip.kind === 'hand' && pressed;
 
 /**
  * Of the dials whose grab band takes `point`, the one a press there means: one whose

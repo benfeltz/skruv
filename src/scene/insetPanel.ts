@@ -32,6 +32,7 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
 
   let offered: InsetSubject | null = null;
   let engaged: readonly InsetSubject[] = [];
+  let settled: readonly InsetSubject[] = [];
   // The circle this frame, or null while nothing shows.
   let frame: InsetFrame | null = null;
   // The canvas's box and the circle in it, read from layout only when the window has been resized
@@ -47,9 +48,10 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
   const joint = new THREE.Vector3();
 
   const hook: InsetHook = {
-    candidates(nextOffered, nextEngaged) {
+    candidates(nextOffered, nextEngaged, nextSettled) {
       offered = nextOffered;
       engaged = nextEngaged;
+      settled = nextSettled;
     },
     covers: (point) => frame !== null && insideInset(point, frame),
     tapOutside: (point) => frame !== null && !insideInset(point, frame) && model.tapOutside(),
@@ -60,7 +62,7 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
     hook,
     /** One frame: step the model on what the router reported, then place, aim and ink the circle if it shows. */
     update() {
-      model.step({ offered, engaged });
+      model.step({ offered, engaged, settled });
       const { state, subject } = model;
       if (!subject || (state !== 'offered' && state !== 'active')) {
         frame = null;

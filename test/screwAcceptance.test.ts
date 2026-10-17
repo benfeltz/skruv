@@ -62,11 +62,8 @@ function bench() {
   const screw = m.assembly.seat({ partA: 'woodScrew-1', connectorA: SCREW_THREAD, partB: 'rail-1', connectorB: RAIL_HOLE, mover: 'woodScrew-1' });
   m.assembly.seat({ partA: 'screwdriver-1', connectorA: 0, partB: 'woodScrew-1', connectorB: SCREW_SLOT, mover: 'screwdriver-1' });
   const state = () => m.assembly.get(screw.id)!;
-  // Circle the screwdriver's ring round the screw head `degrees` (clockwise positive, on screen).
-  const circle = (degrees: number) => {
-    const at = m.screen(head);
-    m.circle({ clientX: at.clientX + TURN_RING.radius, clientY: at.clientY }, head, degrees, 0, TURN_RING.radius);
-  };
+  // Circle the screwdriver round the screw head `degrees` (clockwise positive, on screen): pressed on the driver.
+  const circle = (degrees: number) => m.circle(m.screen(driver.mesh.position), head, degrees, 0, TURN_RING.radius);
   const holdDriver = () => {
     const at = m.screen(driver.mesh.position);
     m.canvas.fire('pointerdown', at);
@@ -78,11 +75,11 @@ function bench() {
 }
 
 describe('AC2: a screw seated in a screw hole is driven home by the screwdriver in two turns, by circle or hold', () => {
-  it('is a screw joint, lit for the screwdriver, with the existing tool ring clockwise from above', () => {
+  it('is a screw joint, and the screwdriver on it draws no dial in the main view', () => {
     const b = bench();
     expect(b.screw.kind).toBe(KIND.SCREW);
     b.hold(1);
-    expect(b.dials.at(-1)?.[0]?.clockwise).toBe(true);
+    expect(b.dials.every((d) => d === null)).toBe(true);
   });
 
   it('is partway after one turn of the circle and home after two, reported once', () => {
@@ -94,6 +91,8 @@ describe('AC2: a screw seated in a screw hole is driven home by the screwdriver 
     b.circle(400);
     expect(b.state()).toMatchObject({ through: 'sidePanel-1', fastener: { state: STATE.SCREWED, progress: 1 } });
     expect(b.fastens().filter((e) => e.kind === KIND.SCREW)).toHaveLength(1);
+    // Home: the screwdriver came off by itself.
+    expect(b.assembly.all().some((j) => j.kind === KIND.TOOL)).toBe(false);
   });
 
   it('drives home on a still hold of the screwdriver', () => {
@@ -113,11 +112,15 @@ describe('AC3: screwed, it bonds its host and the part behind rigidly; backed of
     expect(b.assembly.compoundOf('rail-1').has('sidePanel-1')).toBe(true);
   });
 
-  it('drops the bond when circled back out to seated', () => {
+  it('drops the bond, the screw and the driver when circled all the way out', () => {
     const b = bench();
     b.holdDriver();
+    // The driver dropped at home: set it back on the screw's slot to back the screw out.
+    b.assembly.seat({ partA: 'screwdriver-1', connectorA: 0, partB: 'woodScrew-1', connectorB: SCREW_SLOT, mover: 'screwdriver-1' });
     b.circle(-800);
-    expect(b.state()).toMatchObject({ through: null, fastener: { state: STATE.SEATED, progress: 0 } });
+    // Backed all the way out, the screw and the driver both drop: the joint is gone and the bond with it.
+    expect(b.assembly.get(b.screw.id)).toBeNull();
+    expect(b.assembly.all().some((j) => j.kind === KIND.TOOL)).toBe(false);
     expect(b.bridges()).toEqual([]);
   });
 

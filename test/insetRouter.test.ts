@@ -79,7 +79,7 @@ describe('the router reports what the inset could frame', () => {
     expect(b.last().offered).toBeNull();
   });
 
-  it('reports a dowel seated and not yet pushed home as engaged, and drops it once pressed home', () => {
+  it('reports a dowel seated and not yet pushed home as engaged, and as settled (pressed) once pressed home', () => {
     const b = bench();
     const at = b.carry(b.dowel);
     b.canvas.fire('pointerup', at);
@@ -91,6 +91,7 @@ describe('the router reports what the inset could frame', () => {
     b.hold(1);
     expect(b.assembly.get(joint.id)!.fastener.state).not.toBe(STATE.SEATED);
     expect(b.last().engaged).toEqual([]);
+    expect(b.last().settled).toMatchObject([{ joint: joint.id, kind: 'dowel', pressed: true, progress: 1, tighten: false, loosen: false }]);
   });
 
   it('offers a seated bolt’s head to a carried Allen key, then reports the joint with the tool set once it is on', () => {
@@ -191,16 +192,12 @@ describe('the router’s taps are the inset’s', () => {
     expect(keyJoints(b)).toHaveLength(1);
   });
 
-  it('a tap on a turn ring dismisses nothing and reopens nothing', () => {
+  // 1.10.0.2: the ring lives beside the inset, so the main view draws no dial for a tool's turn
+  // and nothing is on screen where it was.
+  it('draws no dial for the seated key in the main view', () => {
     const b = keyed();
-    b.hold(1);
-    const dial = b.dials.at(-1)![0];
-    // On the ring's band, away from the key itself.
-    const on = { clientX: dial.centre[0], clientY: dial.centre[1] + 64 };
-    b.tap(on);
-    expect(b.recorder.outside).toEqual([]);
-    expect(b.recorder.tapsOn).toEqual([]);
-    expect(keyJoints(b)).toHaveLength(1);
+    b.hold(2);
+    expect(b.dials.every((d) => d === null)).toBe(true);
   });
 
   it('lets a consumed tap on a seated dowel leave it unpressed', () => {
@@ -221,5 +218,103 @@ describe('the router’s taps are the inset’s', () => {
     m.hold(1);
     m.tap(m.screen(dowel.mesh.position));
     expect(m.assembly.all()[0].fastener.state).not.toBe(STATE.SEATED);
+  });
+});
+
+describe('the router works the inset’s controls (1.10.0.2)', () => {
+  const SPAN = spanOf('bolt');
+  const boltJoint = (b: ReturnType<typeof bench>) => b.assembly.all().find((j) => j.kind === 'bolt')!;
+  const keyJoint = (b: ReturnType<typeof bench>) => b.assembly.all().find((j) => j.hardware === 'allenWrench-1');
+  const unseats = (b: ReturnType<typeof bench>) => b.log.filter((e) => e.type === 'unseat');
+  // The key let go over the head.
+  function keyOn(b: ReturnType<typeof bench>) {
+    b.canvas.fire('pointerup', b.carry(b.key));
+    b.hold(1);
+    expect(keyJoint(b)).toBeDefined();
+  }
+
+  it('reports the key on a fresh bolt with its tighten head only, at depth zero', () => {
+    const b = bench();
+    keyOn(b);
+    expect(b.last().engaged[0]).toMatchObject({ tool: 'allenWrench-1', progress: 0, tighten: true, loosen: false, pressed: false });
+  });
+
+  it('a turn of the ring to home drops the key: its joint goes, it is released and UNSEAT is emitted; the inset then has no subject', () => {
+    const b = bench();
+    keyOn(b);
+    expect(b.router.turnGrip('allenWrench-1', SPAN)).toBe(true);
+    expect(boltJoint(b).fastener).toMatchObject({ state: STATE.SCREWED, progress: 1 });
+    expect(keyJoint(b)).toBeUndefined();
+    expect(unseats(b)).toHaveLength(1);
+    b.hold(1);
+    expect(b.last().engaged).toEqual([]);
+  });
+
+  it('does not drop the key short of home, and drops it only on the edge', () => {
+    const b = bench();
+    keyOn(b);
+    b.router.turnGrip('allenWrench-1', SPAN / 2);
+    expect(keyJoint(b)).toBeDefined();
+    expect(b.last().engaged[0]).toBeDefined();
+    b.hold(1);
+    expect(b.last().engaged[0]).toMatchObject({ progress: 0.5, tighten: true, loosen: true });
+  });
+
+  it('a key set on a home bolt stays on, with its loosen head only', () => {
+    const b = bench();
+    b.assembly.drive(boltJoint(b).id);
+    keyOn(b);
+    expect(unseats(b)).toEqual([]);
+    expect(b.last().engaged[0]).toMatchObject({ progress: 1, tighten: false, loosen: true });
+  });
+
+  it('loosening all the way out drops the bolt and the key both', () => {
+    const b = bench();
+    b.assembly.drive(boltJoint(b).id);
+    keyOn(b);
+    expect(b.router.turnGrip('allenWrench-1', -SPAN)).toBe(true);
+    expect(keyJoint(b)).toBeUndefined();
+    expect(b.assembly.all().filter((j) => j.kind === 'bolt')).toEqual([]);
+    expect(unseats(b)).toHaveLength(2);
+  });
+
+  it('turnGrip on a part with no turn changes nothing', () => {
+    const b = bench();
+    expect(b.router.turnGrip('allenWrench-1', 1)).toBe(false);
+    expect(b.router.turnGrip('dowel-1', 1)).toBe(false);
+    expect(unseats(b)).toEqual([]);
+  });
+
+  it('a tap on a seated key short of home still takes it off, as ever', () => {
+    const b = bench();
+    keyOn(b);
+    b.router.turnGrip('allenWrench-1', SPAN / 4);
+    b.tap(b.screen(b.key.mesh.position));
+    expect(keyJoint(b)).toBeUndefined();
+    expect(boltJoint(b).fastener.progress).toBeGreaterThan(0);
+  });
+
+  it('the push arrow presses a seated dowel home (settled, pressed), and its second tap backs it out to seated (engaged)', () => {
+    const b = bench();
+    b.canvas.fire('pointerup', b.carry(b.dowel));
+    b.hold(1);
+    const id = b.assembly.all().find((j) => j.hardware === 'dowel-1')!.id;
+    expect(b.router.pressJoint(id)).toBe(true);
+    b.hold(1);
+    expect(b.last().engaged).toEqual([]);
+    expect(b.last().settled).toMatchObject([{ joint: id, pressed: true }]);
+    expect(b.router.pressJoint(id)).toBe(false);
+    expect(b.router.pullJoint(id)).toBe(true);
+    b.hold(1);
+    expect(b.last().settled).toEqual([]);
+    expect(b.last().engaged).toMatchObject([{ joint: id, pressed: false }]);
+    expect(b.router.pullJoint(id)).toBe(false);
+  });
+
+  it('pressJoint and pullJoint leave a tool joint alone', () => {
+    const b = bench();
+    keyOn(b);
+    expect(b.router.pressJoint(keyJoint(b)!.id)).toBe(false);
+    expect(b.router.pullJoint(keyJoint(b)!.id)).toBe(false);
   });
 });

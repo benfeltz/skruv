@@ -27,6 +27,7 @@ import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../g
 import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
 import type { Probe } from '../game/toolTargets.js';
 import type { InsetSubject } from '../game/insetModel.js';
+import type { Fastener } from '../game/fasteners.js';
 import { gripOf, isDrawn, isTurnHome, isTurnStalled, pickDial, tightensClockwise, turnProgress } from '../game/turnRing.js';
 import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { FitPair, Relatives } from '../game/panelFit.js';
@@ -152,15 +153,21 @@ export interface GestureRouter {
   update(delta?: number): void;
   sync(): void;
   unseatAll(ids: PartId[]): void;
+  /** The inset's turn ring: turn the tool `grip` by `radians` (positive tightens) through the one crank path. Whether anything moved. */
+  turnGrip(grip: PartId, radians: number): boolean;
+  /** The inset's push arrow: press the seated dowel, pin or fitting `id` home, as a tap on it would. Whether anything changed. */
+  pressJoint(id: number): boolean;
+  /** The push arrow's second tap: back the pressed `id` out to seated, as a pull on it would. Whether anything changed. */
+  pullJoint(id: number): boolean;
   dispose(): void;
 }
 
 /**
  * What the router tells the detail inset (src/scene/insetPanel.ts): each frame the seat on offer to carried hardware
- * and the joints engaged, and the taps that are the inset's: one on its circle (consumed), one outside it, one on a part.
+ * and the joints engaged (and the dowels pressed home, which stay on show), and the taps that are the inset's: one on its circle (consumed), one outside it, one on a part.
  */
 export interface InsetHook {
-  candidates(offered: InsetSubject | null, engaged: readonly InsetSubject[]): void;
+  candidates(offered: InsetSubject | null, engaged: readonly InsetSubject[], settled: readonly InsetSubject[]): void;
   covers(point: ScreenPoint): boolean;
   tapOutside(point: ScreenPoint): boolean;
   tapOn(part: Part): boolean;
@@ -219,7 +226,8 @@ const PULL_AXIS_PROBE = 0.05;
  * does what is the graph's and the fastener machines' call:
  *   snap      seats the pair; the dragged part is held where it seated
  *   tap       pushes home the dowels/pins/back fittings touching the tapped part (else selects it);
- *             tapping an engaged tool takes it off
+ *             tapping an engaged tool takes it off — the escape for a tool attached by mistake: a tool
+ *             also comes off by itself, dropping, at full seat and at full removal (`dropToolAfter`)
  *   drag      an engaged tool cranks its fastener; a part pushed into fastened seats pulls
  *             back out along their axis, and once nothing holds it, moves on as a normal
  *             drag; a part bonded into a compound moves it all through its joints
@@ -260,12 +268,12 @@ const PULL_AXIS_PROBE = 0.05;
  *            behind the picture — nor does one on a ring or dial, which dismisses nothing. A tap on a part then asks `tapOn`: true means the inset was dismissed and
  *            the tap only reopened it, so it goes no further. Otherwise `tapOutside` may
  *            dismiss it and the tap carries on as ever — dismissing never swallows a tap.
- *   turnRing — `{ show(dials), hide() }` (src/ui/turnRing.ts): a dial for each turn the
- *            graph has (`assembly.turns`) — round the head a seated tool is on, for as long
- *            as it is on; round the hole of a part circled by hand (a leg on its stud) while
- *            the finger is on that part — its arc at the turn's progress (full at home) and flashing as it
- *            goes home. A press on its band is its grip's crank — a drag there turns it as
- *            circling does, a tap does nothing; only a tap on a tool itself takes it off.
+ *   turnRing — `{ show(dials), hide() }` (src/ui/turnRing.ts): a dial for each turn a part is
+ *            circled by hand in (a leg on its stud), round the hole of the part while the finger
+ *            is on it — its arc at the turn's progress (full at home) and flashing as it goes
+ *            home. A press on its band is its grip's crank — a drag there turns it as circling
+ *            does, a tap does nothing. A seated tool's turn has no dial here: its ring sits beside
+ *            the detail inset (`turnGrip`), and a tap on the tool itself still takes it off.
  *            Which turns get a dial, and where it is grabbed, is src/game/turnRing.ts's call.
  * Turns: what a gesture on a part turns — its joints, what visibly turns and about what,
  * what rides along, what is loose — is the graph's record (`assembly.turnOf`, `Turn`), read
@@ -1205,7 +1213,17 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function insetSubject(joint: AssemblyJoint, tool: PartId | null): InsetSubject {
     const { type, mesh } = partById.get(joint.host)!;
     const hole = connectorInWorld(PART_TYPES[type].connectors[joint.hostConnector], { position: mesh.position.toArray(), rotation: mesh.quaternion.toArray() });
-    return { joint: joint.id, kind: joint.kind, hardware: joint.hardware, host: joint.host, tool, centre: hole.position, axis: [-hole.axis[0], -hole.axis[1], -hole.axis[2]] };
+    return { joint: joint.id, kind: joint.kind, hardware: joint.hardware, host: joint.host, tool, centre: hole.position, axis: [-hole.axis[0], -hole.axis[1], -hole.axis[2]], ...insetState(joint, tool) };
+  }
+
+  // How far in the joint is and what can still move: a tool's turn from the graph's record of it — the tighten head
+  // is drawn until every joint is home (a cam turned full onto nothing is not), the loosen head while any has turn
+  // left — and a dowel, pin or fitting's pressed state.
+  function insetState(joint: AssemblyJoint, tool: PartId | null) {
+    const turn = tool === null ? null : assembly.turnOf(tool);
+    if (turn && turn.joints.length > 0) return { progress: turnProgress(turn), tighten: !isTurnHome(turn), loosen: advancing(turn, -1).length > 0, pressed: false };
+    const pressed = joint.fastener.state === STATE.PRESSED;
+    return { progress: pressed ? 1 : 0, tighten: false, loosen: false, pressed };
   }
 
   // The seat the aim is turning the carried hardware into — the workable one the end needing the least turn
@@ -1223,6 +1241,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       tool: isToolTip(end.connector.type) ? drag!.part.id : null,
       centre: seat.position,
       axis: [-seat.axis[0], -seat.axis[1], -seat.axis[2]],
+      progress: 0,
+      tighten: false,
+      loosen: false,
+      pressed: false,
     };
   }
 
@@ -1231,6 +1253,12 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (!inset) return [];
     return joints
       .flatMap((joint) => (joint.kind === KIND.TOOL ? [insetSubject(joint, joint.hardware)] : isTapKind(joint.kind) && joint.fastener.state === STATE.SEATED ? [insetSubject(joint, null)] : []));
+  }
+
+  // The dowels, pins and fittings pressed home: the inset keeps showing one it was on, to be backed out.
+  function settledSubjects(joints: readonly AssemblyJoint[]): InsetSubject[] {
+    if (!inset) return [];
+    return joints.filter((joint) => isTapKind(joint.kind) && joint.fastener.state === STATE.PRESSED).map((joint) => insetSubject(joint, null));
   }
 
   // The bolt a seated cam lock's recess would catch, as a turn of it would, and the joint a
@@ -1587,7 +1615,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // home — by a FASTEN event, or, for one only backed off partway, by onRehome; joints turned
   // together (a top's four studs) click and buzz once, for the first of them that moved.
   function turnJoints(joints: AssemblyJoint[], radiansOf: (joint: AssemblyJoint) => number) {
-    let changed = false;
+    const drivers = toolsDriving(joints);
+    const turned: { joint: AssemblyJoint; before: Fastener; after: Fastener }[] = [];
     for (const joint of joints) {
       const before = assembly.get(joint.id)!.fastener;
       const radians = radiansOf(joint);
@@ -1595,12 +1624,36 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       const after = assembly.get(joint.id)!.fastener;
       const span = spanOf(joint.kind);
       const clicks = ratchetTicks(before.progress * span, after.progress * span, FASTENER.ratchetRadians);
-      if (!changed && clicks > 0) onRatchet?.(clicks);
+      if (turned.length === 0 && clicks > 0) onRatchet?.(clicks);
       reportFastening(joint.id, isFastened(before));
-      if (!changed && isFastened(before) && !isHome(before) && isHome(after)) onRehome?.(joint.kind);
-      changed = true;
+      if (turned.length === 0 && isFastened(before) && !isHome(before) && isHome(after)) onRehome?.(joint.kind);
+      turned.push({ joint, before, after });
     }
-    if (changed) reconcile();
+    for (const { joint, before, after } of turned) dropToolAfter(joint, drivers.get(joint.id), before, after);
+    if (turned.length > 0) reconcile();
+    return turned.length > 0;
+  }
+
+  // The seated tool turning each of `joints`, by joint id, read before the batch turns them.
+  function toolsDriving(joints: readonly AssemblyJoint[]) {
+    const drivers = new Map<number, AssemblyJoint>();
+    const all = assembly.all();
+    for (const tool of all.filter((j) => j.kind === KIND.TOOL)) {
+      for (const driven of assembly.turnOf(tool.hardware, all)?.joints ?? []) if (joints.some((j) => j.id === driven.id)) drivers.set(driven.id, tool);
+    }
+    return drivers;
+  }
+
+  // A tool comes off by itself: edge-triggered, as its fastener reaches full seat (the tool drops) or is backed
+  // all the way out (the fastener and the tool both drop). A turn by hand has no tool and drops nothing.
+  function dropToolAfter(joint: AssemblyJoint, tool: AssemblyJoint | undefined, before: Fastener, after: Fastener) {
+    if (!tool) return;
+    const turn = assembly.turnOf(tool.hardware);
+    if (!isHome(before) && isHome(after) && turn && isTurnHome(turn)) unseat(tool);
+    else if (isFastened(before) && !isFastened(after) && after.progress === 0) {
+      unseat(joint);
+      unseat(tool);
+    }
   }
 
   // --- hold-to-drive: a still press on a turn's grip drives it home ---
@@ -1652,8 +1705,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // Every frame: a dial for each turn with something to turn — one per turn, however many
   // joints it turns. One that went home since last frame flashes for TURN_RING.flashMs —
   // again after being backed off and driven back — while a tool put on a fastener already
-  // home shows it full, without a flash. A tool's dial stays while it is on; a part circled by
-  // hand shows its own only while the finger is on it (isDrawn).
+  // home shows it full, without a flash. A part circled by hand shows its own only while the
+  // finger is on it, and a tool's turn none (isDrawn): its ring is the inset's.
   function showDials(delta: number, world: readonly Turn[]) {
     if (!turnRing) return;
     const rect = domElement.getBoundingClientRect();
@@ -1793,7 +1846,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       physics.move(partById.get(id)!.body, scratch.toArray(), twist.toArray());
     }
     // Last, so the inset frames the parts as this frame drew them: a bolt sunk by its turn, a rider carried along.
-    inset?.candidates(offeredSubject(ends, workable), engagedSubjects(joints));
+    inset?.candidates(offeredSubject(ends, workable), engagedSubjects(joints), settledSubjects(joints));
   }
 
   // Fastener progress, drawn on top of the simulated poses. Each turn moves its turned part
@@ -2095,6 +2148,25 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       const set = new Set(ids);
       for (const joint of assembly.all()) if (set.has(joint.hardware) || set.has(joint.host)) unseat(joint);
       reconcile();
+    },
+    turnGrip(grip, radians) {
+      const turn = assembly.turnOf(grip);
+      if (!turn || turn.joints.length === 0 || radians === 0) return false;
+      return turnJoints(advancing(turn, radians > 0 ? 1 : -1), () => radians);
+    },
+    pressJoint(id) {
+      const joint = assembly.get(id);
+      if (!joint || !isTapKind(joint.kind) || !assembly.apply(id, { type: 'tap' }, behind(joint))) return false;
+      reportFastening(id, false);
+      reconcile();
+      return true;
+    },
+    pullJoint(id) {
+      const joint = assembly.get(id);
+      if (!joint || !isTapKind(joint.kind) || !assembly.apply(id, { type: 'pull' })) return false;
+      reportFastening(id, true);
+      reconcile();
+      return true;
     },
     dispose() {
       onInterrupted();

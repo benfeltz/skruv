@@ -72,7 +72,7 @@ export type ClientPoint = { clientX: number; clientY: number };
  */
 export interface InsetRecorder {
   hook: InsetHook;
-  frames: { offered: InsetSubject | null; engaged: InsetSubject[] }[];
+  frames: { offered: InsetSubject | null; engaged: InsetSubject[]; settled: InsetSubject[] }[];
   outside: ScreenPoint[];
   tapsOn: string[];
   consume: boolean;
@@ -89,7 +89,7 @@ export function insetRecorder(): InsetRecorder {
     circle: null,
     hook: {
       covers: ([x, y]) => recorder.circle !== null && Math.hypot(x - recorder.circle.centre[0], y - recorder.circle.centre[1]) <= recorder.circle.radius,
-      candidates: (offered, engaged) => recorder.frames.push({ offered, engaged: [...engaged] }),
+      candidates: (offered, engaged, settled) => recorder.frames.push({ offered, engaged: [...engaged], settled: [...settled] }),
       tapOutside: (point) => {
         recorder.outside.push(point);
         return false;
