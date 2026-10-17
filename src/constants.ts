@@ -904,11 +904,11 @@ export const INSET = {
   segments: 64,
   // The controls beside the circle (src/game/insetControls.ts, src/ui/insetControls.ts): the turn ring (its drawn
   // radius, ring and arc widths, arrowhead size and the grab band either side of the ring, CSS px), the push arrow
-  // (its shaft length and width, head size), the gap between a control and the circle's rim, the gap kept from the
+  // (its shaft length and width, head size and the grab band round it), the gap between a control and the circle's rim, the gap kept from the
   // control cluster, and which slots each layout offers, in preference order.
   controls: {
     ring: { radius: 44, width: 4, arcWidth: 8, arrowSize: 16, band: 28 },
-    arrow: { length: 64, width: 14, head: 22 },
+    arrow: { length: 64, width: 14, head: 22, band: 20 },
     gap: 20,
     clusterGap: 12,
     slots: { portrait: ['left', 'right'], landscape: ['left', 'below'] },
