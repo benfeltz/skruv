@@ -1121,6 +1121,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return best;
   }
 
+  // How far from a seat a carried part's end starts to aim: a tool's tuned apart from a fastener's.
+  const zoneOf = (ends: CarriedEnd[]) => (ends.some((end) => isToolTip(end.connector.type)) ? AIM.toolZone : AIM.zone);
+
   // Self-aim: carried hardware whose end nears a seat turns that end into it, harder the
   // nearer, so the snap's angle window comes to the part — a tool's tip to a bolt head, a
   // dowel's end to its hole. Every frame — a still finger sends no events, so the offer the
@@ -1131,7 +1134,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (!ends || drag!.snapped) return;
     // No seat on offer: the part is held exactly where the finger puts it.
     const tool = ends.some((end) => isToolTip(end.connector.type));
-    const zone = tool ? AIM.toolZone : AIM.zone;
+    const zone = zoneOf(ends);
     const near = aimEnd(ends, drag!.held!, zone);
     if (!near || near.turn < AIM.settled) return;
     const aimed = aimedRotation(drag!.rotation, near.end.connector.axis, near.target.axis);
@@ -1204,18 +1207,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return { joint: joint.id, kind: joint.kind, hardware: joint.hardware, host: joint.host, tool, centre: hole.position, axis: [-hole.axis[0], -hole.axis[1], -hole.axis[2]] };
   }
 
-  // The workable seat nearest an end of the carried hardware, inside the aim zone, if any: what is on offer.
+  // The seat the aim is turning the carried hardware into — the workable one the end needing the least turn
+  // reaches inside the aim zone (aimEnd) — if any: what is on offer.
   function offeredSubject(ends: CarriedEnd[] | null): InsetSubject | null {
     if (!inset || !ends) return null;
     const workable = new Set(workableSeats(ends));
-    const zone = ends.some((end) => isToolTip(end.connector.type)) ? AIM.toolZone : AIM.zone;
-    let best: { end: CarriedEnd; seat: WorldConnector; distance: number } | null = null;
-    for (const end of ends) {
-      const near = nearestTarget(endAt(end, drag!.held!), end.seats.filter((c) => workable.has(c)), zone);
-      if (near && (!best || near.distance < best.distance)) best = { end, seat: near.target, distance: near.distance };
-    }
-    if (!best) return null;
-    const { end, seat } = best;
+    const near = aimEnd(ends.map((end) => ({ ...end, seats: end.seats.filter((c) => workable.has(c)) })), drag!.held!, zoneOf(ends));
+    if (!near) return null;
+    const { end, target: seat } = near;
     return {
       joint: -1,
       kind: kindOf(end.connector.type)!,
