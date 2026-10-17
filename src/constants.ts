@@ -34,8 +34,10 @@ const SCENERY_PAPER = 0xf1eee6;
 // The ink every outline draws in (src/scene/ink.ts): the room's and the box's edge lines in CSS pixels
 // (LineMaterial linewidth against the canvas's CSS size); the parts' inverted hull in metres, world space,
 // so a bolt and a panel carry the same weight; and the crease angle above which the box's edge pass
-// draws a line — above the 30° facets of a 12-sided round, below the box's 90° corners.
-export const INK = { lineWidth: 3, hullWidth: 0.002, boxCrease: 45 };
+// draws a line — above the 30° facets of a 12-sided round, below the box's 90° corners. A hull
+// vertex moves out far enough that every face meeting there is `hullWidth` thicker (a mitre); at
+// a sharp corner that is capped at `hullMiter` hull widths, so a spike never shoots off a point.
+export const INK = { lineWidth: 3, hullWidth: 0.002, boxCrease: 45, hullMiter: 2 };
 
 // The diorama stage (src/game/stageBoxes.ts, built by src/scene/room.ts and mirrored by
 // src/physics/world.ts): a base slab under the floor, two walls (back and left, with windows) and a low

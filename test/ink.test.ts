@@ -31,25 +31,21 @@ describe('the ink', () => {
     expect(hull.castShadow).toBe(false);
   });
 
-  it('welds a box hull to eight vertices pushed out on every axis, with no colour', () => {
-    const source = box();
-    source.setAttribute('color', new THREE.BufferAttribute(new Float32Array(source.getAttribute('position').count * 3), 3));
-    const hull = hullGeometry(source, INK.hullWidth);
-    expect(hull.getAttribute('position').count).toBe(8);
-    expect(hull.getAttribute('color')).toBeUndefined();
-    const grown = bounds(hull).getSize(new THREE.Vector3());
-    const was = bounds(source).getSize(new THREE.Vector3());
-    for (const axis of ['x', 'y', 'z'] as const) {
-      const grew = (grown[axis] - was[axis]) / 2;
-      expect(grew).toBeGreaterThan(0);
-      expect(grew).toBeLessThanOrEqual(INK.hullWidth);
+  it('welds a box hull to eight vertices and grows every side by the full width, thin panel or not', () => {
+    for (const geometry of [box(), new THREE.BoxGeometry(0.4, 0.018, 0.6)]) {
+      geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geometry.getAttribute('position').count * 3), 3));
+      const hull = hullGeometry(geometry, INK.hullWidth);
+      expect(hull.getAttribute('position').count).toBe(8);
+      expect(hull.getAttribute('color')).toBeUndefined();
+      const grown = bounds(hull).getSize(new THREE.Vector3());
+      const was = bounds(geometry).getSize(new THREE.Vector3());
+      for (const axis of ['x', 'y', 'z'] as const) expect((grown[axis] - was[axis]) / 2).toBeCloseTo(INK.hullWidth, 6);
     }
   });
 
-  it('puts a round\'s hull outside its radius by up to one width (the welded cap corners lean in)', () => {
-    const hull = hullGeometry(round(), INK.hullWidth);
-    const half = bounds(hull).getSize(new THREE.Vector3()).x / 2;
+  it('puts a round\'s hull a width outside its radius, give or take its facet', () => {
+    const half = bounds(hullGeometry(round(), INK.hullWidth)).getSize(new THREE.Vector3()).x / 2;
     expect(half).toBeGreaterThan(0.003 + INK.hullWidth * 0.9);
-    expect(half).toBeLessThanOrEqual(0.003 + INK.hullWidth + 1e-6);
+    expect(half).toBeLessThanOrEqual(0.003 + INK.hullWidth * INK.hullMiter);
   });
 });
