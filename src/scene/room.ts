@@ -1,27 +1,28 @@
 import * as THREE from 'three';
-import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
-import { COLORS, INK, STAGE } from '../constants.js';
+import { COLORS, STAGE } from '../constants.js';
 import { advance, phaseFromClock, skyColourAt } from '../game/skyCycle.js';
 import type { Rgb } from '../game/skyCycle.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { sizeAndCentre, stageBoxes, wallBox, wallPieces, windowBoxes, windowOpeningBoxes } from '../game/stageBoxes.js';
 import type { StageBox, StageBoxName, WallName } from '../game/stageBoxes.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
+import { createInk, edgesOf, inkEdges } from './ink.js';
 import { createScenery } from './scenery.js';
 import { STAGE_WALLS, wallHidden } from './stageCutaway.js';
 
 /**
  * The diorama: a base slab whose top is the floor, a back wall and a left wall with a window in it, and a low lip on
  * the front and right edges, every edge in ink. Built once; `update` only flips a wall's
- * visibility (its ink lines go with it) and keeps the line resolution current.
+ * visibility (its ink lines go with it) and keeps the line resolution current. The `Ink` it
+ * owns is the game's: item worlds borrow it (src/main.ts).
  */
 export function createRoom() {
   const group = new THREE.Group();
   group.name = 'room';
 
-  const ink = new LineMaterial({ color: COLORS.ink, linewidth: INK.lineWidth });
+  const ink = createInk();
   const floor = new THREE.MeshStandardMaterial({ color: COLORS.floor });
   const wall = new THREE.MeshStandardMaterial({ color: COLORS.wall });
   const trim = new THREE.MeshStandardMaterial({ color: COLORS.trim });
@@ -32,7 +33,6 @@ export function createRoom() {
     const { size, centre } = sizeAndCentre(box);
     return new THREE.BoxGeometry(...size).translate(...centre);
   };
-  const edgesOf = (geometry: THREE.BufferGeometry) => new THREE.EdgesGeometry(geometry);
 
   // One group per box: the mesh and its ink travel together, so hiding it hides both.
   const pieces = new Map<StageBoxName, THREE.Group>();
@@ -41,7 +41,7 @@ export function createRoom() {
     const geometry = boxGeometry(box);
     const mesh = new THREE.Mesh(geometry, box.name === 'slab' ? floor : wall);
     mesh.receiveShadow = true;
-    const edges = new LineSegments2(new LineSegmentsGeometry().fromEdgesGeometry(edgesOf(geometry)), ink);
+    const edges = inkEdges(geometry, ink.lines);
     const piece = new THREE.Group();
     piece.name = box.name;
     piece.add(mesh, edges);
@@ -68,11 +68,11 @@ export function createRoom() {
       ...windowOpeningBoxes(name).map((box) => edgesOf(boxGeometry(box))),
       edgesOf(trimGeometry),
     ])!;
-    const wallInk = new LineSegments2(new LineSegmentsGeometry().setPositions(inkGeometry.getAttribute('position').array as Float32Array), ink);
+    const wallInk = new LineSegments2(new LineSegmentsGeometry().setPositions(inkGeometry.getAttribute('position').array as Float32Array), ink.lines);
     wallInk.name = `${name}WallInk`;
     side.add(wallMesh, trimMesh, wallInk);
     // The scenery: a closed diorama box behind the openings, in the wall's group so the cutaway hides it with the wall.
-    const scenery = createScenery(name, { ink, skyMaterial });
+    const scenery = createScenery(name, { ink: ink.lines, skyMaterial });
     side.add(scenery.group);
     sceneries.push(scenery);
     group.add(side);
@@ -92,6 +92,7 @@ export function createRoom() {
   return {
     group,
     pieces,
+    ink,
     leftWall,
     backWall,
     /**
@@ -104,7 +105,7 @@ export function createRoom() {
       backWall.visible = !wallHidden(eyeAt, STAGE_WALLS.back);
       leftWall.visible = !wallHidden(eyeAt, STAGE_WALLS.left);
       renderer.getSize(size);
-      if (!size.equals(ink.resolution)) ink.resolution.copy(size);
+      if (!size.equals(ink.lines.resolution)) ink.lines.resolution.copy(size);
       if (STAGE.sky.phase !== scrubbed) {
         scrubbed = STAGE.sky.phase;
         phase = scrubbed;
