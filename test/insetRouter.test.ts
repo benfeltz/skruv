@@ -352,4 +352,36 @@ describe('the router works the inset’s controls (1.10.0.2)', () => {
     expect(b.router.pressJoint(id)).toBe(false);
     expect(b.assembly.get(id)).toBeNull();
   });
+
+  // Ben's phone test: picking a tool up and having it deselect. Pressing the key after it dropped at home, and
+  // carrying it on, stays a move — through the offer of the next seat, never a crank, a take-off or a tap.
+  it('picks the key up again after it dropped at home and keeps carrying it, the inset offering as it nears', () => {
+    const b = bench();
+    keyOn(b);
+    b.router.turnGrip('allenWrench-1', SPAN);
+    b.hold(2);
+    expect(keyJoint(b)).toBeUndefined();
+    const at = b.screen(b.key.mesh.position);
+    b.canvas.fire('pointerdown', at);
+    b.canvas.fire('pointermove', { clientX: at.clientX + 12, clientY: at.clientY });
+    b.canvas.fire('pointermove', { clientX: at.clientX + 40, clientY: at.clientY - 30 });
+    b.hold(1);
+    expect(b.router.dragging).toMatchObject({ part: { id: 'allenWrench-1' }, mode: 'move' });
+    b.canvas.fire('pointermove', { clientX: at.clientX + 80, clientY: at.clientY - 60 });
+    b.hold(1);
+    expect(b.router.dragging).toMatchObject({ part: { id: 'allenWrench-1' }, mode: 'move' });
+    expect(b.taps).toEqual([]);
+    expect(unseats(b)).toHaveLength(1);
+  });
+
+  it('keeps carrying a key when the circle appears under the finger mid-drag', () => {
+    const b = bench();
+    const at = b.carry(b.key);
+    b.recorder.circle = { centre: [at.clientX, at.clientY], radius: 80 };
+    b.canvas.fire('pointermove', { clientX: at.clientX + 30, clientY: at.clientY });
+    b.hold(1);
+    expect(b.router.dragging).toMatchObject({ part: { id: 'allenWrench-1' }, mode: 'move' });
+    b.canvas.fire('pointerup', { clientX: at.clientX + 30, clientY: at.clientY });
+    expect(b.taps).toEqual([]);
+  });
 });
