@@ -178,6 +178,19 @@ describe('the router’s taps are the inset’s', () => {
     expect(b.taps.at(-1)).not.toBeNull();
   });
 
+  it('ignores a press on the circle: it grabs no part behind it and is kept from the camera', () => {
+    const b = keyed();
+    const at = b.screen(b.key.mesh.position);
+    b.recorder.circle = { centre: [at.clientX, at.clientY], radius: 40 };
+    let stopped = 0;
+    b.canvas.fire('pointerdown', { ...at, stopImmediatePropagation: () => stopped++ });
+    b.canvas.fire('pointermove', { clientX: at.clientX + 40, clientY: at.clientY + 40 });
+    expect(b.router.dragging).toBeNull();
+    expect(stopped).toBe(1);
+    b.canvas.fire('pointerup', at);
+    expect(keyJoints(b)).toHaveLength(1);
+  });
+
   it('a tap on a turn ring dismisses nothing and reopens nothing', () => {
     const b = keyed();
     b.hold(1);

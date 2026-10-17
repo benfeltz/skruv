@@ -256,7 +256,7 @@ const PULL_AXIS_PROBE = 0.05;
  *            each frame the seat on offer to the carried hardware (the workable seat nearest an
  *            end, inside the aim zone) and every joint engaged (a seated tool's, a seated
  *            dowel, pin or fitting not yet pushed home), re-resolved from the poses; and the
- *            taps. A tap on the circle itself (`covers`) goes no further — it reaches no part
+ *            taps. A press or tap on the circle itself (`covers`) goes no further — it reaches no part
  *            behind the picture — nor does one on a ring or dial, which dismisses nothing. A tap on a part then asks `tapOn`: true means the inset was dismissed and
  *            the tap only reopened it, so it goes no further. Otherwise `tapOutside` may
  *            dismiss it and the tap carries on as ever — dismissing never swallows a tap.
@@ -1972,6 +1972,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // Capture phase, so this runs before OrbitControls' own pointerdown on the same element
   // and a part touch has already disabled the camera when OrbitControls sees it.
   function onPointerDown(event: PointerEvent) {
+    // A press on the inset's circle is on a picture, as its tap is: it grabs no part behind it and orbits nothing.
+    if (inset?.covers([event.clientX, event.clientY])) return event.stopImmediatePropagation();
     const hit = state.owner === null ? hitTest(event) : null;
     const wasCamera = state.cameraEnabled;
     state.down(pointer(event, hit));

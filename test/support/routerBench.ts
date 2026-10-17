@@ -36,7 +36,7 @@ export class FakeCanvas {
   }
   setPointerCapture() {}
   fire(type: string, init: object) {
-    this.listeners.get(type)?.({ type, pointerId: 1, button: 0, timeStamp: this.time, ...init });
+    this.listeners.get(type)?.({ type, pointerId: 1, button: 0, timeStamp: this.time, stopImmediatePropagation() {}, ...init });
   }
 }
 
