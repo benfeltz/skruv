@@ -875,8 +875,9 @@ export const TURN_RING = {
   arrowSize: 14,
 };
 
-// Render layers: the room on its own, so the detail inset's camera (src/scene/inset.ts) sees the parts on paper.
-export const LAYER = { room: 1 };
+// Render layers: the room and the rotate gizmo's rings each on their own, which the main camera enables and the
+// detail inset's camera (src/scene/inset.ts) does not, so it sees the parts on paper, free of the controls.
+export const LAYER = { room: 1, gizmo: 2 };
 
 // The live detail inset (src/game/insetModel.ts, src/game/insetView.ts, src/scene/inset.ts, src/ui/inset.ts): a circle
 // of the manual's paper showing the engaged joint and its tool from a fixed orthographic close-up.

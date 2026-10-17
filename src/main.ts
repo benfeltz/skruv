@@ -43,6 +43,8 @@ const room = createRoom();
 scene.add(room.group);
 // The room sits on its own layer, which the detail inset's camera leaves out (src/scene/inset.ts).
 camera.layers.enable(LAYER.room);
+// And the rotate gizmo's rings, which the inset leaves out as it leaves out every control.
+camera.layers.enable(LAYER.gizmo);
 // Shadows are drawn once a frame, by the main render (below), and the inset's pass reuses them.
 renderer.shadowMap.autoUpdate = false;
 

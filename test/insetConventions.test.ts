@@ -12,6 +12,10 @@ describe('the room layer (regression risk)', () => {
   it('lets the main camera see the room’s layer, so the room renders as it did', () => {
     expect(main).toMatch(/camera\.layers\.enable\(LAYER\.room\)/);
   });
+
+  it('lets it see the gizmo’s layer too, or the rings would vanish from the main view', () => {
+    expect(main).toMatch(/camera\.layers\.enable\(LAYER\.gizmo\)/);
+  });
 });
 
 describe('shadow maps once per frame (regression risk)', () => {
