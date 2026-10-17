@@ -38,6 +38,10 @@ export interface InsetInput {
 
 const keyOf = (s: InsetSubject) => (s.joint >= 0 ? `joint:${s.joint}` : `seat:${s.hardware}>${s.host}`);
 
+// The parts a tap on reopens a put-away subject: its hardware and tool, and the fastener a tool is on —
+// never a host panel, which a tap selects or presses its dowels home through.
+const partsOf = (s: InsetSubject): PartId[] => (s.tool === null ? [s.hardware] : [s.hardware, s.host, s.tool]);
+
 export function createInsetModel() {
   let state: InsetState = 'hidden';
   let subject: InsetSubject | null = null;
@@ -90,12 +94,12 @@ export function createInsetModel() {
       state = 'dismissed';
       return true;
     },
-    /** A tap on `part`: while dismissed, one on a part of a subject put away brings that subject back alone, and is consumed. */
+    /** A tap on `part`: while dismissed, one on a part of a subject put away (its hardware; for a tool, also its bolt) brings that subject back alone, and is consumed. */
     tapOn(part: PartId) {
       if (state !== 'dismissed') return false;
       const key = [...away].find((k) => {
         const s = known.get(k);
-        return s !== undefined && (part === s.hardware || part === s.host || part === s.tool);
+        return s !== undefined && partsOf(s).includes(part);
       });
       if (key === undefined) return false;
       away.delete(key);

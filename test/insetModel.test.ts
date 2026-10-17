@@ -118,15 +118,26 @@ describe('the inset model', () => {
     expect(m.state).toBe('dismissed');
   });
 
-  it('a tap on the subject’s hardware, host or tool reopens a dismissed inset and is consumed', () => {
-    for (const part of ['dowel-1', 'side-1', 'key-1']) {
+  it('a tap on a tool’s joint reopens it from the tool or the bolt, and on a dowel from the dowel', () => {
+    for (const [s, part] of [
+      [subject(1, { kind: 'tool', hardware: 'key-1', host: 'bolt-1', tool: 'key-1' }), 'key-1'],
+      [subject(1, { kind: 'tool', hardware: 'key-1', host: 'bolt-1', tool: 'key-1' }), 'bolt-1'],
+      [subject(1), 'dowel-1'],
+    ] as const) {
       const m = createInsetModel();
-      const s = subject(1, { tool: 'key-1' });
       m.step({ offered: null, engaged: [s] });
       m.tapOutside();
       expect(m.tapOn(part)).toBe(true);
       expect(m.state).toBe('active');
     }
+  });
+
+  it('a tap on a dowel’s host panel is not the inset’s: the panel keeps its own tap', () => {
+    const m = createInsetModel();
+    m.step({ offered: null, engaged: [subject(1)] });
+    m.tapOutside();
+    expect(m.tapOn('side-1')).toBe(false);
+    expect(m.state).toBe('dismissed');
   });
 
   it('a tap on a part that is not the subject does nothing and stays dismissed', () => {
