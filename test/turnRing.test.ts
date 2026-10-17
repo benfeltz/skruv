@@ -70,14 +70,15 @@ describe('dials of turns', () => {
     return { assembly, bolt };
   }
 
-  it("draws a tool's dial for as long as the tool is on, home or not, as the key's press", () => {
+  it("draws no dial for a tool's turn, home or not: it is worked from the inset's ring", () => {
     const { assembly, bolt } = johnny();
     const [turn] = assembly.turns();
     expect(gripOf(turn)).toBe('key');
-    expect([turnProgress(turn), isTurnHome(turn), isDrawn(turn, false)]).toEqual([0, false, true]);
+    expect([turnProgress(turn), isTurnHome(turn), isDrawn(turn, false)]).toEqual([0, false, false]);
+    expect(isDrawn(turn, true)).toBe(false);
     assembly.drive(bolt.id);
     const [home] = assembly.turns();
-    expect([turnProgress(home), isTurnHome(home), isDrawn(home, false)]).toEqual([1, true, true]);
+    expect([turnProgress(home), isTurnHome(home), isDrawn(home, false)]).toEqual([1, true, false]);
   });
 
   it('draws nothing for a part with no tool and no turn', () => {

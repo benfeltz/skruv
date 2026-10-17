@@ -765,6 +765,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     coincident,
     connectorAt: connectorOf,
     screwedBolts,
+    isHeld,
     compoundOf,
     bonds,
     restPose,

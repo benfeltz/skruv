@@ -1,11 +1,13 @@
 import * as THREE from 'three';
+import { controlFor, pushLook, turnLook } from '../game/insetControls.js';
 import { createInsetModel } from '../game/insetModel.js';
 import { insetCameraPose, insetFrame, insideInset } from '../game/insetView.js';
 import { createInsetOverlay } from '../ui/inset.js';
+import { createInsetControls } from '../ui/insetControls.js';
 import { createInset } from './inset.js';
 import type { InsetSubject } from '../game/insetModel.js';
 import type { InsetFrame, SafeInsets } from '../game/insetView.js';
-import type { InsetHook } from './gestureRouter.js';
+import type { GestureRouter, InsetHook } from './gestureRouter.js';
 
 /** What the panel is built over: the canvas it frames in, the main camera, and where its ring and tail go. */
 export interface InsetPanelDeps {
@@ -22,16 +24,28 @@ export interface InsetPanelDeps {
  * it and the overlay inks its ring and tail. This only composes them. The router's `hook`
  * feeds it each frame's candidates and its taps; `update()` runs after the router's update;
  * `render()` is the extra pass after the main render. The canvas fills the window, so its
- * client px are the circle's.
+ * client px are the circle's. Attached to the circle, as the manual's tool bubble is to its detail
+ * inset, sits the subject's control — the spinner for a tool, the push bubble for a dowel — driving the router's
+ * actions (`connect`, once the router exists); while the circle is offered or dismissed there is none.
  */
 export function createInsetPanel({ domElement, camera, container, lines }: InsetPanelDeps) {
   const model = createInsetModel();
   const pass = createInset(lines);
   const overlay = createInsetOverlay(container);
   const probe = createSafeProbe(container);
+  // The router's actions the controls drive, once `connect`ed; until then a gesture on a control does nothing.
+  let actions: Pick<GestureRouter, 'turnGrip' | 'pressJoint' | 'pullJoint'> | null = null;
+  // The subject the controls act on: the one shown while active, else null.
+  let driven: InsetSubject | null = null;
+  const controls = createInsetControls(container, {
+    onTurn: (radians) => driven?.tool && actions?.turnGrip(driven.tool, radians),
+    onPush: () => driven && actions?.pressJoint(driven.joint),
+    onPull: () => driven && actions?.pullJoint(driven.joint),
+  });
 
   let offered: InsetSubject | null = null;
   let engaged: readonly InsetSubject[] = [];
+  let settled: (joint: number) => InsetSubject | null = () => null;
   // The circle this frame, or null while nothing shows.
   let frame: InsetFrame | null = null;
   // The canvas's box and the circle in it, read from layout only when the window has been resized
@@ -42,14 +56,21 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
     box = null;
   };
   window.addEventListener('resize', resized);
+  // A press on the canvas owns the finger until it lifts: the controls go inert, so a part carried over one keeps its moves.
+  const pressed = () => controls.setInert(true);
+  const lifted = () => controls.setInert(false);
+  domElement.addEventListener('pointerdown', pressed, { capture: true });
+  window.addEventListener('pointerup', lifted);
+  window.addEventListener('pointercancel', lifted);
   // Reused every frame.
   const forward = new THREE.Vector3();
   const joint = new THREE.Vector3();
 
   const hook: InsetHook = {
-    candidates(nextOffered, nextEngaged) {
+    candidates(nextOffered, nextEngaged, nextSettled) {
       offered = nextOffered;
       engaged = nextEngaged;
+      settled = nextSettled;
     },
     covers: (point) => frame !== null && insideInset(point, frame),
     tapOutside: (point) => frame !== null && !insideInset(point, frame) && model.tapOutside(),
@@ -60,11 +81,13 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
     hook,
     /** One frame: step the model on what the router reported, then place, aim and ink the circle if it shows. */
     update() {
-      model.step({ offered, engaged });
+      model.step({ offered, engaged, settled });
       const { state, subject } = model;
       if (!subject || (state !== 'offered' && state !== 'active')) {
         frame = null;
+        driven = null;
         overlay.hide();
+        controls.hide();
         return;
       }
       if (!box || !placed) {
@@ -80,6 +103,15 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
       joint.set(...subject.centre).project(camera);
       const anchor: [number, number] = [rect.left + ((joint.x + 1) / 2) * rect.width, rect.top + ((1 - joint.y) / 2) * rect.height];
       overlay.show({ frame, anchor: joint.z < 1 ? anchor : null, active: state === 'active' });
+      const kind = state === 'active' ? controlFor(subject) : null;
+      driven = kind ? subject : null;
+      if (!kind) return controls.hide();
+      if (kind === 'turn') controls.showTurn(frame, turnLook(subject));
+      else controls.showPush(frame, pushLook(subject));
+    },
+    /** The router's actions the controls drive: its spinner turns the tool, its push bubble presses a dowel home and backs it out. */
+    connect(router: Pick<GestureRouter, 'turnGrip' | 'pressJoint' | 'pullJoint'>) {
+      actions = router;
     },
     /** The extra pass after the main render, only while the circle shows. */
     render(renderer: THREE.WebGLRenderer, scene: THREE.Scene) {
@@ -91,11 +123,17 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
     reset() {
       model.reset();
       frame = null;
+      driven = null;
       overlay.hide();
+      controls.hide();
     },
     dispose() {
       window.removeEventListener('resize', resized);
+      domElement.removeEventListener('pointerdown', pressed, { capture: true });
+      window.removeEventListener('pointerup', lifted);
+      window.removeEventListener('pointercancel', lifted);
       overlay.element.remove();
+      controls.element.remove();
       probe.element.remove();
       pass.dispose();
     },

@@ -299,6 +299,8 @@ export const COLORS = {
   bookletPaper: 0xffffff,
   bookletInk: 0x1c1c1c,
   bookletFaint: 0xbdbdbd,
+  // Placeholder green for the inset's controls (the turn ring's fill, a seated push arrow): the game is ink on paper, so this changes.
+  insetFill: 0x2e9e4f,
   // Per-page highlight (src/scene/highlight.ts): the warm accent, glowing softly.
   highlight: 0xe0a64a,
   // Target rings on the fasteners a carried tool can work (src/scene/targetRings.ts).
@@ -900,6 +902,18 @@ export const INSET = {
   // The render target's multisampling, and the circle's rim segments.
   samples: 4,
   segments: 64,
+  // The controls (src/game/insetControls.ts, src/ui/insetControls.ts) are sub-bubbles attached to the circle as the
+  // manual's tool bubble is attached to its first detail inset (BOOKLET.inset): a paper disc `share` of the circle's
+  // radius, its centre `at` of the radius out along the lower-right diagonal, so it sits partly on the rim and partly
+  // off it, ringed at the circle's own line weight. `min` is its smallest radius, so a finger can grab it (CSS px).
+  // The turn bubble holds a ring `mark.radius` of its radius with an arc of progress and an arrowhead each way; the
+  // push bubble a down arrow, `arrow.length` and `arrow.head` of its radius, onto a baseline `arrow.base.gap` of the
+  // radius under its tip and `arrow.base.width` of it wide: the download-to-surface icon, pressing onto a surface.
+  controls: {
+    bubble: { share: BOOKLET.inset.tool, at: BOOKLET.inset.toolAt, min: 26 },
+    mark: { radius: 0.62, width: 2.5, arcWidth: 5, arrowSize: 0.3 },
+    arrow: { length: 0.9, head: 0.34, width: 3, base: { gap: 0.14, width: 0.8 } },
+  },
 };
 
 // Hole markings (src/game/decals.ts, drawn by src/game/partMesh.ts). Radii are keyed by

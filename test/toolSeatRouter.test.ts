@@ -287,15 +287,20 @@ describe('rings light the fasteners a carried tool can work (1.8.2.1 step 6)', (
     expect(ringCalls.hides).toBeGreaterThan(hides);
   });
 
-  it.each([
-    ['a loose bolt', { seated: false }],
-    ['a bolt already screwed home', { screwed: true }],
-  ])('never lights %s', (_, options) => {
-    const { router, key, drag, shown } = harness({ keyAt: FLAT_BESIDE, keyRotation: IDENTITY, ...options });
+  it('never lights a loose bolt', () => {
+    const { router, key, drag, shown } = harness({ keyAt: FLAT_BESIDE, keyRotation: IDENTITY, seated: false });
     drag(key);
     router.update(0);
     expect(shown.length).toBeGreaterThan(0);
     expect(headRing(shown)).toBeUndefined();
+  });
+
+  // The key could loosen it: a home bolt lights for the loosening pass, since the key comes off by itself at home.
+  it('lights a bolt already screwed home, for the loosening pass', () => {
+    const { router, key, drag, shown } = harness({ keyAt: FLAT_BESIDE, keyRotation: IDENTITY, screwed: true });
+    drag(key);
+    router.update(0);
+    expect(headRing(shown)).toBeDefined();
   });
 
   it('draws no rings while a panel is dragged', () => {

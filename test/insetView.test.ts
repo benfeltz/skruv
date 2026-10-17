@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { INSET } from '../src/constants.js';
+import { bubbleOf, bubbleOverhang } from '../src/game/insetControls.js';
 import { insetCameraPose, insetFrame, insetLayout, insetOrtho, insideInset } from '../src/game/insetView.js';
 import type { Vec3 } from '../tools/validate/lib/geometry.js';
 
@@ -38,9 +39,30 @@ describe('insetFrame', () => {
   it('sits on the right under the cluster in landscape, clear of the safe insets', () => {
     const viewport = { width: 844, height: 390 };
     const { centre, radius } = insetFrame(viewport, { top: 0, right: 47 });
-    expect(centre[0] + radius).toBeCloseTo(844 - 47 - INSET.landscape.right);
+    expect(centre[0] + radius + bubbleOverhang({ centre, radius })).toBeCloseTo(844 - 47 - INSET.landscape.right);
     expect(centre[1] - radius).toBeCloseTo(INSET.landscape.top);
     expect(centre[1] + radius).toBeLessThan(viewport.height);
+  });
+
+  // The control's bubble hangs off the circle's lower right: it must stay wholly on screen, and in landscape inside
+  // the clearance from the right edge the circle alone had (the cluster's), in both orientations.
+  it.each([
+    [320, 568],
+    [390, 844],
+    [800, 1000],
+    [568, 320],
+    [844, 390],
+    [1000, 800],
+  ])('keeps the control’s bubble on screen and inside the old clearances at %i x %i', (width, height) => {
+    const safe = { top: 47, right: 20 };
+    const viewport = { width, height };
+    const frame = insetFrame(viewport, safe);
+    const { centre, radius } = bubbleOf(frame);
+    expect(centre[0] + radius).toBeLessThanOrEqual(width - safe.right + 1e-9);
+    expect(centre[0] - radius).toBeGreaterThanOrEqual(0);
+    expect(centre[1] + radius).toBeLessThanOrEqual(height);
+    expect(frame.centre[1] - frame.radius).toBeCloseTo(safe.top + INSET[insetLayout(viewport)].top, 6);
+    if (insetLayout(viewport) === 'landscape') expect(centre[0] + radius).toBeCloseTo(width - safe.right - INSET.landscape.right, 6);
   });
 
   it('takes its layout from the argument when given', () => {

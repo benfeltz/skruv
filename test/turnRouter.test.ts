@@ -525,8 +525,8 @@ describe('5. a key on a hand-seated stud', () => {
 
   it('turns and sinks the stud on a top that was dropped onto it — the top does not turn', () => {
     const b = bench({ mover: 'top-1' });
-    // Seated by the graph: the top's own ring is where a press on the key would land.
-    b.assembly.seat({ partA: b.key.id, connectorA: 0, partB: b.stud.id, connectorB: HEX_AT_END_2, mover: b.key.id });
+    // Let go onto the stud's free hex, as a player does: a press on the key is the key's, not the top's.
+    keyAt(b.t, b.key, b.free);
     expect(tool(b)).toMatchObject({ host: 'doubleEndedStud-1', hostConnector: HEX_AT_END_2 });
     const topAt = b.top.mesh.position.clone();
     b.assembly.apply(b.inTop.id, { type: 'crank', radians: FASTENER.studRadians / 8 });
@@ -534,9 +534,12 @@ describe('5. a key on a hand-seated stud', () => {
     expect(b.top.mesh.position.distanceTo(topAt)).toBeCloseTo(0, 9);
     expect(b.top.mesh.quaternion.angleTo(new THREE.Quaternion(...FLIPPED))).toBeCloseTo(0, 9);
     expect(b.stud.mesh.position.y).toBeCloseTo(b.stud.body.translation().y - SINK() / 8, 9);
-    // Circling on the key's ring turns the stud on.
-    const c = b.screen(b.free);
-    b.circle({ clientX: c.clientX + TURN_RING.radius, clientY: c.clientY }, b.free, 180, 0, TURN_RING.radius);
+    // The spare leg moved clear, so a press on the key lands on the key. Circling the stud's end from it turns the stud on.
+    const legPose = (b.leg.body as unknown as { pose: { position: THREE.Vector3 } }).pose;
+    legPose.position.x += 0.5;
+    b.leg.mesh.position.copy(legPose.position);
+    b.leg.mesh.updateMatrixWorld(true);
+    b.circle(b.screen(b.key.mesh.localToWorld(new THREE.Vector3(-0.025, 0, 0))), b.free, 180, 0, TURN_RING.radius);
     expect(b.assembly.get(b.inTop.id)!.fastener.progress).toBeGreaterThan(1 / 8);
   });
 
@@ -582,29 +585,26 @@ describe('a stud with two joints no turn owns', () => {
 describe('6. JOHNNY: the key on a bolt, as before', () => {
   // The full tool suites — test/toolDriveRouter.test.ts, test/toolsDriveAcceptance.test.ts,
   // test/toolsSeatAcceptance.test.ts — run unchanged on the record; this pins its centre and
-  // direction against the bolt's head, which is where the ring has always been.
+  // the crank's centre against the bolt's head; a tool's turn draws no dial in the main view (1.10.0.2).
   beforeAll(() => setItem('johnny'));
   afterAll(() => setItem('blank'));
 
-  it('rings the head, tightens clockwise from above, and cranks from a circle of the key', () => {
+  it('draws no dial, and cranks clockwise from above from a circle of the key round the head', () => {
     const panelPose = { position: [0, 0.008, 0] as Vec3, rotation: [0, 0, Math.SQRT1_2, Math.SQRT1_2] as Quat };
     const hole = connectorInWorld(PART_TYPES.sidePanel.connectors[2], panelPose).position;
     const half = PART_TYPES.camLockBolt.size[1] / 2;
     const head: Vec3 = [hole[0], hole[1] + 2 * half, hole[2]];
+    const wrench = makePart('allenWrench-1', 'allenWrench', [head[0] + 0.03, head[1] + 0.03, head[2]]);
     const m = mount([
       makePart('sidePanel-1', 'sidePanel', panelPose.position, panelPose.rotation),
       makePart('camLockBolt-1', 'camLockBolt', [hole[0], hole[1] + half, hole[2]]),
-      makePart('allenWrench-1', 'allenWrench', [head[0] + 0.03, head[1] + 0.03, head[2]]),
+      wrench,
     ]);
     const bolt = m.assembly.seat({ partA: 'camLockBolt-1', connectorA: 0, partB: 'sidePanel-1', connectorB: 2, mover: 'camLockBolt-1' });
     m.assembly.seat({ partA: 'allenWrench-1', connectorA: 0, partB: 'camLockBolt-1', connectorB: 1, mover: 'allenWrench-1' });
     m.hold(1);
-    const dial = m.dials.at(-1)![0];
-    const at = m.screen(head);
-    expect(dial.centre[0]).toBeCloseTo(at.clientX, 6);
-    expect(dial.centre[1]).toBeCloseTo(at.clientY, 6);
-    expect(dial.clockwise).toBe(true);
-    m.circle({ clientX: at.clientX + TURN_RING.radius, clientY: at.clientY }, head, 180, 0, TURN_RING.radius);
+    expect(m.dials.every((d) => d === null)).toBe(true);
+    m.circle(m.screen(wrench.mesh.position), head, 180, 0, TURN_RING.radius);
     expect(m.assembly.get(bolt.id)!.fastener.progress).toBeGreaterThan(0);
     expect(m.log.filter((e) => e.type === EVENT.FASTEN)).toEqual([]);
   });

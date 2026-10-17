@@ -523,6 +523,16 @@ describe('the detail inset rides the item world (1.10.0.1)', () => {
     expect(insetNode()).toBeUndefined();
   });
 
+  it('puts the inset controls on the page, hidden, and takes them off again with the world', async () => {
+    const { deps } = await engine();
+    const controls = () => body.children.find((node) => node.attributes.class === 'inset-controls');
+    expect(controls()).toBeUndefined();
+    const world = createItemWorld(deps);
+    expect(controls()?.attributes.hidden).toBe('');
+    world.dispose();
+    expect(controls()).toBeUndefined();
+  });
+
   it('renders nothing extra while the inset is not showing', async () => {
     const { deps } = await engine();
     const world = createItemWorld(deps);
