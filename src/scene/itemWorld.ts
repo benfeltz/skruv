@@ -448,10 +448,11 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
       physics.step(delta);
       sweep(delta);
       router.update(delta);
-      insetPanel.update();
       gizmo.update();
       sprue.update();
       highlight.update(delta);
+      // Last: the inset only draws what the rest settled, and nothing waits on it.
+      insetPanel.update();
     },
   };
 }

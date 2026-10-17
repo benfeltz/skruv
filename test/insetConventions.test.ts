@@ -46,8 +46,8 @@ describe('repack and teardown take the inset with them', () => {
     expect(repack).toMatch(/insetPanel\.reset\(\)/);
   });
 
-  it('disposes the panel with the world and steps it after the router', () => {
+  it('disposes the panel with the world and steps it last, so no other overlay ever waits on it', () => {
     expect(world).toMatch(/undo\.push\(\(\) => insetPanel\.dispose\(\)\)/);
-    expect(world).toMatch(/router\.update\(delta\);\s+insetPanel\.update\(\);/);
+    expect(world).toMatch(/router\.update\(delta\);\s+gizmo\.update\(\);\s+sprue\.update\(\);\s+highlight\.update\(delta\);\s+\/\/[^\n]*\n\s+insetPanel\.update\(\);/);
   });
 });
