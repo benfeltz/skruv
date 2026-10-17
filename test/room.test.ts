@@ -15,7 +15,8 @@ const backlightUvs = (room: ReturnType<typeof createRoom>) => uvsOf(room.backWal
 const sceneryHalfWidth = () => sceneryMouth('back').width / 2;
 
 describe('the room as built', () => {
-  const { group, pieces, leftWall, backWall } = createRoom();
+  const room = createRoom();
+  const { group, pieces, leftWall, backWall } = room;
   group.updateMatrixWorld(true);
   const box = (name: string) => bounds(pieces.get(name as 'slab')!);
   const names = (object: THREE.Object3D) => object.children.map((c) => c.name).sort();
@@ -106,6 +107,12 @@ describe('the room as built', () => {
 
   it('draws every box with its ink: a mesh and its edge lines in one group', () => {
     for (const piece of pieces.values()) expect(piece.children).toHaveLength(2);
+  });
+
+  it('hands out the one ink it draws with', () => {
+    const slabInk = room.pieces.get('slab')!.children[1] as unknown as { material: unknown };
+    expect(room.ink.lines).toBe(slabInk.material);
+    expect(room.ink.hull.color.getHex()).toBe(COLORS.ink);
   });
 });
 
@@ -262,7 +269,7 @@ describe('the sky turns', () => {
     expect(cloud.color.b).toBeGreaterThan(cloud.color.r * 1.2);
     // The ink stays black, and the moon is its own light: untinted, in the moon's own tone.
     expect(ink.getHex()).toBe(inkNoon);
-    expect(ink.getHex()).toBe(COLORS.stageInk);
+    expect(ink.getHex()).toBe(COLORS.ink);
     expect(disc.color.getHex()).toBe(COLORS.sceneryFaint);
   });
 

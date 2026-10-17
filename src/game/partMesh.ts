@@ -56,7 +56,7 @@ function primitiveGeometry(primitive: Primitive, body: THREE.Color) {
  * as its shape — merged into one geometry, its tones in vertex colours on the one material,
  * so highlight's emissive and the ghost's shared geometry work as on a box; anything else is
  * its box. Either way it lies inside the pack box, which stays the collider.
- * `mesh.userData.decals` maps connector index → that socket's decal mesh, so a seat can
+ * `mesh.userData.shaped` says which (a panel is not shaped). `mesh.userData.decals` maps connector index → that socket's decal mesh, so a seat can
  * flash the hole it went into.
  */
 export function createPartMesh({ size, color, connectors = [] }: Pick<GamePartType, 'size' | 'color'> & Partial<Pick<GamePartType, 'connectors'>>) {
@@ -70,6 +70,7 @@ export function createPartMesh({ size, color, connectors = [] }: Pick<GamePartTy
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   mesh.userData.decals = new Map();
+  mesh.userData.shaped = primitives !== null;
   for (const { index, kind, radius, position, rotation } of decalPlacements(connectors)) {
     const geometry =
       kind === 'recess'

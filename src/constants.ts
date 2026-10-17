@@ -31,6 +31,14 @@ const SCENERY_FAINT = 0xd0d0d0;
 const SCENERY_MID = 0xe2e0dc;
 const SCENERY_PAPER = 0xf1eee6;
 
+// The ink every outline draws in (src/scene/ink.ts): the room's and the box's edge lines in CSS pixels
+// (LineMaterial linewidth against the canvas's CSS size); the parts' inverted hull in metres, world space,
+// so a bolt and a panel carry the same weight; and the crease angle above which the box's edge pass
+// draws a line — above the 30° facets of a 12-sided round, below the box's 90° corners. A hull
+// vertex moves out far enough that every face meeting there is `hullWidth` thicker (a mitre); at
+// a sharp corner that is capped at `hullMiter` hull widths, so a spike never shoots off a point.
+export const INK = { lineWidth: 3, hullWidth: 0.002, boxCrease: 45, hullMiter: 2 };
+
 // The diorama stage (src/game/stageBoxes.ts, built by src/scene/room.ts and mirrored by
 // src/physics/world.ts): a base slab under the floor, two walls (back and left, with windows) and a low
 // lip on the open front and right edges — every collider stands outside the floor's footprint,
@@ -45,8 +53,6 @@ export const STAGE = {
   slabThickness: 0.1,
   lipHeight: 0.03,
   lipThickness: 0.03,
-  // The ink edges' width in CSS pixels (LineMaterial linewidth, against the canvas's CSS size).
-  inkWidth: 3,
   // The double-hung windows, all one design, spaced evenly along their wall: one in the left
   // wall (centred, z = 0) and two in the long back wall. All in metres.
   window: {
@@ -233,8 +239,8 @@ export const STAGE = {
 export const COLORS = {
   background: 0x1b1d22,
   floor: 0xc9b79c,
-  // The stage's ink edges: the manual's ink, so the room and the booklet draw alike.
-  stageInk: 0x1c1c1c,
+  // The ink: the manual's, so the room, the parts and the booklet draw alike.
+  ink: 0x1c1c1c,
   // The stage walls: white, like the catalog's paper (COLORS.bookletPaper).
   wall: 0xffffff,
   // The window's casing, sill, apron, frame and rail: white, like the wall.

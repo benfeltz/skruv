@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CAMERA, COLORS, PHYSICS } from '../src/constants.js';
+import type { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { createBus } from '../src/game/events.js';
 import { createHaptics } from '../src/game/haptics.js';
 import { ITEM_ID, ITEM_IDS, MANIFEST, PART_TYPES, setItem } from '../src/game/item.js';
 import { createItemSlot } from '../src/game/itemSlot.js';
 import { createPhysicsWorld } from '../src/physics/world.js';
 import { createCameraControls } from '../src/scene/cameraControls.js';
+import { createInk } from '../src/scene/ink.js';
 import { createItemWorld } from '../src/scene/itemWorld.js';
 import type { Body } from '../src/physics/world.js';
 import type { BookletPages, ItemWorldDeps } from '../src/scene/itemWorld.js';
@@ -146,6 +148,7 @@ async function engine() {
     events: createBus(),
     haptics: createHaptics({ buzzer: () => {} }),
     isFree: () => true,
+    ink: createInk(),
     pages,
   };
   // Everything a world could leave behind, counted.
@@ -215,11 +218,23 @@ describe('the item world comes and goes without a trace', () => {
         held.add(object.geometry);
         if ('material' in object) for (const material of [object.material].flat() as THREE.Material[]) held.add(material);
       });
+    // The room's ink is borrowed, not the world's to free.
+    const borrowed = [deps.ink.lines, deps.ink.hull];
+    for (const material of borrowed) held.delete(material);
     expect(held.size).toBeGreaterThan(0);
     const freed = new Set<unknown>();
     for (const resource of held) vi.spyOn(resource, 'dispose').mockImplementation(() => freed.add(resource));
     world.dispose();
     expect([...held].filter((resource) => !freed.has(resource))).toEqual([]);
+    vi.restoreAllMocks();
+  });
+
+  it('leaves the room\'s ink materials alone on teardown', async () => {
+    const { deps } = await engine();
+    const world = createItemWorld(deps);
+    const disposed = [deps.ink.lines, deps.ink.hull].map((material) => vi.spyOn(material, 'dispose'));
+    world.dispose();
+    for (const spy of disposed) expect(spy).not.toHaveBeenCalled();
     vi.restoreAllMocks();
   });
 
@@ -242,6 +257,69 @@ describe('the item world comes and goes without a trace', () => {
     // Only the camera's own capture listener and OrbitControls' remain — exactly the baseline set.
     expect(canvas.listeners.length).toBe(baseline.canvasListeners);
     expect(() => canvas.dispatch('pointerdown', { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 400, clientY: 400, preventDefault() {} })).not.toThrow();
+  });
+});
+
+describe('the ink on parts and the box', () => {
+  const named = (mesh: THREE.Object3D, name: string) => mesh.children.filter((child) => child.name === name);
+  // A panel is drawn as its plain box (no vertex colours); the shaped hardware merges its tones into vertex colours.
+  const isPanel = (mesh: THREE.Mesh) => !(mesh.material as THREE.MeshStandardMaterial).vertexColors;
+
+  async function built() {
+    const { deps } = await engine();
+    createItemWorld(deps);
+    const meshes = deps.scene.children.filter((child): child is THREE.Mesh => child instanceof THREE.Mesh);
+    return { deps, meshes, box: meshes.filter((mesh) => mesh.name === 'flatpack') };
+  }
+
+  it('gives every packed part one hull in the shared hull material, with no vertex colours', async () => {
+    const { deps, meshes } = await built();
+    const packed = meshes.filter((mesh) => named(mesh, 'inkHull').length);
+    expect(packed.length).toBeGreaterThan(10);
+    for (const mesh of packed) {
+      const [hull] = named(mesh, 'inkHull') as THREE.Mesh[];
+      expect(named(mesh, 'inkHull')).toHaveLength(1);
+      expect(hull!.material).toBe(deps.ink.hull);
+      expect(hull!.geometry.getAttribute('color')).toBeUndefined();
+    }
+  });
+
+  it('builds one hull per part type and shares it across the instances', async () => {
+    const { meshes } = await built();
+    const hulls = meshes.flatMap((mesh) => named(mesh, 'inkHull') as THREE.Mesh[]).map((hull) => hull.geometry);
+    expect(new Set(hulls).size).toBeLessThan(hulls.length);
+  });
+
+  it('gives every panel the crease pass as well, and no shaped part', async () => {
+    const { deps, meshes } = await built();
+    const packed = meshes.filter((mesh) => named(mesh, 'inkHull').length);
+    const panels = packed.filter(isPanel);
+    expect(panels.length).toBeGreaterThan(0);
+    expect(packed.length).toBeGreaterThan(panels.length);
+    for (const mesh of packed) {
+      const edges = named(mesh, 'inkEdges') as LineSegments2[];
+      if (!isPanel(mesh)) {
+        expect(edges).toHaveLength(0);
+        continue;
+      }
+      expect(edges).toHaveLength(1);
+      expect(edges[0]!.material).toBe(deps.ink.lines);
+      expect(edges[0]!.geometry.instanceCount).toBe(12);
+    }
+  });
+
+  it('gives the flatpack base and lid the crease pass and no hull', async () => {
+    const { deps, meshes, box } = await built();
+    const lid = meshes.filter((mesh) => named(mesh, 'inkEdges').length && !named(mesh, 'inkHull').length && mesh.name !== 'flatpack');
+    expect(box).toHaveLength(1);
+    expect(lid).toHaveLength(1);
+    // The box's solid: its outer block's twelve edges and its cavity's twelve, no seams where the slabs butt.
+    expect((named(box[0]!, 'inkEdges')[0] as LineSegments2).geometry.instanceCount).toBe(24);
+    for (const mesh of [...box, ...lid]) {
+      expect(named(mesh, 'inkHull')).toHaveLength(0);
+      expect(named(mesh, 'inkEdges')).toHaveLength(1);
+      expect((named(mesh, 'inkEdges')[0] as LineSegments2).material).toBe(deps.ink.lines);
+    }
   });
 });
 

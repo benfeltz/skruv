@@ -16,6 +16,8 @@ import { createCompoundPhysics } from './compoundPhysics.js';
 import { createDropGuide } from './dropGuide.js';
 import { createTargetRings } from './targetRings.js';
 import { createFlatpack } from './flatpack.js';
+import { edgesGeometry, hullGeometry, inkEdges, inkHull } from './ink.js';
+import type { Ink } from './ink.js';
 import { createGestureRouter } from './gestureRouter.js';
 import { createLiftHold, liftRangeOf } from './liftHold.js';
 import { createGizmo } from './gizmo.js';
@@ -47,6 +49,8 @@ export interface ItemWorldDeps {
   haptics: Haptics;
   /** Whether rotation is free, or snapped to 90° detents (the persistent Snap rotate toggle). */
   isFree: () => boolean;
+  /** The room's ink, so parts draw in the same line. */
+  ink: Ink;
   /** Draws the current item's booklet pages. */
   pages: () => BookletPages;
 }
@@ -101,7 +105,8 @@ export function createItemWorld(deps: ItemWorldDeps) {
 export type ItemWorld = ReturnType<typeof createItemWorld>;
 
 // The build: every acquisition pushes its own release onto `undo` as it happens.
-function buildItemWorld({ scene, camera, domElement, physics, cameraControls, events, haptics, isFree, pages }: ItemWorldDeps, undo: (() => void)[]) {
+function buildItemWorld({ scene, camera, domElement, physics, cameraControls, events, haptics, isFree, ink, pages }: ItemWorldDeps, undo: (() => void)[]) {
+  const release = releaser(new Set<THREE.Material>([ink.lines, ink.hull]));
   const add = (...added: THREE.Object3D[]) => {
     scene.add(...added);
     // Off the scene, their GPU resources freed.
@@ -124,8 +129,21 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
 
   // The game opens on the closed flatpack: every part packed flat inside, settling at once
   // and resting until the lid comes off and a hand disturbs it.
-  const flatpack = createFlatpack(owning);
+  const flatpack = createFlatpack(owning, ink);
   add(flatpack.base.mesh, flatpack.lid.mesh);
+
+  // Every part wears the hull; a panel (drawn as its plain box) also its sharp edges, never a faceted round.
+  // The outline geometry is built once per part type and shared by its instances, like the ghost's.
+  const outlines = new Map<string, { hull: THREE.BufferGeometry; edges: ReturnType<typeof edgesGeometry> | null }>();
+  const outline = (mesh: THREE.Mesh, type: string) => {
+    let shared = outlines.get(type);
+    if (!shared) {
+      shared = { hull: hullGeometry(mesh.geometry), edges: mesh.userData.shaped ? null : edgesGeometry(mesh.geometry) };
+      outlines.set(type, shared);
+    }
+    mesh.add(inkHull(shared.hull, ink.hull));
+    if (shared.edges) mesh.add(inkEdges(shared.edges, ink.lines));
+  };
 
   // One record per physical part — what gestures pick, drag and snap. The box and its lid
   // are ones too.
@@ -133,6 +151,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   for (const { id, type, position, rotation } of createPackedWorldLayout()) {
     const part = PART_TYPES[type];
     const mesh = createPartMesh(part);
+    outline(mesh, type);
     const body = owning.register(mesh, {
       // map keeps the length; TS widens a mapped tuple to number[].
       halfExtents: part.size.map((d) => d / 2) as Vec3,
@@ -426,11 +445,15 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   };
 }
 
-// Frees what an object holds on the GPU. Shared materials are safe to free: three re-uploads
-// a disposed one the next time something draws with it.
-function release(object: THREE.Object3D) {
+// Frees what an object holds on the GPU. The materials the world borrows (the room's ink) are not its
+// to free: disposing them would recompile the room's own lines on every item swap.
+function releaser(borrowed: ReadonlySet<THREE.Material>) {
+  return (object: THREE.Object3D) => release(object, borrowed);
+}
+
+function release(object: THREE.Object3D, borrowed: ReadonlySet<THREE.Material>) {
   // Line covers LineSegments and the drop guide's plain Line; Mesh covers the fat LineSegments2.
   if (!(object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Points)) return;
   object.geometry.dispose();
-  for (const material of [object.material].flat()) material.dispose();
+  for (const material of [object.material].flat()) if (!borrowed.has(material)) material.dispose();
 }

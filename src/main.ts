@@ -101,6 +101,7 @@ const items = createItemSlot({
       events,
       haptics,
       isFree: () => !snapRotate.pressed,
+      ink: room.ink,
       // Its controls page shows the device in hand: a coarse pointer is a touch screen.
       pages: () => createBookletPages(renderer, { scheme: matchMedia('(pointer: coarse)').matches ? 'touch' : 'desktop' }),
     }),
