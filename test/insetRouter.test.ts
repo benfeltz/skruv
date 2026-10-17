@@ -346,8 +346,8 @@ describe('the router works the inset’s controls (1.10.0.2)', () => {
     b.canvas.fire('pointerup', b.carry(b.dowel));
     b.hold(1);
     const id = b.assembly.all().find((j) => j.hardware === 'dowel-1')!.id;
-    b.dowel.mesh.position.set(1, 1, 1);
-    b.dowel.mesh.updateMatrixWorld(true);
+    // The simulation's pose is what a seat is judged on (a fake body, as makePart builds it).
+    (b.dowel.body as unknown as { pose: { position: THREE.Vector3 } }).pose.position.set(1, 1, 1);
     expect(b.router.pressJoint(id)).toBe(false);
     expect(b.assembly.get(id)).toBeNull();
   });
