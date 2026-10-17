@@ -45,10 +45,12 @@ class FakeElement {
 }
 
 const resizeListeners = new Set<() => void>();
-// The control cluster's box, as document.querySelector finds it: null for none on screen.
-let clusterBox: { left: number; top: number; right: number; bottom: number } | null = null;
+// The boxes of what the controls keep clear of (the control cluster, a booklet's docked thumb), as
+// document.querySelectorAll finds them: none by default.
+type Box = { left: number; top: number; right: number; bottom: number };
+let obstacleBoxes: Box[] = [];
 beforeEach(() => {
-  clusterBox = null;
+  obstacleBoxes = [];
   resizeListeners.clear();
   vi.stubGlobal('window', {
     addEventListener: (type: string, fn: () => void) => type === 'resize' && resizeListeners.add(fn),
@@ -60,7 +62,7 @@ beforeEach(() => {
     createElement: () => new FakeElement(),
     createElementNS: () => new FakeElement(),
     getElementById: () => null,
-    querySelector: () => (clusterBox ? { getBoundingClientRect: () => clusterBox } : null),
+    querySelectorAll: () => obstacleBoxes.map((box) => ({ getBoundingClientRect: () => ({ ...box, width: box.right - box.left, height: box.bottom - box.top }) })),
   });
   vi.stubGlobal('getComputedStyle', () => ({ paddingTop: '47px', paddingRight: '0px' }));
 });
@@ -300,12 +302,29 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
     first.panel.update();
     const [x, y] = at(first.turn());
     first.panel.dispose();
-    clusterBox = { left: x - 10, top: y - 10, right: x + 10, bottom: y + 10 };
+    obstacleBoxes = [{ left: x - 10, top: y - 10, right: x + 10, bottom: y + 10 }];
     const { panel, turn, frame } = mount(WIDE);
     panel.hook.candidates(null, [tool()], nothing);
     panel.update();
     const moved = at(turn());
     expect(Math.sign(moved[0] - frame().centre[0])).toBe(-Math.sign(x - frame().centre[0]));
+  });
+
+  // Review round 2: the catalog's thumb sits upper left; the control must not cover it or take its taps.
+  it('keeps clear of a booklet’s docked thumb too, and ignores one with no box on screen', () => {
+    const first = mount(WIDE);
+    first.panel.hook.candidates(null, [tool()], nothing);
+    first.panel.update();
+    const [x, y] = at(first.turn());
+    first.panel.dispose();
+    obstacleBoxes = [
+      { left: x - 20, top: y - 20, right: x + 20, bottom: y + 20 },
+      { left: 0, top: 0, right: 0, bottom: 0 },
+    ];
+    const { panel, turn, frame } = mount(WIDE);
+    panel.hook.candidates(null, [tool()], nothing);
+    panel.update();
+    expect(Math.sign(at(turn())[0] - frame().centre[0])).toBe(-Math.sign(x - frame().centre[0]));
   });
 
   it('drives the connected router: a sweep of the ring turns the tool, taps press and pull the dowel', () => {

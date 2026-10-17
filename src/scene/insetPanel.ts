@@ -3,6 +3,7 @@ import { INSET } from '../constants.js';
 import { controlFor, controlSlot, pushLook, toolScreenDirection, turnLook } from '../game/insetControls.js';
 import { createInsetModel } from '../game/insetModel.js';
 import { insetCameraPose, insetFrame, insetLayout, insideInset } from '../game/insetView.js';
+import { STRIP_CLASS, THUMB_CLASS } from '../ui/booklet.js';
 import { CLUSTER_CLASS } from '../ui/controlCluster.js';
 import { createInsetOverlay } from '../ui/inset.js';
 import { createInsetControls } from '../ui/insetControls.js';
@@ -58,8 +59,9 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
   let layout: InsetLayout = 'portrait';
   // The screen as the canvas covers it: a control stays inside.
   let screen: ScreenBox = { left: 0, top: 0, right: 0, bottom: 0 };
-  // The control cluster's box, measured with the canvas's: what the controls keep clear of.
-  let cluster: ScreenBox | null = null;
+  // The boxes the controls keep clear of, measured with the canvas's: the control cluster and the booklets' docked
+  // thumbs and strip (the catalog's thumb, upper left). One not on screen has no box.
+  let obstacles: ScreenBox[] = [];
   const resized = () => {
     box = null;
   };
@@ -98,7 +100,7 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
         placed = insetFrame({ width, height }, probe.read(width, height));
         layout = insetLayout({ width, height });
         screen = { left, top, right: left + width, bottom: top + height };
-        cluster = document.querySelector(`.${CLUSTER_CLASS}`)?.getBoundingClientRect() ?? null;
+        obstacles = [...document.querySelectorAll(`.${CLUSTER_CLASS}, .${THUMB_CLASS}, .${STRIP_CLASS}`)].map((node) => node.getBoundingClientRect()).filter(({ width, height }) => width > 0 && height > 0);
       }
       const rect = box;
       frame = placed;
@@ -112,7 +114,7 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
       const kind = state === 'active' ? controlFor(subject) : null;
       driven = kind ? subject : null;
       if (!kind) return controls.hide();
-      const { centre } = controlSlot(frame, layout, toolScreenDirection(subject.axis, pose), { obstacles: cluster ? [cluster] : [], bounds: screen }, INSET.controls);
+      const { centre } = controlSlot(frame, layout, toolScreenDirection(subject.axis, pose), { obstacles, bounds: screen }, INSET.controls);
       if (kind === 'turn') controls.showTurn(centre, turnLook(subject));
       else controls.showPush(centre, pushLook(subject));
     },

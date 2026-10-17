@@ -20,6 +20,10 @@ import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 // one has no scrim, so only the strip and the open page take input and the room keeps every
 // gesture. Follows the src/ui pattern (own element, own style, colours from COLORS).
 
+/** The docked forms' classes, which the detail inset's panel finds them by to keep its controls off them. */
+export const THUMB_CLASS = 'booklet-thumb';
+export const STRIP_CLASS = 'booklet-strip';
+
 const STYLE_ID = 'skruv-booklet';
 const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 const [pageW, pageH] = BOOKLET.pageSize;
@@ -328,7 +332,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   // The docked form: a thumbnail button, or the strip of pages. `thumb` is the element to
   // mount either way; `anchor()` is the box the open page grows out of and shrinks back to.
   const thumb: HTMLElement = document.createElement(stripped ? 'div' : 'button');
-  thumb.className = stripped ? 'booklet-strip' : 'booklet-thumb';
+  thumb.className = stripped ? STRIP_CLASS : THUMB_CLASS;
   if (!stripped) {
     (thumb as HTMLButtonElement).type = 'button';
     thumb.setAttribute('aria-label', `Open the ${name}`);
