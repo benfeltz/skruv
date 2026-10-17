@@ -6,6 +6,7 @@ import { CUE, homeCue } from '../game/haptics.js';
 import { ASSEMBLED, PART_TYPES } from '../game/item.js';
 import { preferredRelatives } from '../game/panelFit.js';
 import { createPartMesh } from '../game/partMesh.js';
+import { shapeOf } from '../game/partShapes.js';
 import { hasEscaped } from '../game/dragMath.js';
 import { fractionOf, heightAt, selectsDuringHold } from '../game/liftLine.js';
 import { baseRest, boxPlacement, boxPoseOf, createPackedWorldLayout, lidRest, respawnSpots } from '../game/boxLayout.js';
@@ -16,6 +17,8 @@ import { createCompoundPhysics } from './compoundPhysics.js';
 import { createDropGuide } from './dropGuide.js';
 import { createTargetRings } from './targetRings.js';
 import { createFlatpack } from './flatpack.js';
+import { inkEdges, inkHull } from './ink.js';
+import type { Ink } from './ink.js';
 import { createGestureRouter } from './gestureRouter.js';
 import { createLiftHold, liftRangeOf } from './liftHold.js';
 import { createGizmo } from './gizmo.js';
@@ -47,6 +50,8 @@ export interface ItemWorldDeps {
   haptics: Haptics;
   /** Whether rotation is free, or snapped to 90° detents (the persistent Snap rotate toggle). */
   isFree: () => boolean;
+  /** The room's ink, so parts draw in the same line. */
+  ink: Ink;
   /** Draws the current item's booklet pages. */
   pages: () => BookletPages;
 }
@@ -101,7 +106,7 @@ export function createItemWorld(deps: ItemWorldDeps) {
 export type ItemWorld = ReturnType<typeof createItemWorld>;
 
 // The build: every acquisition pushes its own release onto `undo` as it happens.
-function buildItemWorld({ scene, camera, domElement, physics, cameraControls, events, haptics, isFree, pages }: ItemWorldDeps, undo: (() => void)[]) {
+function buildItemWorld({ scene, camera, domElement, physics, cameraControls, events, haptics, isFree, ink, pages }: ItemWorldDeps, undo: (() => void)[]) {
   const add = (...added: THREE.Object3D[]) => {
     scene.add(...added);
     // Off the scene, their GPU resources freed.
@@ -124,8 +129,14 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
 
   // The game opens on the closed flatpack: every part packed flat inside, settling at once
   // and resting until the lid comes off and a hand disturbs it.
-  const flatpack = createFlatpack(owning);
+  const flatpack = createFlatpack(owning, ink);
   add(flatpack.base.mesh, flatpack.lid.mesh);
+
+  // Every part wears the hull; a panel (drawn as its plain box) also its sharp edges, never a faceted round.
+  const outline = (mesh: THREE.Mesh, part: Parameters<typeof shapeOf>[0]) => {
+    mesh.add(inkHull(mesh.geometry, ink.hull));
+    if (shapeOf(part) === null) mesh.add(inkEdges(mesh.geometry, ink.lines));
+  };
 
   // One record per physical part — what gestures pick, drag and snap. The box and its lid
   // are ones too.
@@ -133,6 +144,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   for (const { id, type, position, rotation } of createPackedWorldLayout()) {
     const part = PART_TYPES[type];
     const mesh = createPartMesh(part);
+    outline(mesh, part);
     const body = owning.register(mesh, {
       // map keeps the length; TS widens a mapped tuple to number[].
       halfExtents: part.size.map((d) => d / 2) as Vec3,
