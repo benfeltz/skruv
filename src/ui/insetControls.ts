@@ -1,6 +1,6 @@
 import { COLORS, FASTENER, GESTURE, INSET } from '../constants.js';
 import { createCrank } from '../game/crankMath.js';
-import { bubbleOf, bubbleTail, ringRadians } from '../game/insetControls.js';
+import { bubbleOf, ringRadians } from '../game/insetControls.js';
 import { arcLength } from '../game/turnRing.js';
 import { put } from './svgAttrs.js';
 import type { ScreenPoint } from '../game/dragMath.js';
@@ -54,7 +54,6 @@ function injectStyle() {
       pointer-events: none;
     }
     .inset-controls[hidden],
-    .inset-controls__tail[hidden],
     .inset-controls__control[hidden],
     .inset-controls__head[hidden] {
       display: none;
@@ -65,14 +64,6 @@ function injectStyle() {
     }
     .inset-controls[data-inert='true'] .inset-controls__control {
       pointer-events: none;
-    }
-    .inset-controls__tail {
-      stroke: ${css(COLORS.bookletInk)};
-      stroke-width: ${INSET.tail.width};
-      stroke-linecap: round;
-    }
-    .inset-controls__dot {
-      fill: ${css(COLORS.bookletInk)};
     }
     .inset-controls__bubble {
       fill: ${css(COLORS.bookletPaper)};
@@ -219,16 +210,9 @@ export function createInsetControls(container: HTMLElement, handlers: InsetContr
   element.setAttribute('hidden', '');
   const turn = createTurn(handlers);
   const push = createPush(handlers);
-  // The push bubble's tail to its dowel, under the bubbles and no part of the grab.
-  const tail = svg('g', 'inset-controls__tail');
-  const line = svg('line', 'inset-controls__line');
-  const dot = svg('circle', 'inset-controls__dot');
-  dot.setAttribute('r', String(INSET.tail.dot));
-  tail.append(line, dot);
-  tail.setAttribute('hidden', '');
   turn.group.setAttribute('hidden', '');
   push.group.setAttribute('hidden', '');
-  element.append(tail, turn.group, push.group);
+  element.append(turn.group, push.group);
   container.append(element);
 
   const toggle = (group: Element, shown: boolean) => {
@@ -243,24 +227,12 @@ export function createInsetControls(container: HTMLElement, handlers: InsetContr
       const { centre, radius } = bubbleOf(frame);
       toggle(turn.group, true);
       toggle(push.group, false);
-      toggle(tail, false);
       turn.show(centre, radius, look);
       element.removeAttribute('hidden');
     },
-    /** The push bubble attached to the circle `frame`, with `look`, tailed to the dowel at screen point `joint` (null: none); the spinner away. */
-    showPush(frame: InsetFrame, look: PushLook, joint: ScreenPoint | null) {
-      const bubble = bubbleOf(frame);
-      const { centre, radius } = bubble;
-      const run = bubbleTail(bubble, joint);
-      if (run) {
-        put(line, 'x1', run.from[0]);
-        put(line, 'y1', run.from[1]);
-        put(line, 'x2', run.to[0]);
-        put(line, 'y2', run.to[1]);
-        put(dot, 'cx', run.to[0]);
-        put(dot, 'cy', run.to[1]);
-      }
-      toggle(tail, run !== null);
+    /** The push bubble attached to the circle `frame`, with `look`; the spinner away. */
+    showPush(frame: InsetFrame, look: PushLook) {
+      const { centre, radius } = bubbleOf(frame);
       toggle(turn.group, false);
       toggle(push.group, true);
       push.show(centre, radius, look);

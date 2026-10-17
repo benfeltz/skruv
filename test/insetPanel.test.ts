@@ -272,25 +272,6 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
     expect(Math.hypot(x - centre[0], y - centre[1]) - bubbleRadius).toBeLessThan(radius);
   });
 
-  it('tails the push bubble to its dowel, and the circle’s own tail gives way; a tool’s circle keeps its tail', () => {
-    const { panel, svg, controls, push } = mount();
-    const circleTail = () => svg.all('inset__tail')[0];
-    const bubbleTail = () => controls.all('inset-controls__tail')[0];
-    panel.hook.candidates(null, [subject()], nothing);
-    panel.update();
-    expect(('hidden' in bubbleTail().attributes)).toBe(false);
-    expect(('hidden' in circleTail().attributes)).toBe(true);
-    const [line] = bubbleTail().all('inset-controls__line');
-    const to = [Number(line.attributes.x2), Number(line.attributes.y2)];
-    expect(to.every(Number.isFinite)).toBe(true);
-    const [x, y] = at(push());
-    expect(Math.hypot(Number(line.attributes.x1) - x, Number(line.attributes.y1) - y)).toBeCloseTo(bubbleOf(mount().frame()).radius, 6);
-    panel.hook.candidates(null, [tool()], nothing);
-    panel.update();
-    expect(('hidden' in bubbleTail().attributes)).toBe(true);
-    expect(('hidden' in circleTail().attributes)).toBe(false);
-  });
-
   it('shows the push arrow for a dowel, black while seated, green once it is pressed home and stays', () => {
     const { panel, controls, push } = mount();
     panel.hook.candidates(null, [subject()], nothing);

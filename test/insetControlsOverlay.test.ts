@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOOKLET, GESTURE, INSET } from '../src/constants.js';
 import { arcLength } from '../src/game/turnRing.js';
-import { bubbleOf, bubbleTail } from '../src/game/insetControls.js';
+import { bubbleOf } from '../src/game/insetControls.js';
 import { createInsetControls } from '../src/ui/insetControls.js';
 
 // The real inset controls (src/ui/insetControls.ts) on a minimal fake DOM (1.10.0.2 step 5): what they draw for the
@@ -215,7 +215,7 @@ describe('the inset controls overlay', () => {
   describe('the push control', () => {
     it('is a bubble attached the same way, paper with a down arrow while seated, the spinner away', () => {
       const { controls, turn, push } = mount();
-      controls.showPush(FRAME, { seated: false, head: 'in' }, null);
+      controls.showPush(FRAME, { seated: false, head: 'in' });
       expect(push.hasAttribute('hidden')).toBe(false);
       expect(turn.hasAttribute('hidden')).toBe(true);
       expect(push.attributes['data-seated']).toBe('false');
@@ -226,46 +226,19 @@ describe('the inset controls overlay', () => {
 
     it('fills green in the bubble and flips its arrowhead once pressed home', () => {
       const { controls, push } = mount();
-      controls.showPush(FRAME, { seated: true, head: 'out' }, null);
+      controls.showPush(FRAME, { seated: true, head: 'out' });
       expect(push.attributes['data-seated']).toBe('true');
       expect(push.attributes.transform).toContain('scale(1 -1)');
       expect(head.children[0].textContent).toMatch(/data-seated='true'\] \.inset-controls__bubble \{[^}]*fill: #2e9e4f/);
     });
 
-    it('tails to the dowel it presses: a line from the bubble’s edge to the joint, a dot on the joint, under the grab', () => {
-      const { controls, svg, push } = mount();
-      const tail = svg.all('inset-controls__tail')[0];
-      const joint: [number, number] = [60, 420];
-      controls.showPush(FRAME, { seated: false, head: 'in' }, joint);
-      const [line] = tail.all('inset-controls__line');
-      const [dot] = tail.all('inset-controls__dot');
-      expect(tail.hasAttribute('hidden')).toBe(false);
-      expect([Number(line.attributes.x2), Number(line.attributes.y2)]).toEqual(joint);
-      expect([Number(dot.attributes.cx), Number(dot.attributes.cy)]).toEqual(joint);
-      expect(Math.hypot(Number(line.attributes.x1) - CENTRE[0], Number(line.attributes.y1) - CENTRE[1])).toBeCloseTo(BUBBLE.radius, 6);
-      expect(svg.children.indexOf(tail)).toBeLessThan(svg.children.indexOf(push));
-      expect(head.children[0].textContent).not.toMatch(/__tail \{[^}]*pointer-events: auto/);
-    });
-
-    it('has no tail with no joint on screen, or one under the bubble, and none on the spinner', () => {
-      const { controls, svg } = mount();
-      const tail = svg.all('inset-controls__tail')[0];
-      controls.showPush(FRAME, { seated: false, head: 'in' }, null);
-      expect(tail.hasAttribute('hidden')).toBe(true);
-      controls.showPush(FRAME, { seated: false, head: 'in' }, CENTRE);
-      expect(tail.hasAttribute('hidden')).toBe(true);
-      controls.showPush(FRAME, { seated: false, head: 'in' }, [60, 420]);
-      controls.showTurn(FRAME, lookTurn());
-      expect(tail.hasAttribute('hidden')).toBe(true);
-    });
-
     it('a tap calls onPush while the head is in, onPull once it is out', () => {
       const { controls, push, calls } = mount();
-      controls.showPush(FRAME, { seated: false, head: 'in' }, null);
+      controls.showPush(FRAME, { seated: false, head: 'in' });
       push.fire('pointerdown', { clientX: 200, clientY: 300 });
       push.fire('pointerup', { clientX: 200, clientY: 300 });
       expect(calls).toEqual({ push: 1, pull: 0 });
-      controls.showPush(FRAME, { seated: true, head: 'out' }, null);
+      controls.showPush(FRAME, { seated: true, head: 'out' });
       push.fire('pointerdown', { clientX: 200, clientY: 300 });
       push.fire('pointerup', { clientX: 201, clientY: 301 });
       expect(calls).toEqual({ push: 1, pull: 1 });
@@ -273,7 +246,7 @@ describe('the inset controls overlay', () => {
 
     it('a press that moves past the tap distance calls nothing, and nor does a cancelled one', () => {
       const { controls, push, calls } = mount();
-      controls.showPush(FRAME, { seated: false, head: 'in' }, null);
+      controls.showPush(FRAME, { seated: false, head: 'in' });
       push.fire('pointerdown', { clientX: 200, clientY: 300 });
       push.fire('pointerup', { clientX: 200, clientY: 300 + GESTURE.tapMaxDistance + 5 });
       push.fire('pointerdown', { clientX: 200, clientY: 300 });
@@ -284,7 +257,7 @@ describe('the inset controls overlay', () => {
 
     it('a pointerup with no press before it calls nothing', () => {
       const { controls, push, calls } = mount();
-      controls.showPush(FRAME, { seated: false, head: 'in' }, null);
+      controls.showPush(FRAME, { seated: false, head: 'in' });
       push.fire('pointerup', { clientX: 200, clientY: 300 });
       expect(calls.push).toBe(0);
     });
@@ -295,16 +268,5 @@ describe('the inset controls overlay', () => {
     controls.showTurn(FRAME, lookTurn());
     controls.hide();
     expect(svg.hasAttribute('hidden')).toBe(true);
-  });
-});
-
-describe('bubbleTail', () => {
-  const bubble = { centre: [100, 100] as [number, number], radius: 20 };
-  it('runs from the bubble’s edge toward the joint, to the joint', () => {
-    expect(bubbleTail(bubble, [100, 300])).toEqual({ from: [100, 120], to: [100, 300] });
-  });
-  it('is null for no joint or one within the bubble', () => {
-    expect(bubbleTail(bubble, null)).toBeNull();
-    expect(bubbleTail(bubble, [110, 100])).toBeNull();
   });
 });

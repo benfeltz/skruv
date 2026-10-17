@@ -102,14 +102,12 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
       pass.aim(insetCameraPose(subject.centre, subject.axis, [forward.x, forward.y, forward.z]));
       joint.set(...subject.centre).project(camera);
       const anchor: [number, number] = [rect.left + ((joint.x + 1) / 2) * rect.width, rect.top + ((1 - joint.y) / 2) * rect.height];
+      overlay.show({ frame, anchor: joint.z < 1 ? anchor : null, active: state === 'active' });
       const kind = state === 'active' ? controlFor(subject) : null;
-      const onScreen = joint.z < 1 ? anchor : null;
-      // The push bubble carries the tail to its dowel; the circle's own would only double it.
-      overlay.show({ frame, anchor: kind === 'push' ? null : onScreen, active: state === 'active' });
       driven = kind ? subject : null;
       if (!kind) return controls.hide();
       if (kind === 'turn') controls.showTurn(frame, turnLook(subject));
-      else controls.showPush(frame, pushLook(subject), onScreen);
+      else controls.showPush(frame, pushLook(subject));
     },
     /** The router's actions the controls drive: its spinner turns the tool, its push bubble presses a dowel home and backs it out. */
     connect(router: Pick<GestureRouter, 'turnGrip' | 'pressJoint' | 'pullJoint'>) {
