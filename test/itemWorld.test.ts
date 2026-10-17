@@ -295,6 +295,8 @@ describe('the ink on parts and the box', () => {
     const lid = meshes.filter((mesh) => named(mesh, 'inkEdges').length && !named(mesh, 'inkHull').length && mesh.name !== 'flatpack');
     expect(box).toHaveLength(1);
     expect(lid).toHaveLength(1);
+    // The box's solid: its outer block's twelve edges and its cavity's twelve, no seams where the slabs butt.
+    expect((named(box[0]!, 'inkEdges')[0] as LineSegments2).geometry.instanceCount).toBe(24);
     for (const mesh of [...box, ...lid]) {
       expect(named(mesh, 'inkHull')).toHaveLength(0);
       expect(named(mesh, 'inkEdges')).toHaveLength(1);

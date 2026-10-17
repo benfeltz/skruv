@@ -2,13 +2,26 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BOX, COLORS } from '../constants.js';
 import { PART_TYPES } from '../game/item.js';
-import { baseRest, boxSlabs, lidRest } from '../game/boxLayout.js';
+import { baseRest, boxSlabs, lidRest, packedBox } from '../game/boxLayout.js';
 import { createPartMesh } from '../game/partMesh.js';
 import { inkEdges } from './ink.js';
 import type { Ink } from './ink.js';
 import type { Part } from '../game/partMesh.js';
 import type { PhysicsWorld } from '../physics/world.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
+
+/**
+ * The box's solid, not its slabs: the outer block and the cavity it holds, so the edge pass draws
+ * the corners, the rim and the inside corners and none of the seams where the slabs butt.
+ */
+function outlineOf(): THREE.BufferGeometry {
+  const { inner: [width, height, length], wall, floor } = packedBox();
+  const centre = (floor + height) / 2;
+  return mergeGeometries([
+    new THREE.BoxGeometry(width + 2 * wall, floor + height, length + 2 * wall),
+    new THREE.BoxGeometry(width, height, length).translate(0, floor + height / 2 - centre, 0),
+  ]);
+}
 
 /**
  * The flatpack the game opens on: an open-topped cardboard box lying on the floor — bottom
@@ -27,7 +40,7 @@ export function createFlatpack(physics: PhysicsWorld, ink: Ink): { base: Part; l
   box.name = 'flatpack';
   box.castShadow = true;
   box.receiveShadow = true;
-  box.add(inkEdges(geometry, ink.lines));
+  box.add(inkEdges(outlineOf(), ink.lines));
   const rest = baseRest();
   // map keeps the length; TS widens a mapped tuple to number[].
   const boxBody = physics.register(box, {
