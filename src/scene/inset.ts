@@ -8,9 +8,11 @@ import type { InsetFrame, InsetPose } from '../game/insetView.js';
  * manual's paper into a small render target, and that target drawn as a textured circle
  * over the screen. Built once; `aim` points the camera at a joint, `resize` keeps the target
  * the circle's size in device pixels, `render` is the one extra pass a frame costs. The room
- * sits on LAYER.room, which the camera never enables, so the parts show on paper alone.
+ * sits on LAYER.room, which the camera never enables, so the parts show on paper alone. The
+ * ink's fat lines (`lines`, the room's) convert their CSS px width by the material's
+ * `resolution`, the canvas's size; for the pass it is the circle's, then the canvas's again.
  */
-export function createInset() {
+export function createInset(lines: { resolution: THREE.Vector2 }) {
   const ortho = insetOrtho();
   const camera = new THREE.OrthographicCamera(ortho.left, ortho.right, ortho.top, ortho.bottom, ortho.near, ortho.far);
   const paper = new THREE.Color(COLORS.bookletPaper);
@@ -24,8 +26,9 @@ export function createInset() {
   const circle = new THREE.Mesh(geometry, material);
   overlayScene.add(circle);
 
-  // Reused every frame: the canvas's CSS size.
+  // Reused every frame: the canvas's CSS size, and the ink's while the pass has it.
   const size = new THREE.Vector2();
+  const inked = new THREE.Vector2();
 
   return {
     camera,
@@ -54,8 +57,11 @@ export function createInset() {
       const autoClear = renderer.autoClear;
       const background = scene.background;
       scene.background = paper;
+      inked.copy(lines.resolution);
+      lines.resolution.set(radius * 2, radius * 2);
       renderer.setRenderTarget(target);
       renderer.render(scene, camera);
+      lines.resolution.copy(inked);
       scene.background = background;
       renderer.setRenderTarget(previousTarget);
 

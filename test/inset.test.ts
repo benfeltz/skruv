@@ -25,10 +25,11 @@ function spyRenderer(width = 800, height = 600) {
   return { renderer: renderer as unknown as THREE.WebGLRenderer, state: renderer, calls };
 }
 const frame = { centre: [400, 100] as [number, number], radius: 100 };
+const lines = () => ({ resolution: new THREE.Vector2(800, 600) });
 
 describe('the inset render pass', () => {
   it('renders the scene into the target with its own camera, then the circle over the screen', () => {
-    const inset = createInset();
+    const inset = createInset(lines());
     const scene = new THREE.Scene();
     const { renderer, calls } = spyRenderer();
     inset.render(renderer, scene, frame);
@@ -38,7 +39,7 @@ describe('the inset render pass', () => {
   });
 
   it('restores the renderer’s target and auto-clear, and the scene’s background', () => {
-    const inset = createInset();
+    const inset = createInset(lines());
     const scene = new THREE.Scene();
     const before = new THREE.Color(0x123456);
     scene.background = before;
@@ -52,7 +53,7 @@ describe('the inset render pass', () => {
   });
 
   it('paints the scene on the manual’s paper for the inset’s render only', () => {
-    const inset = createInset();
+    const inset = createInset(lines());
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x123456);
     const { renderer, calls } = spyRenderer();
@@ -61,11 +62,11 @@ describe('the inset render pass', () => {
   });
 
   it('never enables the room’s layer on its camera', () => {
-    expect(createInset().camera.layers.mask).toBe(1);
+    expect(createInset(lines()).camera.layers.mask).toBe(1);
   });
 
   it('draws the circle at the frame, flipped to the canvas’s y-up pixels', () => {
-    const inset = createInset();
+    const inset = createInset(lines());
     const { renderer } = spyRenderer(800, 600);
     inset.render(renderer, new THREE.Scene(), frame);
     expect(inset.circle.position.toArray()).toEqual([400, 500, 0]);
@@ -74,7 +75,7 @@ describe('the inset render pass', () => {
   });
 
   it('sizes the overlay camera to the canvas', () => {
-    const inset = createInset();
+    const inset = createInset(lines());
     const { renderer } = spyRenderer(800, 600);
     inset.render(renderer, new THREE.Scene(), frame);
     expect([inset.overlayCamera.right, inset.overlayCamera.top]).toEqual([800, 600]);
@@ -82,7 +83,7 @@ describe('the inset render pass', () => {
   });
 
   it('resizes the target to the circle in device pixels and keeps the texture on the circle', () => {
-    const inset = createInset();
+    const inset = createInset(lines());
     inset.resize({ centre: [0, 0], radius: 100 }, 2);
     expect(inset.target.width).toBe(400);
     expect(inset.target.height).toBe(400);
@@ -92,12 +93,27 @@ describe('the inset render pass', () => {
     expect((inset.circle.material as THREE.MeshBasicMaterial).map).toBe(inset.target.texture);
   });
 
+  it('draws the ink’s lines at the circle’s size for the inset pass only, then gives the canvas’s back', () => {
+    const ink = lines();
+    const inset = createInset(ink);
+    const seen: number[][] = [];
+    const { renderer } = spyRenderer();
+    const draw = renderer.render.bind(renderer);
+    renderer.render = (scene, camera) => {
+      seen.push(ink.resolution.toArray());
+      draw(scene, camera);
+    };
+    inset.render(renderer, new THREE.Scene(), frame);
+    expect(seen).toEqual([[200, 200], [800, 600]]);
+    expect(ink.resolution.toArray()).toEqual([800, 600]);
+  });
+
   it('multisamples the target', () => {
-    expect(createInset().target.samples).toBe(INSET.samples);
+    expect(createInset(lines()).target.samples).toBe(INSET.samples);
   });
 
   it('points the camera at the joint along the pose', () => {
-    const inset = createInset();
+    const inset = createInset(lines());
     inset.aim({ position: [0, 1, 1], target: [0, 0, 0], up: [0, 1, 0] });
     expect(inset.camera.position.toArray()).toEqual([0, 1, 1]);
     const forward = inset.camera.getWorldDirection(new THREE.Vector3());
@@ -106,7 +122,7 @@ describe('the inset render pass', () => {
   });
 
   it('disposes the target, circle geometry and material', () => {
-    const inset = createInset();
+    const inset = createInset(lines());
     let targets = 0;
     let geometries = 0;
     let materials = 0;

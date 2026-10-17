@@ -12,6 +12,8 @@ export interface InsetPanelDeps {
   domElement: HTMLElement;
   camera: THREE.Camera;
   container: HTMLElement;
+  /** The room's ink lines, whose resolution the pass sets to the circle's while it draws. */
+  lines: { resolution: THREE.Vector2 };
 }
 
 /**
@@ -22,9 +24,9 @@ export interface InsetPanelDeps {
  * `render()` is the extra pass after the main render. The canvas fills the window, so its
  * client px are the circle's.
  */
-export function createInsetPanel({ domElement, camera, container }: InsetPanelDeps) {
+export function createInsetPanel({ domElement, camera, container, lines }: InsetPanelDeps) {
   const model = createInsetModel();
-  const pass = createInset();
+  const pass = createInset(lines);
   const overlay = createInsetOverlay(container);
   const probe = createSafeProbe(container);
 

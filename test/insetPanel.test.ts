@@ -62,7 +62,7 @@ function mount(rect = { left: 0, top: 0, width: 390, height: 844 }) {
   camera.updateMatrixWorld(true);
   const container = new FakeElement();
   const domElement = { getBoundingClientRect: () => rect } as unknown as HTMLElement;
-  const panel = createInsetPanel({ domElement, camera, container: container as unknown as HTMLElement });
+  const panel = createInsetPanel({ domElement, camera, container: container as unknown as HTMLElement, lines: { resolution: new THREE.Vector2(rect.width, rect.height) } });
   const renders: { scene: unknown; target: unknown }[] = [];
   const state = { current: null as unknown };
   const renderer = {

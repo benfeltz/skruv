@@ -244,7 +244,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   undo.push(() => turnRing.element.remove());
 
   // The live detail inset: a circle of paper showing the joint a carried part nears or an engaged tool works.
-  const insetPanel = createInsetPanel({ domElement, camera, container: document.body });
+  const insetPanel = createInsetPanel({ domElement, camera, container: document.body, lines: ink.lines });
   undo.push(() => insetPanel.dispose());
 
   const router = createGestureRouter({
