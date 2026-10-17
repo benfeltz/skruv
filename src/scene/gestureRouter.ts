@@ -1184,16 +1184,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // --- target rings: where carried hardware can go right now ---
 
   // The seats the carried ends could go in right now. A dowel's two ends take the same holes: each counts once.
-  function workableSeats(ends: CarriedEnd[]) {
-    const catches = catcher(assembly.all());
+  function workableSeats(ends: CarriedEnd[], joints: AssemblyJoint[] = assembly.all()) {
+    const catches = catcher(joints);
     return [...new Set(ends.flatMap((end) => end.seats))].filter((c) => isWorkable(c, catches));
   }
 
   // Workable seats for the carried part, nearest the finger first, with how brightly each
   // lights — dark ones included.
-  function ringsFor(ends: CarriedEnd[]) {
+  function ringsFor(ends: CarriedEnd[], workable: readonly WorldConnector[] = workableSeats(ends)) {
     const { held, pointer } = drag!;
-    const workable = workableSeats(ends);
     const rect = domElement.getBoundingClientRect();
     const reach = ends.map((end) => connectorInWorld(end.connector, held!).position);
     return ringStrengths(workable, [pointer!.clientX, pointer!.clientY], (position) => screenPoint(position, rect), reach, RING);
@@ -1209,10 +1208,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // The seat the aim is turning the carried hardware into — the workable one the end needing the least turn
   // reaches inside the aim zone (aimEnd) — if any: what is on offer.
-  function offeredSubject(ends: CarriedEnd[] | null): InsetSubject | null {
+  function offeredSubject(ends: CarriedEnd[] | null, workable: readonly WorldConnector[] | null): InsetSubject | null {
     if (!inset || !ends) return null;
-    const workable = new Set(workableSeats(ends));
-    const near = aimEnd(ends.map((end) => ({ ...end, seats: end.seats.filter((c) => workable.has(c)) })), drag!.held!, zoneOf(ends));
+    const near = aimEnd(ends.map((end) => ({ ...end, seats: end.seats.filter((c) => workable!.includes(c)) })), drag!.held!, zoneOf(ends));
     if (!near) return null;
     const { end, target: seat } = near;
     return {
@@ -1227,10 +1225,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   // Every joint the inset could frame: each seated tool's, and each dowel, pin or fitting seated and not yet pushed home.
-  function engagedSubjects(): InsetSubject[] {
+  function engagedSubjects(joints: readonly AssemblyJoint[]): InsetSubject[] {
     if (!inset) return [];
-    return assembly
-      .all()
+    return joints
       .flatMap((joint) => (joint.kind === KIND.TOOL ? [insetSubject(joint, joint.hardware)] : isTapKind(joint.kind) && joint.fastener.state === STATE.SEATED ? [insetSubject(joint, null)] : []));
   }
 
@@ -1266,9 +1263,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return snap && seatPose(snap, held!);
   }
 
-  function showRings(ends: CarriedEnd[] | null) {
+  function showRings(ends: CarriedEnd[] | null, workable: readonly WorldConnector[] | null) {
     if (!targetRings || !ends) return;
-    const lit = ringsFor(ends).filter(({ strength }) => strength > 0);
+    const lit = ringsFor(ends, workable!).filter(({ strength }) => strength > 0);
     targetRings.show(lit.map(({ target, strength }) => ({ position: target.position, axis: target.axis, strength })));
   }
 
@@ -1774,11 +1771,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     assist(delta);
     fadeFlashes(delta);
     guideDrop();
-    showRings(ends);
-    showPanelRings(goal);
-    inset?.candidates(offeredSubject(ends), engagedSubjects());
-    // Every turn the graph has, once per frame: the dials and the draw read the same records.
+    // The graph's joints and the carried part's workable seats, swept once for the rings and the inset alike.
     const joints = assembly.all();
+    const workable = ends && (targetRings || inset) ? workableSeats(ends, joints) : null;
+    showRings(ends, workable);
+    showPanelRings(goal);
+    inset?.candidates(offeredSubject(ends, workable), engagedSubjects(joints));
+    // Every turn the graph has, once per frame: the dials and the draw read the same records.
     const world = assembly.turns();
     // A part being screwed on by hand has no gizmo — selected and then set onto its stud, it
     // sheds it: it turns by its circle, and the gizmo cannot turn a seated part anyway.

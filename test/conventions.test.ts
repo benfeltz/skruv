@@ -191,7 +191,10 @@ describe('target rings (1.8.2.1)', () => {
     const update = router.slice(router.indexOf('function update('), router.indexOf('// --- effects from the state machine'));
     expect(update.match(/carriedEnds\(\)/g)).toHaveLength(1);
     expect(update).toMatch(/aimHardware\(ends, delta\)/);
-    expect(update).toMatch(/showRings\(ends\)/);
+    expect(update).toMatch(/showRings\(ends, workable\)/);
+    // The rings and the inset (1.10.0.1) read one sweep of workable seats and one list of joints.
+    expect(update.match(/workableSeats\(/g)).toHaveLength(1);
+    expect(update.match(/assembly\.all\(\)/g)).toHaveLength(1);
     const perFrame = router.slice(router.indexOf('function aimHardware('), router.indexOf('// The bolt a seated cam lock'));
     expect(perFrame).not.toMatch(/seatsFor\(|carriedEnds\(/);
   });
