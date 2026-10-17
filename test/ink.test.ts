@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { COLORS, INK } from '../src/constants.js';
-import { createInk, hullGeometry, inkEdges, inkHull } from '../src/scene/ink.js';
+import { createInk, edgesGeometry, hullGeometry, inkEdges, inkHull } from '../src/scene/ink.js';
 
 const box = () => new THREE.BoxGeometry(0.1, 0.02, 0.2);
 const round = () => new THREE.CylinderGeometry(0.003, 0.003, 0.03, 12);
@@ -17,15 +17,14 @@ describe('the ink', () => {
   });
 
   it('draws a panel\'s twelve edges and only the rims of a faceted round', () => {
-    const { lines } = createInk();
-    expect(inkEdges(box(), lines).geometry.instanceCount).toBe(12);
-    expect(inkEdges(round(), lines).geometry.instanceCount).toBe(24);
+    expect(edgesGeometry(box()).instanceCount).toBe(12);
+    expect(edgesGeometry(round()).instanceCount).toBe(24);
   });
 
   it('names its outlines', () => {
     const ink = createInk();
-    expect(inkEdges(box(), ink.lines).name).toBe('inkEdges');
-    const hull = inkHull(box(), ink.hull);
+    expect(inkEdges(edgesGeometry(box()), ink.lines).name).toBe('inkEdges');
+    const hull = inkHull(hullGeometry(box()), ink.hull);
     expect(hull.name).toBe('inkHull');
     expect(hull.material).toBe(ink.hull);
     expect(hull.castShadow).toBe(false);

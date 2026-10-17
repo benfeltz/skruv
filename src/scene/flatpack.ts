@@ -4,7 +4,7 @@ import { BOX, COLORS } from '../constants.js';
 import { PART_TYPES } from '../game/item.js';
 import { baseRest, boxSlabs, lidRest, packedBox } from '../game/boxLayout.js';
 import { createPartMesh } from '../game/partMesh.js';
-import { inkEdges } from './ink.js';
+import { edgesGeometry, inkEdges } from './ink.js';
 import type { Ink } from './ink.js';
 import type { Part } from '../game/partMesh.js';
 import type { PhysicsWorld } from '../physics/world.js';
@@ -40,7 +40,7 @@ export function createFlatpack(physics: PhysicsWorld, ink: Ink): { base: Part; l
   box.name = 'flatpack';
   box.castShadow = true;
   box.receiveShadow = true;
-  box.add(inkEdges(outlineOf(), ink.lines));
+  box.add(inkEdges(edgesGeometry(outlineOf()), ink.lines));
   const rest = baseRest();
   // map keeps the length; TS widens a mapped tuple to number[].
   const boxBody = physics.register(box, {
@@ -53,7 +53,7 @@ export function createFlatpack(physics: PhysicsWorld, ink: Ink): { base: Part; l
 
   const type = PART_TYPES.boxLid;
   const mesh = createPartMesh(type);
-  mesh.add(inkEdges(mesh.geometry, ink.lines));
+  mesh.add(inkEdges(edgesGeometry(mesh.geometry), ink.lines));
   const closed = lidRest();
   const body = physics.register(mesh, {
     halfExtents: type.size.map((d) => d / 2) as Vec3,

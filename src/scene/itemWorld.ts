@@ -6,7 +6,6 @@ import { CUE, homeCue } from '../game/haptics.js';
 import { ASSEMBLED, PART_TYPES } from '../game/item.js';
 import { preferredRelatives } from '../game/panelFit.js';
 import { createPartMesh } from '../game/partMesh.js';
-import { shapeOf } from '../game/partShapes.js';
 import { hasEscaped } from '../game/dragMath.js';
 import { fractionOf, heightAt, selectsDuringHold } from '../game/liftLine.js';
 import { baseRest, boxPlacement, boxPoseOf, createPackedWorldLayout, lidRest, respawnSpots } from '../game/boxLayout.js';
@@ -17,7 +16,7 @@ import { createCompoundPhysics } from './compoundPhysics.js';
 import { createDropGuide } from './dropGuide.js';
 import { createTargetRings } from './targetRings.js';
 import { createFlatpack } from './flatpack.js';
-import { inkEdges, inkHull } from './ink.js';
+import { edgesGeometry, hullGeometry, inkEdges, inkHull } from './ink.js';
 import type { Ink } from './ink.js';
 import { createGestureRouter } from './gestureRouter.js';
 import { createLiftHold, liftRangeOf } from './liftHold.js';
@@ -134,9 +133,16 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   add(flatpack.base.mesh, flatpack.lid.mesh);
 
   // Every part wears the hull; a panel (drawn as its plain box) also its sharp edges, never a faceted round.
-  const outline = (mesh: THREE.Mesh, part: Parameters<typeof shapeOf>[0]) => {
-    mesh.add(inkHull(mesh.geometry, ink.hull));
-    if (shapeOf(part) === null) mesh.add(inkEdges(mesh.geometry, ink.lines));
+  // The outline geometry is built once per part type and shared by its instances, like the ghost's.
+  const outlines = new Map<string, { hull: THREE.BufferGeometry; edges: ReturnType<typeof edgesGeometry> | null }>();
+  const outline = (mesh: THREE.Mesh, type: string) => {
+    let shared = outlines.get(type);
+    if (!shared) {
+      shared = { hull: hullGeometry(mesh.geometry), edges: mesh.userData.shaped ? null : edgesGeometry(mesh.geometry) };
+      outlines.set(type, shared);
+    }
+    mesh.add(inkHull(shared.hull, ink.hull));
+    if (shared.edges) mesh.add(inkEdges(shared.edges, ink.lines));
   };
 
   // One record per physical part — what gestures pick, drag and snap. The box and its lid
@@ -145,7 +151,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   for (const { id, type, position, rotation } of createPackedWorldLayout()) {
     const part = PART_TYPES[type];
     const mesh = createPartMesh(part);
-    outline(mesh, part);
+    outline(mesh, type);
     const body = owning.register(mesh, {
       // map keeps the length; TS widens a mapped tuple to number[].
       halfExtents: part.size.map((d) => d / 2) as Vec3,

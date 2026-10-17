@@ -33,11 +33,17 @@ export function edgesOf(geometry: THREE.BufferGeometry, crease: number = INK.box
   return new THREE.EdgesGeometry(geometry, crease);
 }
 
-/** A geometry's sharp edges as one fat line object. */
-export function inkEdges(geometry: THREE.BufferGeometry, lines: LineMaterial, crease: number = INK.boxCrease): LineSegments2 {
+/** A geometry's sharp edges as a fat-line geometry, built once and shared by every object that draws them. */
+export function edgesGeometry(geometry: THREE.BufferGeometry, crease: number = INK.boxCrease): LineSegmentsGeometry {
   const edges = edgesOf(geometry, crease);
-  const object = new LineSegments2(new LineSegmentsGeometry().fromEdgesGeometry(edges), lines);
+  const lines = new LineSegmentsGeometry().fromEdgesGeometry(edges);
   edges.dispose();
+  return lines;
+}
+
+/** An edge geometry as one fat line object in the ink. */
+export function inkEdges(edges: LineSegmentsGeometry, lines: LineMaterial): LineSegments2 {
+  const object = new LineSegments2(edges, lines);
   object.name = 'inkEdges';
   return object;
 }
@@ -106,9 +112,9 @@ export function hullGeometry(geometry: THREE.BufferGeometry, width: number = INK
   return hull;
 }
 
-/** A geometry's back-face silhouette: its hull, drawn in the ink behind the part. */
-export function inkHull(geometry: THREE.BufferGeometry, hull: THREE.MeshBasicMaterial, width: number = INK.hullWidth): THREE.Mesh {
-  const mesh = new THREE.Mesh(hullGeometry(geometry, width), hull);
+/** A hull geometry (see `hullGeometry`) drawn in the ink behind its part. */
+export function inkHull(hull: THREE.BufferGeometry, material: THREE.MeshBasicMaterial): THREE.Mesh {
+  const mesh = new THREE.Mesh(hull, material);
   mesh.name = 'inkHull';
   mesh.castShadow = false;
   mesh.receiveShadow = false;

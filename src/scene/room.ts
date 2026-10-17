@@ -8,7 +8,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { sizeAndCentre, stageBoxes, wallBox, wallPieces, windowBoxes, windowOpeningBoxes } from '../game/stageBoxes.js';
 import type { StageBox, StageBoxName, WallName } from '../game/stageBoxes.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
-import { createInk, edgesOf, inkEdges } from './ink.js';
+import { createInk, edgesGeometry, edgesOf, inkEdges } from './ink.js';
 import { createScenery } from './scenery.js';
 import { STAGE_WALLS, wallHidden } from './stageCutaway.js';
 
@@ -41,7 +41,7 @@ export function createRoom() {
     const geometry = boxGeometry(box);
     const mesh = new THREE.Mesh(geometry, box.name === 'slab' ? floor : wall);
     mesh.receiveShadow = true;
-    const edges = inkEdges(geometry, ink.lines);
+    const edges = inkEdges(edgesGeometry(geometry), ink.lines);
     const piece = new THREE.Group();
     piece.name = box.name;
     piece.add(mesh, edges);

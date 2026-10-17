@@ -284,6 +284,12 @@ describe('the ink on parts and the box', () => {
     }
   });
 
+  it('builds one hull per part type and shares it across the instances', async () => {
+    const { meshes } = await built();
+    const hulls = meshes.flatMap((mesh) => named(mesh, 'inkHull') as THREE.Mesh[]).map((hull) => hull.geometry);
+    expect(new Set(hulls).size).toBeLessThan(hulls.length);
+  });
+
   it('gives every panel the crease pass as well, and no shaped part', async () => {
     const { deps, meshes } = await built();
     const packed = meshes.filter((mesh) => named(mesh, 'inkHull').length);
