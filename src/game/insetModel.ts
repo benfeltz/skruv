@@ -38,27 +38,27 @@ export interface InsetInput {
 
 const keyOf = (s: InsetSubject) => (s.joint >= 0 ? `joint:${s.joint}` : `seat:${s.hardware}>${s.host}`);
 
-// The next state, given what is on offer, what is engaged and whether the dismissed subject is still there.
-// A carried part's offer outranks what is engaged; a dismissed inset stays put while its subject does.
-function decide(state: InsetState, offered: boolean, engaged: boolean, dismissedHolds: boolean): InsetState {
-  if (state === 'dismissed' && dismissedHolds) return 'dismissed';
-  if (offered) return 'offered';
-  if (engaged) return 'active';
-  return 'hidden';
-}
-
 export function createInsetModel() {
   let state: InsetState = 'hidden';
   let subject: InsetSubject | null = null;
   // The engaged joints' keys, first seen first: the last is the most recently engaged.
   let order: string[] = [];
+  // Every subject the router reported last frame, by key.
+  let known = new Map<string, InsetSubject>();
+  // The keys a tap outside put away, while they last. Only these are put away: whatever is
+  // newly offered or engaged afterwards shows, and a tap on one of them brings it back alone.
+  const away = new Set<string>();
 
-  // Keeps the keys still engaged in order and appends the newly engaged; returns the latest subject.
-  function recency(engaged: readonly InsetSubject[]) {
-    const byKey = new Map(engaged.map((s) => [keyOf(s), s]));
-    order = [...order.filter((key) => byKey.has(key)), ...[...byKey.keys()].filter((key) => !order.includes(key))];
-    return { byKey, latest: byKey.get(order[order.length - 1]) ?? null };
+  // Keeps the keys still engaged in order and appends the newly engaged.
+  function remember(engaged: ReadonlyMap<string, InsetSubject>) {
+    order = [...order.filter((key) => engaged.has(key)), ...[...engaged.keys()].filter((key) => !order.includes(key))];
   }
+
+  // The most recently engaged of the subjects not put away, or null.
+  const latest = (engaged: ReadonlyMap<string, InsetSubject>) => {
+    const key = order.findLast((k) => !away.has(k));
+    return key === undefined ? null : (engaged.get(key) ?? null);
+  };
 
   return {
     get state() {
@@ -67,30 +67,48 @@ export function createInsetModel() {
     get subject() {
       return subject;
     },
-    /** One frame: what is on offer and what is engaged, in. */
+    /**
+     * One frame: what is on offer and what is engaged, in. A carried part's offer outranks
+     * what is engaged; otherwise the most recently engaged shows. What was put away stays away
+     * until it ends, and once all of it has the inset hides, so the next approach offers it again.
+     */
     step({ offered, engaged }: InsetInput) {
-      const { byKey, latest } = recency(engaged);
-      const held = state === 'dismissed' && subject ? (byKey.get(keyOf(subject)) ?? (offered && keyOf(offered) === keyOf(subject) ? offered : null)) : null;
-      state = decide(state, offered !== null, latest !== null, held !== null);
-      subject = state === 'dismissed' ? held : state === 'offered' ? offered : state === 'active' ? latest : null;
+      const engagedByKey = new Map(engaged.map((s) => [keyOf(s), s]));
+      known = new Map(offered ? [[keyOf(offered), offered], ...engagedByKey] : engagedByKey);
+      for (const key of away) if (!known.has(key)) away.delete(key);
+      remember(engagedByKey);
+      const next = latest(engagedByKey);
+      if (offered && !away.has(keyOf(offered))) [state, subject] = ['offered', offered];
+      else if (next) [state, subject] = ['active', next];
+      else if (away.size > 0) [state, subject] = ['dismissed', known.get(order.findLast((k) => away.has(k)) ?? [...away][0]) ?? null];
+      else [state, subject] = ['hidden', null];
     },
-    /** A tap outside the circle: put it away. Returns whether that changed anything. */
+    /** A tap outside the circle: put away everything it shows or could. Returns whether that changed anything. */
     tapOutside() {
       if (state !== 'offered' && state !== 'active') return false;
+      for (const key of known.keys()) away.add(key);
       state = 'dismissed';
       return true;
     },
-    /** A tap on `part`: while dismissed, one on the subject's hardware, host or tool brings it back and is consumed. */
+    /** A tap on `part`: while dismissed, one on a part of a subject put away brings that subject back alone, and is consumed. */
     tapOn(part: PartId) {
-      if (state !== 'dismissed' || !subject) return false;
-      if (part !== subject.hardware && part !== subject.host && part !== subject.tool) return false;
-      state = 'active';
+      if (state !== 'dismissed') return false;
+      const key = [...away].find((k) => {
+        const s = known.get(k);
+        return s !== undefined && (part === s.hardware || part === s.host || part === s.tool);
+      });
+      if (key === undefined) return false;
+      away.delete(key);
+      subject = known.get(key)!;
+      state = subject.joint >= 0 ? 'active' : 'offered';
       return true;
     },
     reset() {
       state = 'hidden';
       subject = null;
       order = [];
+      known = new Map();
+      away.clear();
     },
   };
 }

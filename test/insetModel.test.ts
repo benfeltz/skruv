@@ -154,6 +154,49 @@ describe('the inset model', () => {
     expect(m.state).toBe('offered');
   });
 
+  it('a dismissal puts away what was there: a new offer after it shows', () => {
+    const m = createInsetModel();
+    m.step({ offered: null, engaged: [subject(1)] });
+    m.tapOutside();
+    m.step({ offered: seat('dowel-9', 'top-1'), engaged: [subject(1)] });
+    expect(m.state).toBe('offered');
+    expect(m.subject?.joint).toBe(-1);
+  });
+
+  it('shows a joint engaged after the dismissal, and leaves the earlier one away when it ends', () => {
+    const m = createInsetModel();
+    m.step({ offered: null, engaged: [subject(1)] });
+    m.tapOutside();
+    m.step({ offered: null, engaged: [subject(1), subject(2)] });
+    expect(m.state).toBe('active');
+    expect(m.subject?.joint).toBe(2);
+    m.step({ offered: null, engaged: [subject(1)] });
+    expect(m.state).toBe('dismissed');
+    m.step(none);
+    expect(m.state).toBe('hidden');
+  });
+
+  it('puts away every joint that was engaged, not only the one it showed', () => {
+    const m = createInsetModel();
+    m.step({ offered: null, engaged: [subject(1), subject(2)] });
+    m.tapOutside();
+    m.step({ offered: null, engaged: [subject(1), subject(2)] });
+    expect(m.state).toBe('dismissed');
+  });
+
+  it('a tap reopens the joint it was on, not the most recently engaged one', () => {
+    const m = createInsetModel();
+    m.step({ offered: null, engaged: [subject(1), subject(2)] });
+    m.tapOutside();
+    m.step({ offered: null, engaged: [subject(1), subject(2), subject(3)] });
+    m.tapOutside();
+    expect(m.tapOn('dowel-1')).toBe(true);
+    expect(m.subject?.joint).toBe(1);
+    m.step({ offered: null, engaged: [subject(1), subject(2), subject(3)] });
+    expect(m.state).toBe('active');
+    expect(m.subject?.joint).toBe(1);
+  });
+
   it('reset hides it and forgets the engagement order', () => {
     const m = createInsetModel();
     m.step({ offered: null, engaged: [subject(1), subject(2)] });
