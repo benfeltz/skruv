@@ -319,15 +319,16 @@ describe('the router works the inset’s controls (1.10.0.2)', () => {
   });
 
   // Review round 1.
-  it('drops the bolt and the key when turned back to nothing from partway, never home', () => {
+  // Plan decision 10 (Ben): the drop on removal is from fastened back to seated at nothing. A bolt only ever
+  // turned partway and back is not that edge, so it and the key stay put.
+  it('keeps the bolt and the key when a bolt never screwed home is turned back to nothing', () => {
     const b = bench();
     keyOn(b);
     b.router.turnGrip('allenWrench-1', SPAN / 2);
-    expect(keyJoint(b)).toBeDefined();
     expect(b.router.turnGrip('allenWrench-1', -SPAN / 2)).toBe(true);
-    expect(keyJoint(b)).toBeUndefined();
-    expect(b.assembly.all().filter((j) => j.kind === 'bolt')).toEqual([]);
-    expect(unseats(b)).toHaveLength(2);
+    expect(boltJoint(b).fastener).toMatchObject({ state: STATE.SEATED, progress: 0 });
+    expect(keyJoint(b)).toBeDefined();
+    expect(unseats(b)).toEqual([]);
   });
 
   it('refuses a pull the assembly says is bound (a locked cam across the seam), as a pull in the main view does', () => {

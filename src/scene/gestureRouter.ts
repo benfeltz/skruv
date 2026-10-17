@@ -1651,13 +1651,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return drivers;
   }
 
-  // A tool comes off by itself: edge-triggered, as its fastener reaches full seat (the tool drops) or is turned back
-  // to nothing, from home or from partway (the fastener and the tool both drop). A turn by hand has no tool and drops nothing.
+  // A tool comes off by itself: edge-triggered, as its fastener reaches full seat (the tool drops) or is backed all
+  // the way out from fastened (the fastener and the tool both drop). A turn by hand has no tool and drops nothing.
   function dropToolAfter(joint: AssemblyJoint, tool: AssemblyJoint | undefined, before: Fastener, after: Fastener) {
     if (!tool) return;
     const turn = assembly.turnOf(tool.hardware);
     if (!isHome(before) && isHome(after) && turn && isTurnHome(turn)) unseat(tool);
-    else if (before.progress > 0 && after.progress === 0) {
+    else if (isFastened(before) && !isFastened(after) && after.progress === 0) {
       unseat(joint);
       unseat(tool);
     }
