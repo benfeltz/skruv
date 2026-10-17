@@ -26,6 +26,7 @@ import { createSprue } from './sprue.js';
 import { createBookletSheet } from '../ui/booklet.js';
 import { createLiftLine } from '../ui/liftLine.js';
 import { createTurnRing } from '../ui/turnRing.js';
+import { createInsetPanel } from './insetPanel.js';
 import type { Bus } from '../game/events.js';
 import type { Haptics } from '../game/haptics.js';
 import type { PartId } from '../game/assembly.js';
@@ -59,8 +60,9 @@ export interface ItemWorldDeps {
  * Everything one item brings into the room, built for the item src/game/item.ts serves
  * now: its flatpack and packed parts, the assembly graph and
  * the compound seam, the gizmo, the gesture router, the elevation line and Shift hold, the
- * booklet and its highlight, repack and the recovery sweep. Returns `{ update(delta),
- * repack(), pickDistance, booklet, dispose() }`: the loop calls `update`, the reset button
+ * booklet and its highlight, the detail inset, repack and the recovery sweep. Returns `{ update(delta),
+ * render(renderer, scene), repack(), pickDistance, booklet, dispose() }`: the loop calls `update`
+ * and, after the main render, `render` (the inset's one extra pass), the reset button
  * `repack`, the camera's pivot `pickDistance`. `dispose()` takes it all back out — meshes off
  * the scene, bodies out of the physics world, DOM nodes off the page, every listener it
  * bound unbound — so the room is as it was before it came; an item swap is `dispose()` then
@@ -241,6 +243,10 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   const turnRing = createTurnRing(document.body);
   undo.push(() => turnRing.element.remove());
 
+  // The live detail inset: a circle of paper showing the joint a carried part nears or an engaged tool works.
+  const insetPanel = createInsetPanel({ domElement, camera, container: document.body });
+  undo.push(() => insetPanel.dispose());
+
   const router = createGestureRouter({
     domElement,
     camera,
@@ -259,6 +265,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
     events,
     hold,
     turnRing,
+    inset: insetPanel.hook,
     // Where each panel goes in the finished item: offered first, never a gate.
     relatives: preferredRelatives(ASSEMBLED, PART_TYPES),
     // One tick a frame, however many eighths the turn crossed: a buzz can't land faster.
@@ -289,6 +296,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
     events.emit(resetEvent());
     router.unseatAll(playerParts.map((part) => part.id));
     select(null);
+    insetPanel.reset();
     const box = boxPose();
     const upright = baseRest(box);
     physics.place(flatpack.base.body, upright.position, upright.rotation);
@@ -430,6 +438,8 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
     booklet,
     pickDistance,
     repack,
+    /** The inset's extra pass, after the main render: nothing while the inset is not showing. */
+    render: (renderer: THREE.WebGLRenderer, scene: THREE.Scene) => insetPanel.render(renderer, scene),
     /** One frame of the item: the hold eases and the line draws before the physics step; the sweep, router and overlays follow it. */
     update(delta: number) {
       keepShiftHold();
@@ -438,6 +448,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
       physics.step(delta);
       sweep(delta);
       router.update(delta);
+      insetPanel.update();
       gizmo.update();
       sprue.update();
       highlight.update(delta);

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
-import { COLORS, STAGE } from '../constants.js';
+import { COLORS, LAYER, STAGE } from '../constants.js';
 import { advance, phaseFromClock, skyColourAt } from '../game/skyCycle.js';
 import type { Rgb } from '../game/skyCycle.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -80,6 +80,10 @@ export function createRoom() {
   };
   const backWall = buildWall('back');
   const leftWall = buildWall('left');
+
+  // The whole room on its own layer: the main camera enables it, the detail inset's does not, so
+  // its close-up shows the parts on paper (src/scene/inset.ts). The lights stay on layer 0 and light both.
+  group.traverse((object) => object.layers.set(LAYER.room));
 
   // Reused every frame: the eye as a tuple and the canvas size, so the loop allocates nothing.
   const eyeAt: Vec3 = [0, 0, 0];

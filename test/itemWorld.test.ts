@@ -505,3 +505,40 @@ describe('the manual in the room (1.9.1.2)', () => {
     world.dispose();
   });
 });
+
+describe('the detail inset rides the item world (1.10.0.1)', () => {
+  // A renderer that only counts what it is asked to draw.
+  const spyRenderer = () => {
+    const renders: unknown[] = [];
+    return { renders, renderer: { render: (scene: unknown) => renders.push(scene) } as unknown as THREE.WebGLRenderer };
+  };
+  const insetNode = () => body.children.find((node) => node.attributes.class === 'inset');
+
+  it('puts its ink overlay on the page and takes it off again with the world', async () => {
+    const { deps } = await engine();
+    expect(insetNode()).toBeUndefined();
+    const world = createItemWorld(deps);
+    expect(insetNode()).toBeDefined();
+    world.dispose();
+    expect(insetNode()).toBeUndefined();
+  });
+
+  it('renders nothing extra while the inset is not showing', async () => {
+    const { deps } = await engine();
+    const world = createItemWorld(deps);
+    const { renderer, renders } = spyRenderer();
+    world.update(PHYSICS.timestep);
+    world.render(renderer, deps.scene);
+    expect(renders).toEqual([]);
+    world.dispose();
+  });
+
+  it('frees its render target when the world goes', async () => {
+    const { deps } = await engine();
+    const disposed = vi.spyOn(THREE.WebGLRenderTarget.prototype, 'dispose');
+    const world = createItemWorld(deps);
+    world.dispose();
+    expect(disposed).toHaveBeenCalledTimes(1);
+    vi.restoreAllMocks();
+  });
+});
