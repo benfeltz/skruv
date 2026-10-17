@@ -9,7 +9,7 @@
 //   workable     a seat target worth lighting: any free hole for a fastener; for a tool,
 //                what it could turn either way — a seated bolt, stud or screw for its tool
 //                (tightened short of home, loosened at it, so a finished fastener lights for
-//                the loosening pass), a locked cam lock for the screwdriver to loosen, or
+//                the loosening pass, unless a locked cam holds it), a locked cam lock for the screwdriver to loosen, or
 //                an unlocked one with a screwed bolt in reach to tighten
 //   ring         how brightly a workable target lights for the finger: by on-screen
 //                distance (what looks close is close, on a phone), capped by a 3D distance
@@ -46,6 +46,8 @@ export type TurnedBy = (hex: TargetConnector) => AssemblyJoint | null;
 export interface Probe {
   captured: Captured;
   turnedBy: TurnedBy;
+  /** Whether a locked cam holds this bolt's head, so it cannot back out (`assembly.isHeld`); absent, none does. */
+  held?: (bolt: PartId) => boolean;
 }
 
 /** The bolt a cam lock would catch (`capture` over screwed bolt heads), or null. */
@@ -67,13 +69,14 @@ export const isSeatTarget = (connector: TargetConnector, seated: ReadonlySet<Par
   !isToolTarget(connector.type) || seated.has(connector.part.id);
 
 /** A seat target worth lighting — any hole; a bolt head or cam slot only when its tool could turn it either way (see the header). */
-export function isWorkable(connector: TargetConnector, { captured, turnedBy }: Probe) {
+export function isWorkable(connector: TargetConnector, { captured, turnedBy, held }: Probe) {
   if (!isToolTarget(connector.type)) return true;
   // What a tool put here would turn: a bolt, a cam, a stud's far end — the graph's answer.
   const seat = turnedBy(connector);
   if (!seat) return false;
   if (seat.kind === KIND.CAM) return seat.fastener.state === STATE.LOCKED || captured(seat.hardware) !== null;
-  return true;
+  // A bolt a locked cam holds can neither tighten (it is home) nor loosen: a dead end, not a target.
+  return !(seat.kind === KIND.BOLT && held?.(seat.hardware));
 }
 
 /** A target ring: its target, how brightly it lights (0..1) and how far it is from the finger (CSS px). */

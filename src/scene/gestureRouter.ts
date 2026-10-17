@@ -1221,7 +1221,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // left — and a dowel, pin or fitting's pressed state.
   function insetState(joint: AssemblyJoint, tool: PartId | null) {
     const turn = tool === null ? null : assembly.turnOf(tool);
-    if (turn && turn.joints.length > 0) return { progress: turnProgress(turn), tighten: !isTurnHome(turn), loosen: advancing(turn, -1).length > 0, pressed: false };
+    if (turn && turn.joints.length > 0) return { progress: turnProgress(turn), tighten: !isTurnHome(turn), loosen: canLoosen(turn), pressed: false };
     const pressed = joint.fastener.state === STATE.PRESSED;
     return { progress: pressed ? 1 : 0, tighten: false, loosen: false, pressed };
   }
@@ -1255,6 +1255,9 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       .flatMap((joint) => (joint.kind === KIND.TOOL ? [insetSubject(joint, joint.hardware)] : isTapKind(joint.kind) && joint.fastener.state === STATE.SEATED ? [insetSubject(joint, null)] : []));
   }
 
+  // Whether a tool's turn can back out: it has turn left, and no locked cam holds its bolt (the machine refuses it).
+  const canLoosen = (turn: Turn) => advancing(turn, -1).length > 0 && !turn.joints.some((j) => j.kind === KIND.BOLT && assembly.isHeld(j.hardware));
+
   // A dowel, pin or fitting pressed home, as the inset frames it, looked up by joint id: the inset keeps showing
   // the one it was on, to be backed out, and asks only for that one — never one built per pressed dowel a frame.
   function settledSubjects(joints: readonly AssemblyJoint[]) {
@@ -1277,6 +1280,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
         return capture(connectorWorld(joint.host, joint.hostConnector), heads)?.id ?? null;
       },
       turnedBy: (hex) => assembly.turnedFrom(hex.part.id, hex.index, joints),
+      held: assembly.isHeld,
     };
   }
 
@@ -1647,13 +1651,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return drivers;
   }
 
-  // A tool comes off by itself: edge-triggered, as its fastener reaches full seat (the tool drops) or is backed
-  // all the way out (the fastener and the tool both drop). A turn by hand has no tool and drops nothing.
+  // A tool comes off by itself: edge-triggered, as its fastener reaches full seat (the tool drops) or is turned back
+  // to nothing, from home or from partway (the fastener and the tool both drop). A turn by hand has no tool and drops nothing.
   function dropToolAfter(joint: AssemblyJoint, tool: AssemblyJoint | undefined, before: Fastener, after: Fastener) {
     if (!tool) return;
     const turn = assembly.turnOf(tool.hardware);
     if (!isHome(before) && isHome(after) && turn && isTurnHome(turn)) unseat(tool);
-    else if (isFastened(before) && !isFastened(after) && after.progress === 0) {
+    else if (before.progress > 0 && after.progress === 0) {
       unseat(joint);
       unseat(tool);
     }
@@ -2153,23 +2157,31 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       reconcile();
     },
     turnGrip(grip, radians) {
+      pruneStale();
       const turn = assembly.turnOf(grip);
       if (!turn || turn.joints.length === 0 || radians === 0) return false;
       return turnJoints(advancing(turn, radians > 0 ? 1 : -1), () => radians);
     },
+    // As a tap on the dowel: every tap-kind joint the part is in goes home.
     pressJoint(id) {
+      pruneStale();
       const joint = assembly.get(id);
-      if (!joint || !isTapKind(joint.kind) || !assembly.apply(id, { type: 'tap' }, behind(joint))) return false;
-      reportFastening(id, false);
-      reconcile();
-      return true;
+      if (!joint || !isTapKind(joint.kind)) return false;
+      const pressed = assembly.tap(joint.hardware, behind);
+      for (const done of pressed) reportFastening(done, false);
+      if (pressed.length > 0) reconcile();
+      return pressed.length > 0;
     },
+    // As a pull on the dowel: the joints it is pressed home in back out, but not across a seam a locked cam or a screwed screw binds (`pullable`).
     pullJoint(id) {
+      pruneStale();
       const joint = assembly.get(id);
-      if (!joint || !isTapKind(joint.kind) || !assembly.apply(id, { type: 'pull' })) return false;
-      reportFastening(id, true);
-      reconcile();
-      return true;
+      if (!joint || !isTapKind(joint.kind)) return false;
+      const free = new Set(assembly.pullable(joint.mover).map((j) => j.id));
+      const pulled = assembly.jointsOf(joint.hardware).filter((j) => free.has(j.id) && assembly.apply(j.id, { type: 'pull' }));
+      for (const { id: done } of pulled) reportFastening(done, true);
+      if (pulled.length > 0) reconcile();
+      return pulled.length > 0;
     },
     dispose() {
       onInterrupted();

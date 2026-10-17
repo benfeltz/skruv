@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AIM } from '../src/constants.js';
 import { spanOf, STATE } from '../src/game/fasteners.js';
 import { PART_TYPES } from '../src/game/item.js';
@@ -316,5 +316,39 @@ describe('the router works the inset’s controls (1.10.0.2)', () => {
     keyOn(b);
     expect(b.router.pressJoint(keyJoint(b)!.id)).toBe(false);
     expect(b.router.pullJoint(keyJoint(b)!.id)).toBe(false);
+  });
+
+  // Review round 1.
+  it('drops the bolt and the key when turned back to nothing from partway, never home', () => {
+    const b = bench();
+    keyOn(b);
+    b.router.turnGrip('allenWrench-1', SPAN / 2);
+    expect(keyJoint(b)).toBeDefined();
+    expect(b.router.turnGrip('allenWrench-1', -SPAN / 2)).toBe(true);
+    expect(keyJoint(b)).toBeUndefined();
+    expect(b.assembly.all().filter((j) => j.kind === 'bolt')).toEqual([]);
+    expect(unseats(b)).toHaveLength(2);
+  });
+
+  it('refuses a pull the assembly says is bound (a locked cam across the seam), as a pull in the main view does', () => {
+    const b = bench();
+    b.canvas.fire('pointerup', b.carry(b.dowel));
+    b.hold(1);
+    const id = b.assembly.all().find((j) => j.hardware === 'dowel-1')!.id;
+    b.router.pressJoint(id);
+    vi.spyOn(b.assembly, 'pullable').mockReturnValue([]);
+    expect(b.router.pullJoint(id)).toBe(false);
+    expect(b.assembly.get(id)!.fastener.state).toBe(STATE.PRESSED);
+  });
+
+  it('prunes a seat whose parts have drifted apart before pressing it', () => {
+    const b = bench();
+    b.canvas.fire('pointerup', b.carry(b.dowel));
+    b.hold(1);
+    const id = b.assembly.all().find((j) => j.hardware === 'dowel-1')!.id;
+    b.dowel.mesh.position.set(1, 1, 1);
+    b.dowel.mesh.updateMatrixWorld(true);
+    expect(b.router.pressJoint(id)).toBe(false);
+    expect(b.assembly.get(id)).toBeNull();
   });
 });
