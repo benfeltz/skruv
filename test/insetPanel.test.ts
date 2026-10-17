@@ -80,6 +80,9 @@ const subject = (over: Partial<InsetSubject> = {}): InsetSubject => ({
   pressed: false,
   ...over,
 });
+const nothing = () => null;
+// The router's lookup of a pressed-home joint's subject.
+const pressedOf = (...subjects: InsetSubject[]) => (joint: number) => subjects.find((s) => s.joint === joint) ?? null;
 const part = (id: string) => ({ id }) as Part;
 
 function mount(initial = { left: 0, top: 0, width: 390, height: 844 }) {
@@ -124,7 +127,7 @@ function mount(initial = { left: 0, top: 0, width: 390, height: 844 }) {
 describe('the inset panel', () => {
   it('draws nothing while nothing is offered or engaged', () => {
     const { panel, renderer, renders, scene, svg } = mount();
-    panel.hook.candidates(null, [], []);
+    panel.hook.candidates(null, [], nothing);
     panel.update();
     panel.render(renderer, scene);
     expect(renders).toEqual([]);
@@ -133,7 +136,7 @@ describe('the inset panel', () => {
 
   it('draws the extra pass and inks the ring once something is offered, faint', () => {
     const { panel, renderer, renders, scene, svg } = mount();
-    panel.hook.candidates(subject({ joint: -1 }), [], []);
+    panel.hook.candidates(subject({ joint: -1 }), [], nothing);
     panel.update();
     panel.render(renderer, scene);
     expect(renders).toHaveLength(2);
@@ -144,14 +147,14 @@ describe('the inset panel', () => {
 
   it('goes active, full ink, when the parts engage', () => {
     const { panel, svg } = mount();
-    panel.hook.candidates(null, [subject()], []);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
     expect(svg.attributes['data-state']).toBe('active');
   });
 
   it('keeps the circle clear of the safe-area inset', () => {
     const { panel, svg, frame } = mount();
-    panel.hook.candidates(null, [subject()], []);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
     const ring = svg.children[0].children[0];
     expect(Number(ring.attributes.cy) - Number(ring.attributes.r)).toBeGreaterThanOrEqual(47);
@@ -160,7 +163,7 @@ describe('the inset panel', () => {
 
   it('a tap outside the circle dismisses it, which stops drawing; a tap inside does not', () => {
     const { panel, renderer, renders, scene, frame } = mount();
-    panel.hook.candidates(null, [subject()], []);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
     const { centre } = frame();
     expect(panel.hook.tapOutside(centre)).toBe(false);
@@ -172,7 +175,7 @@ describe('the inset panel', () => {
 
   it('while dismissed, a tap on an engaged part reopens it and is consumed; one on another part is not', () => {
     const { panel, renderer, renders, scene, svg } = mount();
-    panel.hook.candidates(null, [subject()], []);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
     panel.hook.tapOutside([10, 800]);
     panel.update();
@@ -186,19 +189,19 @@ describe('the inset panel', () => {
 
   it('while showing, the engaged part’s tap is not the inset’s', () => {
     const { panel } = mount();
-    panel.hook.candidates(null, [subject()], []);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
     expect(panel.hook.tapOn(part('dowel-1'))).toBe(false);
   });
 
   it('hides when the engagement ends, and a repack hides it at once', () => {
     const { panel, svg } = mount();
-    panel.hook.candidates(null, [subject()], []);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
-    panel.hook.candidates(null, [], []);
+    panel.hook.candidates(null, [], nothing);
     panel.update();
     expect(svg.attributes.hidden).toBe('');
-    panel.hook.candidates(null, [subject()], []);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
     panel.reset();
     expect(svg.attributes.hidden).toBe('');
@@ -206,7 +209,7 @@ describe('the inset panel', () => {
 
   it('reads layout only when the window is resized, not every frame', () => {
     const { panel, svg, reads, resize } = mount();
-    panel.hook.candidates(null, [subject()], []);
+    panel.hook.candidates(null, [subject()], nothing);
     for (let i = 0; i < 5; i++) panel.update();
     expect(reads()).toBe(1);
     resize({ left: 0, top: 0, width: 844, height: 390 });
@@ -238,7 +241,7 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
 
   it('shows the turn ring beside the circle for an active tool, never inside it', () => {
     const { panel, controls, turn, push, frame } = mount();
-    panel.hook.candidates(null, [tool({ progress: 0.5, tighten: true, loosen: true })], []);
+    panel.hook.candidates(null, [tool({ progress: 0.5, tighten: true, loosen: true })], nothing);
     panel.update();
     expect(controls.attributes.hidden).toBeUndefined();
     expect(turn().attributes.hidden).toBeUndefined();
@@ -251,10 +254,10 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
 
   it('shows the push arrow for a dowel, black while seated, green once it is pressed home and stays', () => {
     const { panel, controls, push } = mount();
-    panel.hook.candidates(null, [subject()], []);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
     expect(push().attributes['data-seated']).toBe('false');
-    panel.hook.candidates(null, [], [subject({ pressed: true, progress: 1 })]);
+    panel.hook.candidates(null, [], pressedOf(subject({ pressed: true, progress: 1 })));
     panel.update();
     expect(controls.attributes.hidden).toBeUndefined();
     expect(push().attributes['data-seated']).toBe('true');
@@ -262,29 +265,29 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
 
   it('shows no control while the seat is only offered, nor once dismissed, nor while hidden', () => {
     const { panel, controls } = mount();
-    panel.hook.candidates(subject({ joint: -1 }), [], []);
+    panel.hook.candidates(subject({ joint: -1 }), [], nothing);
     panel.update();
     expect(controls.attributes.hidden).toBe('');
-    panel.hook.candidates(null, [tool()], []);
+    panel.hook.candidates(null, [tool()], nothing);
     panel.update();
     expect(controls.attributes.hidden).toBeUndefined();
     panel.hook.tapOutside([5, 700]);
     panel.update();
     expect(controls.attributes.hidden).toBe('');
-    panel.hook.candidates(null, [], []);
+    panel.hook.candidates(null, [], nothing);
     panel.update();
     expect(controls.attributes.hidden).toBe('');
   });
 
   it('moves to the next slot when the control cluster covers the first', () => {
     const first = mount();
-    first.panel.hook.candidates(null, [tool()], []);
+    first.panel.hook.candidates(null, [tool()], nothing);
     first.panel.update();
     const [x, y] = at(first.turn());
     first.panel.dispose();
     clusterBox = { left: x - 10, top: y - 10, right: x + 10, bottom: y + 10 };
     const { panel, turn, frame } = mount();
-    panel.hook.candidates(null, [tool()], []);
+    panel.hook.candidates(null, [tool()], nothing);
     panel.update();
     const moved = at(turn());
     expect(Math.sign(moved[0] - frame().centre[0])).toBe(-Math.sign(x - frame().centre[0]));
@@ -294,7 +297,7 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
     const { panel, turn, push } = mount();
     const calls: unknown[][] = [];
     panel.connect({ turnGrip: (...args) => !!calls.push(['turn', ...args]), pressJoint: (...args) => !!calls.push(['press', ...args]), pullJoint: (...args) => !!calls.push(['pull', ...args]) });
-    panel.hook.candidates(null, [tool({ joint: 7 })], []);
+    panel.hook.candidates(null, [tool({ joint: 7 })], nothing);
     panel.update();
     const [cx, cy] = at(turn());
     const r = INSET.controls.ring.radius;
@@ -302,11 +305,11 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
     turn().fire('pointermove', { clientX: cx, clientY: cy + r });
     expect(calls).toEqual([['turn', 'key-1', expect.closeTo(Math.PI / 2, 5)]]);
     calls.length = 0;
-    panel.hook.candidates(null, [subject({ joint: 9 })], []);
+    panel.hook.candidates(null, [subject({ joint: 9 })], nothing);
     panel.update();
     push().fire('pointerdown', { clientX: 1, clientY: 1 });
     push().fire('pointerup', { clientX: 1, clientY: 1 });
-    panel.hook.candidates(null, [], [subject({ joint: 9, pressed: true, progress: 1 })]);
+    panel.hook.candidates(null, [], pressedOf(subject({ joint: 9, pressed: true, progress: 1 })));
     panel.update();
     push().fire('pointerdown', { clientX: 1, clientY: 1 });
     push().fire('pointerup', { clientX: 1, clientY: 1 });
@@ -315,7 +318,7 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
 
   it('does nothing from a control before the router is connected', () => {
     const { panel, turn } = mount();
-    panel.hook.candidates(null, [tool()], []);
+    panel.hook.candidates(null, [tool()], nothing);
     panel.update();
     const [cx, cy] = at(turn());
     expect(() => {

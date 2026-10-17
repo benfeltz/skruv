@@ -167,7 +167,7 @@ export interface GestureRouter {
  * and the joints engaged (and the dowels pressed home, which stay on show), and the taps that are the inset's: one on its circle (consumed), one outside it, one on a part.
  */
 export interface InsetHook {
-  candidates(offered: InsetSubject | null, engaged: readonly InsetSubject[], settled: readonly InsetSubject[]): void;
+  candidates(offered: InsetSubject | null, engaged: readonly InsetSubject[], settled: (joint: number) => InsetSubject | null): void;
   covers(point: ScreenPoint): boolean;
   tapOutside(point: ScreenPoint): boolean;
   tapOn(part: Part): boolean;
@@ -1255,10 +1255,13 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       .flatMap((joint) => (joint.kind === KIND.TOOL ? [insetSubject(joint, joint.hardware)] : isTapKind(joint.kind) && joint.fastener.state === STATE.SEATED ? [insetSubject(joint, null)] : []));
   }
 
-  // The dowels, pins and fittings pressed home: the inset keeps showing one it was on, to be backed out.
-  function settledSubjects(joints: readonly AssemblyJoint[]): InsetSubject[] {
-    if (!inset) return [];
-    return joints.filter((joint) => isTapKind(joint.kind) && joint.fastener.state === STATE.PRESSED).map((joint) => insetSubject(joint, null));
+  // A dowel, pin or fitting pressed home, as the inset frames it, looked up by joint id: the inset keeps showing
+  // the one it was on, to be backed out, and asks only for that one — never one built per pressed dowel a frame.
+  function settledSubjects(joints: readonly AssemblyJoint[]) {
+    return (id: number): InsetSubject | null => {
+      const joint = joints.find((j) => j.id === id);
+      return joint && isTapKind(joint.kind) && joint.fastener.state === STATE.PRESSED ? insetSubject(joint, null) : null;
+    };
   }
 
   // The bolt a seated cam lock's recess would catch, as a turn of it would, and the joint a

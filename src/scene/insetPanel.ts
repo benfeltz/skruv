@@ -48,7 +48,7 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
 
   let offered: InsetSubject | null = null;
   let engaged: readonly InsetSubject[] = [];
-  let settled: readonly InsetSubject[] = [];
+  let settled: (joint: number) => InsetSubject | null = () => null;
   // The circle this frame, or null while nothing shows.
   let frame: InsetFrame | null = null;
   // The canvas's box and the circle in it, read from layout only when the window has been resized

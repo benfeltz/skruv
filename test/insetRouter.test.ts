@@ -91,7 +91,7 @@ describe('the router reports what the inset could frame', () => {
     b.hold(1);
     expect(b.assembly.get(joint.id)!.fastener.state).not.toBe(STATE.SEATED);
     expect(b.last().engaged).toEqual([]);
-    expect(b.last().settled).toMatchObject([{ joint: joint.id, kind: 'dowel', pressed: true, progress: 1, tighten: false, loosen: false }]);
+    expect(b.last().settled(joint.id)).toMatchObject({ joint: joint.id, kind: 'dowel', pressed: true, progress: 1, tighten: false, loosen: false });
   });
 
   it('offers a seated bolt’s head to a carried Allen key, then reports the joint with the tool set once it is on', () => {
@@ -302,11 +302,11 @@ describe('the router works the inset’s controls (1.10.0.2)', () => {
     expect(b.router.pressJoint(id)).toBe(true);
     b.hold(1);
     expect(b.last().engaged).toEqual([]);
-    expect(b.last().settled).toMatchObject([{ joint: id, pressed: true }]);
+    expect(b.last().settled(id)).toMatchObject({ joint: id, pressed: true });
     expect(b.router.pressJoint(id)).toBe(false);
     expect(b.router.pullJoint(id)).toBe(true);
     b.hold(1);
-    expect(b.last().settled).toEqual([]);
+    expect(b.last().settled(id)).toBeNull();
     expect(b.last().engaged).toMatchObject([{ joint: id, pressed: false }]);
     expect(b.router.pullJoint(id)).toBe(false);
   });
