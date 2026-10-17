@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { AIM } from '../src/constants.js';
-import { STATE } from '../src/game/fasteners.js';
+import { spanOf, STATE } from '../src/game/fasteners.js';
 import { PART_TYPES } from '../src/game/item.js';
 import { connectorInWorld } from '../tools/validate/lib/geometry.js';
 import { insetRecorder, makePart, mount } from './support/routerBench.js';
@@ -103,6 +103,21 @@ describe('the router reports what the inset could frame', () => {
     const joint = b.assembly.all().find((j) => j.hardware === 'allenWrench-1')!;
     expect(b.last().offered).toBeNull();
     expect(b.last().engaged).toMatchObject([{ joint: joint.id, kind: 'tool', hardware: 'allenWrench-1', host: 'camLockBolt-1', tool: 'allenWrench-1' }]);
+  });
+
+  it('frames the head where this frame drew it, sinking with the turn, not where the simulation holds it', () => {
+    const b = bench();
+    const at = b.carry(b.key);
+    b.canvas.fire('pointerup', at);
+    b.hold(1);
+    const before = b.last().engaged[0].centre[1];
+    const bolt = b.assembly.all().find((j) => j.kind === 'bolt')!;
+    b.assembly.apply(bolt.id, { type: 'crank', radians: 0.5 * spanOf(bolt.kind) });
+    b.hold(1);
+    // The body has not moved; the drawn bolt has, and the inset's centre is the drawn head's.
+    const drawn = b.bolt.mesh.position.y - b.bolt.body.translation().y;
+    expect(drawn).toBeLessThan(-1e-4);
+    expect(before - b.last().engaged[0].centre[1]).toBeCloseTo(-drawn, 6);
   });
 
   it('offers a loose bolt’s head to no key', () => {

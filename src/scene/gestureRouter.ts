@@ -1200,9 +1200,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // --- the detail inset: what it could frame ---
 
-  // A joint as the inset frames it: its hole in the world, the axis pointing into it.
+  // A joint as the inset frames it: its hole in the world as the part is drawn (its mesh, with fastener feedback
+  // on top of the simulation's pose), the axis pointing into it.
   function insetSubject(joint: AssemblyJoint, tool: PartId | null): InsetSubject {
-    const hole = connectorWorld(joint.host, joint.hostConnector);
+    const { type, mesh } = partById.get(joint.host)!;
+    const hole = connectorInWorld(PART_TYPES[type].connectors[joint.hostConnector], { position: mesh.position.toArray(), rotation: mesh.quaternion.toArray() });
     return { joint: joint.id, kind: joint.kind, hardware: joint.hardware, host: joint.host, tool, centre: hole.position, axis: [-hole.axis[0], -hole.axis[1], -hole.axis[2]] };
   }
 
@@ -1776,7 +1778,6 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const workable = ends && (targetRings || inset) ? workableSeats(ends, joints) : null;
     showRings(ends, workable);
     showPanelRings(goal);
-    inset?.candidates(offeredSubject(ends, workable), engagedSubjects(joints));
     // Every turn the graph has, once per frame: the dials and the draw read the same records.
     const world = assembly.turns();
     // A part being screwed on by hand has no gizmo — selected and then set onto its stud, it
@@ -1791,6 +1792,8 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       hardwarePose.decompose(scratch, twist, offset);
       physics.move(partById.get(id)!.body, scratch.toArray(), twist.toArray());
     }
+    // Last, so the inset frames the parts as this frame drew them: a bolt sunk by its turn, a rider carried along.
+    inset?.candidates(offeredSubject(ends, workable), engagedSubjects(joints));
   }
 
   // Fastener progress, drawn on top of the simulated poses. Each turn moves its turned part
