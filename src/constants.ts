@@ -902,12 +902,14 @@ export const INSET = {
   // The render target's multisampling, and the circle's rim segments.
   samples: 4,
   segments: 64,
-  // The controls beside the circle (src/game/insetControls.ts, src/ui/insetControls.ts): the turn ring (its drawn
-  // radius, ring and arc widths, arrowhead size and the grab band either side of the ring, CSS px), the push arrow
+  // The controls round and beside the circle (src/game/insetControls.ts, src/ui/insetControls.ts): the turn ring
+  // encircles the circle, sharing its centre — the gap from the rim to the ring's line, the ring and arc widths, the
+  // arrowhead size, and the grab band either side of the line, its inner half cut off at the rim so the circle itself
+  // stays picture-only (CSS px). The circle's offsets from the screen edge count to the ring's outer edge. The push arrow
   // (its shaft length and width, head size and the grab band round it), the gap between a control and the circle's rim, the gap kept from the
-  // control cluster, and which slots each layout offers, in preference order (portrait's `below` is the last resort, where a phone is too narrow to have either side clear).
+  // control cluster, and which slots each layout offers the push arrow, in preference order (portrait's `below` is the last resort, where a phone is too narrow to have either side clear).
   controls: {
-    ring: { radius: 44, width: 4, arcWidth: 8, arrowSize: 16, band: 28 },
+    ring: { gap: 12, width: 3, arcWidth: 7, arrowSize: 16, band: 18 },
     arrow: { length: 64, width: 14, head: 22, band: 20 },
     gap: 20,
     clusterGap: 12,

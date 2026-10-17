@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { INSET } from '../src/constants.js';
-import { controlFor, controlSlot, pushLook, ringGrab, ringRadians, RING_SIGN, toolScreenDirection, turnLook } from '../src/game/insetControls.js';
+import { controlFor, controlSlot, pushLook, ringGeometry, ringGrab, ringRadians, RING_SIGN, toolScreenDirection, turnLook } from '../src/game/insetControls.js';
 import { insetCameraPose } from '../src/game/insetView.js';
 import type { InsetSubject } from '../src/game/insetModel.js';
 import type { InsetFrame } from '../src/game/insetView.js';
@@ -23,8 +23,8 @@ const tool = (over: Partial<InsetSubject> = {}) => subject({ kind: 'tool', tool:
 
 const frame: InsetFrame = { centre: [500, 300], radius: 80 };
 const { ring: RING, arrow: ARROW, gap: GAP, clusterGap: CLUSTER_GAP } = INSET.controls;
-// What takes a press, from a control's centre: the ring's grab disc, the arrow's grab box.
-const half = Math.max(RING.radius + RING.band, ARROW.length / 2 + ARROW.band);
+// What takes a press, from the arrow's centre: its grab box.
+const half = Math.max(ARROW.length / 2, Math.max(ARROW.width, ARROW.head) / 2) + ARROW.band;
 const reach = frame.radius + GAP + half;
 const screen = { left: 0, top: 0, right: 1000, bottom: 800 };
 const placement = (obstacles: { left: number; top: number; right: number; bottom: number }[] = [], bounds = screen) => ({ obstacles, bounds });
@@ -55,13 +55,31 @@ describe('how a control looks', () => {
   });
 });
 
-describe('the ring’s grab band', () => {
-  const { radius, band } = INSET.controls.ring;
-  it('takes the band either side of the ring and not the middle or far outside', () => {
-    expect(ringGrab([100 + radius, 50], [100, 50])).toBe(true);
-    expect(ringGrab([100 + radius + band - 1, 50], [100, 50])).toBe(true);
-    expect(ringGrab([100, 50], [100, 50])).toBe(false);
-    expect(ringGrab([100 + radius + band + 5, 50], [100, 50])).toBe(false);
+describe('the turn ring round the circle', () => {
+  const ring = ringGeometry(frame);
+
+  it('shares the circle’s centre, its line just outside the rim', () => {
+    expect(ring.radius).toBe(frame.radius + RING.gap);
+    expect(ring.radius).toBeGreaterThan(frame.radius);
+  });
+
+  it('grabs on the band outside the rim, never on the circle’s picture', () => {
+    const at = (distance: number): [number, number] => [frame.centre[0] + distance, frame.centre[1]];
+    expect(ring.inner).toBeGreaterThanOrEqual(frame.radius);
+    expect(ringGrab(at(ring.radius), frame)).toBe(true);
+    expect(ringGrab(at(ring.outer), frame)).toBe(true);
+    expect(ringGrab(at(ring.outer + 2), frame)).toBe(false);
+    // Inside the circle, and on its very rim, is the picture's.
+    expect(ringGrab(at(0), frame)).toBe(false);
+    expect(ringGrab(at(frame.radius - 1), frame)).toBe(false);
+    expect(ringGrab(at(ring.inner - 0.5), frame)).toBe(false);
+  });
+
+  it('is the same all the way round', () => {
+    for (const angle of [0, 1, 2.5, 4, 5.5]) {
+      const p: [number, number] = [frame.centre[0] + ring.radius * Math.cos(angle), frame.centre[1] + ring.radius * Math.sin(angle)];
+      expect(ringGrab(p, frame)).toBe(true);
+    }
   });
 });
 
@@ -101,11 +119,11 @@ describe('where a control sits', () => {
     expect(controlSlot(frame, 'portrait', [-0.1, 1], placement()).centre).toEqual([frame.centre[0] - reach, frame.centre[1]]);
   });
 
-  it('keeps what takes a press clear of the circle: the grab reach plus the gap fits between rim and slot', () => {
+  it('keeps the arrow’s grab box clear of the circle: its reach plus the gap fits between rim and slot', () => {
     for (const layout of ['portrait', 'landscape'] as const) {
       for (const tip of [[1, 0], [-1, 0], [0, 1]] as [number, number][]) {
         const [x, y] = controlSlot(frame, layout, tip, placement()).centre;
-        expect(Math.hypot(x - frame.centre[0], y - frame.centre[1]) - (RING.radius + RING.band)).toBeGreaterThanOrEqual(frame.radius + GAP);
+        expect(Math.hypot(x - frame.centre[0], y - frame.centre[1]) - half).toBeGreaterThanOrEqual(frame.radius + GAP);
       }
     }
   });

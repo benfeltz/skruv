@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { INSET } from '../src/constants.js';
-import { insetCameraPose, insetFrame, insetLayout, insetOrtho, insideInset } from '../src/game/insetView.js';
+import { insetCameraPose, insetFrame, insetLayout, insetOrtho, insideInset, ringReach } from '../src/game/insetView.js';
 import type { Vec3 } from '../tools/validate/lib/geometry.js';
 
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -20,7 +20,7 @@ describe('insetFrame', () => {
     const { centre, radius } = insetFrame({ width: 390, height: 844 });
     expect(radius * 2).toBeCloseTo(0.42 * 390);
     expect(centre[0]).toBe(195);
-    expect(centre[1]).toBeCloseTo(INSET.portrait.top + radius);
+    expect(centre[1]).toBeCloseTo(INSET.portrait.top + ringReach() + radius);
   });
 
   it('clamps the diameter to the layout’s min and max', () => {
@@ -32,15 +32,37 @@ describe('insetFrame', () => {
 
   it('keeps the portrait circle below the top safe inset', () => {
     const { centre, radius } = insetFrame({ width: 390, height: 844 }, { top: 47, right: 0 });
-    expect(centre[1] - radius).toBeCloseTo(47 + INSET.portrait.top);
+    expect(centre[1] - radius - ringReach()).toBeCloseTo(47 + INSET.portrait.top);
   });
 
   it('sits on the right under the cluster in landscape, clear of the safe insets', () => {
     const viewport = { width: 844, height: 390 };
     const { centre, radius } = insetFrame(viewport, { top: 0, right: 47 });
-    expect(centre[0] + radius).toBeCloseTo(844 - 47 - INSET.landscape.right);
-    expect(centre[1] - radius).toBeCloseTo(INSET.landscape.top);
-    expect(centre[1] + radius).toBeLessThan(viewport.height);
+    expect(centre[0] + radius + ringReach()).toBeCloseTo(844 - 47 - INSET.landscape.right);
+    expect(centre[1] - radius - ringReach()).toBeCloseTo(INSET.landscape.top);
+    expect(centre[1] + radius + ringReach()).toBeLessThan(viewport.height);
+  });
+
+  // The turn ring encircles the circle: its whole grab band must stay on screen, and inside the clearance the
+  // circle alone had from the safe insets and the control cluster, in both orientations.
+  it.each([
+    [320, 568],
+    [390, 844],
+    [800, 1000],
+    [568, 320],
+    [844, 390],
+    [1000, 800],
+  ])('leaves the turn ring’s band on screen and inside the old clearances at %i x %i', (width, height) => {
+    const safe = { top: 47, right: 20 };
+    const viewport = { width, height };
+    const { centre, radius } = insetFrame(viewport, safe);
+    const outer = radius + ringReach();
+    const layout = insetLayout(viewport);
+    expect(centre[0] - outer).toBeGreaterThanOrEqual(0);
+    expect(centre[0] + outer).toBeLessThanOrEqual(width - safe.right);
+    expect(centre[1] + outer).toBeLessThanOrEqual(height);
+    expect(centre[1] - outer).toBeCloseTo(safe.top + INSET[layout].top, 6);
+    if (layout === 'landscape') expect(centre[0] + outer).toBeCloseTo(width - safe.right - INSET.landscape.right, 6);
   });
 
   it('takes its layout from the argument when given', () => {

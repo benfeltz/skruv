@@ -66,6 +66,12 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
     box = null;
   };
   window.addEventListener('resize', resized);
+  // A press on the canvas owns the finger until it lifts: the controls go inert, so a part carried over one keeps its moves.
+  const pressed = () => controls.setInert(true);
+  const lifted = () => controls.setInert(false);
+  domElement.addEventListener('pointerdown', pressed, { capture: true });
+  window.addEventListener('pointerup', lifted);
+  window.addEventListener('pointercancel', lifted);
   // Reused every frame.
   const forward = new THREE.Vector3();
   const joint = new THREE.Vector3();
@@ -114,9 +120,9 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
       const kind = state === 'active' ? controlFor(subject) : null;
       driven = kind ? subject : null;
       if (!kind) return controls.hide();
+      if (kind === 'turn') return controls.showTurn(frame, turnLook(subject));
       const { centre } = controlSlot(frame, layout, toolScreenDirection(subject.axis, pose), { obstacles, bounds: screen }, INSET.controls);
-      if (kind === 'turn') controls.showTurn(centre, turnLook(subject));
-      else controls.showPush(centre, pushLook(subject));
+      controls.showPush(centre, pushLook(subject));
     },
     /** The router's actions the controls drive: its ring turns the tool, its arrow presses a dowel home and backs it out. */
     connect(router: Pick<GestureRouter, 'turnGrip' | 'pressJoint' | 'pullJoint'>) {
@@ -138,6 +144,9 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
     },
     dispose() {
       window.removeEventListener('resize', resized);
+      domElement.removeEventListener('pointerdown', pressed, { capture: true });
+      window.removeEventListener('pointerup', lifted);
+      window.removeEventListener('pointercancel', lifted);
       overlay.element.remove();
       controls.element.remove();
       probe.element.remove();

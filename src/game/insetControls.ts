@@ -1,9 +1,8 @@
-// The controls beside the detail inset's circle: which one a subject gets, how it looks, which way the tool points
-// in the picture and where the control sits clear of the control cluster. Pure — CSS px [x, y] (y down) and world
+// The controls round and beside the detail inset's circle: which one a subject gets, how it looks, where the turn
+// ring encircles the circle and where the push arrow sits beside it, clear of the control cluster. Pure — CSS px [x, y] (y down) and world
 // vectors in, plain records out; src/ui/insetControls.ts draws, src/scene/insetPanel.ts composes.
 
 import { INSET } from '../constants.js';
-import { dialHit } from './turnRing.js';
 import { isTapKind } from './fasteners.js';
 import { sub } from '../../tools/validate/lib/geometry.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
@@ -11,6 +10,7 @@ import type { InsetSubject } from './insetModel.js';
 import type { InsetFrame, InsetLayout, InsetPose } from './insetView.js';
 import type { ScreenPoint } from './dragMath.js';
 
+/** The ring encircles the circle; the arrow sits beside it. */
 export type ControlKind = 'turn' | 'push';
 
 /** A box on screen, CSS px. */
@@ -46,8 +46,21 @@ export const pushLook = ({ pressed }: InsetSubject) => ({ seated: pressed, head:
 /** The sweep the ring was given, as the radians the tool turns (positive tightens). */
 export const ringRadians = (sweep: number) => RING_SIGN * sweep;
 
-/** Whether a press is on the ring's grab band round `centre`: the ring itself, not its middle. */
-export const ringGrab = (point: ScreenPoint, centre: ScreenPoint) => dialHit(point, centre, { radius: INSET.controls.ring.radius, band: INSET.controls.ring.band });
+/**
+ * The turn ring round the circle: it shares the circle's centre, its line `gap` outside the rim; `inner` and
+ * `outer` bound its grab band, the inner edge never inside the rim — a press on the circle is the picture's.
+ */
+export function ringGeometry({ radius }: InsetFrame, { ring }: Controls = INSET.controls) {
+  const line = radius + ring.gap;
+  return { radius: line, inner: Math.max(radius, line - ring.band), outer: line + ring.band };
+}
+
+/** Whether a press is on the ring's grab band round the circle: outside the rim, never on the picture or the room's far side of the band. */
+export function ringGrab([x, y]: ScreenPoint, frame: InsetFrame) {
+  const { inner, outer } = ringGeometry(frame);
+  const distance = Math.hypot(x - frame.centre[0], y - frame.centre[1]);
+  return distance >= inner && distance <= outer;
+}
 
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -62,9 +75,8 @@ export function toolScreenDirection(axis: Vec3, { position, target, up }: InsetP
   return [dot(axis, right) / span, -dot(axis, up) / (Math.hypot(...up) || 1)];
 }
 
-// Half the side of the box every control is placed as, so a ring and an arrow take the same slots: the reach of
-// what takes a press — the ring's grab band, the arrow's grab box — not just what is drawn.
-const halfOf = ({ ring, arrow }: Controls) => Math.max(ring.radius + ring.band, arrow.length / 2 + arrow.band, Math.max(arrow.width, arrow.head) / 2 + arrow.band);
+// Half the side of the arrow's placement box: the reach of what takes a press — its grab box — not just what is drawn.
+const halfOf = ({ arrow }: Controls) => Math.max(arrow.length / 2, Math.max(arrow.width, arrow.head) / 2) + arrow.band;
 
 // The slot's centre: the circle's, moved out past its rim, the gap and the control's half-size.
 function slotCentre({ centre, radius }: InsetFrame, slot: Slot, controls: Controls): ScreenPoint {
@@ -93,7 +105,7 @@ function slotOrder(layout: InsetLayout, [x, y]: ScreenPoint, controls: Controls)
 }
 
 /**
- * Where a control's centre goes beside the circle: the first slot, tip's side first, whose box keeps `clusterGap`
+ * Where the push arrow's centre goes beside the circle: the first slot, tip's side first, whose box keeps `clusterGap`
  * clear of every obstacle and lies inside the screen. If no slot does the last is used — a control is never left out.
  */
 export function controlSlot(frame: InsetFrame, layout: InsetLayout, tipDirection: ScreenPoint, { obstacles, bounds }: Placement, controls: Controls = INSET.controls) {

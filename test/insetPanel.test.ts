@@ -45,6 +45,7 @@ class FakeElement {
 }
 
 const resizeListeners = new Set<() => void>();
+const windowListeners = new Map<string, (() => void)[]>();
 // The boxes of what the controls keep clear of (the control cluster, a booklet's docked thumb), as
 // document.querySelectorAll finds them: none by default.
 type Box = { left: number; top: number; right: number; bottom: number };
@@ -52,9 +53,16 @@ let obstacleBoxes: Box[] = [];
 beforeEach(() => {
   obstacleBoxes = [];
   resizeListeners.clear();
+  windowListeners.clear();
   vi.stubGlobal('window', {
-    addEventListener: (type: string, fn: () => void) => type === 'resize' && resizeListeners.add(fn),
-    removeEventListener: (type: string, fn: () => void) => type === 'resize' && resizeListeners.delete(fn),
+    addEventListener: (type: string, fn: () => void) => {
+      if (type === 'resize') resizeListeners.add(fn);
+      else windowListeners.set(type, [...(windowListeners.get(type) ?? []), fn]);
+    },
+    removeEventListener: (type: string, fn: () => void) => {
+      if (type === 'resize') resizeListeners.delete(fn);
+      else windowListeners.set(type, (windowListeners.get(type) ?? []).filter((f) => f !== fn));
+    },
   });
   const head = new FakeElement();
   vi.stubGlobal('document', {
@@ -95,11 +103,14 @@ function mount(initial = { left: 0, top: 0, width: 390, height: 844 }) {
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld(true);
   const container = new FakeElement();
+  const canvasListeners = new Map<string, (() => void)[]>();
   const domElement = {
     getBoundingClientRect: () => {
       reads++;
       return rect;
     },
+    addEventListener: (type: string, fn: () => void) => canvasListeners.set(type, [...(canvasListeners.get(type) ?? []), fn]),
+    removeEventListener: (type: string, fn: () => void) => canvasListeners.set(type, (canvasListeners.get(type) ?? []).filter((f) => f !== fn)),
   } as unknown as HTMLElement;
   const panel = createInsetPanel({ domElement, camera, container: container as unknown as HTMLElement, lines: { resolution: new THREE.Vector2(rect.width, rect.height) } });
   const renders: { scene: unknown; target: unknown }[] = [];
@@ -123,7 +134,7 @@ function mount(initial = { left: 0, top: 0, width: 390, height: 844 }) {
     rect = next;
     for (const fn of resizeListeners) fn();
   };
-  return { panel, renderer, renders, scene, frame, svg, controls, turn, push, container, resize, reads: () => reads };
+  return { panel, renderer, renders, scene, frame, svg, controls, canvasListeners, turn, push, container, resize, reads: () => reads };
 }
 
 describe('the inset panel', () => {
@@ -242,26 +253,25 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
 
   // A tablet-wide portrait screen, where either side of the circle has room.
   const WIDE = { left: 0, top: 0, width: 800, height: 1000 };
-  const half = Math.max(INSET.controls.ring.radius + INSET.controls.ring.band, INSET.controls.arrow.length / 2 + INSET.controls.arrow.band);
+  const half = Math.max(INSET.controls.arrow.length / 2, Math.max(INSET.controls.arrow.width, INSET.controls.arrow.head) / 2) + INSET.controls.arrow.band;
 
-  it('shows the turn ring beside the circle for an active tool, never inside it', () => {
-    const { panel, controls, turn, push, frame } = mount(WIDE);
+  it('shows the turn ring round the circle for an active tool, on its centre, with the arrow away', () => {
+    const { panel, controls, turn, push, frame } = mount();
     panel.hook.candidates(null, [tool({ progress: 0.5, tighten: true, loosen: true })], nothing);
     panel.update();
     expect(controls.attributes.hidden).toBeUndefined();
     expect(turn().attributes.hidden).toBeUndefined();
     expect(push().attributes.hidden).toBe('');
     const { centre, radius } = frame();
-    const [x, y] = at(turn());
-    expect(y).toBe(centre[1]);
-    expect(Math.abs(x - centre[0])).toBeGreaterThanOrEqual(radius + INSET.controls.gap + half);
+    expect(at(turn())).toEqual(centre);
+    expect(turn().all('inset-controls__track')[0].attributes.r).toBe(String(radius + INSET.controls.ring.gap));
   });
 
-  it('puts the control below the circle on a phone too narrow for either side, wholly on screen', () => {
-    const { panel, turn, frame } = mount();
-    panel.hook.candidates(null, [tool()], nothing);
+  it('puts the push arrow below the circle on a phone too narrow for either side, wholly on screen', () => {
+    const { panel, push, frame } = mount();
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
-    const [x, y] = at(turn());
+    const [x, y] = at(push());
     expect(x).toBe(frame().centre[0]);
     expect(y).toBeGreaterThanOrEqual(frame().centre[1] + frame().radius + INSET.controls.gap + half);
     expect(x - half).toBeGreaterThanOrEqual(0);
@@ -296,47 +306,48 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
     expect(controls.attributes.hidden).toBe('');
   });
 
-  it('moves to the next slot when the control cluster covers the first', () => {
+  it('moves the push arrow to the next slot when the control cluster covers the first', () => {
     const first = mount(WIDE);
-    first.panel.hook.candidates(null, [tool()], nothing);
+    first.panel.hook.candidates(null, [subject()], nothing);
     first.panel.update();
-    const [x, y] = at(first.turn());
+    const [x, y] = at(first.push());
     first.panel.dispose();
     obstacleBoxes = [{ left: x - 10, top: y - 10, right: x + 10, bottom: y + 10 }];
-    const { panel, turn, frame } = mount(WIDE);
-    panel.hook.candidates(null, [tool()], nothing);
+    const { panel, push, frame } = mount(WIDE);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
-    const moved = at(turn());
+    const moved = at(push());
     expect(Math.sign(moved[0] - frame().centre[0])).toBe(-Math.sign(x - frame().centre[0]));
   });
 
   // Review round 2: the catalog's thumb sits upper left; the control must not cover it or take its taps.
-  it('keeps clear of a booklet’s docked thumb too, and ignores one with no box on screen', () => {
+  it('keeps the push arrow clear of a booklet’s docked thumb too, and ignores one with no box on screen', () => {
     const first = mount(WIDE);
-    first.panel.hook.candidates(null, [tool()], nothing);
+    first.panel.hook.candidates(null, [subject()], nothing);
     first.panel.update();
-    const [x, y] = at(first.turn());
+    const [x, y] = at(first.push());
     first.panel.dispose();
     obstacleBoxes = [
       { left: x - 20, top: y - 20, right: x + 20, bottom: y + 20 },
       { left: 0, top: 0, right: 0, bottom: 0 },
     ];
-    const { panel, turn, frame } = mount(WIDE);
-    panel.hook.candidates(null, [tool()], nothing);
+    const { panel, push, frame } = mount(WIDE);
+    panel.hook.candidates(null, [subject()], nothing);
     panel.update();
-    expect(Math.sign(at(turn())[0] - frame().centre[0])).toBe(-Math.sign(x - frame().centre[0]));
+    expect(Math.sign(at(push())[0] - frame().centre[0])).toBe(-Math.sign(x - frame().centre[0]));
   });
 
   it('drives the connected router: a sweep of the ring turns the tool, taps press and pull the dowel', () => {
-    const { panel, turn, push } = mount();
+    const { panel, turn, push, frame } = mount();
     const calls: unknown[][] = [];
     panel.connect({ turnGrip: (...args) => !!calls.push(['turn', ...args]), pressJoint: (...args) => !!calls.push(['press', ...args]), pullJoint: (...args) => !!calls.push(['pull', ...args]) });
     panel.hook.candidates(null, [tool({ joint: 7 })], nothing);
     panel.update();
-    const [cx, cy] = at(turn());
-    const r = INSET.controls.ring.radius;
-    turn().fire('pointerdown', { clientX: cx + r, clientY: cy });
-    turn().fire('pointermove', { clientX: cx, clientY: cy + r });
+    // The ring encircles the circle: swept about its centre, from a press on the band.
+    const { centre, radius } = frame();
+    const r = radius + INSET.controls.ring.gap;
+    turn().fire('pointerdown', { clientX: centre[0] + r, clientY: centre[1] });
+    turn().fire('pointermove', { clientX: centre[0], clientY: centre[1] + r });
     expect(calls).toEqual([['turn', 'key-1', expect.closeTo(Math.PI / 2, 5)]]);
     calls.length = 0;
     panel.hook.candidates(null, [subject({ joint: 9 })], nothing);
@@ -351,13 +362,14 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
   });
 
   it('does nothing from a control before the router is connected', () => {
-    const { panel, turn } = mount();
+    const { panel, turn, frame } = mount();
     panel.hook.candidates(null, [tool()], nothing);
     panel.update();
-    const [cx, cy] = at(turn());
+    const { centre, radius } = frame();
+    const r = radius + INSET.controls.ring.gap;
     expect(() => {
-      turn().fire('pointerdown', { clientX: cx + INSET.controls.ring.radius, clientY: cy });
-      turn().fire('pointermove', { clientX: cx, clientY: cy + INSET.controls.ring.radius });
+      turn().fire('pointerdown', { clientX: centre[0] + r, clientY: centre[1] });
+      turn().fire('pointermove', { clientX: centre[0], clientY: centre[1] + r });
     }).not.toThrow();
   });
 
@@ -366,5 +378,26 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
     expect(container.children).toHaveLength(3);
     panel.dispose();
     expect(container.children).toHaveLength(0);
+  });
+
+  // Ben's phone test: picking up a tool and having it deselect. A press on the canvas owns the finger until it
+  // lifts, so a control under a carried part never takes its moves.
+  it('goes inert while a press is on the canvas, and live again once it lifts', () => {
+    const { panel, controls, canvasListeners, turn } = mount();
+    panel.hook.candidates(null, [tool()], nothing);
+    panel.update();
+    expect(controls.attributes['data-inert']).toBeUndefined();
+    for (const fn of canvasListeners.get('pointerdown') ?? []) fn();
+    expect(controls.attributes['data-inert']).toBe('true');
+    expect(turn()).toBeDefined();
+    for (const fn of windowListeners.get('pointerup') ?? []) fn();
+    expect(controls.attributes['data-inert']).toBe('false');
+  });
+
+  it('stops listening to the canvas and window when the panel goes', () => {
+    const { panel, canvasListeners } = mount();
+    panel.dispose();
+    expect(canvasListeners.get('pointerdown')).toEqual([]);
+    expect(windowListeners.get('pointerup') ?? []).toEqual([]);
   });
 });
