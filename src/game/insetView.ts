@@ -2,6 +2,7 @@
 // metres in, plain records out; src/scene/inset.ts turns them into a Three camera.
 
 import { INSET } from '../constants.js';
+import { bubbleOverhang } from './insetControls.js';
 import { add, scale, sub } from '../../tools/validate/lib/geometry.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 import type { ScreenPoint } from './dragMath.js';
@@ -70,20 +71,17 @@ export function insetLayout({ width, height }: Viewport): InsetLayout {
 /**
  * The circle for a viewport: its diameter a share of the shorter side clamped to the
  * layout's min and max; in portrait top-centre, in landscape on the right under the
- * control cluster, both inside `safe`, with room left round them for the turn ring.
+ * control cluster, both inside `safe`, with room left on the right for the control's bubble in landscape.
  */
 export function insetFrame(viewport: Viewport, safe: SafeInsets = { top: 0, right: 0 }, layout: InsetLayout = insetLayout(viewport)): InsetFrame {
   const { share, min, max } = INSET[layout];
-  // The turn ring round the circle needs room outside it: the offsets from the screen edge are to its outer edge.
-  const reach = ringReach();
   const diameter = Math.min(max, Math.max(min, share * Math.min(viewport.width, viewport.height)));
   const radius = diameter / 2;
-  if (layout === 'portrait') return { centre: [viewport.width / 2, safe.top + INSET.portrait.top + reach + radius], radius };
-  return { centre: [viewport.width - safe.right - INSET.landscape.right - reach - radius, safe.top + INSET.landscape.top + reach + radius], radius };
+  if (layout === 'portrait') return { centre: [viewport.width / 2, safe.top + INSET.portrait.top + radius], radius };
+  // The control's bubble hangs off the circle's lower right: the right offset is to its edge when it reaches past the rim.
+  const hang = bubbleOverhang({ centre: [0, 0], radius });
+  return { centre: [viewport.width - safe.right - INSET.landscape.right - hang - radius, safe.top + INSET.landscape.top + radius], radius };
 }
-
-/** How far the turn ring's grab band reaches past the circle's rim, CSS px: what the circle leaves room for on every side. */
-export const ringReach = () => INSET.controls.ring.gap + INSET.controls.ring.band;
 
 /** Whether a client-px `point` is on or inside the circle. */
 export function insideInset([x, y]: ScreenPoint, { centre, radius }: InsetFrame) {

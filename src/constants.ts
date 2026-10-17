@@ -902,18 +902,16 @@ export const INSET = {
   // The render target's multisampling, and the circle's rim segments.
   samples: 4,
   segments: 64,
-  // The controls round and beside the circle (src/game/insetControls.ts, src/ui/insetControls.ts): the turn ring
-  // encircles the circle, sharing its centre — the gap from the rim to the ring's line, the ring and arc widths, the
-  // arrowhead size, and the grab band either side of the line, its inner half cut off at the rim so the circle itself
-  // stays picture-only (CSS px). The circle's offsets from the screen edge count to the ring's outer edge. The push arrow
-  // (its shaft length and width, head size and the grab band round it), the gap between a control and the circle's rim, the gap kept from the
-  // control cluster, and which slots each layout offers the push arrow, in preference order (portrait's `below` is the last resort, where a phone is too narrow to have either side clear).
+  // The controls (src/game/insetControls.ts, src/ui/insetControls.ts) are sub-bubbles attached to the circle as the
+  // manual's tool bubble is attached to its first detail inset (BOOKLET.inset): a paper disc `share` of the circle's
+  // radius, its centre `at` of the radius out along the lower-right diagonal, so it sits partly on the rim and partly
+  // off it, ringed at the circle's own line weight. `min` is its smallest radius, so a finger can grab it (CSS px).
+  // The turn bubble holds a ring `mark.radius` of its radius with an arc of progress and an arrowhead each way; the
+  // push bubble a down arrow, `arrow.length` and `arrow.head` of its radius.
   controls: {
-    ring: { gap: 12, width: 3, arcWidth: 7, arrowSize: 16, band: 18 },
-    arrow: { length: 64, width: 14, head: 22, band: 20 },
-    gap: 20,
-    clusterGap: 12,
-    slots: { portrait: ['left', 'right', 'below'], landscape: ['left', 'below'] },
+    bubble: { share: BOOKLET.inset.tool, at: BOOKLET.inset.toolAt, min: 26 },
+    mark: { radius: 0.62, width: 2.5, arcWidth: 5, arrowSize: 0.3 },
+    arrow: { length: 1, head: 0.38, width: 3 },
   },
 };
 

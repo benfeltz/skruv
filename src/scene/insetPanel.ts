@@ -1,16 +1,12 @@
 import * as THREE from 'three';
-import { INSET } from '../constants.js';
-import { controlFor, controlSlot, pushLook, toolScreenDirection, turnLook } from '../game/insetControls.js';
+import { controlFor, pushLook, turnLook } from '../game/insetControls.js';
 import { createInsetModel } from '../game/insetModel.js';
-import { insetCameraPose, insetFrame, insetLayout, insideInset } from '../game/insetView.js';
-import { STRIP_CLASS, THUMB_CLASS } from '../ui/booklet.js';
-import { CLUSTER_CLASS } from '../ui/controlCluster.js';
+import { insetCameraPose, insetFrame, insideInset } from '../game/insetView.js';
 import { createInsetOverlay } from '../ui/inset.js';
 import { createInsetControls } from '../ui/insetControls.js';
 import { createInset } from './inset.js';
 import type { InsetSubject } from '../game/insetModel.js';
-import type { ScreenBox } from '../game/insetControls.js';
-import type { InsetFrame, InsetLayout, SafeInsets } from '../game/insetView.js';
+import type { InsetFrame, SafeInsets } from '../game/insetView.js';
 import type { GestureRouter, InsetHook } from './gestureRouter.js';
 
 /** What the panel is built over: the canvas it frames in, the main camera, and where its ring and tail go. */
@@ -28,9 +24,9 @@ export interface InsetPanelDeps {
  * it and the overlay inks its ring and tail. This only composes them. The router's `hook`
  * feeds it each frame's candidates and its taps; `update()` runs after the router's update;
  * `render()` is the extra pass after the main render. The canvas fills the window, so its
- * client px are the circle's. Beside the circle sit the subject's control — the turn ring for a tool,
- * the push arrow for a dowel — placed clear of the control cluster and driving the router's actions
- * (`connect`, once the router exists); while the circle is offered or dismissed there is none.
+ * client px are the circle's. Attached to the circle, as the manual's tool bubble is to its detail
+ * inset, sits the subject's control — the spinner for a tool, the push bubble for a dowel — driving the router's
+ * actions (`connect`, once the router exists); while the circle is offered or dismissed there is none.
  */
 export function createInsetPanel({ domElement, camera, container, lines }: InsetPanelDeps) {
   const model = createInsetModel();
@@ -56,12 +52,6 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
   // (a rotation included), never per frame: a read after last frame's attribute writes forces a layout flush.
   let box: { left: number; top: number; width: number; height: number } | null = null;
   let placed: InsetFrame | null = null;
-  let layout: InsetLayout = 'portrait';
-  // The screen as the canvas covers it: a control stays inside.
-  let screen: ScreenBox = { left: 0, top: 0, right: 0, bottom: 0 };
-  // The boxes the controls keep clear of, measured with the canvas's: the control cluster and the booklets' docked
-  // thumbs and strip (the catalog's thumb, upper left). One not on screen has no box.
-  let obstacles: ScreenBox[] = [];
   const resized = () => {
     box = null;
   };
@@ -104,27 +94,22 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
         const { left, top, width, height } = domElement.getBoundingClientRect();
         box = { left, top, width, height };
         placed = insetFrame({ width, height }, probe.read(width, height));
-        layout = insetLayout({ width, height });
-        screen = { left, top, right: left + width, bottom: top + height };
-        obstacles = [...document.querySelectorAll(`.${CLUSTER_CLASS}, .${THUMB_CLASS}, .${STRIP_CLASS}`)].map((node) => node.getBoundingClientRect()).filter(({ width, height }) => width > 0 && height > 0);
       }
       const rect = box;
       frame = placed;
       camera.getWorldDirection(forward);
       forward.y = 0;
-      const pose = insetCameraPose(subject.centre, subject.axis, [forward.x, forward.y, forward.z]);
-      pass.aim(pose);
+      pass.aim(insetCameraPose(subject.centre, subject.axis, [forward.x, forward.y, forward.z]));
       joint.set(...subject.centre).project(camera);
       const anchor: [number, number] = [rect.left + ((joint.x + 1) / 2) * rect.width, rect.top + ((1 - joint.y) / 2) * rect.height];
       overlay.show({ frame, anchor: joint.z < 1 ? anchor : null, active: state === 'active' });
       const kind = state === 'active' ? controlFor(subject) : null;
       driven = kind ? subject : null;
       if (!kind) return controls.hide();
-      if (kind === 'turn') return controls.showTurn(frame, turnLook(subject));
-      const { centre } = controlSlot(frame, layout, toolScreenDirection(subject.axis, pose), { obstacles, bounds: screen }, INSET.controls);
-      controls.showPush(centre, pushLook(subject));
+      if (kind === 'turn') controls.showTurn(frame, turnLook(subject));
+      else controls.showPush(frame, pushLook(subject));
     },
-    /** The router's actions the controls drive: its ring turns the tool, its arrow presses a dowel home and backs it out. */
+    /** The router's actions the controls drive: its spinner turns the tool, its push bubble presses a dowel home and backs it out. */
     connect(router: Pick<GestureRouter, 'turnGrip' | 'pressJoint' | 'pullJoint'>) {
       actions = router;
     },

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INSET } from '../src/constants.js';
+import { bubbleOf } from '../src/game/insetControls.js';
 import { insetFrame } from '../src/game/insetView.js';
 import { createInsetPanel } from '../src/scene/insetPanel.js';
 import type { InsetSubject } from '../src/game/insetModel.js';
@@ -46,12 +47,7 @@ class FakeElement {
 
 const resizeListeners = new Set<() => void>();
 const windowListeners = new Map<string, (() => void)[]>();
-// The boxes of what the controls keep clear of (the control cluster, a booklet's docked thumb), as
-// document.querySelectorAll finds them: none by default.
-type Box = { left: number; top: number; right: number; bottom: number };
-let obstacleBoxes: Box[] = [];
 beforeEach(() => {
-  obstacleBoxes = [];
   resizeListeners.clear();
   windowListeners.clear();
   vi.stubGlobal('window', {
@@ -70,7 +66,6 @@ beforeEach(() => {
     createElement: () => new FakeElement(),
     createElementNS: () => new FakeElement(),
     getElementById: () => null,
-    querySelectorAll: () => obstacleBoxes.map((box) => ({ getBoundingClientRect: () => ({ ...box, width: box.right - box.left, height: box.bottom - box.top }) })),
   });
   vi.stubGlobal('getComputedStyle', () => ({ paddingTop: '47px', paddingRight: '0px' }));
 });
@@ -251,32 +246,30 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
     return [x, y];
   };
 
-  // A tablet-wide portrait screen, where either side of the circle has room.
-  const WIDE = { left: 0, top: 0, width: 800, height: 1000 };
-  const half = Math.max(INSET.controls.arrow.length / 2, Math.max(INSET.controls.arrow.width, INSET.controls.arrow.head) / 2) + INSET.controls.arrow.band;
-
-  it('shows the turn ring round the circle for an active tool, on its centre, with the arrow away', () => {
+  it('attaches the spinner to the circle for an active tool, as the manual’s tool bubble is, the push bubble away', () => {
     const { panel, controls, turn, push, frame } = mount();
     panel.hook.candidates(null, [tool({ progress: 0.5, tighten: true, loosen: true })], nothing);
     panel.update();
     expect(controls.attributes.hidden).toBeUndefined();
     expect(turn().attributes.hidden).toBeUndefined();
     expect(push().attributes.hidden).toBe('');
-    const { centre, radius } = frame();
-    expect(at(turn())).toEqual(centre);
-    expect(turn().all('inset-controls__track')[0].attributes.r).toBe(String(radius + INSET.controls.ring.gap));
+    const bubble = bubbleOf(frame());
+    expect(at(turn())).toEqual(bubble.centre);
+    expect(turn().all('inset-controls__bubble')[0].attributes.r).toBe(String(bubble.radius));
   });
 
-  it('puts the push arrow below the circle on a phone too narrow for either side, wholly on screen', () => {
+  it('attaches the push bubble the same way, wholly on screen, partly over the circle’s rim', () => {
     const { panel, push, frame } = mount();
     panel.hook.candidates(null, [subject()], nothing);
     panel.update();
     const [x, y] = at(push());
-    expect(x).toBe(frame().centre[0]);
-    expect(y).toBeGreaterThanOrEqual(frame().centre[1] + frame().radius + INSET.controls.gap + half);
-    expect(x - half).toBeGreaterThanOrEqual(0);
-    expect(x + half).toBeLessThanOrEqual(390);
-    expect(y + half).toBeLessThanOrEqual(844);
+    const { centre, radius } = frame();
+    expect([x, y]).toEqual(bubbleOf(frame()).centre);
+    const bubbleRadius = bubbleOf(frame()).radius;
+    expect(x - bubbleRadius).toBeGreaterThanOrEqual(0);
+    expect(x + bubbleRadius).toBeLessThanOrEqual(390);
+    expect(y + bubbleRadius).toBeLessThanOrEqual(844);
+    expect(Math.hypot(x - centre[0], y - centre[1]) - bubbleRadius).toBeLessThan(radius);
   });
 
   it('shows the push arrow for a dowel, black while seated, green once it is pressed home and stays', () => {
@@ -306,46 +299,15 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
     expect(controls.attributes.hidden).toBe('');
   });
 
-  it('moves the push arrow to the next slot when the control cluster covers the first', () => {
-    const first = mount(WIDE);
-    first.panel.hook.candidates(null, [subject()], nothing);
-    first.panel.update();
-    const [x, y] = at(first.push());
-    first.panel.dispose();
-    obstacleBoxes = [{ left: x - 10, top: y - 10, right: x + 10, bottom: y + 10 }];
-    const { panel, push, frame } = mount(WIDE);
-    panel.hook.candidates(null, [subject()], nothing);
-    panel.update();
-    const moved = at(push());
-    expect(Math.sign(moved[0] - frame().centre[0])).toBe(-Math.sign(x - frame().centre[0]));
-  });
-
-  // Review round 2: the catalog's thumb sits upper left; the control must not cover it or take its taps.
-  it('keeps the push arrow clear of a booklet’s docked thumb too, and ignores one with no box on screen', () => {
-    const first = mount(WIDE);
-    first.panel.hook.candidates(null, [subject()], nothing);
-    first.panel.update();
-    const [x, y] = at(first.push());
-    first.panel.dispose();
-    obstacleBoxes = [
-      { left: x - 20, top: y - 20, right: x + 20, bottom: y + 20 },
-      { left: 0, top: 0, right: 0, bottom: 0 },
-    ];
-    const { panel, push, frame } = mount(WIDE);
-    panel.hook.candidates(null, [subject()], nothing);
-    panel.update();
-    expect(Math.sign(at(push())[0] - frame().centre[0])).toBe(-Math.sign(x - frame().centre[0]));
-  });
-
-  it('drives the connected router: a sweep of the ring turns the tool, taps press and pull the dowel', () => {
+  it('drives the connected router: a sweep of the spinner turns the tool, taps press and pull the dowel', () => {
     const { panel, turn, push, frame } = mount();
     const calls: unknown[][] = [];
     panel.connect({ turnGrip: (...args) => !!calls.push(['turn', ...args]), pressJoint: (...args) => !!calls.push(['press', ...args]), pullJoint: (...args) => !!calls.push(['pull', ...args]) });
     panel.hook.candidates(null, [tool({ joint: 7 })], nothing);
     panel.update();
-    // The ring encircles the circle: swept about its centre, from a press on the band.
-    const { centre, radius } = frame();
-    const r = radius + INSET.controls.ring.gap;
+    // Swept about the bubble's centre, from a press on it.
+    const { centre, radius } = bubbleOf(frame());
+    const r = radius * INSET.controls.mark.radius;
     turn().fire('pointerdown', { clientX: centre[0] + r, clientY: centre[1] });
     turn().fire('pointermove', { clientX: centre[0], clientY: centre[1] + r });
     expect(calls).toEqual([['turn', 'key-1', expect.closeTo(Math.PI / 2, 5)]]);
@@ -365,8 +327,8 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
     const { panel, turn, frame } = mount();
     panel.hook.candidates(null, [tool()], nothing);
     panel.update();
-    const { centre, radius } = frame();
-    const r = radius + INSET.controls.ring.gap;
+    const { centre, radius } = bubbleOf(frame());
+    const r = radius * INSET.controls.mark.radius;
     expect(() => {
       turn().fire('pointerdown', { clientX: centre[0] + r, clientY: centre[1] });
       turn().fire('pointermove', { clientX: centre[0], clientY: centre[1] + r });
