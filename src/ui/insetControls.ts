@@ -1,7 +1,8 @@
 import { COLORS, FASTENER, GESTURE, INSET } from '../constants.js';
 import { createCrank } from '../game/crankMath.js';
-import { ringRadians } from '../game/insetControls.js';
+import { ringGrab, ringRadians } from '../game/insetControls.js';
 import { arcLength } from '../game/turnRing.js';
+import { put } from './svgAttrs.js';
 import type { ScreenPoint } from '../game/dragMath.js';
 
 // The controls beside the detail inset's circle: the turn ring (grabbed and swept to turn the tool, its arc at the
@@ -85,17 +86,6 @@ function injectStyle() {
   document.head.append(style);
 }
 
-// The attribute writes each node has had, so a frame rewrites only what changed (as src/ui/inset.ts).
-const written = new WeakMap<object, Record<string, string>>();
-function put(node: Element, name: string, value: string | number) {
-  const text = String(value);
-  const seen = written.get(node) ?? {};
-  written.set(node, seen);
-  if (seen[name] === text) return;
-  seen[name] = text;
-  node.setAttribute(name, text);
-}
-
 const svg = (tag: string, className: string) => {
   const node = document.createElementNS(SVG_NS, tag);
   node.setAttribute('class', className);
@@ -125,7 +115,9 @@ function createTurn({ onTurn }: InsetControlHandlers) {
   const end = () => {
     crank = null;
   };
+  // A press anywhere in the disc is the ring's — it never reaches the camera — but only one on the band turns it.
   group.addEventListener('pointerdown', (event) => {
+    if (!ringGrab(pointOf(event), centre)) return;
     (event.target as Element | null)?.setPointerCapture?.(event.pointerId);
     crank = createCrank(FASTENER.crankDeadzone);
     crank.move(centre, pointOf(event));

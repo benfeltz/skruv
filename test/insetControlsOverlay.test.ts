@@ -143,6 +143,22 @@ describe('the inset controls overlay', () => {
       expect(total()).toBeCloseTo(-Math.PI / 2, 1);
     });
 
+    it('turns only from a press on the band: one in the middle, or past the band, does nothing', () => {
+      const { controls, turn, turns } = mount();
+      controls.showTurn(CENTRE, lookTurn());
+      for (const start of [onRing(0, 0), onRing(0, ring.radius + ring.band + 4)]) {
+        turn.fire('pointerdown', start);
+        turn.fire('pointermove', onRing(40));
+        turn.fire('pointermove', onRing(80));
+        turn.fire('pointerup', onRing(80));
+      }
+      expect(turns).toEqual([]);
+      expect(turn.captured).toEqual([]);
+      // Still turns from the band's inner and outer edges.
+      sweep(turn, 0, 30);
+      expect(turns.length).toBeGreaterThan(0);
+    });
+
     it('reports nothing once the finger has lifted, and nothing for a press with no sweep', () => {
       const { controls, turn, turns } = mount();
       controls.showTurn(CENTRE, lookTurn());

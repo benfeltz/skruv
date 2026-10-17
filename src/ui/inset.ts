@@ -1,4 +1,5 @@
 import { COLORS, INSET } from '../constants.js';
+import { put } from './svgAttrs.js';
 import type { ScreenPoint } from '../game/dragMath.js';
 import type { InsetFrame } from '../game/insetView.js';
 
@@ -59,17 +60,6 @@ function injectStyle() {
     }
   `;
   document.head.append(style);
-}
-
-// The attribute writes each node has had, so a frame rewrites only what changed.
-const written = new WeakMap<object, Record<string, string>>();
-function put(node: Element, name: string, value: string | number) {
-  const text = String(value);
-  const seen = written.get(node) ?? {};
-  written.set(node, seen);
-  if (seen[name] === text) return;
-  seen[name] = text;
-  node.setAttribute(name, text);
 }
 
 const svg = (tag: string, className: string) => {
