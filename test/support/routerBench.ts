@@ -76,6 +76,8 @@ export interface InsetRecorder {
   outside: ScreenPoint[];
   tapsOn: string[];
   consume: boolean;
+  /** The circle, as `covers` answers: a tap inside it is the inset's alone. */
+  circle: { centre: ScreenPoint; radius: number } | null;
 }
 
 export function insetRecorder(): InsetRecorder {
@@ -84,7 +86,9 @@ export function insetRecorder(): InsetRecorder {
     outside: [],
     tapsOn: [],
     consume: false,
+    circle: null,
     hook: {
+      covers: ([x, y]) => recorder.circle !== null && Math.hypot(x - recorder.circle.centre[0], y - recorder.circle.centre[1]) <= recorder.circle.radius,
       candidates: (offered, engaged) => recorder.frames.push({ offered, engaged: [...engaged] }),
       tapOutside: (point) => {
         recorder.outside.push(point);

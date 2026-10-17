@@ -43,6 +43,7 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
       offered = nextOffered;
       engaged = nextEngaged;
     },
+    covers: (point) => frame !== null && insideInset(point, frame),
     tapOutside: (point) => frame !== null && !insideInset(point, frame) && model.tapOutside(),
     tapOn: (part) => model.tapOn(part.id),
   };

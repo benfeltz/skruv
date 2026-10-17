@@ -152,6 +152,29 @@ describe('the router’s taps are the inset’s', () => {
     expect(b.recorder.outside).toEqual([]);
   });
 
+  it('swallows a tap on the circle: the part behind it is untouched and the inset is not asked again', () => {
+    const b = keyed();
+    const at = b.screen(b.key.mesh.position);
+    b.recorder.circle = { centre: [at.clientX, at.clientY], radius: 40 };
+    b.tap(at);
+    expect(keyJoints(b)).toHaveLength(1);
+    expect(b.recorder.tapsOn).toEqual([]);
+    expect(b.recorder.outside).toEqual([]);
+    expect(b.taps.at(-1)).not.toBeNull();
+  });
+
+  it('a tap on a turn ring dismisses nothing and reopens nothing', () => {
+    const b = keyed();
+    b.hold(1);
+    const dial = b.dials.at(-1)![0];
+    // On the ring's band, away from the key itself.
+    const on = { clientX: dial.centre[0], clientY: dial.centre[1] + 64 };
+    b.tap(on);
+    expect(b.recorder.outside).toEqual([]);
+    expect(b.recorder.tapsOn).toEqual([]);
+    expect(keyJoints(b)).toHaveLength(1);
+  });
+
   it('lets a consumed tap on a seated dowel leave it unpressed', () => {
     const b = bench();
     const at = b.carry(b.dowel);

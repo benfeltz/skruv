@@ -157,10 +157,11 @@ export interface GestureRouter {
 
 /**
  * What the router tells the detail inset (src/scene/insetPanel.ts): each frame the seat on offer to carried hardware
- * and the joints engaged, and the two taps that are the inset's — one outside its circle, one on a part.
+ * and the joints engaged, and the taps that are the inset's: one on its circle (consumed), one outside it, one on a part.
  */
 export interface InsetHook {
   candidates(offered: InsetSubject | null, engaged: readonly InsetSubject[]): void;
+  covers(point: ScreenPoint): boolean;
   tapOutside(point: ScreenPoint): boolean;
   tapOn(part: Part): boolean;
 }
@@ -251,11 +252,12 @@ const PULL_AXIS_PROBE = 0.05;
  *            gone; a lift (second finger, wheel) moves the line with it, and Shift + scroll
  *            moves the line, with or without a drag. A part the
  *            line holds is never a seat for another: it drops when the line lets go.
- *   inset  — `{ candidates(offered, engaged), tapOutside(point), tapOn(part) }` (src/scene/insetPanel.ts):
+ *   inset  — `{ candidates(offered, engaged), covers(point), tapOutside(point), tapOn(part) }` (src/scene/insetPanel.ts):
  *            each frame the seat on offer to the carried hardware (the workable seat nearest an
  *            end, inside the aim zone) and every joint engaged (a seated tool's, a seated
  *            dowel, pin or fitting not yet pushed home), re-resolved from the poses; and the
- *            taps. A tap on a part first asks `tapOn`: true means the inset was dismissed and
+ *            taps. A tap on the circle itself (`covers`) goes no further — it reaches no part
+ *            behind the picture — nor does one on a ring or dial, which dismisses nothing. A tap on a part then asks `tapOn`: true means the inset was dismissed and
  *            the tap only reopened it, so it goes no further. Otherwise `tapOutside` may
  *            dismiss it and the tap carries on as ever — dismissing never swallows a tap.
  *   turnRing — `{ show(dials), hide() }` (src/ui/turnRing.ts): a dial for each turn the
@@ -1913,13 +1915,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (!effect) return;
     if (effect.type === 'tap') {
       const hit = effect.hit;
+      // A ring is for turning: a tap on a gizmo ring or a turn ring does nothing — it never dismisses the inset either.
+      if (hit?.kind === 'ring' || hit?.dial) return;
+      // A tap on the circle is on a picture: it reaches no part behind it.
+      if (inset?.covers([effect.x, effect.y])) return;
       // A dismissed inset's engaged part: the tap only reopens it. Asked before the dismissal below, or
       // the tap that would reopen it would first put it away.
-      if (hit?.kind === 'part' && !hit.dial && inset?.tapOn(hit.part)) return;
+      if (hit && inset?.tapOn(hit.part)) return;
       // A tap outside the circle puts the inset away; the tap itself carries on as ever.
       inset?.tapOutside([effect.x, effect.y]);
-      // A ring is for turning: a tap on a gizmo ring or a turn ring does nothing.
-      if (hit?.kind === 'ring' || hit?.dial) return;
       if (hit) tapPart(hit.part);
       else onTap?.(null);
       return;
