@@ -262,7 +262,7 @@ describe('the sky turns', () => {
     expect(cloud.color.b).toBeGreaterThan(cloud.color.r * 1.2);
     // The ink stays black, and the moon is its own light: untinted, in the moon's own tone.
     expect(ink.getHex()).toBe(inkNoon);
-    expect(ink.getHex()).toBe(COLORS.stageInk);
+    expect(ink.getHex()).toBe(COLORS.ink);
     expect(disc.color.getHex()).toBe(COLORS.sceneryFaint);
   });
 

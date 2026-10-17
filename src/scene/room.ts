@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
-import { COLORS, STAGE } from '../constants.js';
+import { COLORS, INK, STAGE } from '../constants.js';
 import { advance, phaseFromClock, skyColourAt } from '../game/skyCycle.js';
 import type { Rgb } from '../game/skyCycle.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -21,7 +21,7 @@ export function createRoom() {
   const group = new THREE.Group();
   group.name = 'room';
 
-  const ink = new LineMaterial({ color: COLORS.stageInk, linewidth: STAGE.inkWidth });
+  const ink = new LineMaterial({ color: COLORS.ink, linewidth: INK.lineWidth });
   const floor = new THREE.MeshStandardMaterial({ color: COLORS.floor });
   const wall = new THREE.MeshStandardMaterial({ color: COLORS.wall });
   const trim = new THREE.MeshStandardMaterial({ color: COLORS.trim });
@@ -96,7 +96,7 @@ export function createRoom() {
     backWall,
     /**
      * Per frame: hide the walls the eye is behind; keep the ink's resolution at the canvas's
-     * CSS size, so `STAGE.inkWidth` is the same on screen at any pixel ratio; turn the sky
+     * CSS size, so `INK.lineWidth` is the same on screen at any pixel ratio; turn the sky
      * on by `delta` seconds of game time.
      */
     update(eye: THREE.Vector3, renderer: THREE.WebGLRenderer, delta: number) {
