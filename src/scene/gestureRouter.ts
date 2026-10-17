@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { AIM, COLORS, DROP, FASTENER, GESTURE, PANEL, PICK, RING, ROOM, SNAP, TURN_RING } from '../constants.js';
-import { areCompatible, canPassInto, CONNECTOR, isFastenerEnd, KIND, passesThrough } from '../../tools/validate/lib/vocabulary.js';
+import { areCompatible, canPassInto, CONNECTOR, isFastenerEnd, KIND, kindOf, passesThrough } from '../../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, contains, rotateVector } from '../../tools/validate/lib/geometry.js';
 import { advancing, capture, carryPose, layersOf } from '../game/assembly.js';
 import { PART_TYPES } from '../game/item.js';
@@ -8,7 +8,7 @@ import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
 import { driveRadians, ratchetTicks } from '../game/driveMath.js';
 import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rebaseDragOffset, rotatedHalfExtents } from '../game/dragMath.js';
-import { fastensOn, isCrankKind, isFastened, isHome, isTapKind, sinksAsTurned, spanOf } from '../game/fasteners.js';
+import { fastensOn, isCrankKind, isFastened, isHome, isTapKind, sinksAsTurned, spanOf, STATE } from '../game/fasteners.js';
 import {
   fastenEvent,
   grabEvent,
@@ -26,6 +26,7 @@ import { applyTransform, findSnap } from '../game/snapMath.js';
 import { aimAngle, aimedRotation, aimStep, aimWeight, nearestTarget } from '../game/toolAim.js';
 import { isSeatTarget, isToolTip, isWorkable, ringStrengths, seatedHardware } from '../game/toolTargets.js';
 import type { Probe } from '../game/toolTargets.js';
+import type { InsetSubject } from '../game/insetModel.js';
 import { gripOf, isDrawn, isTurnHome, isTurnStalled, pickDial, tightensClockwise, turnProgress } from '../game/turnRing.js';
 import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { FitPair, Relatives } from '../game/panelFit.js';
@@ -154,6 +155,16 @@ export interface GestureRouter {
   dispose(): void;
 }
 
+/**
+ * What the router tells the detail inset (src/scene/insetPanel.ts): each frame the seat on offer to carried hardware
+ * and the joints engaged, and the two taps that are the inset's — one outside its circle, one on a part.
+ */
+export interface InsetHook {
+  candidates(offered: InsetSubject | null, engaged: readonly InsetSubject[]): void;
+  tapOutside(point: ScreenPoint): boolean;
+  tapOn(part: Part): boolean;
+}
+
 /** What `createGestureRouter` takes — see there. */
 export interface GestureRouterOptions {
   domElement: HTMLElement;
@@ -171,6 +182,7 @@ export interface GestureRouterOptions {
   events?: Pick<Bus, 'emit'>;
   hold?: { readonly held: Part | null; readonly height: number; readonly goal: number; target(height: number): void; jump(height: number): void };
   turnRing?: { show(dials: readonly Dial[]): void; hide(): void };
+  inset?: InsetHook;
   onRatchet?: (count: number) => void;
   onRehome?: (kind: FastenerKind) => void;
   relatives?: Relatives;
@@ -239,6 +251,13 @@ const PULL_AXIS_PROBE = 0.05;
  *            gone; a lift (second finger, wheel) moves the line with it, and Shift + scroll
  *            moves the line, with or without a drag. A part the
  *            line holds is never a seat for another: it drops when the line lets go.
+ *   inset  — `{ candidates(offered, engaged), tapOutside(point), tapOn(part) }` (src/scene/insetPanel.ts):
+ *            each frame the seat on offer to the carried hardware (the workable seat nearest an
+ *            end, inside the aim zone) and every joint engaged (a seated tool's, a seated
+ *            dowel, pin or fitting not yet pushed home), re-resolved from the poses; and the
+ *            taps. A tap on a part first asks `tapOn`: true means the inset was dismissed and
+ *            the tap only reopened it, so it goes no further. Otherwise `tapOutside` may
+ *            dismiss it and the tap carries on as ever — dismissing never swallows a tap.
  *   turnRing — `{ show(dials), hide() }` (src/ui/turnRing.ts): a dial for each turn the
  *            graph has (`assembly.turns`) — round the head a seated tool is on, for as long
  *            as it is on; round the hole of a part circled by hand (a leg on its stud) while
@@ -271,7 +290,7 @@ const PULL_AXIS_PROBE = 0.05;
  * turns carried hardware's end toward a seat near it (self-aim), eases a dragged part
  * toward the seat on offer (seat assist) and fades the seat flash.
  */
-export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, targetRings, events, hold, turnRing, onRatchet, onRehome, relatives = new Map() }: GestureRouterOptions) {
+export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, targetRings, events, hold, turnRing, inset, onRatchet, onRehome, relatives = new Map() }: GestureRouterOptions) {
   const state = createGestureState<Press>();
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -1159,17 +1178,59 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // --- target rings: where carried hardware can go right now ---
 
+  // The seats the carried ends could go in right now. A dowel's two ends take the same holes: each counts once.
+  function workableSeats(ends: CarriedEnd[]) {
+    const catches = catcher(assembly.all());
+    return [...new Set(ends.flatMap((end) => end.seats))].filter((c) => isWorkable(c, catches));
+  }
+
   // Workable seats for the carried part, nearest the finger first, with how brightly each
   // lights — dark ones included.
   function ringsFor(ends: CarriedEnd[]) {
     const { held, pointer } = drag!;
-    const joints = assembly.all();
-    const catches = catcher(joints);
-    // A dowel's two ends take the same holes: each lights once.
-    const workable = [...new Set(ends.flatMap((end) => end.seats))].filter((c) => isWorkable(c, catches));
+    const workable = workableSeats(ends);
     const rect = domElement.getBoundingClientRect();
     const reach = ends.map((end) => connectorInWorld(end.connector, held!).position);
     return ringStrengths(workable, [pointer!.clientX, pointer!.clientY], (position) => screenPoint(position, rect), reach, RING);
+  }
+
+  // --- the detail inset: what it could frame ---
+
+  // A joint as the inset frames it: its hole in the world, the axis pointing into it.
+  function insetSubject(joint: AssemblyJoint, tool: PartId | null): InsetSubject {
+    const hole = connectorWorld(joint.host, joint.hostConnector);
+    return { joint: joint.id, kind: joint.kind, hardware: joint.hardware, host: joint.host, tool, centre: hole.position, axis: [-hole.axis[0], -hole.axis[1], -hole.axis[2]] };
+  }
+
+  // The workable seat nearest an end of the carried hardware, inside the aim zone, if any: what is on offer.
+  function offeredSubject(ends: CarriedEnd[] | null): InsetSubject | null {
+    if (!inset || !ends) return null;
+    const workable = new Set(workableSeats(ends));
+    const zone = ends.some((end) => isToolTip(end.connector.type)) ? AIM.toolZone : AIM.zone;
+    let best: { end: CarriedEnd; seat: WorldConnector; distance: number } | null = null;
+    for (const end of ends) {
+      const near = nearestTarget(endAt(end, drag!.held!), end.seats.filter((c) => workable.has(c)), zone);
+      if (near && (!best || near.distance < best.distance)) best = { end, seat: near.target, distance: near.distance };
+    }
+    if (!best) return null;
+    const { end, seat } = best;
+    return {
+      joint: -1,
+      kind: kindOf(end.connector.type)!,
+      hardware: drag!.part.id,
+      host: seat.part.id,
+      tool: isToolTip(end.connector.type) ? drag!.part.id : null,
+      centre: seat.position,
+      axis: [-seat.axis[0], -seat.axis[1], -seat.axis[2]],
+    };
+  }
+
+  // Every joint the inset could frame: each seated tool's, and each dowel, pin or fitting seated and not yet pushed home.
+  function engagedSubjects(): InsetSubject[] {
+    if (!inset) return [];
+    return assembly
+      .all()
+      .flatMap((joint) => (joint.kind === KIND.TOOL ? [insetSubject(joint, joint.hardware)] : isTapKind(joint.kind) && joint.fastener.state === STATE.SEATED ? [insetSubject(joint, null)] : []));
   }
 
   // The bolt a seated cam lock's recess would catch, as a turn of it would, and the joint a
@@ -1714,6 +1775,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     guideDrop();
     showRings(ends);
     showPanelRings(goal);
+    inset?.candidates(offeredSubject(ends), engagedSubjects());
     // Every turn the graph has, once per frame: the dials and the draw read the same records.
     const joints = assembly.all();
     const world = assembly.turns();
@@ -1850,9 +1912,15 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function apply(effect: GestureEffect<Press> | null, event?: MouseEvent) {
     if (!effect) return;
     if (effect.type === 'tap') {
+      const hit = effect.hit;
+      // A dismissed inset's engaged part: the tap only reopens it. Asked before the dismissal below, or
+      // the tap that would reopen it would first put it away.
+      if (hit?.kind === 'part' && !hit.dial && inset?.tapOn(hit.part)) return;
+      // A tap outside the circle puts the inset away; the tap itself carries on as ever.
+      inset?.tapOutside([effect.x, effect.y]);
       // A ring is for turning: a tap on a gizmo ring or a turn ring does nothing.
-      if (effect.hit?.kind === 'ring' || effect.hit?.dial) return;
-      if (effect.hit) tapPart(effect.hit.part);
+      if (hit?.kind === 'ring' || hit?.dial) return;
+      if (hit) tapPart(hit.part);
       else onTap?.(null);
       return;
     }
