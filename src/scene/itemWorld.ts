@@ -276,6 +276,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
       if (cue) haptics.cue(cue);
     },
   });
+  insetPanel.connect(router);
   // It lets go of any gesture and unbinds from the room's canvas.
   undo.push(() => router.dispose());
   // The line keeps whatever a panel carries (its dowels, its assembly) off the floor too: the router knows what it carries.
