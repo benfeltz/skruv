@@ -107,6 +107,7 @@ export type ItemWorld = ReturnType<typeof createItemWorld>;
 
 // The build: every acquisition pushes its own release onto `undo` as it happens.
 function buildItemWorld({ scene, camera, domElement, physics, cameraControls, events, haptics, isFree, ink, pages }: ItemWorldDeps, undo: (() => void)[]) {
+  const release = releaser(new Set<THREE.Material>([ink.lines, ink.hull]));
   const add = (...added: THREE.Object3D[]) => {
     scene.add(...added);
     // Off the scene, their GPU resources freed.
@@ -438,11 +439,15 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   };
 }
 
-// Frees what an object holds on the GPU. Shared materials are safe to free: three re-uploads
-// a disposed one the next time something draws with it.
-function release(object: THREE.Object3D) {
+// Frees what an object holds on the GPU. The materials the world borrows (the room's ink) are not its
+// to free: disposing them would recompile the room's own lines on every item swap.
+function releaser(borrowed: ReadonlySet<THREE.Material>) {
+  return (object: THREE.Object3D) => release(object, borrowed);
+}
+
+function release(object: THREE.Object3D, borrowed: ReadonlySet<THREE.Material>) {
   // Line covers LineSegments and the drop guide's plain Line; Mesh covers the fat LineSegments2.
   if (!(object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Points)) return;
   object.geometry.dispose();
-  for (const material of [object.material].flat()) material.dispose();
+  for (const material of [object.material].flat()) if (!borrowed.has(material)) material.dispose();
 }

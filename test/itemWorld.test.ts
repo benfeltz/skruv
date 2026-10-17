@@ -218,11 +218,23 @@ describe('the item world comes and goes without a trace', () => {
         held.add(object.geometry);
         if ('material' in object) for (const material of [object.material].flat() as THREE.Material[]) held.add(material);
       });
+    // The room's ink is borrowed, not the world's to free.
+    const borrowed = [deps.ink.lines, deps.ink.hull];
+    for (const material of borrowed) held.delete(material);
     expect(held.size).toBeGreaterThan(0);
     const freed = new Set<unknown>();
     for (const resource of held) vi.spyOn(resource, 'dispose').mockImplementation(() => freed.add(resource));
     world.dispose();
     expect([...held].filter((resource) => !freed.has(resource))).toEqual([]);
+    vi.restoreAllMocks();
+  });
+
+  it('leaves the room\'s ink materials alone on teardown', async () => {
+    const { deps } = await engine();
+    const world = createItemWorld(deps);
+    const disposed = [deps.ink.lines, deps.ink.hull].map((material) => vi.spyOn(material, 'dispose'));
+    world.dispose();
+    for (const spy of disposed) expect(spy).not.toHaveBeenCalled();
     vi.restoreAllMocks();
   });
 
