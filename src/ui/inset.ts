@@ -61,6 +61,17 @@ function injectStyle() {
   document.head.append(style);
 }
 
+// The attribute writes each node has had, so a frame rewrites only what changed.
+const written = new WeakMap<object, Record<string, string>>();
+function put(node: Element, name: string, value: string | number) {
+  const text = String(value);
+  const seen = written.get(node) ?? {};
+  written.set(node, seen);
+  if (seen[name] === text) return;
+  seen[name] = text;
+  node.setAttribute(name, text);
+}
+
 const svg = (tag: string, className: string) => {
   const node = document.createElementNS(SVG_NS, tag);
   node.setAttribute('class', className);
@@ -93,20 +104,20 @@ export function createInsetOverlay(container: HTMLElement) {
   return {
     element,
     show({ frame: { centre, radius }, anchor, active }: InsetMark) {
-      element.setAttribute('data-state', active ? 'active' : 'offered');
-      ring.setAttribute('cx', String(centre[0]));
-      ring.setAttribute('cy', String(centre[1]));
-      ring.setAttribute('r', String(radius));
+      put(element, 'data-state', active ? 'active' : 'offered');
+      put(ring, 'cx', centre[0]);
+      put(ring, 'cy', centre[1]);
+      put(ring, 'r', radius);
       const reach = anchor ? Math.hypot(anchor[0] - centre[0], anchor[1] - centre[1]) : 0;
       if (!anchor || reach <= radius) tail.setAttribute('hidden', '');
       else {
         const rim: ScreenPoint = [centre[0] + ((anchor[0] - centre[0]) / reach) * radius, centre[1] + ((anchor[1] - centre[1]) / reach) * radius];
-        line.setAttribute('x1', String(rim[0]));
-        line.setAttribute('y1', String(rim[1]));
-        line.setAttribute('x2', String(anchor[0]));
-        line.setAttribute('y2', String(anchor[1]));
-        dot.setAttribute('cx', String(anchor[0]));
-        dot.setAttribute('cy', String(anchor[1]));
+        put(line, 'x1', rim[0]);
+        put(line, 'y1', rim[1]);
+        put(line, 'x2', anchor[0]);
+        put(line, 'y2', anchor[1]);
+        put(dot, 'cx', anchor[0]);
+        put(dot, 'cy', anchor[1]);
         tail.removeAttribute('hidden');
       }
       element.removeAttribute('hidden');

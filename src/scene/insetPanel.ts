@@ -34,6 +34,14 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
   let engaged: readonly InsetSubject[] = [];
   // The circle this frame, or null while nothing shows.
   let frame: InsetFrame | null = null;
+  // The canvas's box and the circle in it, read from layout only when the window has been resized
+  // (a rotation included), never per frame: a read after last frame's attribute writes forces a layout flush.
+  let box: { left: number; top: number; width: number; height: number } | null = null;
+  let placed: InsetFrame | null = null;
+  const resized = () => {
+    box = null;
+  };
+  window.addEventListener('resize', resized);
   // Reused every frame.
   const forward = new THREE.Vector3();
   const joint = new THREE.Vector3();
@@ -59,8 +67,13 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
         overlay.hide();
         return;
       }
-      const rect = domElement.getBoundingClientRect();
-      frame = insetFrame({ width: rect.width, height: rect.height }, probe.read(rect.width, rect.height));
+      if (!box || !placed) {
+        const { left, top, width, height } = domElement.getBoundingClientRect();
+        box = { left, top, width, height };
+        placed = insetFrame({ width, height }, probe.read(width, height));
+      }
+      const rect = box;
+      frame = placed;
       camera.getWorldDirection(forward);
       forward.y = 0;
       pass.aim(insetCameraPose(subject.centre, subject.axis, [forward.x, forward.y, forward.z]));
@@ -81,6 +94,7 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
       overlay.hide();
     },
     dispose() {
+      window.removeEventListener('resize', resized);
       overlay.element.remove();
       probe.element.remove();
       pass.dispose();

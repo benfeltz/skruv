@@ -15,7 +15,9 @@ class FakeElement {
   constructor(tag: string) {
     this.tag = tag;
   }
+  writes = 0;
   setAttribute(name: string, value: string) {
+    this.writes++;
     this.attributes[name] = value;
   }
   removeAttribute(name: string) {
@@ -133,6 +135,19 @@ describe('the inset overlay', () => {
     overlay.show({ frame, anchor: [200, 450], active: true });
     overlay.show({ frame, anchor: null, active: true });
     expect(svg.first('inset__tail').hasAttribute('hidden')).toBe(true);
+  });
+
+  it('rewrites only what changed from one frame to the next', () => {
+    const { overlay, svg } = mount();
+    overlay.show({ frame, anchor: [200, 450], active: true });
+    const ring = svg.first('inset__ring');
+    const line = svg.first('inset__line');
+    const [ringWrites, lineWrites] = [ring.writes, line.writes];
+    overlay.show({ frame, anchor: [200, 450], active: true });
+    expect([ring.writes, line.writes]).toEqual([ringWrites, lineWrites]);
+    overlay.show({ frame, anchor: [200, 460], active: true });
+    expect(ring.writes).toBe(ringWrites);
+    expect(line.writes).toBeGreaterThan(lineWrites);
   });
 
   it('hide hides it', () => {

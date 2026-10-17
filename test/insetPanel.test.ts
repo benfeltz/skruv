@@ -31,7 +31,13 @@ class FakeElement {
   }
 }
 
+const resizeListeners = new Set<() => void>();
 beforeEach(() => {
+  resizeListeners.clear();
+  vi.stubGlobal('window', {
+    addEventListener: (type: string, fn: () => void) => type === 'resize' && resizeListeners.add(fn),
+    removeEventListener: (type: string, fn: () => void) => type === 'resize' && resizeListeners.delete(fn),
+  });
   const head = new FakeElement();
   vi.stubGlobal('document', {
     head,
@@ -55,13 +61,20 @@ const subject = (over: Partial<InsetSubject> = {}): InsetSubject => ({
 });
 const part = (id: string) => ({ id }) as Part;
 
-function mount(rect = { left: 0, top: 0, width: 390, height: 844 }) {
+function mount(initial = { left: 0, top: 0, width: 390, height: 844 }) {
+  let rect = initial;
+  let reads = 0;
   const camera = new THREE.PerspectiveCamera(50, rect.width / rect.height, 0.01, 100);
   camera.position.set(0, 0.5, 0.6);
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld(true);
   const container = new FakeElement();
-  const domElement = { getBoundingClientRect: () => rect } as unknown as HTMLElement;
+  const domElement = {
+    getBoundingClientRect: () => {
+      reads++;
+      return rect;
+    },
+  } as unknown as HTMLElement;
   const panel = createInsetPanel({ domElement, camera, container: container as unknown as HTMLElement, lines: { resolution: new THREE.Vector2(rect.width, rect.height) } });
   const renders: { scene: unknown; target: unknown }[] = [];
   const state = { current: null as unknown };
@@ -76,7 +89,11 @@ function mount(rect = { left: 0, top: 0, width: 390, height: 844 }) {
   const scene = new THREE.Scene();
   const frame = () => insetFrame({ width: rect.width, height: rect.height }, { top: 47, right: 0 });
   const svg = container.children[0];
-  return { panel, renderer, renders, scene, frame, svg, container };
+  const resize = (next: typeof rect) => {
+    rect = next;
+    for (const fn of resizeListeners) fn();
+  };
+  return { panel, renderer, renders, scene, frame, svg, container, resize, reads: () => reads };
 }
 
 describe('the inset panel', () => {
@@ -162,10 +179,25 @@ describe('the inset panel', () => {
     expect(svg.attributes.hidden).toBe('');
   });
 
+  it('reads layout only when the window is resized, not every frame', () => {
+    const { panel, svg, reads, resize } = mount();
+    panel.hook.candidates(null, [subject()]);
+    for (let i = 0; i < 5; i++) panel.update();
+    expect(reads()).toBe(1);
+    resize({ left: 0, top: 0, width: 844, height: 390 });
+    panel.update();
+    panel.update();
+    expect(reads()).toBe(2);
+    // Landscape now: the circle moved to the right.
+    const ring = svg.children[0].children[0];
+    expect(Number(ring.attributes.cx)).toBeGreaterThan(422);
+  });
+
   it('takes its overlay and probe off the page on dispose', () => {
     const { panel, container } = mount();
     expect(container.children.length).toBe(2);
     panel.dispose();
     expect(container.children.length).toBe(0);
+    expect(resizeListeners.size).toBe(0);
   });
 });
