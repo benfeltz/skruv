@@ -164,7 +164,8 @@ function createPush({ onPush, onPull }: InsetControlHandlers) {
   const group = svg('g', 'inset-controls__control inset-controls__push');
   const disc = svg('circle', 'inset-controls__bubble');
   const arrow = svg('polyline', 'inset-controls__arrow');
-  group.append(disc, arrow);
+  const base = svg('line', 'inset-controls__arrow');
+  group.append(disc, arrow, base);
 
   let pointing: PushLook['head'] = 'in';
   let pressedAt: ScreenPoint | null = null;
@@ -187,13 +188,20 @@ function createPush({ onPush, onPull }: InsetControlHandlers) {
     group,
     show(at: ScreenPoint, radius: number, look: PushLook) {
       pointing = look.head;
-      put(group, 'transform', `translate(${at[0]} ${at[1]})${look.head === 'out' ? ' scale(1 -1)' : ''}`);
+      put(group, 'transform', `translate(${at[0]} ${at[1]})`);
       put(group, 'data-seated', String(look.seated));
       put(disc, 'r', radius);
-      // The shaft down from the top, the chevron at its foot; the group's flip turns it round.
+      // The shaft down from the top, the chevron at its foot, over a baseline: the surface it presses onto. Only the arrow
+      // flips to point up once home; the baseline stays under it.
       const half = (radius * ARROW.length) / 2;
       const size = radius * ARROW.head;
+      const floor = (half * 2 + radius * ARROW.base.gap) / 2;
+      put(arrow, 'transform', `translate(0 ${-radius * ARROW.base.gap / 2})${look.head === 'out' ? ' scale(1 -1)' : ''}`);
       put(arrow, 'points', `0,${-half} 0,${half} ${chevron(0, half, Math.PI / 2, size)}`);
+      put(base, 'x1', -radius * ARROW.base.width / 2);
+      put(base, 'x2', radius * ARROW.base.width / 2);
+      put(base, 'y1', floor);
+      put(base, 'y2', floor);
     },
   };
 }

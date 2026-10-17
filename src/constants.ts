@@ -907,11 +907,12 @@ export const INSET = {
   // radius, its centre `at` of the radius out along the lower-right diagonal, so it sits partly on the rim and partly
   // off it, ringed at the circle's own line weight. `min` is its smallest radius, so a finger can grab it (CSS px).
   // The turn bubble holds a ring `mark.radius` of its radius with an arc of progress and an arrowhead each way; the
-  // push bubble a down arrow, `arrow.length` and `arrow.head` of its radius.
+  // push bubble a down arrow, `arrow.length` and `arrow.head` of its radius, onto a baseline `arrow.base.gap` of the
+  // radius under its tip and `arrow.base.width` of it wide: the download-to-surface icon, pressing onto a surface.
   controls: {
     bubble: { share: BOOKLET.inset.tool, at: BOOKLET.inset.toolAt, min: 26 },
     mark: { radius: 0.62, width: 2.5, arcWidth: 5, arrowSize: 0.3 },
-    arrow: { length: 1, head: 0.38, width: 3 },
+    arrow: { length: 0.9, head: 0.34, width: 3, base: { gap: 0.14, width: 0.8 } },
   },
 };
 

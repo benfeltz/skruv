@@ -221,14 +221,31 @@ describe('the inset controls overlay', () => {
       expect(push.attributes['data-seated']).toBe('false');
       expect(push.attributes.transform).toBe(`translate(${CENTRE[0]} ${CENTRE[1]})`);
       expect(push.all('inset-controls__bubble')[0].attributes.r).toBe(String(BUBBLE.radius));
-      expect(push.all('inset-controls__arrow')).toHaveLength(1);
+      expect(push.all('inset-controls__arrow').map((node) => node.tag)).toEqual(['polyline', 'line']);
+    });
+
+    it('draws a baseline under the arrow, inside the bubble, that stays put when the arrow flips', () => {
+      const { controls, push } = mount();
+      const [, base] = push.all('inset-controls__arrow');
+      for (const look of [{ seated: false, head: 'in' as const }, { seated: true, head: 'out' as const }]) {
+        controls.showPush(FRAME, look);
+        const [arrow] = push.all('inset-controls__arrow');
+        const tipY = Number(arrow.attributes.points.split(' ')[1].split(',')[1]) - (look.head === 'in' ? Number(/translate\(0 ([-\d.e]+)\)/.exec(arrow.attributes.transform)![1]) * -1 : 0);
+        expect(Number(base.attributes.y1)).toBe(Number(base.attributes.y2));
+        expect(Number(base.attributes.y1)).toBeGreaterThan(0);
+        expect(Number(base.attributes.y1)).toBeLessThan(BUBBLE.radius);
+        expect(Number(base.attributes.x2) - Number(base.attributes.x1)).toBeCloseTo(BUBBLE.radius * INSET.controls.arrow.base.width, 6);
+        expect(tipY).toBeLessThan(Number(base.attributes.y1));
+        expect(base.attributes.transform).toBeUndefined();
+        expect(arrow.attributes.transform.includes('scale(1 -1)')).toBe(look.head === 'out');
+      }
     });
 
     it('fills green in the bubble and flips its arrowhead once pressed home', () => {
       const { controls, push } = mount();
       controls.showPush(FRAME, { seated: true, head: 'out' });
       expect(push.attributes['data-seated']).toBe('true');
-      expect(push.attributes.transform).toContain('scale(1 -1)');
+      expect(push.all('inset-controls__arrow')[0].attributes.transform).toContain('scale(1 -1)');
       expect(head.children[0].textContent).toMatch(/data-seated='true'\] \.inset-controls__bubble \{[^}]*fill: #2e9e4f/);
     });
 
