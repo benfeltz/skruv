@@ -56,6 +56,8 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
   let box: { left: number; top: number; width: number; height: number } | null = null;
   let placed: InsetFrame | null = null;
   let layout: InsetLayout = 'portrait';
+  // The screen as the canvas covers it: a control stays inside.
+  let screen: ScreenBox = { left: 0, top: 0, right: 0, bottom: 0 };
   // The control cluster's box, measured with the canvas's: what the controls keep clear of.
   let cluster: ScreenBox | null = null;
   const resized = () => {
@@ -95,6 +97,7 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
         box = { left, top, width, height };
         placed = insetFrame({ width, height }, probe.read(width, height));
         layout = insetLayout({ width, height });
+        screen = { left, top, right: left + width, bottom: top + height };
         cluster = document.querySelector(`.${CLUSTER_CLASS}`)?.getBoundingClientRect() ?? null;
       }
       const rect = box;
@@ -109,7 +112,7 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
       const kind = state === 'active' ? controlFor(subject) : null;
       driven = kind ? subject : null;
       if (!kind) return controls.hide();
-      const { centre } = controlSlot(frame, layout, toolScreenDirection(subject.axis, pose), cluster ? [cluster] : [], INSET.controls);
+      const { centre } = controlSlot(frame, layout, toolScreenDirection(subject.axis, pose), { obstacles: cluster ? [cluster] : [], bounds: screen }, INSET.controls);
       if (kind === 'turn') controls.showTurn(centre, turnLook(subject));
       else controls.showPush(centre, pushLook(subject));
     },

@@ -46,7 +46,7 @@ export const pushLook = ({ pressed }: InsetSubject) => ({ seated: pressed, head:
 /** The sweep the ring was given, as the radians the tool turns (positive tightens). */
 export const ringRadians = (sweep: number) => RING_SIGN * sweep;
 
-/** Whether a press is on the ring's grab band round `centre`. */
+/** Whether a press is on the ring's grab band round `centre`: the ring itself, not its middle. */
 export const ringGrab = (point: ScreenPoint, centre: ScreenPoint) => dialHit(point, centre, { radius: INSET.controls.ring.radius, band: INSET.controls.ring.band });
 
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -62,8 +62,9 @@ export function toolScreenDirection(axis: Vec3, { position, target, up }: InsetP
   return [dot(axis, right) / span, -dot(axis, up) / (Math.hypot(...up) || 1)];
 }
 
-// Half the side of the box every control is placed as, so a ring and an arrow take the same slots.
-const halfOf = ({ ring, arrow }: Controls) => Math.max(ring.radius, arrow.length / 2, arrow.head);
+// Half the side of the box every control is placed as, so a ring and an arrow take the same slots: the reach of
+// what takes a press — the ring's grab band, the arrow's grab box — not just what is drawn.
+const halfOf = ({ ring, arrow }: Controls) => Math.max(ring.radius + ring.band, arrow.length / 2 + arrow.band, Math.max(arrow.width, arrow.head) / 2 + arrow.band);
 
 // The slot's centre: the circle's, moved out past its rim, the gap and the control's half-size.
 function slotCentre({ centre, radius }: InsetFrame, slot: Slot, controls: Controls): ScreenPoint {
@@ -75,23 +76,32 @@ function slotCentre({ centre, radius }: InsetFrame, slot: Slot, controls: Contro
 const collides = (box: ScreenBox, other: ScreenBox, grow: number) =>
   box.left < other.right + grow && box.right > other.left - grow && box.top < other.bottom + grow && box.bottom > other.top - grow;
 
+const within = (box: ScreenBox, bounds: ScreenBox) => box.left >= bounds.left && box.top >= bounds.top && box.right <= bounds.right && box.bottom <= bounds.bottom;
+
+/** What a control keeps clear of and inside: boxes it must not touch (the control cluster, grown by `clusterGap`), and the screen it must fit in. */
+export interface Placement {
+  obstacles: readonly ScreenBox[];
+  bounds: ScreenBox;
+}
+
 // The slots the layout offers, the one on the tip's side first, the rest in order.
 function slotOrder(layout: InsetLayout, [x, y]: ScreenPoint, controls: Controls): Slot[] {
   const offered: Slot[] = [...controls.slots[layout]];
-  const wanted: Slot = offered.includes('below') && y > Math.abs(x) ? 'below' : x < 0 ? 'left' : 'right';
+  // Landscape prefers below for a tip pointing down; portrait keeps to the sides, below only as the last resort.
+  const wanted: Slot = layout === 'landscape' && y > Math.abs(x) ? 'below' : x < 0 ? 'left' : 'right';
   return offered.includes(wanted) ? [wanted, ...offered.filter((slot) => slot !== wanted)] : offered;
 }
 
 /**
  * Where a control's centre goes beside the circle: the first slot, tip's side first, whose box keeps `clusterGap`
- * clear of every obstacle. If every slot collides the last is used — a control is never left out.
+ * clear of every obstacle and lies inside the screen. If no slot does the last is used — a control is never left out.
  */
-export function controlSlot(frame: InsetFrame, layout: InsetLayout, tipDirection: ScreenPoint, obstacles: readonly ScreenBox[], controls: Controls = INSET.controls) {
+export function controlSlot(frame: InsetFrame, layout: InsetLayout, tipDirection: ScreenPoint, { obstacles, bounds }: Placement, controls: Controls = INSET.controls) {
   const half = halfOf(controls);
   const centres = slotOrder(layout, tipDirection, controls).map((slot) => slotCentre(frame, slot, controls));
   const free = centres.find(([x, y]) => {
     const box = { left: x - half, top: y - half, right: x + half, bottom: y + half };
-    return obstacles.every((obstacle) => !collides(box, obstacle, controls.clusterGap));
+    return within(box, bounds) && obstacles.every((obstacle) => !collides(box, obstacle, controls.clusterGap));
   });
   return { centre: free ?? centres[centres.length - 1] };
 }

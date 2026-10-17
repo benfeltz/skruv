@@ -237,10 +237,13 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
     const [x, y] = /translate\(([-\d.e]+) ([-\d.e]+)\)/.exec(group.attributes.transform)!.slice(1).map(Number);
     return [x, y];
   };
-  const reach = (half = Math.max(INSET.controls.ring.radius, INSET.controls.arrow.length / 2, INSET.controls.arrow.head)) => INSET.controls.gap + half;
+
+  // A tablet-wide portrait screen, where either side of the circle has room.
+  const WIDE = { left: 0, top: 0, width: 800, height: 1000 };
+  const half = Math.max(INSET.controls.ring.radius + INSET.controls.ring.band, INSET.controls.arrow.length / 2 + INSET.controls.arrow.band);
 
   it('shows the turn ring beside the circle for an active tool, never inside it', () => {
-    const { panel, controls, turn, push, frame } = mount();
+    const { panel, controls, turn, push, frame } = mount(WIDE);
     panel.hook.candidates(null, [tool({ progress: 0.5, tighten: true, loosen: true })], nothing);
     panel.update();
     expect(controls.attributes.hidden).toBeUndefined();
@@ -249,7 +252,19 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
     const { centre, radius } = frame();
     const [x, y] = at(turn());
     expect(y).toBe(centre[1]);
-    expect(Math.abs(x - centre[0])).toBeGreaterThanOrEqual(radius + reach());
+    expect(Math.abs(x - centre[0])).toBeGreaterThanOrEqual(radius + INSET.controls.gap + half);
+  });
+
+  it('puts the control below the circle on a phone too narrow for either side, wholly on screen', () => {
+    const { panel, turn, frame } = mount();
+    panel.hook.candidates(null, [tool()], nothing);
+    panel.update();
+    const [x, y] = at(turn());
+    expect(x).toBe(frame().centre[0]);
+    expect(y).toBeGreaterThanOrEqual(frame().centre[1] + frame().radius + INSET.controls.gap + half);
+    expect(x - half).toBeGreaterThanOrEqual(0);
+    expect(x + half).toBeLessThanOrEqual(390);
+    expect(y + half).toBeLessThanOrEqual(844);
   });
 
   it('shows the push arrow for a dowel, black while seated, green once it is pressed home and stays', () => {
@@ -280,13 +295,13 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
   });
 
   it('moves to the next slot when the control cluster covers the first', () => {
-    const first = mount();
+    const first = mount(WIDE);
     first.panel.hook.candidates(null, [tool()], nothing);
     first.panel.update();
     const [x, y] = at(first.turn());
     first.panel.dispose();
     clusterBox = { left: x - 10, top: y - 10, right: x + 10, bottom: y + 10 };
-    const { panel, turn, frame } = mount();
+    const { panel, turn, frame } = mount(WIDE);
     panel.hook.candidates(null, [tool()], nothing);
     panel.update();
     const moved = at(turn());
