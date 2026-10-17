@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COLORS, GESTURE, GIZMO, ROOM } from '../constants.js';
+import { COLORS, GESTURE, GIZMO, LAYER, ROOM } from '../constants.js';
 import { PART_TYPES } from '../game/item.js';
 import { arcDelta, clampToRoom, quantizeAngle, rotatedHalfExtents } from '../game/dragMath.js';
 import type { ScreenPoint } from '../game/dragMath.js';
@@ -74,6 +74,8 @@ export function createGizmo({
     );
     ring.rotation.set(...turn);
     ring.renderOrder = 1;
+    // Drawn by the main camera only: the detail inset shows no controls. The hit bands stay on the default layer, which rays test.
+    ring.layers.set(LAYER.gizmo);
     // Never rendered — raycasts ignore visibility, so it widens the touch target.
     const band = new THREE.Mesh(new THREE.TorusGeometry(1, GIZMO.hitTube, ...RING_SEGMENTS));
     band.rotation.set(...turn);
@@ -95,6 +97,7 @@ export function createGizmo({
       // Shares the ring's material, so it dims and brightens with its ring.
       const cone = new THREE.Mesh(arrowGeometry, ring.material);
       cone.renderOrder = 1;
+      cone.layers.set(LAYER.gizmo);
       holder.add(cone);
       object.add(holder);
       arrows.push({ cone, vector, facing });

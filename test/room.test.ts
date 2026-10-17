@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
-import { COLORS, ROOM, STAGE } from '../src/constants.js';
+import { COLORS, LAYER, ROOM, STAGE } from '../src/constants.js';
 import { sceneryMouth } from '../src/game/stageBoxes.js';
 import { createRoom } from '../src/scene/room.js';
 
@@ -429,5 +429,24 @@ describe('the sky turns', () => {
     STAGE.sky.phase = 0.25 + 0; // the sky's own phase: not a scrub
     room.update(at(0, 2, 3), renderer(), 0);
     expect(skyColour(room).equals(here)).toBe(true);
+  });
+});
+
+describe('the room’s render layer', () => {
+  it('puts every object of the room on LAYER.room alone, so the detail inset’s camera never draws it', () => {
+    const room = createRoom();
+    const objects: THREE.Object3D[] = [];
+    room.group.traverse((object) => objects.push(object));
+    expect(objects.length).toBeGreaterThan(10);
+    for (const object of objects) expect(object.layers.mask, object.name || object.type).toBe(1 << LAYER.room);
+  });
+
+  it('is a layer the default camera does not see and one a camera can enable', () => {
+    const room = createRoom();
+    const plain = new THREE.OrthographicCamera();
+    const main = new THREE.PerspectiveCamera();
+    main.layers.enable(LAYER.room);
+    expect(room.group.layers.test(plain.layers)).toBe(false);
+    expect(room.group.layers.test(main.layers)).toBe(true);
   });
 });

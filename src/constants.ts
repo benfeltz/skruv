@@ -875,6 +875,33 @@ export const TURN_RING = {
   arrowSize: 14,
 };
 
+// Render layers: the room and the rotate gizmo's rings each on their own, which the main camera enables and the
+// detail inset's camera (src/scene/inset.ts) does not, so it sees the parts on paper, free of the controls.
+export const LAYER = { room: 1, gizmo: 2 };
+
+// The live detail inset (src/game/insetModel.ts, src/game/insetView.ts, src/scene/inset.ts, src/ui/inset.ts): a circle
+// of the manual's paper showing the engaged joint and its tool from a fixed orthographic close-up.
+export const INSET = {
+  // The close-up: how tall its frame is (metres) and how far its view direction tilts off the hole's axis (degrees):
+  // 0 looks straight down the hole, 90 side-on. The camera sits `distance` metres out along that direction.
+  camera: { frameHeight: 0.14, tilt: 55, distance: 1 },
+  // Portrait (height > width): the circle in the top centre, between the catalog thumb and the control cluster.
+  // Landscape: on the right under the control cluster. `share` is the circle's diameter as a share of the shorter
+  // screen side, clamped to [min, max] (CSS px); `top`/`right` are insets from the safe-area edges.
+  portrait: { share: 0.42, min: 140, max: 280, top: 16 },
+  landscape: { share: 0.36, min: 140, max: 260, right: 16, top: 72 },
+  // The ring's weight (CSS px) and its alpha while offered and while active; the tail's weight and the dot at the
+  // joint; and the ms the ring takes to fade between states.
+  ring: { width: 3, offeredAlpha: 0.4, activeAlpha: 1 },
+  tail: { width: 2, dot: 5 },
+  fadeMs: 160,
+  // How far behind and in front of the joint the orthographic camera keeps (metres), so a long tool shaft never clips.
+  depth: 0.6,
+  // The render target's multisampling, and the circle's rim segments.
+  samples: 4,
+  segments: 64,
+};
+
 // Hole markings (src/game/decals.ts, drawn by src/game/partMesh.ts). Radii are keyed by
 // the catalog's socket connector type and sized a touch wider than what fills them, so a
 // seated fastener still shows a rim.

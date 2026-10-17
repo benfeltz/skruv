@@ -7,7 +7,9 @@ import { createGestureRouter } from '../../src/scene/gestureRouter.js';
 import type { StampedEvent } from '../../src/game/events.js';
 import type { Part } from '../../src/game/partMesh.js';
 import type { Body, PhysicsJoint } from '../../src/physics/world.js';
-import type { GestureRouterOptions } from '../../src/scene/gestureRouter.js';
+import type { GestureRouterOptions, InsetHook } from '../../src/scene/gestureRouter.js';
+import type { InsetSubject } from '../../src/game/insetModel.js';
+import type { ScreenPoint } from '../../src/game/dragMath.js';
 import type { Dial } from '../../src/ui/turnRing.js';
 import type { Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
 
@@ -34,7 +36,7 @@ export class FakeCanvas {
   }
   setPointerCapture() {}
   fire(type: string, init: object) {
-    this.listeners.get(type)?.({ type, pointerId: 1, button: 0, timeStamp: this.time, ...init });
+    this.listeners.get(type)?.({ type, pointerId: 1, button: 0, timeStamp: this.time, stopImmediatePropagation() {}, ...init });
   }
 }
 
@@ -64,8 +66,45 @@ export function makePart(id: string, type: string, position: Vec3, rotation: Qua
 
 export type ClientPoint = { clientX: number; clientY: number };
 
-/** The router mounted over `parts`, with the camera looking down at the origin from above. */
-export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8]) {
+/**
+ * The detail-inset hook as a recorder: what the router reports each frame, the points it tells
+ * of a tap outside, the parts it asks `tapOn` of — and `consume`, the scripted answer to that.
+ */
+export interface InsetRecorder {
+  hook: InsetHook;
+  frames: { offered: InsetSubject | null; engaged: InsetSubject[] }[];
+  outside: ScreenPoint[];
+  tapsOn: string[];
+  consume: boolean;
+  /** The circle, as `covers` answers: a tap inside it is the inset's alone. */
+  circle: { centre: ScreenPoint; radius: number } | null;
+}
+
+export function insetRecorder(): InsetRecorder {
+  const recorder: InsetRecorder = {
+    frames: [],
+    outside: [],
+    tapsOn: [],
+    consume: false,
+    circle: null,
+    hook: {
+      covers: ([x, y]) => recorder.circle !== null && Math.hypot(x - recorder.circle.centre[0], y - recorder.circle.centre[1]) <= recorder.circle.radius,
+      candidates: (offered, engaged) => recorder.frames.push({ offered, engaged: [...engaged] }),
+      tapOutside: (point) => {
+        recorder.outside.push(point);
+        return false;
+      },
+      tapOn: (part) => {
+        recorder.tapsOn.push(part.id);
+        return recorder.consume;
+      },
+    },
+  };
+  return recorder;
+}
+
+/** The router mounted over `parts`, with the camera looking down at the origin from above; `inset` is the recorder it reports to, if any. */
+export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8], inset?: InsetRecorder) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   camera.position.set(...cameraAt);
   camera.lookAt(0, 0, 0);
@@ -124,6 +163,7 @@ export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8]) {
     assembly,
     events,
     turnRing,
+    inset: inset?.hook,
     rings,
     onTap: (part) => {
       taps.push(part);

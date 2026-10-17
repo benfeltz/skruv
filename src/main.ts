@@ -1,4 +1,4 @@
-import { CATALOG, RENDER, TUNE } from './constants.js';
+import { CATALOG, LAYER, RENDER, TUNE } from './constants.js';
 import { catalogEntries, createCatalog } from './game/catalogModel.js';
 import { pickableSet } from './game/pickable.js';
 import { ANY, createBus, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
@@ -41,6 +41,12 @@ document.addEventListener('visibilitychange', () => events.emit(sessionEvent(doc
 const { renderer, scene, camera, startPose } = createScene(document.getElementById('app')!);
 const room = createRoom();
 scene.add(room.group);
+// The room sits on its own layer, which the detail inset's camera leaves out (src/scene/inset.ts).
+camera.layers.enable(LAYER.room);
+// And the rotate gizmo's rings, which the inset leaves out as it leaves out every control.
+camera.layers.enable(LAYER.gizmo);
+// Shadows are drawn once a frame, by the main render (below), and the inset's pass reuses them.
+renderer.shadowMap.autoUpdate = false;
 
 const physics = await createPhysicsWorld();
 
@@ -145,7 +151,12 @@ createLoop((delta, rawDelta) => {
   // Measured on the true delta: the clamped one would floor every slow device at 15 fps.
   const { render, sample } = fps.frame(rawDelta);
   if (sample) events.emit(fpsEvent(Math.round(sample.fps * 10) / 10, sample.skipping));
-  if (render) renderer.render(scene, camera);
+  if (render) {
+    renderer.shadowMap.needsUpdate = true;
+    renderer.render(scene, camera);
+    // The detail inset's one extra pass, over the room just drawn.
+    items.current?.render(renderer, scene);
+  }
 }).start();
 
 // Dev server only: the dev stream — events out, knob sets and screenshots in. The guard is
@@ -156,6 +167,7 @@ if (import.meta.env.DEV) {
       events,
       tunables,
       screenshot: () => {
+        renderer.shadowMap.needsUpdate = true;
         renderer.render(scene, camera);
         return renderer.domElement.toDataURL('image/png');
       },
