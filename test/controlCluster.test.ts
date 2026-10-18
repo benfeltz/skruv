@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CLUSTER, MENU } from '../src/constants.js';
+import { CLUSTER } from '../src/constants.js';
 import { createControlCluster } from '../src/ui/controlCluster.js';
 import { FakeElement, installFakeDom } from './support/fakeDom.js';
 import type { FakeDom } from './support/fakeDom.js';
@@ -32,17 +32,15 @@ describe('the control cluster', () => {
     expect(css).toContain(`gap: ${CLUSTER.gap}px;`);
   });
 
-  it("goes to the side without the manual's band in landscape, a column centred in the notch's margin, or in the corner with no notch", () => {
+  it("goes to the side without the manual's band in landscape, a column just inside the room's view", () => {
     createControlCluster();
     const css = dom.head.children.find((node) => node.id === 'skruv-control-cluster')!.textContent;
-    const half = MENU.size / 2;
-    // Notch on the left (band on the right): left, around --rail-x.
-    expect(css).toContain("html[data-strip='right'] .control-cluster {");
-    expect(css).toContain(`left: calc(var(--rail-x, ${CLUSTER.inset + half}px) - ${half}px);`);
-    // Notch on the right (band on the left): right, around --rail-x; with no notch column (Chrome on
-    // iOS reports no inset), the corner — CLUSTER.inset from the edge, never past it.
-    expect(css).toContain("html[data-strip='left'] .control-cluster {");
-    expect(css).toContain(`right: calc(100vw - var(--rail-x, calc(100vw - ${CLUSTER.inset + half}px)) - ${half}px);`);
+    // Just inside the room's view, past the notch's margin and never in it (Ben's phone, 2026-10-18:
+    // in Safari the Dynamic Island covered the menu in the margin). With no inset reported (Chrome on
+    // iOS), CLUSTER.inset from the page's edge.
+    expect(css).toContain(`html[data-strip='right'] .control-cluster {\n      right: auto;\n      left: calc(${CLUSTER.inset}px + env(safe-area-inset-left));`);
+    expect(css).toContain(`html[data-strip='left'] .control-cluster {\n      right: calc(${CLUSTER.inset}px + env(safe-area-inset-right));`);
+    expect(css).not.toContain('--rail-x');
     expect(css.match(/flex-direction: column;/g)).toHaveLength(2);
   });
 

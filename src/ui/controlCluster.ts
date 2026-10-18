@@ -1,4 +1,4 @@
-import { CLUSTER, MENU } from '../constants.js';
+import { CLUSTER } from '../constants.js';
 
 // The control cluster: one row in the upper right that lays out the screen's small
 // controls — the menu button in the corner (first added, at the right), the ?tune gear to
@@ -33,17 +33,17 @@ function injectStyle() {
       flex-direction: row;
     }
     /* Landscape, with the manual's band down one edge: the controls go to the other side, a column
-       centred in the notch's margin (--rail-x, set when there is a notch) or, with no notch, in the
-       corner. The band's side is html[data-strip]. */
+       just inside the room's view — past the notch's margin, never in it (Ben's phone, 2026-10-18:
+       in Safari the Dynamic Island covered the menu and the lift line in the margin). Where the
+       browser reports no inset (Chrome on iOS keeps the page out of the notch itself) that is the
+       page's edge. The band's side is html[data-strip]. */
     html[data-strip='right'] .control-cluster {
       right: auto;
-      left: calc(var(--rail-x, ${CLUSTER.inset + MENU.size / 2}px) - ${MENU.size / 2}px);
+      left: calc(${CLUSTER.inset}px + env(safe-area-inset-left));
       flex-direction: column;
     }
-    /* With no notch column (Chrome on iOS reports no inset) the corner, as on the left: inset from
-       the edge, never past it (Ben's phone, 2026-10-18: the menu sat half off the page). */
     html[data-strip='left'] .control-cluster {
-      right: calc(100vw - var(--rail-x, calc(100vw - ${CLUSTER.inset + MENU.size / 2}px)) - ${MENU.size / 2}px);
+      right: calc(${CLUSTER.inset}px + env(safe-area-inset-right));
       flex-direction: column;
     }
   `;

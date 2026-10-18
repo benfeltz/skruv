@@ -258,7 +258,10 @@ describe("the manual's band shrinks the room's view (1.9.7.1.2)", () => {
     const html = read('index.html');
     expect(html).toContain('inset: 0 var(--strip-right, 0px) var(--strip-bottom, 0px) var(--strip-left, 0px);');
     expect(html).toContain('background: var(--backdrop, #1b1d22);');
-    expect(cluster).toContain('var(--rail-x,');
+    // The cluster sits just inside the view, past the notch's margin, never in its column (Ben's phone,
+    // 2026-10-18: the Dynamic Island covered it there); the lift line, hung under the menu, follows.
+    expect(cluster).toContain('env(safe-area-inset-left)');
+    expect(cluster).not.toContain('--rail-x');
     expect(read('src/ui/liftLine.ts')).toContain('var(--rail-x, clamp(');
     expect(read('src/ui/menuButton.ts')).toContain("html[data-strip='right'] .menu-drop");
   });
