@@ -550,8 +550,16 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     thumb.addEventListener('pointerdown', (event) => {
       const control = (event.target as Element).closest('button');
       const slot = control?.dataset.slot;
-      // The arrows keep their own job; a right button or a second finger starts nothing.
-      if (event.button !== 0 || stripPress || (control && slot === undefined)) return;
+      if (event.button !== 0) return;
+      // The band has no two-finger gesture, so a second finger ends the first one's as a cancel
+      // (no tap, no flip, a peek put back) and starts nothing: a pinch here is nobody's. The
+      // room is not told; fingers on the band were never the room's.
+      if (stripPress) {
+        if (event.pointerId !== stripPress.id) cancelStripPress();
+        return;
+      }
+      // The arrows keep their own job.
+      if (control && slot === undefined) return;
       const touch = event.pointerType !== 'mouse';
       stripPress = { id: event.pointerId, x: event.clientX, y: event.clientY, slot: slot === undefined ? null : Number(slot), touch };
       thumb.setPointerCapture(event.pointerId);
@@ -561,12 +569,17 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
       if (!stripPress || event.pointerId !== stripPress.id) return;
       peekSend({ type: 'move', distance: Math.hypot(event.clientX - stripPress.x, event.clientY - stripPress.y) });
     });
+    function cancelStripPress() {
+      if (!stripPress) return;
+      const { touch } = stripPress;
+      stripPress = null;
+      if (touch) peekSend({ type: 'release' });
+    }
     const endStripPress = (event: PointerEvent) => {
       if (!stripPress || event.pointerId !== stripPress.id) return;
       const { x, y, slot, touch } = stripPress;
-      stripPress = null;
       const wasPeeking = peek === 'peeking';
-      if (touch) peekSend({ type: 'release' });
+      cancelStripPress();
       if (event.type !== 'pointerup' || wasPeeking) return;
       const dx = event.clientX - x;
       const dy = event.clientY - y;

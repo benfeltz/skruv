@@ -295,6 +295,53 @@ describe('opening it on a touch: hold to peek, release to put it back', () => {
   });
 });
 
+describe('a second finger on the band cancels its gesture', () => {
+  const finger = (target: FakeElement, pointerId: number, x: number) => down(target, { pointerType: 'touch', pointerId, x });
+  const lift = (target: FakeElement, pointerId: number, x: number) => up(target, { pointerType: 'touch', pointerId, x });
+
+  it('a pinch with both fingers on the band flips nothing and peeks nothing', () => {
+    const { manual, slots, centre, changes } = mountStrip({ viewport: 1280, page: 3 });
+    finger(centre(), 1, 100);
+    finger(slots()[3], 2, 200);
+    // The first finger spreads past the swipe distance and lifts.
+    centre().fire('pointermove', { pointerType: 'touch', pointerId: 1, clientX: 100 - 2 * BOOKLET_UI.swipeDistance, clientY: 100 });
+    lift(centre(), 1, 100 - 2 * BOOKLET_UI.swipeDistance);
+    lift(slots()[3], 2, 200);
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs * 2);
+    expect(manual.currentPage).toBe(3);
+    expect(manual.expanded).toBe(false);
+    expect(changes).toEqual([]);
+  });
+
+  it('a second finger puts a peeked page back, and the first finger\'s lift changes nothing', () => {
+    const { manual, slots, centre, changes } = mountStrip({ viewport: 1280, page: 3 });
+    finger(centre(), 1, 100);
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs);
+    expect(manual.expanded).toBe(true);
+    finger(slots()[3], 2, 200);
+    expect(manual.expanded).toBe(false);
+    lift(centre(), 1, 100);
+    lift(slots()[3], 2, 200);
+    expect(manual.currentPage).toBe(3);
+    expect(manual.expanded).toBe(false);
+    expect(changes).toEqual([
+      { page: 3, expanded: true },
+      { page: 3, expanded: false },
+    ]);
+  });
+
+  it('the next single press works', () => {
+    const { manual, slots, centre } = mountStrip({ viewport: 1280, page: 3 });
+    finger(centre(), 1, 100);
+    finger(slots()[3], 2, 200);
+    lift(centre(), 1, 100);
+    lift(slots()[3], 2, 200);
+    down(slots()[3], { pointerType: 'touch', pointerId: 3 });
+    up(slots()[3], { pointerType: 'touch', pointerId: 3 });
+    expect(manual.currentPage).toBe(4);
+  });
+});
+
 describe('opening it with a mouse or a key: click to open, click the page to close', () => {
   it('a click on the centre page opens it, with no hold', () => {
     const { manual, centre, changes } = mountStrip();
