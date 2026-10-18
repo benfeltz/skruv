@@ -21,6 +21,14 @@ export interface SafeInsets {
   bottom: number;
 }
 
+/** A box in client px: where an element sits in the window. */
+export interface Box {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 /** The circle on screen: its `centre` and `radius` in CSS px. */
 export interface InsetFrame {
   centre: ScreenPoint;
@@ -82,6 +90,18 @@ export function insetFrame(viewport: Viewport, safe: SafeInsets = { top: 0, righ
   // The control's bubble hangs off the circle's lower right: the offsets are to its edge when it reaches past the rim.
   const hang = bubbleOverhang({ centre: [0, 0], radius });
   return { centre: [viewport.width - safe.right - INSET.landscape.right - hang - radius, viewport.height - safe.bottom - INSET.landscape.bottom - hang - radius], radius };
+}
+
+/**
+ * The part of the screen's safe insets that reaches into `box`: each inset less the distance from the box's
+ * edge to the screen's, never below 0. The band stands in the right margin, so the notch there reaches the canvas by 0.
+ */
+export function safeWithin(box: Box, screen: Viewport, safe: SafeInsets): SafeInsets {
+  return {
+    top: Math.max(0, safe.top - box.top),
+    right: Math.max(0, safe.right - (screen.width - box.left - box.width)),
+    bottom: Math.max(0, safe.bottom - (screen.height - box.top - box.height)),
+  };
 }
 
 /** Whether a client-px `point` is on or inside the circle. */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, BOOKLET_UI, INSET } from '../src/constants.js';
 import { bubbleOf, bubbleOverhang } from '../src/game/insetControls.js';
-import { insetCameraPose, insetFrame, insetLayout, insetOrtho, insideInset } from '../src/game/insetView.js';
+import { insetCameraPose, insetFrame, insetLayout, insetOrtho, insideInset, safeWithin } from '../src/game/insetView.js';
 import type { Vec3 } from '../tools/validate/lib/geometry.js';
 
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -78,6 +78,28 @@ describe('insetFrame', () => {
   it('takes its layout from the argument when given', () => {
     const forced = insetFrame({ width: 390, height: 844 }, undefined, 'landscape');
     expect(forced.centre[0]).toBeGreaterThan(195);
+  });
+});
+
+describe('safeWithin', () => {
+  it('gives a canvas at the screen’s edges the insets whole', () => {
+    const safe = { top: 47, right: 20, bottom: 34 };
+    expect(safeWithin({ left: 0, top: 0, width: 390, height: 844 }, { width: 390, height: 844 }, safe)).toEqual(safe);
+  });
+
+  it('leaves out the right inset the band stands in, in landscape', () => {
+    const box = { left: 47, top: 0, width: 701, height: 390 };
+    expect(safeWithin(box, { width: 844, height: 390 }, { top: 0, right: 47, bottom: 21 })).toEqual({ top: 0, right: 0, bottom: 21 });
+  });
+
+  it('leaves out the bottom inset the band stands in, in portrait', () => {
+    const box = { left: 0, top: 0, width: 390, height: 844 - 124 - 34 };
+    expect(safeWithin(box, { width: 390, height: 844 }, { top: 47, right: 0, bottom: 34 })).toEqual({ top: 47, right: 0, bottom: 0 });
+  });
+
+  it('floors at 0 when the margin is larger than the inset', () => {
+    const box = { left: 100, top: 100, width: 100, height: 100 };
+    expect(safeWithin(box, { width: 400, height: 400 }, { top: 10, right: 10, bottom: 10 })).toEqual({ top: 0, right: 0, bottom: 0 });
   });
 });
 
