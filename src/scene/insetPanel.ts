@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { bubbleOf, controlFor, pushLook, turnLook } from '../game/insetControls.js';
 import { createInsetModel } from '../game/insetModel.js';
-import { insetCameraPose, insetFrame, insideInset } from '../game/insetView.js';
+import { insetCameraPose, insetFrame, insideInset, safeWithin } from '../game/insetView.js';
 import { createInsetOverlay } from '../ui/inset.js';
 import { createInsetControls } from '../ui/insetControls.js';
 import { createInset } from './inset.js';
@@ -23,8 +23,8 @@ export interface InsetPanelDeps {
  * what it frames, the view maths place the circle and aim its camera, the render pass draws
  * it and the overlay inks its ring and tail. This only composes them. The router's `hook`
  * feeds it each frame's candidates and its taps; `update()` runs after the router's update;
- * `render()` is the extra pass after the main render. The canvas fills the window, so its
- * client px are the circle's. Attached to the circle, as the manual's tool bubble is to its detail
+ * `render()` is the extra pass after the main render. The canvas no longer fills the window (the band takes an edge), but its
+ * client px are still the circle's; the safe insets that reach into it are what the circle keeps clear of. Attached to the circle, as the manual's tool bubble is to its detail
  * inset, sits the subject's control — the spinner for a turn (a tool's or a part circled by hand, the same small bubble), the push bubble for a dowel — driving the router's
  * actions (`connect`, once the router exists); while the circle is offered or dismissed there is none.
  */
@@ -93,7 +93,7 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
       if (!box || !placed) {
         const { left, top, width, height } = domElement.getBoundingClientRect();
         box = { left, top, width, height };
-        placed = insetFrame({ width, height }, probe.read(width, height));
+        placed = insetFrame({ width, height }, safeWithin(box, { width: window.innerWidth, height: window.innerHeight }, probe.read(width, height)));
       }
       const rect = box;
       frame = placed;
@@ -147,9 +147,9 @@ export type InsetPanel = ReturnType<typeof createInsetPanel>;
 function createSafeProbe(container: HTMLElement) {
   const element = document.createElement('div');
   element.setAttribute('aria-hidden', 'true');
-  element.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;width:0;height:0;padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 0';
+  element.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;width:0;height:0;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0';
   container.append(element);
-  const safe: SafeInsets = { top: 0, right: 0 };
+  const safe: SafeInsets = { top: 0, right: 0, bottom: 0 };
   let width = NaN;
   let height = NaN;
   return {
@@ -161,6 +161,7 @@ function createSafeProbe(container: HTMLElement) {
         const style = getComputedStyle(element);
         safe.top = parseFloat(style.paddingTop) || 0;
         safe.right = parseFloat(style.paddingRight) || 0;
+        safe.bottom = parseFloat(style.paddingBottom) || 0;
       }
       return safe;
     },

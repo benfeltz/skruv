@@ -51,6 +51,8 @@ beforeEach(() => {
   resizeListeners.clear();
   windowListeners.clear();
   vi.stubGlobal('window', {
+    innerWidth: 390,
+    innerHeight: 844,
     addEventListener: (type: string, fn: () => void) => {
       if (type === 'resize') resizeListeners.add(fn);
       else windowListeners.set(type, [...(windowListeners.get(type) ?? []), fn]);
@@ -67,7 +69,7 @@ beforeEach(() => {
     createElementNS: () => new FakeElement(),
     getElementById: () => null,
   });
-  vi.stubGlobal('getComputedStyle', () => ({ paddingTop: '47px', paddingRight: '0px' }));
+  vi.stubGlobal('getComputedStyle', () => ({ paddingTop: '47px', paddingRight: '0px', paddingBottom: '0px' }));
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -94,6 +96,9 @@ const part = (id: string) => ({ id }) as Part;
 function mount(initial = { left: 0, top: 0, width: 390, height: 844 }) {
   let rect = initial;
   let reads = 0;
+  // The canvas fills the window here.
+  const fill = () => Object.assign(window, { innerWidth: rect.width, innerHeight: rect.height });
+  fill();
   const camera = new THREE.PerspectiveCamera(50, rect.width / rect.height, 0.01, 100);
   camera.position.set(0, 0.5, 0.6);
   camera.lookAt(0, 0, 0);
@@ -120,7 +125,7 @@ function mount(initial = { left: 0, top: 0, width: 390, height: 844 }) {
     render: (scene: unknown) => renders.push({ scene, target: state.current }),
   } as unknown as THREE.WebGLRenderer;
   const scene = new THREE.Scene();
-  const frame = () => insetFrame({ width: rect.width, height: rect.height }, { top: 47, right: 0 });
+  const frame = () => insetFrame({ width: rect.width, height: rect.height }, { top: 47, right: 0, bottom: 0 });
   const svg = container.children[0];
   // After the ring's overlay and the safe-area probe.
   const controls = container.children[2];
@@ -128,6 +133,7 @@ function mount(initial = { left: 0, top: 0, width: 390, height: 844 }) {
   const push = () => controls.all('inset-controls__push')[0];
   const resize = (next: typeof rect) => {
     rect = next;
+    fill();
     for (const fn of resizeListeners) fn();
   };
   return { panel, renderer, renders, scene, frame, svg, controls, canvasListeners, turn, push, container, resize, reads: () => reads };
@@ -228,6 +234,8 @@ describe('the inset panel', () => {
     // Landscape now: the circle moved to the right.
     const ring = svg.children[0].children[0];
     expect(Number(ring.attributes.cx)).toBeGreaterThan(422);
+    // And in the lower half.
+    expect(Number(ring.attributes.cy)).toBeGreaterThan(195);
   });
 
   it('takes its overlay, probe and controls off the page on dispose', () => {
