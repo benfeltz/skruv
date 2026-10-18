@@ -581,8 +581,11 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
       const touch = event.pointerType !== 'mouse';
       stripPress = { id: event.pointerId, x: event.clientX, y: event.clientY, slot: slot === undefined ? null : Number(slot), touch };
       thumb.setPointerCapture(event.pointerId);
-      // A hold peeks the page in any slot that has one.
-      if (touch && stripPress.slot !== null && slotWindow()[stripPress.slot] != null) peekSend({ type: 'press' });
+      // A hold peeks the page in any slot that has one — while the manual is docked. Open, only
+      // the centre slot's hold is armed, as it always was: a side slot's hold is a tap that
+      // flips the open page, and must never close it on the release.
+      const holdable = stripPress.slot !== null && slotWindow()[stripPress.slot] != null && (!open || stripPress.slot === centreSlot(carousel.visible()));
+      if (touch && holdable) peekSend({ type: 'press' });
     });
     thumb.addEventListener('pointermove', (event) => {
       if (!stripPress || event.pointerId !== stripPress.id) return;

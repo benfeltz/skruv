@@ -348,6 +348,21 @@ describe('holding a side page peeks it in place', () => {
     expect(manual.expanded).toBe(false);
   });
 
+  it('with the manual open, a hold on a side page still flips to it and never closes the page', () => {
+    const { manual, side, changes } = held();
+    down(manual.thumb.children[1].children[2]);
+    up(manual.thumb.children[1].children[2]);
+    expect(manual.expanded).toBe(true);
+    changes.length = 0;
+    touchDown(side);
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs * 2);
+    expect(manual.expanded).toBe(true);
+    touchUp(side);
+    expect(manual.expanded).toBe(true);
+    expect(manual.currentPage).toBe(1);
+    expect(changes.every((change) => change.expanded)).toBe(true);
+  });
+
   it('the page on view is the one reported, so the glow follows it', () => {
     const { side, changes, manual } = held();
     touchDown(side);
