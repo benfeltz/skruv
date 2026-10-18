@@ -10,7 +10,7 @@ const buttonRule = (source: string, from: string, to: string) => source.slice(so
 describe('the cluster buttons place nothing themselves', () => {
   const rules = {
     menu: buttonRule(read('src/ui/menuButton.ts'), '.menu-button {', '.menu-button[aria-expanded'),
-    repack: buttonRule(read('src/ui/resetButton.ts'), '.reset-button {', ".reset-button[data-armed='true']"),
+    repack: buttonRule(read('src/ui/resetButton.ts'), '.reset-button {', '.reset-button > *'),
     snapRotate: buttonRule(read('src/ui/toggleButton.ts'), '.toggle-button {', ".toggle-button[aria-pressed='true']"),
     gear: buttonRule(read('src/ui/tunePanel.ts'), '.tune-tab {', ".tune-tab[aria-expanded='true']"),
   };

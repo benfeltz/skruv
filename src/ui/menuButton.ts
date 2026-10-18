@@ -61,10 +61,10 @@ function injectStyle() {
 /**
  * `{ element, add(control), open, close, isOpen, dispose }`: mount `element` once; `add`
  * appends a control to the drop. The drop closes on a tap outside the menu, on Escape, and
- * after a click on a control in it — except one that has just armed (`data-armed='true'`,
- * which Repack publishes on its first tap), so the confirming second tap stays reachable.
+ * after a click on a control in it — except one marked `data-menu-stay='true'` (Repack, a
+ * hold: its tap leaves the menu open, and the completed hold closes it through the caller).
  * `add(control, { onClose })` runs `onClose` whenever the drop closes, so a control can drop
- * state it holds (Repack's arming) rather than carry it across a close and reopen.
+ * state it holds (Repack's hold in progress) rather than carry it across a close and reopen.
  */
 export function createMenuButton({ name }: { name: string }) {
   injectStyle();
@@ -109,7 +109,7 @@ export function createMenuButton({ name }: { name: string }) {
   button.addEventListener('click', () => (opened ? close() : open()));
   drop.addEventListener('click', (event) => {
     const clicked = (event.target as Element | null)?.closest('button');
-    if (clicked && (clicked as HTMLElement).dataset.armed !== 'true') close();
+    if (clicked && (clicked as HTMLElement).dataset.menuStay !== 'true') close();
   });
   window.addEventListener('pointerdown', onPointerDown);
   window.addEventListener('keydown', onKeyDown);

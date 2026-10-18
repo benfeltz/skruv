@@ -15,7 +15,7 @@
 //            to drive it home
 //   legs     a part set onto its stud is circled itself, no tool (items with studs only)
 //   booklet  swipe to flip (touch); the arrows or arrow keys (desktop) — src/ui/booklet.ts
-//   repack   a first tap arms the button, a second repacks (src/ui/resetButton.ts)
+//   repack   press and hold the button until its bar fills (src/ui/resetButton.ts)
 
 import { KIND } from '../../tools/validate/lib/vocabulary.js';
 import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
@@ -50,16 +50,16 @@ export interface ControlRow {
   needs?: FastenerKind;
 }
 
-// The gestures both schemes share, after the camera's and the height's: a press is a tap
-// or a click, and the booklet is swiped or flipped.
-const SHARED_ROWS = (press: 'tap' | 'click', flip: string): ControlRow[] => [
+// The gestures both schemes share, after the camera's and the height's: the booklet is
+// swiped or flipped.
+const SHARED_ROWS = (flip: string): ControlRow[] => [
   { pictogram: 'seat', label: 'Drop to seat' },
   { pictogram: 'pushHome', label: 'Push home' },
   { pictogram: 'turnTool', label: 'Circle or hold', needs: KIND.TOOL },
   { pictogram: 'turnPart', label: 'Circle to screw', needs: KIND.STUD },
   { pictogram: 'pullApart', label: 'Pull apart' },
   { pictogram: 'flip', label: flip },
-  { pictogram: 'repack', label: `Repack: ${press} twice` },
+  { pictogram: 'repack', label: 'Repack: hold' },
 ];
 
 /** Each scheme's rows, top to bottom, for an item that uses every fastener there is — see `rowsFor`. */
@@ -70,7 +70,7 @@ export const CONTROLS: Readonly<Record<Scheme, readonly ControlRow[]>> = Object.
     { pictogram: 'select', label: 'Tap to turn' },
     { pictogram: 'move', label: 'Drag to move' },
     { pictogram: 'lift', label: 'Lift' },
-    ...SHARED_ROWS('tap', 'Swipe pages'),
+    ...SHARED_ROWS('Swipe pages'),
   ]),
   desktop: Object.freeze<ControlRow[]>([
     { pictogram: 'orbit', label: 'Turn view' },
@@ -80,7 +80,7 @@ export const CONTROLS: Readonly<Record<Scheme, readonly ControlRow[]>> = Object.
     { pictogram: 'move', label: 'Drag to move' },
     { pictogram: 'hold', label: 'Hold up' },
     { pictogram: 'height', label: 'Set height' },
-    ...SHARED_ROWS('click', 'Flip pages'),
+    ...SHARED_ROWS('Flip pages'),
   ]),
 });
 

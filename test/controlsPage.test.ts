@@ -56,12 +56,12 @@ const JOHNNY_ROWS = {
   touch: [
     ['orbit', 'Turn view'], ['zoomPan', 'Zoom and pan'], ['select', 'Tap to turn'], ['move', 'Drag to move'], ['lift', 'Lift'],
     ['seat', 'Drop to seat'], ['pushHome', 'Push home'], ['turnTool', 'Circle or hold'], ['pullApart', 'Pull apart'],
-    ['flip', 'Swipe pages'], ['repack', 'Repack: tap twice'],
+    ['flip', 'Swipe pages'], ['repack', 'Repack: hold'],
   ],
   desktop: [
     ['orbit', 'Turn view'], ['pan', 'Pan'], ['zoom', 'Zoom'], ['select', 'Click to turn'], ['move', 'Drag to move'], ['hold', 'Hold up'],
     ['height', 'Set height'], ['seat', 'Drop to seat'], ['pushHome', 'Push home'], ['turnTool', 'Circle or hold'], ['pullApart', 'Pull apart'],
-    ['flip', 'Flip pages'], ['repack', 'Repack: click twice'],
+    ['flip', 'Flip pages'], ['repack', 'Repack: hold'],
   ],
 } as const;
 

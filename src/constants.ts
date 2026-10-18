@@ -667,9 +667,9 @@ export const MENU = {
 export const RESET = {
   // The button's height (CSS pixels); its place is the control cluster's (CLUSTER).
   height: 44,
-  // The repack button arms on a first tap and repacks only on a second within this many
-  // ms — cheap insurance against a fat finger wiping a build.
-  confirmMs: 2500,
+  // The repack button is a hold: a bar fills inside it over this many ms of unbroken press,
+  // and the repack runs when it is full — cheap insurance against a fat finger wiping a build.
+  holdMs: 900,
   // Every this many seconds, any loose player part found outside the room (by more than
   // `escapeMargin` m) is set down again beside the box.
   sweepInterval: 2,

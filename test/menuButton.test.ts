@@ -76,18 +76,16 @@ describe('the menu button', () => {
     expect(menu.isOpen()).toBe(true);
   });
 
-  it('closes after a click on an added control, but not on one that just armed', () => {
+  it('closes after a click on an added control, but not on one marked to stay (Repack)', () => {
     const { menu, control, add } = mount();
     const snap = control('Snap rotate');
     const repack = control('Repack');
     add(menu, repack, snap);
     menu.open();
-    repack.dataset.armed = 'true';
+    repack.dataset.menuStay = 'true';
     repack.fire('click');
     expect(menu.isOpen()).toBe(true);
-    repack.dataset.armed = 'false';
-    repack.fire('click');
-    expect(menu.isOpen()).toBe(false);
+    menu.close();
     menu.open();
     snap.fire('click');
     expect(menu.isOpen()).toBe(false);

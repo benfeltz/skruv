@@ -30,10 +30,10 @@ describe('repack reset (decision 9)', () => {
     expect(repack).toMatch(/const upright = baseRest\(box\);\n\s+physics\.place\(flatpack\.base\.body, upright\.position, upright\.rotation\);/);
   });
 
-  it('asks for a confirming second tap, inside the RESET window', () => {
+  it('runs only when a hold of RESET.holdMs completes — no tap-again label, no enlarged state', () => {
     const button = read('src/ui/resetButton.ts');
-    expect(button).toMatch(/setTimeout\(\(\) => arm\(false\), RESET\.confirmMs\)/);
-    expect(button).toMatch(/if \(element\.dataset\.armed !== 'true'\) return arm\(true\);/);
+    expect(button).toMatch(/\}, RESET\.holdMs\);/);
+    expect(button).not.toMatch(/Tap again|ARMED_LABEL|data-armed/);
   });
 });
 
@@ -238,7 +238,7 @@ describe('tap the open manual to put it down, swipe to flip (1.6.2)', () => {
 describe('the menu button wiring', () => {
   it('holds Repack and Snap rotate, and sits in the cluster', () => {
     expect(main).toMatch(/const repack = createResetButton\(/);
-    expect(main).toMatch(/menu\.add\(repack\.element, \{ onClose: repack\.disarm \}\)/);
+    expect(main).toMatch(/menu\.add\(repack\.element, \{ onClose: repack\.cancel \}\)/);
     expect(main).toMatch(/menu\.add\(snapRotate\.element\)/);
     expect(main).toMatch(/cluster\.add\(menu\.element\)/);
   });

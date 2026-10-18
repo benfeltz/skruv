@@ -146,8 +146,8 @@ const repack = createResetButton({
     menu.close();
   },
 });
-// Closing the menu drops Repack's arming, so a reopened menu starts at a first tap.
-menu.add(repack.element, { onClose: repack.disarm });
+// Closing the menu drops a Repack hold in progress.
+menu.add(repack.element, { onClose: repack.cancel });
 menu.add(snapRotate.element);
 cluster.add(menu.element);
 document.body.append(cluster.element);
