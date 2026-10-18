@@ -313,9 +313,11 @@ describe('the band, by orientation', () => {
     const css = rules();
     const beside = bandRight + page.gutter;
     expect(css).toContain(`html[data-strip='right'] .booklet-thumb[data-corner='topLeft'] {\n      left: auto;\n      right: ${beside}px;`);
-    expect(css).toContain(`html[data-strip='left'] .booklet-thumb[data-corner='topLeft'] {\n      left: ${beside}px;`);
-    // Portrait (Ben, 2026-10-18): the upper right, the menu and the lift line having the left for the left thumb.
-    expect(css).toContain(`html[data-strip='bottom'] .booklet-thumb[data-corner='topLeft'] {\n      left: auto;\n      right: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-right));`);
+    expect(css).toContain(`html[data-strip='left'] .booklet-thumb[data-corner='topLeft'] {\n      left: ${beside}px;\n      right: auto;`);
+    // Ben, 2026-10-18: the upper right from the first load on (the menu and the lift line have the left,
+    // for the left thumb), so nothing swaps sides when a model is picked.
+    expect(css).toContain(`.booklet-thumb[data-corner='topLeft'] {\n      top: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-top));\n      bottom: auto;\n      left: auto;\n      right: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-right));`);
+    expect(css).not.toContain("html[data-strip='bottom']");
     expect(css).not.toContain('margin-top');
     // Over the band (z-index 0), under the scrim.
     expect(css.slice(css.indexOf('.booklet-strip {'), css.indexOf(".booklet-strip[data-band='bottom']"))).toContain('z-index: 0;');

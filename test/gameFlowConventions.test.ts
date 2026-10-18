@@ -263,7 +263,8 @@ describe("the manual's band shrinks the room's view (1.9.7.1.2)", () => {
     expect(cluster).toContain('env(safe-area-inset-left)');
     expect(cluster).not.toContain('--rail-x');
     expect(read('src/ui/liftLine.ts')).toContain('var(--rail-x, clamp(');
-    expect(read('src/ui/menuButton.ts')).toContain("html[data-strip='right'] .menu-drop");
+    // The cluster sits upper left, so the drop opens rightward; beside a left band it is on the right and opens leftward.
+    expect(read('src/ui/menuButton.ts')).toContain("html[data-strip='left'] .menu-drop");
   });
 
   it('has no arrow buttons on the strip: it is dragged, tapped and keyed', () => {

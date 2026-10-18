@@ -95,9 +95,14 @@ function injectStyle() {
       /* Over the manual's band, which a landscape thumb sits on. */
       z-index: 1;
     }
+    /* The catalog's thumb ('topLeft' is the corner it used to have) sits in the upper right, from the
+       first load on: the menu and the lift line under it have the left, for the left thumb (Ben,
+       2026-10-18). */
     .booklet-thumb[data-corner='topLeft'] {
       top: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-top));
       bottom: auto;
+      left: auto;
+      right: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-right));
     }
     /* A mouse resting on the docked thumbnail grows it from its corner to a readable page,
        about a quarter of the screen, raised over its neighbours — still under the scrim (2) and the page (3).
@@ -294,12 +299,7 @@ function injectStyle() {
     }
     html[data-strip='left'] .booklet-thumb[data-corner='topLeft'] {
       left: ${thumbBeside}px;
-    }
-    /* Portrait, with the band along the bottom: the upper right, the menu and the lift line under it
-       having the left for the left thumb (Ben, 2026-10-18). */
-    html[data-strip='bottom'] .booklet-thumb[data-corner='topLeft'] {
-      left: auto;
-      right: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-right));
+      right: auto;
     }
     /* The pages in a row (a column in landscape), centred in the band and moved as one by an
        inline transform: a drag follows the pointer (data-dragging, no transition) and a snap

@@ -42,7 +42,7 @@ function injectStyle() {
     .menu-drop {
       position: absolute;
       top: calc(100% + ${MENU.drop.gap}px);
-      right: 0;
+      left: 0;
       display: flex;
       flex-direction: column;
       align-items: stretch;
@@ -51,11 +51,11 @@ function injectStyle() {
       border-radius: ${MENU.drop.radius}px;
       background: ${css(COLORS.uiSurface)}e6;
     }
-    /* The cluster on the screen's left (the band down the right edge, or along the bottom in
-       portrait): the drop opens into the room. */
-    html[data-strip='right'] .menu-drop, html[data-strip='bottom'] .menu-drop {
-      right: auto;
-      left: 0;
+    /* The cluster is on the screen's left (src/ui/controlCluster.ts), so the drop opens rightward into
+       the room; with the band down the left edge the cluster is on the right, and it opens leftward. */
+    html[data-strip='left'] .menu-drop {
+      left: auto;
+      right: 0;
     }
     .menu-drop[hidden] {
       display: none;
