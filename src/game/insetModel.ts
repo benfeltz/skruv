@@ -53,8 +53,9 @@ export interface InsetInput {
 const keyOf = (s: InsetSubject) => (s.joint >= 0 ? `joint:${s.joint}` : `seat:${s.hardware}>${s.host}`);
 
 // The parts a tap on reopens a put-away subject: its hardware and tool, and the fastener a tool is on —
-// never a host panel, which a tap selects or presses its dowels home through. A hand turn's grip is the part
-// circled (a leg on its stud), which a tap reopens too.
+// never a host panel, which a tap selects or presses its dowels home through. The exception is a hand turn's grip, the
+// part being circled (a leg on its stud, a top on its studs): a tap on it reopens the inset while its turn lasts, and a
+// turn that is home is no subject (src/scene/gestureRouter.ts), so a built table's parts keep their own taps.
 const partsOf = (s: InsetSubject): PartId[] => {
   if (s.tool !== null) return [s.hardware, s.host, s.tool];
   return s.grip === null ? [s.hardware] : [s.hardware, s.grip];
