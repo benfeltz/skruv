@@ -2,6 +2,7 @@
 // One texture of stacked strips, one per wall, each covering that wall's face once; a panel's UVs pick its strip.
 
 import { STAGE } from '../constants.js';
+import { seeded } from './seeded.js';
 import type { WallName } from './stageBoxes.js';
 
 const { stars } = STAGE.scenery;
@@ -28,18 +29,6 @@ export const STRIP_TEXELS = Math.round(stars.sky.height * TEXELS_PER_METRE);
 const STRIPS = Object.keys(stars.strip).length;
 export const SKY_TEXELS: { width: number; height: number } = { width: stars.texels, height: STRIPS * STRIP_TEXELS };
 const CHANNELS = 4;
-
-/** A seeded generator (mulberry32): the same seed gives the same stars everywhere, with no `Math.random`. */
-function seeded(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 const STEADY: Twinkle = { phase: 0, swing: 0 };
 
