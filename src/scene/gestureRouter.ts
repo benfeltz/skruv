@@ -1234,13 +1234,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     const near = aimEnd(ends.map((end) => ({ ...end, seats: end.seats.filter((c) => workable!.includes(c)) })), drag!.held!, zoneOf(ends));
     if (!near) return null;
     const { end, target: seat } = near;
+    const tool = isToolTip(end.connector.type) ? drag!.part.id : null;
     return {
       joint: -1,
       kind: kindOf(end.connector.type)!,
       hardware: drag!.part.id,
       host: seat.part.id,
-      tool: isToolTip(end.connector.type) ? drag!.part.id : null,
-      grip: isToolTip(end.connector.type) ? drag!.part.id : null,
+      tool,
+      grip: tool,
       centre: seat.position,
       axis: [-seat.axis[0], -seat.axis[1], -seat.axis[2]],
       progress: 0,
