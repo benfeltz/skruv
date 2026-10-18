@@ -746,6 +746,33 @@ describe('8. the inset sees hand turns (1.10.0.3)', () => {
     t.canvas.fire('pointercancel', at);
   });
 
+  it('offers a carried top the stud end nearest one of its holes, not the first the goal lists', () => {
+    const recorder = insetRecorder();
+    const spots: [number, number][] = [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]];
+    const legs = spots.map(([x, z], i) => makePart(`leg-${i + 1}`, 'leg', [x, 0.2, z]));
+    const studs = spots.map(([x, z], i) => makePart(`doubleEndedStud-${i + 1}`, 'doubleEndedStud', [x, 0.4, z]));
+    // Lifted a little, nudged and turned off its place so one hole is clearly nearest one stud.
+    const yaw = 0.2;
+    const top = makePart('top-1', 'top', [0.03, 0.5, 0], [0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)]);
+    const m = mount([...legs, ...studs, top], [0, 1.4, 0.9], recorder, preferredRelatives(ASSEMBLED, PART_TYPES));
+    spots.forEach((_, i) => m.assembly.drive(m.assembly.seat({ partA: `doubleEndedStud-${i + 1}`, connectorA: 1, partB: `leg-${i + 1}`, connectorB: 0, mover: `doubleEndedStud-${i + 1}` }).id));
+    const at = m.screen(top.mesh.position);
+    m.canvas.fire('pointerdown', at);
+    m.canvas.fire('pointermove', { clientX: at.clientX, clientY: at.clientY + 7 });
+    m.canvas.fire('pointermove', { clientX: at.clientX, clientY: at.clientY + 15 });
+    m.hold(1);
+    const { offered } = recorder.frames.at(-1)!;
+    expect(offered).toMatchObject({ joint: -1, kind: 'stud', host: 'top-1', grip: 'top-1' });
+    // The pair of top hole and stud end the least apart, worked out here from the parts' poses.
+    const pose = { position: top.mesh.position.toArray() as Vec3, rotation: top.mesh.quaternion.toArray() as Quat };
+    const holes = PART_TYPES.top.connectors.map((c) => connectorInWorld(c, pose).position);
+    const ends = studs.map((s) => ({ id: s.id, at: connectorInWorld(PART_TYPES.doubleEndedStud.connectors[0], { position: s.mesh.position.toArray() as Vec3, rotation: [0, 0, 0, 1] }).position }));
+    const gap = (a: Vec3, b: Vec3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    const nearest = ends.map((e) => ({ id: e.id, gap: Math.min(...holes.map((h) => gap(h, e.at))) })).sort((a, b) => a.gap - b.gap)[0];
+    expect(offered!.hardware).toBe(nearest.id);
+    m.canvas.fire('pointercancel', at);
+  });
+
   it('asks the inset about a tap on a loose leg first: consumed (a reopen) it lifts nothing, else it lifts off as ever', () => {
     for (const consume of [true, false]) {
       const b = bench();

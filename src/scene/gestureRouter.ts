@@ -1252,14 +1252,18 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   // The seat a carried panel-type part (a leg, a top) is nearing, when it is a free stud end: what is on offer to a
-  // hand turn. A panel has holes, not hardware ends, so it is the panel goal's, not the aim's. Framed at the stud's end
+  // hand turn. A panel has holes, not hardware ends, so it is the panel goal's, not the aim's: the stud end nearest one of
+  // the carried part's holes as it is held now, so a top over four studs frames the one it is closest to. Framed at the stud's end
   // with the carried part as the one to circle; nothing is seated yet, so there is no joint and no control. Its axis is the
   // stud end's own, out of the stud — the way the leg's hole axis, negated, points once it seats — so the inset's camera
   // stands where it will when the leg is on, and does not flip.
   function offeredHandSubject(goal: PanelGoal | null): InsetSubject | null {
-    const end = inset && drag && goal?.ends.find((e) => kindOf(e.type) === KIND.STUD);
+    if (!inset || !drag?.held || !goal) return null;
+    const holes = connectorsAt(drag.part, drag.held);
+    const gap = (end: WorldConnector) => Math.min(...holes.map((h) => Math.hypot(...end.position.map((v, i) => v - h.position[i]))));
+    const end = goal.ends.filter((e) => kindOf(e.type) === KIND.STUD).sort((a, b) => gap(a) - gap(b))[0];
     if (!end) return null;
-    const { id } = drag!.part;
+    const { id } = drag.part;
     return { joint: -1, kind: KIND.STUD, hardware: end.part.id, host: id, tool: null, grip: id, centre: end.position, axis: end.axis, progress: 0, tighten: false, loosen: false, pressed: false };
   }
 
