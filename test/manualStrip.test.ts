@@ -23,6 +23,7 @@ afterEach(() => {
 const COUNT = 10;
 type FakeSheet<Scrim> = Omit<ReturnType<typeof createBookletSheet>, 'scrim' | 'thumb' | 'element'> & { scrim: Scrim; thumb: FakeElement; element: FakeElement };
 
+const PITCH = BOOKLET_UI.strip.page + BOOKLET_UI.strip.gap;
 const PORTRAIT = { width: 390, height: 844 };
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -54,6 +55,8 @@ const down = (target: FakeElement, init: { pointerType?: string; x?: number; y?:
   target.fire('pointerdown', { pointerType: init.pointerType ?? 'mouse', clientX: init.x ?? 100, clientY: init.y ?? 100, pointerId: init.pointerId ?? 1, timeStamp: 1000 });
 const up = (target: FakeElement, init: { pointerType?: string; x?: number; y?: number; pointerId?: number; ms?: number } = {}) =>
   target.fire('pointerup', { pointerType: init.pointerType ?? 'mouse', clientX: init.x ?? 100, clientY: init.y ?? 100, pointerId: init.pointerId ?? 1, timeStamp: 1000 + (init.ms ?? 0) });
+const move = (target: FakeElement, init: { pointerType?: string; x?: number; y?: number; pointerId?: number } = {}) =>
+  target.fire('pointermove', { pointerType: init.pointerType ?? 'mouse', clientX: init.x ?? 100, clientY: init.y ?? 100, pointerId: init.pointerId ?? 1 });
 const touchDown = (target: FakeElement, x = 100, y = 100) => down(target, { pointerType: 'touch', x, y });
 const touchUp = (target: FakeElement, x = 100, y = 100) => up(target, { pointerType: 'touch', x, y });
 
@@ -204,18 +207,6 @@ describe('the band, by orientation', () => {
 });
 
 describe('moving along the strip', () => {
-  it('a swipe along the strip moves one page, whichever way, and never opens it', () => {
-    const { manual, slots } = mountStrip({ page: 3 });
-    touchDown(slots()[3]);
-    touchUp(slots()[3], 100 - BOOKLET_UI.swipeDistance, 100);
-    expect(manual.currentPage).toBe(4);
-    touchDown(slots()[2], 100, 100);
-    touchUp(slots()[2], 100 + BOOKLET_UI.swipeDistance, 100);
-    expect(manual.currentPage).toBe(3);
-    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs * 2);
-    expect(manual.expanded).toBe(false);
-  });
-
   it('a tap on a side page centres it', () => {
     const { manual, slots } = mountStrip({ page: 4 });
     touchDown(slots()[4]);
@@ -281,6 +272,176 @@ describe('moving along the strip', () => {
   });
 });
 
+describe('the band scrolls as a carousel', () => {
+  const pull = (target: FakeElement, along: number, axis: 'x' | 'y' = 'x') => {
+    const at = axis === 'x' ? { x: 100 + along, y: 100 } : { x: 100, y: 100 + along };
+    down(target);
+    move(target, at);
+    return at;
+  };
+
+  it('follows the pointer while it moves, and snaps to the nearest page on release', () => {
+    const { manual, slots, track, changes } = mountStrip({ page: 3 });
+    const at = pull(slots()[3], -1.4 * PITCH);
+    expect(track.style.transform).toBe(`translateX(${-1.4 * PITCH}px)`);
+    expect(track.dataset.dragging).toBe('true');
+    up(slots()[3], at);
+    expect(manual.currentPage).toBe(4);
+    expect(manual.expanded).toBe(false);
+    expect(changes).toEqual([{ page: 4, expanded: false }]);
+    // The new page is painted at once; the pages then slide the rest of the way from 0.4 pitch off.
+    expect(shown(slots())).toEqual([2, 3, 4, 5, 6]);
+    expect(track.style.transform).toBe('translateX(0px)');
+    expect(track.dataset.dragging).toBeUndefined();
+  });
+
+  it('slides from where the pages were let go, as far as the snap leaves them', () => {
+    const { slots, track } = mountStrip({ page: 3 });
+    const sets: string[] = [];
+    let current = '';
+    Object.defineProperty(track.style, 'transform', { get: () => current, set: (value: string) => sets.push((current = value)), configurable: true });
+    const at = pull(slots()[3], -1.4 * PITCH);
+    up(slots()[3], at);
+    // The release: the track is put at -32 (a pull of 112 less the page's 80), then let go to 0.
+    expect(sets.slice(-2)).toEqual([`translateX(${-1.4 * PITCH + PITCH}px)`, 'translateX(0px)']);
+  });
+
+  it('a short pull snaps back to the same page', () => {
+    const { manual, slots, track, changes } = mountStrip({ page: 3 });
+    const at = pull(slots()[3], -0.3 * PITCH);
+    up(slots()[3], at);
+    expect(manual.currentPage).toBe(3);
+    expect(changes).toEqual([]);
+    expect(track.style.transform).toBe('translateX(0px)');
+  });
+
+  it('pulls toward earlier pages the other way', () => {
+    const { manual, slots } = mountStrip({ page: 3 });
+    const at = pull(slots()[1], 1.6 * PITCH);
+    up(slots()[1], at);
+    expect(manual.currentPage).toBe(1);
+  });
+
+  it('stops at the ends: pulling past the last page is clamped, and a release there stays', () => {
+    const { manual, slots, track } = mountStrip({ page: COUNT - 1 });
+    const at = pull(slots()[1], -5 * PITCH);
+    expect(track.style.transform).toBe('translateX(0px)');
+    up(slots()[1], at);
+    expect(manual.currentPage).toBe(COUNT - 1);
+    const first = mountStrip();
+    const back = pull(first.slots()[3], 5 * PITCH);
+    expect(first.track.style.transform).toBe('translateX(0px)');
+    up(first.slots()[3], back);
+    expect(first.manual.currentPage).toBe(0);
+  });
+
+  it('moves by more than one page for a long pull', () => {
+    const { manual, slots } = mountStrip();
+    const at = pull(slots()[3], -2.2 * PITCH);
+    up(slots()[3], at);
+    expect(manual.currentPage).toBe(2);
+  });
+
+  it('works with a mouse as with a finger', () => {
+    const { manual, slots } = mountStrip({ page: 3 });
+    const at = pull(slots()[2], -PITCH);
+    up(slots()[2], at);
+    expect(manual.currentPage).toBe(4);
+  });
+
+  it('on the right edge a vertical pull moves the track down the band and flips; a horizontal one is only a wobble', () => {
+    const { manual, slots, track } = mountStrip({ viewport: LANDSCAPE, page: 3 });
+    const at = pull(slots()[3], -1.4 * PITCH, 'y');
+    expect(track.style.transform).toBe(`translateY(${-1.4 * PITCH}px)`);
+    up(slots()[3], at);
+    expect(manual.currentPage).toBe(4);
+    const across = pull(slots()[3], -2 * PITCH, 'x');
+    expect(track.style.transform).toBe('translateY(0px)');
+    up(slots()[3], across);
+    expect(manual.currentPage).toBe(4);
+  });
+
+  it('a tap on a side page slides it to the centre', () => {
+    const { manual, slots, track } = mountStrip({ page: 4 });
+    const sets: string[] = [];
+    let current = '';
+    Object.defineProperty(track.style, 'transform', { get: () => current, set: (value: string) => sets.push((current = value)), configurable: true });
+    down(slots()[3]);
+    up(slots()[3]);
+    expect(manual.currentPage).toBe(5);
+    expect(sets).toEqual([`translateX(${PITCH}px)`, 'translateX(0px)']);
+    down(slots()[1]);
+    up(slots()[1]);
+    expect(manual.currentPage).toBe(4);
+    expect(sets.slice(-2)).toEqual([`translateX(${-PITCH}px)`, 'translateX(0px)']);
+  });
+
+  it('the arrow keys step it, sliding as a tap does, in both orientations', () => {
+    const portrait = mountStrip({ page: 2 });
+    dom.key('ArrowRight');
+    expect(portrait.manual.currentPage).toBe(3);
+    dom.key('ArrowLeft');
+    dom.key('ArrowLeft');
+    expect(portrait.manual.currentPage).toBe(1);
+    expect(portrait.track.style.transform).toBe('translateX(0px)');
+    mounted.pop()!.dispose();
+    const landscape = mountStrip({ viewport: LANDSCAPE });
+    dom.key('ArrowRight');
+    expect(landscape.manual.currentPage).toBe(1);
+    dom.key('ArrowLeft');
+    expect(landscape.manual.currentPage).toBe(0);
+  });
+
+  it('Up and Down step it only when the band stands on the right edge', () => {
+    const portrait = mountStrip();
+    dom.key('ArrowDown');
+    expect(portrait.manual.currentPage).toBe(0);
+    mounted.pop()!.dispose();
+    const landscape = mountStrip({ viewport: LANDSCAPE });
+    dom.key('ArrowDown');
+    dom.key('ArrowDown');
+    dom.key('ArrowUp');
+    expect(landscape.manual.currentPage).toBe(1);
+    expect(landscape.track.style.transform).toBe('translateY(0px)');
+  });
+
+  it('a second finger during a drag slides the pages back and flips nothing', () => {
+    const { manual, slots, track, changes } = mountStrip({ page: 3 });
+    down(slots()[3], { pointerType: 'touch', pointerId: 1 });
+    move(slots()[3], { pointerType: 'touch', pointerId: 1, x: 100 - 1.4 * PITCH });
+    expect(track.dataset.dragging).toBe('true');
+    down(slots()[2], { pointerType: 'touch', pointerId: 2, x: 200 });
+    expect(track.style.transform).toBe('translateX(0px)');
+    expect(track.dataset.dragging).toBeUndefined();
+    up(slots()[3], { pointerType: 'touch', pointerId: 1, x: 100 - 1.4 * PITCH });
+    up(slots()[2], { pointerType: 'touch', pointerId: 2, x: 200 });
+    expect(manual.currentPage).toBe(3);
+    expect(changes).toEqual([]);
+  });
+
+  it('a cancelled drag slides back and flips nothing; so does a lost capture', () => {
+    const { manual, slots, track } = mountStrip({ page: 3 });
+    for (const type of ['pointercancel', 'lostpointercapture']) {
+      pull(slots()[3], -1.4 * PITCH);
+      slots()[3].fire(type, { pointerType: 'mouse' });
+      expect(track.style.transform).toBe('translateX(0px)');
+      expect(track.dataset.dragging).toBeUndefined();
+      expect(manual.currentPage).toBe(3);
+    }
+  });
+
+  it('a drag with the page open flips the open page', () => {
+    const { manual, centre, slots } = mountStrip({ page: 2 });
+    down(centre());
+    up(centre());
+    expect(manual.expanded).toBe(true);
+    const at = pull(slots()[3], -PITCH);
+    up(slots()[3], at);
+    expect(manual.currentPage).toBe(3);
+    expect(manual.expanded).toBe(true);
+  });
+});
+
 describe('opening it on a touch: hold to peek, release to put it back', () => {
   it('holding the centre page past the peek delay opens it, and the release closes it', () => {
     const { manual, centre, changes } = mountStrip();
@@ -306,13 +467,14 @@ describe('opening it on a touch: hold to peek, release to put it back', () => {
     expect(manual.expanded).toBe(false);
   });
 
-  it('a touch that moves past the tap distance before the delay is a swipe, never a peek', () => {
+  it('a touch that moves past the tap distance before the delay is a drag, never a peek', () => {
     const { manual, centre } = mountStrip({ page: 3 });
     touchDown(centre());
     centre().fire('pointermove', { pointerType: 'touch', clientX: 100 - (GESTURE.tapMaxDistance + 1), clientY: 100 });
     vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs * 2);
     expect(manual.expanded).toBe(false);
-    touchUp(centre(), 100 - BOOKLET_UI.swipeDistance, 100);
+    move(centre(), { pointerType: 'touch', x: 100 - 1.4 * PITCH });
+    touchUp(centre(), 100 - 1.4 * PITCH, 100);
     expect(manual.expanded).toBe(false);
     expect(manual.currentPage).toBe(4);
   });
@@ -350,11 +512,14 @@ describe('opening it on a touch: hold to peek, release to put it back', () => {
     expect(manual.expanded).toBe(false);
   });
 
-  it('while peeking, a swipe along the strip is not a flip: the release only closes', () => {
+  it('while peeking, a pull along the strip is not a drag or a flip: the release only closes', () => {
     const { manual, centre } = mountStrip({ page: 2 });
     touchDown(centre());
     vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs);
-    touchUp(centre(), 100 - 3 * BOOKLET_UI.swipeDistance, 100);
+    move(centre(), { pointerType: 'touch', x: 100 - 3 * PITCH });
+    expect(centre().parent!.dataset.dragging).toBeUndefined();
+    expect(centre().parent!.style.transform).toBe('translateX(0px)');
+    touchUp(centre(), 100 - 3 * PITCH, 100);
     expect(manual.expanded).toBe(false);
     expect(manual.currentPage).toBe(2);
   });

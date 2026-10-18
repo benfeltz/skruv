@@ -1,6 +1,6 @@
 import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, MENU, RENDER } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
-import { centreSlot, pitch, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
+import { centreSlot, clampTravel, pitch, snapSteps, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
 import { peekNext } from '../game/peekGesture.js';
 import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 
@@ -435,12 +435,17 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     for (const fn of listeners) fn({ page: shown, expanded: open });
   }
 
-  const flip = (by: number) => {
+  // Moves the page by `by`; the band slides the pages into place from where they stood, `travel`
+  // px (along the band) off their slots when a drag let go — the tap, the keys and the drag's
+  // release are all this one slide.
+  const flip = (by: number, travel = 0) => {
     const to = Math.min(pages.count - 1, Math.max(0, page + by));
     if (to === page) return;
+    const moved = to - page;
     page = to;
     notify(null);
     render();
+    carousel?.slide(travel + moved * carousel.pitch);
   };
 
   // The scrim is up whenever a blocking booklet is open. Put down by a tap, on the room or the
@@ -538,12 +543,13 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   view.addEventListener('pointercancel', endSwipe);
 
   // The strip's own gestures. A press on a slot (or a gap) is tracked from its down to its up
-  // or cancel: past the tap distance it is a swipe — one page, never a peek or a tap;
-  // within it, on a side slot it moves there, on the centre slot a mouse toggles the page
-  // and a touch holds it open: the peek state machine (src/game/peekGesture.ts) times that,
-  // and its release — or a lost capture — puts the page back. A keyboard's click on a slot
-  // (detail 0 — a pointer's was handled here) does what a tap does.
-  let stripPress: { id: number; x: number; y: number; slot: number | null; touch: boolean } | null = null;
+  // or cancel: past the tap distance along the band it is a drag — the pages follow the pointer
+  // and snap to the nearest page on release, never a peek or a tap; within it, on a side slot
+  // it moves there, on the centre slot a mouse toggles the page and a touch holds it open: the
+  // peek state machine (src/game/peekGesture.ts) times that, and its release — or a lost
+  // capture — puts the page back. A keyboard's click on a slot (detail 0 — a pointer's was
+  // handled here) does what a tap does.
+  let stripPress: { id: number; x: number; y: number; slot: number | null; touch: boolean; travel: number; dragging: boolean } | null = null;
   let peek: PeekState = 'idle';
   let peekTimer: ReturnType<typeof setTimeout> | null = null;
   const peekSend = (event: PeekEvent) => {
@@ -576,18 +582,17 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   };
   if (carousel) {
     thumb.addEventListener('pointerdown', (event) => {
-      const control = (event.target as Element).closest('button');
-      const slot = control?.dataset.slot;
+      const slot = (event.target as Element).closest('button')?.dataset.slot;
       if (event.button !== 0) return;
       // The band has no two-finger gesture, so a second finger ends the first one's as a cancel
-      // (no tap, no flip, a peek put back) and starts nothing: a pinch here is nobody's. The
-      // room is not told; fingers on the band were never the room's.
+      // (no tap, no flip, a peek put back, a drag slid back) and starts nothing: a pinch here is
+      // nobody's. The room is not told; fingers on the band were never the room's.
       if (stripPress) {
         if (event.pointerId !== stripPress.id) cancelStripPress();
         return;
       }
       const touch = event.pointerType !== 'mouse';
-      stripPress = { id: event.pointerId, x: event.clientX, y: event.clientY, slot: slot === undefined ? null : Number(slot), touch };
+      stripPress = { id: event.pointerId, x: event.clientX, y: event.clientY, slot: slot === undefined ? null : Number(slot), touch, travel: 0, dragging: false };
       thumb.setPointerCapture(event.pointerId);
       // A hold peeks the page in any slot that has one — while the manual is docked. Open, only
       // the centre slot's hold is armed, as it always was: a side slot's hold is a tap that
@@ -597,25 +602,41 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     });
     thumb.addEventListener('pointermove', (event) => {
       if (!stripPress || event.pointerId !== stripPress.id) return;
-      peekSend({ type: 'move', distance: Math.hypot(event.clientX - stripPress.x, event.clientY - stripPress.y) });
+      const dx = event.clientX - stripPress.x;
+      const dy = event.clientY - stripPress.y;
+      peekSend({ type: 'move', distance: Math.hypot(dx, dy) });
+      // While peeking, travel does nothing: the release only closes.
+      if (peek === 'peeking') return;
+      const along = carousel.axis() === 'x' ? dx : dy;
+      if (!stripPress.dragging && Math.abs(along) <= GESTURE.tapMaxDistance) return;
+      stripPress.dragging = true;
+      stripPress.travel = clampTravel(along, page, pages.count, carousel.pitch);
+      carousel.drag(stripPress.travel);
     });
-    function cancelStripPress() {
-      if (!stripPress) return;
-      const { touch } = stripPress;
+    // Lets the press go: a touch's peek is put back. Returns the press, for a drag to settle.
+    function releaseStripPress() {
+      const press = stripPress;
       stripPress = null;
-      if (touch) peekSend({ type: 'release' });
+      if (press?.touch) peekSend({ type: 'release' });
+      return press;
+    }
+    // A press cut short: nothing is flipped and a drag slides back.
+    function cancelStripPress() {
+      const press = releaseStripPress();
+      if (press?.dragging) carousel!.slide(press.travel);
     }
     const endStripPress = (event: PointerEvent) => {
       if (!stripPress || event.pointerId !== stripPress.id) return;
-      const { x, y, slot, touch } = stripPress;
+      const { x, y, slot, touch, dragging, travel } = stripPress;
       const wasPeeking = peek === 'peeking';
-      cancelStripPress();
-      if (event.type !== 'pointerup' || wasPeeking) return;
-      const dx = event.clientX - x;
-      const dy = event.clientY - y;
-      if (Math.hypot(dx, dy) <= GESTURE.tapMaxDistance) {
-        if (slot !== null) tapSlot(slot, touch);
-      } else if (Math.abs(dx) >= BOOKLET_UI.swipeDistance && Math.abs(dx) > Math.abs(dy)) flip(dx < 0 ? 1 : -1);
+      if (wasPeeking || event.type !== 'pointerup') return cancelStripPress();
+      releaseStripPress();
+      if (dragging) {
+        // To the nearest page, the pages sliding the rest of the way from where they were let go.
+        const steps = snapSteps(travel, carousel.pitch);
+        if (steps === 0) carousel.slide(travel);
+        else flip(steps, travel);
+      } else if (Math.hypot(event.clientX - x, event.clientY - y) <= GESTURE.tapMaxDistance && slot !== null) tapSlot(slot, touch);
     };
     thumb.addEventListener('pointerup', endStripPress);
     thumb.addEventListener('pointercancel', endStripPress);
@@ -641,8 +662,10 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     }
     // A strip steps on the arrow keys docked too, unless another sheet is the one in hand.
     if (!open && !(stripped && !anyOpen(self))) return;
-    if (event.key === 'ArrowLeft') flip(-1);
-    else if (event.key === 'ArrowRight') flip(1);
+    // Left and Right step the band either way up; Up and Down too when it stands on the right edge.
+    const vertical = carousel?.axis() === 'y';
+    if (event.key === 'ArrowLeft' || (vertical && event.key === 'ArrowUp')) flip(-1);
+    else if (event.key === 'ArrowRight' || (vertical && event.key === 'ArrowDown')) flip(1);
   }
   window.addEventListener('keydown', onKey);
 
@@ -761,6 +784,8 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
   const visible = () => visibleCount(axis() === 'x' ? window.innerWidth : window.innerHeight, strip, BOOKLET_UI.page.gutter);
   /** How many slots are built: those, and the hidden ones past each end. */
   const total = () => visible() + 2 * strip.buffer;
+  let lastAxis: Axis | null = null;
+  const shift = (px: number) => `translate${axis() === 'x' ? 'X' : 'Y'}(${px}px)`;
   function rebuild(built: number) {
     // A turn of the phone or a resized window may take away the slot that has focus.
     const hadFocus = slots.some(({ button: old }) => old === document.activeElement);
@@ -797,6 +822,9 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
       const built = total();
       if (built !== slots.length) rebuild(built);
       const now = axis();
+      // A turn of the phone leaves no stale offset along the old axis.
+      if (now !== lastAxis) track.style.transform = shift(0);
+      lastAxis = now;
       root.dataset.axis = track.dataset.axis = leaf.dataset.axis = now;
       document.documentElement.style.setProperty(STRIP_VARS.bottom, bandSize[now].bottom);
       document.documentElement.style.setProperty(STRIP_VARS.right, bandSize[now].right);
@@ -813,6 +841,19 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
         if (index !== null && slot.shows !== index) draw(slot.canvas, index);
         slot.shows = index;
       });
+    },
+    /** The track follows a drag: `travel` px along the band from where it rests, no transition. */
+    drag(travel: number) {
+      track.dataset.dragging = 'true';
+      track.style.transform = shift(travel);
+    },
+    /** The track slides home to rest from `from` px off it, the page just painted: set there without a transition, flushed, then let go to 0. */
+    slide(from: number) {
+      track.dataset.dragging = 'true';
+      track.style.transform = shift(from);
+      track.getBoundingClientRect();
+      delete track.dataset.dragging;
+      track.style.transform = shift(0);
     },
     /** The room's view is whole again: the band is gone. */
     dispose() {
