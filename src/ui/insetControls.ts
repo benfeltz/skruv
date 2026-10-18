@@ -1,10 +1,10 @@
 import { COLORS, FASTENER, GESTURE, INSET } from '../constants.js';
 import { createCrank } from '../game/crankMath.js';
-import { bubbleOf, ringRadians } from '../game/insetControls.js';
+import { ringRadians } from '../game/insetControls.js';
 import { arcLength } from '../game/turnRing.js';
 import { put } from './svgAttrs.js';
 import type { ScreenPoint } from '../game/dragMath.js';
-import type { InsetFrame } from '../game/insetView.js';
+import type { Bubble } from '../game/insetControls.js';
 
 // The controls on the detail inset: sub-bubbles attached to its circle as the manual's tool bubble is attached to its
 // detail inset (a paper disc ringed in ink at the circle's own line weight, sitting partly on the rim and partly off
@@ -208,7 +208,7 @@ function createPush({ onPush, onPull }: InsetControlHandlers) {
 
 /**
  * The controls overlay, appended to `container` and hidden until `showTurn` or `showPush`: the spinner or the push
- * bubble, attached to the circle `frame`, the other hidden. Built once; a frame only rewrites attributes.
+ * bubble, drawn in the bubble it is given, the other hidden. Built once; a frame only rewrites attributes.
  */
 export function createInsetControls(container: HTMLElement, handlers: InsetControlHandlers) {
   injectStyle();
@@ -230,17 +230,15 @@ export function createInsetControls(container: HTMLElement, handlers: InsetContr
 
   return {
     element,
-    /** The spinner's bubble attached to the circle `frame`, with `look`; the push bubble away. */
-    showTurn(frame: InsetFrame, look: TurnLook) {
-      const { centre, radius } = bubbleOf(frame);
+    /** The spinner drawn in `bubble` (where the panel attached it to the circle, whatever its size), with `look`; the push bubble away. */
+    showTurn({ centre, radius }: Bubble, look: TurnLook) {
       toggle(turn.group, true);
       toggle(push.group, false);
       turn.show(centre, radius, look);
       element.removeAttribute('hidden');
     },
-    /** The push bubble attached to the circle `frame`, with `look`; the spinner away. */
-    showPush(frame: InsetFrame, look: PushLook) {
-      const { centre, radius } = bubbleOf(frame);
+    /** The push bubble drawn in `bubble`, with `look`; the spinner away. */
+    showPush({ centre, radius }: Bubble, look: PushLook) {
       toggle(turn.group, false);
       toggle(push.group, true);
       push.show(centre, radius, look);
