@@ -1212,17 +1212,16 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // A joint as the inset frames it: its hole in the world as the part is drawn (its mesh, with fastener feedback
   // on top of the simulation's pose), the axis pointing into it.
   // `grip` is what its spinner turns: the tool of a tool turn (the default), the part of a hand turn.
-  function insetSubject(joint: AssemblyJoint, tool: PartId | null, grip: PartId | null = tool): InsetSubject {
+  function insetSubject(joint: AssemblyJoint, tool: PartId | null, grip: PartId | null = tool, turn: Turn | null = grip === null ? null : assembly.turnOf(grip)): InsetSubject {
     const { type, mesh } = partById.get(joint.host)!;
     const hole = connectorInWorld(PART_TYPES[type].connectors[joint.hostConnector], { position: mesh.position.toArray(), rotation: mesh.quaternion.toArray() });
-    return { joint: joint.id, kind: joint.kind, hardware: joint.hardware, host: joint.host, tool, grip, centre: hole.position, axis: [-hole.axis[0], -hole.axis[1], -hole.axis[2]], ...insetState(joint, grip) };
+    return { joint: joint.id, kind: joint.kind, hardware: joint.hardware, host: joint.host, tool, grip, centre: hole.position, axis: [-hole.axis[0], -hole.axis[1], -hole.axis[2]], ...insetState(joint, turn) };
   }
 
   // How far in the joint is and what can still move: a turn's, a tool's or a hand's, from the graph's record of it — the
   // tighten head is drawn until every joint is home (a cam turned full onto nothing is not), the loosen head while any
   // has turn left — and a dowel, pin or fitting's pressed state.
-  function insetState(joint: AssemblyJoint, grip: PartId | null) {
-    const turn = grip === null ? null : assembly.turnOf(grip);
+  function insetState(joint: AssemblyJoint, turn: Turn | null) {
     if (turn && turn.joints.length > 0) return { progress: turnProgress(turn), tighten: !isTurnHome(turn), loosen: canLoosen(turn), pressed: false };
     const pressed = joint.fastener.state === STATE.PRESSED;
     return { progress: pressed ? 1 : 0, tighten: false, loosen: false, pressed };
@@ -1274,7 +1273,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   function engagedSubjects(joints: readonly AssemblyJoint[], world: readonly Turn[]): InsetSubject[] {
     if (!inset) return [];
     const byTool = joints.flatMap((joint) => (joint.kind === KIND.TOOL ? [insetSubject(joint, joint.hardware)] : isTapKind(joint.kind) && joint.fastener.state === STATE.SEATED ? [insetSubject(joint, null)] : []));
-    const byHand = world.flatMap((turn) => (turn.grip.kind === 'hand' && turn.joints.length > 0 && !isTurnHome(turn) ? [insetSubject(turn.joints[0], null, turn.grip.part)] : []));
+    const byHand = world.flatMap((turn) => (turn.grip.kind === 'hand' && turn.joints.length > 0 && !isTurnHome(turn) ? [insetSubject(turn.joints[0], null, turn.grip.part, turn)] : []));
     return [...byTool, ...byHand];
   }
 
