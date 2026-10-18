@@ -5,8 +5,11 @@ import { FASTENER, GESTURE, TURN_RING } from '../src/constants.js';
 import { tightenSign } from '../src/game/crankMath.js';
 import { EVENT } from '../src/game/events.js';
 import { STATE } from '../src/game/fasteners.js';
-import { PART_TYPES, setItem } from '../src/game/item.js';
-import { FRAME, makePart, mount } from './support/routerBench.js';
+import { ASSEMBLED, PART_TYPES, setItem } from '../src/game/item.js';
+import { FRAME, insetRecorder, makePart, mount } from './support/routerBench.js';
+import { preferredRelatives } from '../src/game/panelFit.js';
+import type { InsetRecorder } from './support/routerBench.js';
+import type { Relatives } from '../src/game/panelFit.js';
 import { RAIL_HOLE, SCREW_SLOT, SCREW_THREAD } from './support/screwParts.js';
 import type { AssemblyJoint } from '../src/game/assembly.js';
 import type { Part } from '../src/game/partMesh.js';
@@ -50,12 +53,12 @@ const legAt = (i: number, sunk: number, on: number): Vec3 => {
 };
 
 // The table's parts on the bench: the top, `n` studs in holes 0..n-1, `n` legs on them.
-function table({ studs = 1, sunk = 1, on = 0, camera = [0, 1.2, 0.8] as Vec3 }: { studs?: number; sunk?: number; on?: number; camera?: Vec3 } = {}) {
+function table({ studs = 1, sunk = 1, on = 0, camera = [0, 1.2, 0.8] as Vec3, inset, relatives }: { studs?: number; sunk?: number; on?: number; camera?: Vec3; inset?: InsetRecorder; relatives?: Relatives } = {}) {
   const legs = studs;
   const top = makePart('top-1', 'top', TOP_POSE.position, TOP_POSE.rotation);
   const studParts = Array.from({ length: studs }, (_, i) => makePart(`doubleEndedStud-${i + 1}`, 'doubleEndedStud', studAt(i, sunk), FLIPPED));
   const legParts = Array.from({ length: legs }, (_, i) => makePart(`leg-${i + 1}`, 'leg', legAt(i, sunk, on), FLIPPED));
-  const m = mount([top, ...studParts, ...legParts], camera);
+  const m = mount([top, ...studParts, ...legParts], camera, inset, relatives);
   const joint = (id: number) => m.assembly.get(id)!;
   const progress = (j: AssemblyJoint) => joint(j.id).fastener.progress;
   // Which way round the screen tightens a part circled by hand, from where the camera is:
@@ -336,12 +339,12 @@ describe('2. a leg screwed home onto a loose stud, carried onto the top', () => 
 
 describe('3. a top dropped onto four standing studs', () => {
   // Four legs standing on the floor, a stud keyed home in each, the top dropped on.
-  function bench(camera: Vec3 = [0, 1.4, 0.9]) {
+  function bench(camera: Vec3 = [0, 1.4, 0.9], inset?: InsetRecorder) {
     const spots: [number, number][] = [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]];
     const legs = spots.map(([x, z], i) => makePart(`leg-${i + 1}`, 'leg', [x, 0.2, z]));
     const studs = spots.map(([x, z], i) => makePart(`doubleEndedStud-${i + 1}`, 'doubleEndedStud', [x, 0.4, z]));
     const top = makePart('top-1', 'top', [0, 0.445, 0]);
-    const m = mount([...legs, ...studs, top], camera);
+    const m = mount([...legs, ...studs, top], camera, inset);
     const inLegs = spots.map((_, i) => {
       const j = m.assembly.seat({ partA: `doubleEndedStud-${i + 1}`, connectorA: 1, partB: `leg-${i + 1}`, connectorB: 0, mover: `doubleEndedStud-${i + 1}` });
       m.assembly.drive(j.id);
@@ -382,6 +385,14 @@ describe('3. a top dropped onto four standing studs', () => {
   });
 
   // Review round 5: the clicks are the first joint that moved, not joints[0] whatever it did.
+  it('is one subject of the inset, the top its grip, though four studs turn', () => {
+    const recorder = insetRecorder();
+    const b = bench(undefined, recorder);
+    b.hold(1);
+    expect(recorder.frames.at(-1)!.engaged).toHaveLength(1);
+    expect(recorder.frames.at(-1)!.engaged[0]).toMatchObject({ kind: 'stud', grip: 'top-1', tool: null });
+  });
+
   it('clicks for the first stud that moved when the first in the batch does not', () => {
     const b = bench();
     const apply = b.assembly.apply.bind(b.assembly);
@@ -509,12 +520,12 @@ describe('5. a key on a hand-seated stud', () => {
     t.canvas.fire('pointerup', s);
     t.hold(1);
   }
-  function bench({ mover = 'doubleEndedStud-1' } = {}) {
+  function bench({ mover = 'doubleEndedStud-1', inset }: { mover?: string; inset?: InsetRecorder } = {}) {
     const top = makePart('top-1', 'top', TOP_POSE.position, TOP_POSE.rotation);
     const stud = makePart('doubleEndedStud-1', 'doubleEndedStud', studAt(0, 0), FLIPPED);
     const key = makePart('allenWrench-1', 'allenWrench', [0.3, 0.1, 0.3], TIP_DOWN);
     const leg = makePart('leg-1', 'leg', legAt(0, 0, -0.25), FLIPPED);
-    const m = mount([top, stud, key, leg]);
+    const m = mount([top, stud, key, leg], undefined, inset);
     const joint = m.assembly.seat({ partA: stud.id, connectorA: 0, partB: top.id, connectorB: 0, mover });
     const free: Vec3 = [...mouth(0)];
     free[1] += 2 * STUD_HALF();
@@ -522,6 +533,16 @@ describe('5. a key on a hand-seated stud', () => {
     return { ...m, t, top, stud, key, leg, inTop: joint, free };
   }
   const tool = (b: ReturnType<typeof bench>) => b.assembly.all().find((j) => j.kind === 'tool') ?? null;
+
+  it('is a tool turn for the inset: the key its grip and tool, no hand subject beside it', () => {
+    const recorder = insetRecorder();
+    const b = bench({ mover: 'top-1', inset: recorder });
+    keyAt(b.t, b.key, b.free);
+    b.hold(1);
+    const { engaged } = recorder.frames.at(-1)!;
+    expect(engaged).toHaveLength(1);
+    expect(engaged[0]).toMatchObject({ kind: 'tool', tool: 'allenWrench-1', grip: 'allenWrench-1' });
+  });
 
   it('turns and sinks the stud on a top that was dropped onto it — the top does not turn', () => {
     const b = bench({ mover: 'top-1' });
@@ -650,5 +671,81 @@ describe('7. a wood screw under the screwdriver (1.9.3.1)', () => {
   it('takes no part behind when the panel lies past the tip, though within the screw\'s length', () => {
     const m = driven(FASTENER.sinkDepth.screw! - PART_TYPES.rail.size[1] + 0.002);
     expect(m.assembly.get(m.screw.id)).toMatchObject({ through: null, fastener: { state: STATE.SCREWED, progress: 1 } });
+  });
+});
+
+// 1.10.0.3: a hand turn is a subject of the detail inset — what the router reports, through the recorder. The
+// main-view hand dial is asserted unchanged by the cases above.
+describe('8. the inset sees hand turns (1.10.0.3)', () => {
+  function bench() {
+    const recorder = insetRecorder();
+    const t = table({ sunk: 1, on: 0, inset: recorder });
+    t.assembly.drive(studIntoTop(t).id);
+    const inLeg = legOntoStud(t);
+    t.hold(1);
+    return { ...t, recorder, inLeg, leg: t.legs[0], last: () => recorder.frames.at(-1)! };
+  }
+
+  it('engages a leg screwed on its stud, naming the leg as its grip, with the tighten head only at the start', () => {
+    const b = bench();
+    expect(b.last().engaged).toHaveLength(1);
+    expect(b.last().engaged[0]).toMatchObject({ kind: 'stud', host: 'leg-1', hardware: 'doubleEndedStud-1', tool: null, grip: 'leg-1', progress: 0, tighten: true, loosen: false });
+    expect(b.last().offered).toBeNull();
+  });
+
+  it('follows the turn: home it has the loosen head only, and nothing is unseated or dropped on the way', () => {
+    const b = bench();
+    set(b, b.inLeg, 0.5);
+    b.hold(1);
+    expect(b.last().engaged[0]).toMatchObject({ progress: 0.5, tighten: true, loosen: true });
+    set(b, b.inLeg, 1);
+    b.hold(1);
+    expect(b.last().engaged[0]).toMatchObject({ progress: 1, tighten: false, loosen: true });
+    expect(b.assembly.get(b.inLeg.id)).toBeDefined();
+    expect(b.released).not.toContain(b.leg.body);
+  });
+
+  it('keeps a backed-out leg engaged, loose and seated, with the tighten head only', () => {
+    const b = bench();
+    set(b, b.inLeg, 0.5);
+    set(b, b.inLeg, 0);
+    b.hold(1);
+    expect(b.assembly.turnOf('leg-1')?.state).toBe('loose');
+    expect(b.last().engaged[0]).toMatchObject({ grip: 'leg-1', progress: 0, tighten: true, loosen: false });
+  });
+
+  it('offers the stud end to a leg carried toward it, the leg its grip, before anything is seated', () => {
+    const recorder = insetRecorder();
+    const t = table({ sunk: 1, on: -0.5, inset: recorder, relatives: preferredRelatives(ASSEMBLED, PART_TYPES) });
+    t.assembly.drive(studIntoTop(t).id);
+    const at = t.screen(t.legs[0].mesh.position);
+    t.canvas.fire('pointerdown', at);
+    t.canvas.fire('pointermove', { clientX: at.clientX, clientY: at.clientY + 7 });
+    t.canvas.fire('pointermove', { clientX: at.clientX, clientY: at.clientY + 15 });
+    t.hold(1);
+    const { offered, engaged } = recorder.frames.at(-1)!;
+    expect(engaged).toEqual([]);
+    expect(offered).toMatchObject({ joint: -1, kind: 'stud', hardware: 'doubleEndedStud-1', host: 'leg-1', tool: null, grip: 'leg-1', tighten: false, loosen: false });
+    const end = connectorInWorld(PART_TYPES.doubleEndedStud.connectors[1], { position: t.studs[0].mesh.position.toArray() as Vec3, rotation: FLIPPED });
+    expect(offered!.centre.every((v, i) => Math.abs(v - end.position[i]) < 1e-3)).toBe(true);
+    t.canvas.fire('pointercancel', at);
+  });
+
+  it('asks the inset about a tap on a loose leg first: consumed (a reopen) it lifts nothing, else it lifts off as ever', () => {
+    for (const consume of [true, false]) {
+      const b = bench();
+      b.circleOn(b.leg, b.centre(b.leg, 0), 30);
+      b.circleOn(b.leg, b.centre(b.leg, 0), -90);
+      b.released.length = 0;
+      b.recorder.consume = consume;
+      b.tap(b.screen(b.leg.mesh.position));
+      expect(b.recorder.tapsOn).toContain('leg-1');
+      expect(b.released.includes(b.leg.body)).toBe(!consume);
+    }
+  });
+
+  it('never settles a stud: settled stays empty for the turn’s joint', () => {
+    const b = bench();
+    expect(b.last().settled(b.inLeg.id)).toBeNull();
   });
 });

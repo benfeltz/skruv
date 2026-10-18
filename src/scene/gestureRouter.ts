@@ -1210,17 +1210,18 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // A joint as the inset frames it: its hole in the world as the part is drawn (its mesh, with fastener feedback
   // on top of the simulation's pose), the axis pointing into it.
-  function insetSubject(joint: AssemblyJoint, tool: PartId | null): InsetSubject {
+  // `grip` is what its spinner turns: the tool of a tool turn (the default), the part of a hand turn.
+  function insetSubject(joint: AssemblyJoint, tool: PartId | null, grip: PartId | null = tool): InsetSubject {
     const { type, mesh } = partById.get(joint.host)!;
     const hole = connectorInWorld(PART_TYPES[type].connectors[joint.hostConnector], { position: mesh.position.toArray(), rotation: mesh.quaternion.toArray() });
-    return { joint: joint.id, kind: joint.kind, hardware: joint.hardware, host: joint.host, tool, centre: hole.position, axis: [-hole.axis[0], -hole.axis[1], -hole.axis[2]], ...insetState(joint, tool) };
+    return { joint: joint.id, kind: joint.kind, hardware: joint.hardware, host: joint.host, tool, grip, centre: hole.position, axis: [-hole.axis[0], -hole.axis[1], -hole.axis[2]], ...insetState(joint, grip) };
   }
 
-  // How far in the joint is and what can still move: a tool's turn from the graph's record of it — the tighten head
-  // is drawn until every joint is home (a cam turned full onto nothing is not), the loosen head while any has turn
-  // left — and a dowel, pin or fitting's pressed state.
-  function insetState(joint: AssemblyJoint, tool: PartId | null) {
-    const turn = tool === null ? null : assembly.turnOf(tool);
+  // How far in the joint is and what can still move: a turn's, a tool's or a hand's, from the graph's record of it — the
+  // tighten head is drawn until every joint is home (a cam turned full onto nothing is not), the loosen head while any
+  // has turn left — and a dowel, pin or fitting's pressed state.
+  function insetState(joint: AssemblyJoint, grip: PartId | null) {
+    const turn = grip === null ? null : assembly.turnOf(grip);
     if (turn && turn.joints.length > 0) return { progress: turnProgress(turn), tighten: !isTurnHome(turn), loosen: canLoosen(turn), pressed: false };
     const pressed = joint.fastener.state === STATE.PRESSED;
     return { progress: pressed ? 1 : 0, tighten: false, loosen: false, pressed };
@@ -1239,6 +1240,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       hardware: drag!.part.id,
       host: seat.part.id,
       tool: isToolTip(end.connector.type) ? drag!.part.id : null,
+      grip: isToolTip(end.connector.type) ? drag!.part.id : null,
       centre: seat.position,
       axis: [-seat.axis[0], -seat.axis[1], -seat.axis[2]],
       progress: 0,
@@ -1248,11 +1250,23 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     };
   }
 
-  // Every joint the inset could frame: each seated tool's, and each dowel, pin or fitting seated and not yet pushed home.
-  function engagedSubjects(joints: readonly AssemblyJoint[]): InsetSubject[] {
+  // The seat a carried panel-type part (a leg, a top) is nearing, when it is a free stud end: what is on offer to a
+  // hand turn. A panel has holes, not hardware ends, so it is the panel goal's, not the aim's. Framed at the stud's end
+  // with the carried part as the one to circle; nothing is seated yet, so there is no joint and no control.
+  function offeredHandSubject(goal: PanelGoal | null): InsetSubject | null {
+    const end = inset && drag && goal?.ends.find((e) => kindOf(e.type) === KIND.STUD);
+    if (!end) return null;
+    const { id } = drag!.part;
+    return { joint: -1, kind: KIND.STUD, hardware: end.part.id, host: id, tool: null, grip: id, centre: end.position, axis: [-end.axis[0], -end.axis[1], -end.axis[2]], progress: 0, tighten: false, loosen: false, pressed: false };
+  }
+
+  // Every joint the inset could frame: each seated tool's, each part circled by hand (framed at its near joint, the hole it
+  // turns on), and each dowel, pin or fitting seated and not yet pushed home.
+  function engagedSubjects(joints: readonly AssemblyJoint[], world: readonly Turn[]): InsetSubject[] {
     if (!inset) return [];
-    return joints
-      .flatMap((joint) => (joint.kind === KIND.TOOL ? [insetSubject(joint, joint.hardware)] : isTapKind(joint.kind) && joint.fastener.state === STATE.SEATED ? [insetSubject(joint, null)] : []));
+    const byTool = joints.flatMap((joint) => (joint.kind === KIND.TOOL ? [insetSubject(joint, joint.hardware)] : isTapKind(joint.kind) && joint.fastener.state === STATE.SEATED ? [insetSubject(joint, null)] : []));
+    const byHand = world.flatMap((turn) => (turn.grip.kind === 'hand' && turn.joints.length > 0 ? [insetSubject(turn.joints[0], null, turn.grip.part)] : []));
+    return [...byTool, ...byHand];
   }
 
   // Whether a tool's turn can back out: it has turn left, and no locked cam holds its bolt (the machine refuses it).
@@ -1853,7 +1867,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       physics.move(partById.get(id)!.body, scratch.toArray(), twist.toArray());
     }
     // Last, so the inset frames the parts as this frame drew them: a bolt sunk by its turn, a rider carried along.
-    inset?.candidates(offeredSubject(ends, workable), engagedSubjects(joints), settledSubjects(joints));
+    inset?.candidates(offeredSubject(ends, workable) ?? offeredHandSubject(goal), engagedSubjects(joints, world), settledSubjects(joints));
   }
 
   // Fastener progress, drawn on top of the simulated poses. Each turn moves its turned part
