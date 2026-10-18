@@ -2,10 +2,21 @@ import { vi } from 'vitest';
 
 // A minimal fake DOM, enough for src/ui/booklet.ts: elements that hold children, listeners,
 // attributes and a dataset, events that bubble from the target up, one focused element, and
-// window key listeners and a viewport width. test/bookletSplash.test.ts carries its own copy of the same shape.
+// window key listeners, a viewport width and height, and a root element whose style records custom properties. test/bookletSplash.test.ts carries its own copy of the same shape.
 
 type FakeEvent = { type: string; target: FakeElement; pointerId: number; pointerType: string; button: number; detail: number; clientX: number; clientY: number; timeStamp: number };
 type Listener = (event: object) => void;
+
+/** The root element's style: just the custom properties a test reads back. */
+export class FakeStyle {
+  props: Record<string, string> = {};
+  setProperty(name: string, value: string) {
+    this.props[name] = value;
+  }
+  removeProperty(name: string) {
+    delete this.props[name];
+  }
+}
 
 export class FakeElement {
   tag: string;
@@ -91,8 +102,10 @@ export interface FakeDom {
   body: FakeElement;
   focused: FakeElement | null;
   windowListeners: Map<string, Listener[]>;
-  /** The viewport's width, as `window.innerWidth`: a test sets it, then fires `resize`. */
-  viewport: { width: number };
+  /** The viewport's size, as `window.innerWidth` and `innerHeight`: a test sets it, then fires `resize`. */
+  viewport: { width: number; height: number };
+  /** `document.documentElement`'s style, where the strip sets its root variables. */
+  rootStyle: FakeStyle;
   /** Presses a key on the window. */
   key(name: string): void;
 }
@@ -105,7 +118,8 @@ export function installFakeDom(): FakeDom {
     body: undefined as unknown as FakeElement,
     focused: null,
     windowListeners,
-    viewport: { width: 1280 },
+    viewport: { width: 1280, height: 800 },
+    rootStyle: new FakeStyle(),
     key: (name) => windowListeners.get('keydown')?.forEach((fn) => fn({ key: name })),
   };
   dom.head = new FakeElement('head', dom);
@@ -113,12 +127,16 @@ export function installFakeDom(): FakeDom {
   vi.stubGlobal('document', {
     head: dom.head,
     body: dom.body,
+    documentElement: { style: dom.rootStyle },
     createElement: (tag: string) => new FakeElement(tag, dom),
     getElementById: (id: string) => dom.head.children.find((node) => node.id === id) ?? null,
   });
   vi.stubGlobal('window', {
     get innerWidth() {
       return dom.viewport.width;
+    },
+    get innerHeight() {
+      return dom.viewport.height;
     },
     addEventListener: (type: string, fn: Listener) => windowListeners.set(type, [...(windowListeners.get(type) ?? []), fn]),
     removeEventListener: (type: string, fn: Listener) => windowListeners.set(type, (windowListeners.get(type) ?? []).filter((f) => f !== fn)),
