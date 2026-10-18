@@ -5,10 +5,10 @@
 import { INSET } from '../constants.js';
 import { isTapKind } from './fasteners.js';
 import type { InsetSubject } from './insetModel.js';
-import type { InsetFrame } from './insetView.js';
+import type { InsetFrame, InsetLayout } from './insetView.js';
 import type { ScreenPoint } from './dragMath.js';
 
-/** The spinner turns a tool; the push control seats a dowel, pin or fitting. */
+/** The spinner turns a tool or a part circled by hand; the push control seats a dowel, pin or fitting. */
 export type ControlKind = 'turn' | 'push';
 
 /**
@@ -17,10 +17,10 @@ export type ControlKind = 'turn' | 'push';
  */
 export const RING_SIGN = 1;
 
-/** The control a subject gets: the spinner for a tool's turn, the push for a dowel, pin or fitting, none for an offered seat. */
+/** The control a subject gets: the spinner for a turn (a tool's or a hand's, whatever its `grip` is), the push for a dowel, pin or fitting, none for an offered seat. */
 export function controlFor(subject: InsetSubject): ControlKind | null {
   if (subject.joint < 0) return null;
-  if (subject.tool !== null) return 'turn';
+  if (subject.grip !== null) return 'turn';
   return isTapKind(subject.kind) ? 'push' : null;
 }
 
@@ -47,6 +47,22 @@ export interface Bubble {
 export function bubbleOf({ centre, radius }: InsetFrame, { bubble } = INSET.controls): Bubble {
   return { centre: [centre[0] + radius * bubble.at, centre[1] + radius * bubble.at], radius: Math.max(radius * bubble.share, bubble.min) };
 }
+
+/**
+ * Where a hand turn's spinner is attached: a bubble the circle's own size (`hand.share` of its radius), its centre
+ * the two radii apart less `hand.overlap` of that, so it overlaps the rim and reads as attached — straight
+ * below the circle in portrait, straight left of it in landscape.
+ */
+export function handBubbleOf({ centre, radius }: InsetFrame, layout: InsetLayout, { hand } = INSET.controls): Bubble {
+  const r = radius * hand.share;
+  const reach = (radius + r) * (1 - hand.overlap);
+  const [x, y] = centre;
+  return { centre: hand.slot[layout] === 'below' ? [x, y + reach] : [x - reach, y], radius: r };
+}
+
+/** The bubble a subject's spinner draws in: the circle's own size for a hand turn (no tool), the small lower-right one for a tool's. */
+export const bubbleFor = (subject: InsetSubject, frame: InsetFrame, layout: InsetLayout): Bubble =>
+  subject.tool === null && subject.grip !== null ? handBubbleOf(frame, layout) : bubbleOf(frame);
 
 /** How far the bubble reaches past the circle's rim to the right, CSS px: what the circle leaves room for at the screen's edge. */
 export function bubbleOverhang({ radius }: InsetFrame) {
