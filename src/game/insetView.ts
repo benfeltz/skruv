@@ -79,8 +79,6 @@ export function insetFrame(viewport: Viewport, safe: SafeInsets = { top: 0, righ
   const radius = diameter / 2;
   if (layout === 'portrait') return { centre: [viewport.width / 2, safe.top + INSET.portrait.top + radius], radius };
   // The control's bubble hangs off the circle's lower right: the right offset is to its edge when it reaches past the rim.
-  // The room kept here is the tool bubble's, whichever subject shows: a hand turn's bubble hangs off the circle's left instead, into the
-  // width free there, so it asks nothing of the right edge and the circle does not move for it.
   const hang = bubbleOverhang({ centre: [0, 0], radius });
   return { centre: [viewport.width - safe.right - INSET.landscape.right - hang - radius, safe.top + INSET.landscape.top + radius], radius };
 }

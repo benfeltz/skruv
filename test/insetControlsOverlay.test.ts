@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOOKLET, GESTURE, INSET } from '../src/constants.js';
 import { arcLength } from '../src/game/turnRing.js';
-import { bubbleOf, handBubbleOf } from '../src/game/insetControls.js';
+import { bubbleOf } from '../src/game/insetControls.js';
 import { createInsetControls } from '../src/ui/insetControls.js';
 
 // The real inset controls (src/ui/insetControls.ts) on a minimal fake DOM (1.10.0.2 step 5): what they draw for the
@@ -160,19 +160,6 @@ describe('the inset controls overlay', () => {
       controls.showTurn(b, lookTurn());
       expect(turn.attributes.transform).toBe(`translate(${b.centre[0]} ${b.centre[1]})`);
       expect(turn.all('inset-controls__bubble')[0].attributes.r).toBe(String(b.radius));
-    });
-
-    it('draws in a hand turn’s bubble, the circle’s own size: the ring and heads scale from that radius, and a sweep is about its centre', () => {
-      const { controls, turn, total } = mount();
-      const hand = handBubbleOf(FRAME, 'portrait');
-      controls.showTurn(hand, lookTurn({ progress: 0.5 }));
-      expect(turn.attributes.transform).toBe(`translate(${hand.centre[0]} ${hand.centre[1]})`);
-      expect(turn.all('inset-controls__bubble')[0].attributes.r).toBe(String(FRAME.radius));
-      expect(turn.all('inset-controls__track')[0].attributes.r).toBe(String(FRAME.radius * mark.radius));
-      const r = hand.radius * mark.radius;
-      turn.fire('pointerdown', { clientX: hand.centre[0] + r, clientY: hand.centre[1] });
-      turn.fire('pointermove', { clientX: hand.centre[0], clientY: hand.centre[1] + r });
-      expect(total()).toBeCloseTo(Math.PI / 2, 5);
     });
 
     it('hides each arrowhead whose way is at its stop', () => {

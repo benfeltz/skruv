@@ -913,10 +913,6 @@ export const INSET = {
     bubble: { share: BOOKLET.inset.tool, at: BOOKLET.inset.toolAt, min: 26 },
     mark: { radius: 0.62, width: 2.5, arcWidth: 5, arrowSize: 0.3 },
     arrow: { length: 0.9, head: 0.34, width: 3, base: { gap: 0.14, width: 0.8 } },
-    // A hand turn's spinner (a leg circled on its stud, src/game/insetControls.ts): a bubble the circle's own size, so a
-    // finger circles it as it circles the leg, attached `overlap` of the radius into the rim — below the circle in portrait,
-    // to its left in landscape (the right is the cluster's and the screen's edge; see 1.9.7).
-    hand: { share: 1, overlap: 0.15, slot: { portrait: 'below', landscape: 'left' } },
   },
 };
 

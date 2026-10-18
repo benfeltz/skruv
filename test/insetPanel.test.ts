@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INSET } from '../src/constants.js';
-import { bubbleOf, handBubbleOf } from '../src/game/insetControls.js';
+import { bubbleOf } from '../src/game/insetControls.js';
 import { insetFrame } from '../src/game/insetView.js';
 import { createInsetPanel } from '../src/scene/insetPanel.js';
 import type { InsetSubject } from '../src/game/insetModel.js';
@@ -260,31 +260,16 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
     expect(turn().all('inset-controls__bubble')[0].attributes.r).toBe(String(bubble.radius));
   });
 
-  it('attaches a hand turn’s spinner below the circle in portrait, the circle’s own size, and left of it in landscape', () => {
-    for (const [rect, layout] of [[{ left: 0, top: 0, width: 390, height: 844 }, 'portrait'], [{ left: 0, top: 0, width: 844, height: 390 }, 'landscape']] as const) {
-      const { panel, controls, turn, push, frame } = mount(rect);
+  it('attaches a hand turn’s spinner exactly as a tool’s: the same small bubble at the lower right, in both orientations', () => {
+    for (const rect of [{ left: 0, top: 0, width: 390, height: 844 }, { left: 0, top: 0, width: 844, height: 390 }]) {
+      const { panel, turn, frame } = mount(rect);
       panel.hook.candidates(null, [hand({ progress: 0.5, tighten: true, loosen: true })], nothing);
       panel.update();
-      expect(controls.attributes.hidden).toBeUndefined();
-      expect(turn().attributes.hidden).toBeUndefined();
-      expect(push().attributes.hidden).toBe('');
-      const bubble = handBubbleOf(frame(), layout);
+      const bubble = bubbleOf(frame());
       expect(at(turn())).toEqual(bubble.centre);
-      expect(turn().all('inset-controls__bubble')[0].attributes.r).toBe(String(frame().radius));
-      // On screen whole.
-      expect(bubble.centre[0] - bubble.radius).toBeGreaterThanOrEqual(0);
-      expect(bubble.centre[1] + bubble.radius).toBeLessThanOrEqual(rect.height);
-      if (layout === 'portrait') expect(bubble.centre[0]).toBeCloseTo(frame().centre[0], 9);
-      else expect(bubble.centre[1]).toBeCloseTo(frame().centre[1], 9);
+      expect(turn().all('inset-controls__bubble')[0].attributes.r).toBe(String(bubble.radius));
+      expect(bubble.radius).toBeLessThan(frame().radius);
     }
-  });
-
-  it('keeps a tool’s spinner the small lower-right bubble, though a hand’s is big', () => {
-    const { panel, turn, frame } = mount();
-    panel.hook.candidates(null, [tool()], nothing);
-    panel.update();
-    expect(turn().all('inset-controls__bubble')[0].attributes.r).toBe(String(bubbleOf(frame()).radius));
-    expect(bubbleOf(frame()).radius).toBeLessThan(frame().radius);
   });
 
   it('shows no control for an offered hand seat', () => {
@@ -359,13 +344,13 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
     expect(calls).toEqual([['press', 9], ['pull', 9]]);
   });
 
-  it('drives a hand turn through the router’s crank path: a sweep of the big spinner turns the leg, its sense the tool spinner’s', () => {
+  it('drives a hand turn through the router’s crank path: a sweep of the spinner turns the leg, its sense the tool spinner’s', () => {
     const { panel, turn, frame } = mount();
     const calls: unknown[][] = [];
     panel.connect({ turnGrip: (...args) => !!calls.push(['turn', ...args]), pressJoint: () => false, pullJoint: () => false });
     panel.hook.candidates(null, [hand({ joint: 7 })], nothing);
     panel.update();
-    const { centre, radius } = handBubbleOf(frame(), 'portrait');
+    const { centre, radius } = bubbleOf(frame());
     const r = radius * INSET.controls.mark.radius;
     turn().fire('pointerdown', { clientX: centre[0] + r, clientY: centre[1] });
     turn().fire('pointermove', { clientX: centre[0], clientY: centre[1] + r });
