@@ -765,6 +765,31 @@ describe("the open manual page's room above the strip", () => {
     expect(rules).toContain('bottom: var(--strip-reserve);');
   });
 
+  it('is centred in the view the band leaves down the right edge', () => {
+    const rules = css();
+    const landscape = rules.slice(rules.indexOf(".booklet-leaf[data-docked='strip'][data-axis='y'] {"));
+    expect(landscape).toContain('left: calc((100vw - var(--strip-right, 0px)) / 2);');
+    expect(landscape).toContain('top: 50%;');
+    expect(landscape).toContain('bottom: auto;');
+    expect(landscape).toContain(`width: min(calc(100vw - var(--strip-right, 0px) - ${2 * page.gutter}px), ${BOOKLET.pageSize[0]}px, calc((100dvh - ${2 * page.gutter}px) * ${BOOKLET.pageSize[0]} / ${BOOKLET.pageSize[1]}));`);
+  });
+
+  it('opens at the bottom centre of its anchor in portrait and the centre of the view in landscape; docked, it sits on the slot', () => {
+    const portrait = mountStrip({ viewport: PORTRAIT });
+    down(portrait.centre());
+    up(portrait.centre());
+    expect(portrait.manual.element.style.transform).toBe('translate(-50%, 0)');
+    mounted.pop()!.dispose();
+    const landscape = mountStrip({ viewport: LANDSCAPE });
+    landscape.centre().rect = { left: 700, top: 150, width: 72, height: 100 };
+    landscape.manual.element.offsetWidth = 360;
+    dom.windowListeners.get('resize')!.forEach((fn) => fn({}));
+    expect(landscape.manual.element.style.transform).toBe('translate(700px, 150px) scale(0.2)');
+    down(landscape.centre());
+    up(landscape.centre());
+    expect(landscape.manual.element.style.transform).toBe('translate(-50%, -50%)');
+  });
+
   it("holds a portrait page's top below the menu button, the cluster's one row", () => {
     const rules = css();
     const below = CLUSTER.inset + MENU.size + page.gutter;

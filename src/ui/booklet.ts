@@ -261,7 +261,8 @@ function injectStyle() {
     .booklet-slot[data-centre='true'] { border-color: ${css(COLORS.uiAccent)}; }
     .booklet-slot[data-empty='true'] { visibility: hidden; }
     .booklet-slot canvas { display: block; width: 100%; height: 100%; }
-    /* A manual page opens above its strip, resting on it, as wide as the room above allows. */
+    /* A manual page opens above its band, resting on it, as wide as the room above allows. Down the
+       right edge (landscape) it is centred in the view the band leaves instead. */
     .booklet-leaf[data-docked='strip'] {
       --strip-reserve: calc(var(${STRIP_VARS.bottom}, 0px) + ${strip.openGap}px);
       --strip-top: ${gutter}px;
@@ -271,6 +272,12 @@ function injectStyle() {
     }
     @media (orientation: portrait) {
       .booklet-leaf[data-docked='strip'] { --strip-top: ${clusterBottom}px; }
+    }
+    .booklet-leaf[data-docked='strip'][data-axis='y'] {
+      left: calc((100vw - var(${STRIP_VARS.right}, 0px)) / 2);
+      top: 50%;
+      bottom: auto;
+      width: min(calc(100vw - var(${STRIP_VARS.right}, 0px) - ${2 * gutter}px), ${pageW}px, calc((100dvh - ${2 * gutter}px) * ${pageW} / ${pageH}));
     }
   `;
   document.head.append(style);
@@ -688,8 +695,9 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     element.getBoundingClientRect();
   };
   const settle = () => {
-    // A thumb's page is centred over the room; a strip's rests on the strip, centred across.
-    element.style.transform = open ? (stripped ? 'translate(-50%, 0)' : 'translate(-50%, -50%)') : dockedPose();
+    // A thumb's page is centred over the room; a strip's rests on the band, centred across, or on the right edge is centred in the view the band leaves.
+    const restsOnBand = stripped && carousel?.axis() === 'x';
+    element.style.transform = open ? (restsOnBand ? 'translate(-50%, 0)' : 'translate(-50%, -50%)') : dockedPose();
   };
   // A resize or a turn of the phone moves both boxes (and may change how many pages the strip
   // shows); the docked page follows.
