@@ -1253,12 +1253,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
 
   // The seat a carried panel-type part (a leg, a top) is nearing, when it is a free stud end: what is on offer to a
   // hand turn. A panel has holes, not hardware ends, so it is the panel goal's, not the aim's. Framed at the stud's end
-  // with the carried part as the one to circle; nothing is seated yet, so there is no joint and no control.
+  // with the carried part as the one to circle; nothing is seated yet, so there is no joint and no control. Its axis is the
+  // stud end's own, out of the stud — the way the leg's hole axis, negated, points once it seats — so the inset's camera
+  // stands where it will when the leg is on, and does not flip.
   function offeredHandSubject(goal: PanelGoal | null): InsetSubject | null {
     const end = inset && drag && goal?.ends.find((e) => kindOf(e.type) === KIND.STUD);
     if (!end) return null;
     const { id } = drag!.part;
-    return { joint: -1, kind: KIND.STUD, hardware: end.part.id, host: id, tool: null, grip: id, centre: end.position, axis: [-end.axis[0], -end.axis[1], -end.axis[2]], progress: 0, tighten: false, loosen: false, pressed: false };
+    return { joint: -1, kind: KIND.STUD, hardware: end.part.id, host: id, tool: null, grip: id, centre: end.position, axis: end.axis, progress: 0, tighten: false, loosen: false, pressed: false };
   }
 
   // Every joint the inset could frame: each seated tool's, each part circled by hand until it is home (framed at the turn's

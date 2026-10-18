@@ -739,6 +739,10 @@ describe('8. the inset sees hand turns (1.10.0.3)', () => {
     expect(offered).toMatchObject({ joint: -1, kind: 'stud', hardware: 'doubleEndedStud-1', host: 'leg-1', tool: null, grip: 'leg-1', tighten: false, loosen: false });
     const end = connectorInWorld(PART_TYPES.doubleEndedStud.connectors[1], { position: t.studs[0].mesh.position.toArray() as Vec3, rotation: FLIPPED });
     expect(offered!.centre.every((v, i) => Math.abs(v - end.position[i]) < 1e-3)).toBe(true);
+    // The camera must not flip when the leg seats: the offer's axis is the one the engaged subject then has.
+    expect(offered!.axis[1]).toBeGreaterThan(0.99);
+    const seated = bench();
+    expect(seated.last().engaged[0].axis[1]).toBeGreaterThan(0.99);
     t.canvas.fire('pointercancel', at);
   });
 
