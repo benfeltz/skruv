@@ -8,6 +8,7 @@ const subject = (joint: number, over: Partial<InsetSubject> = {}): InsetSubject 
   hardware: `dowel-${joint}`,
   host: `side-${joint}`,
   tool: null,
+  grip: null,
   centre: [0, 0, 0],
   axis: [0, 1, 0],
   progress: 0,
@@ -127,8 +128,8 @@ describe('the inset model', () => {
 
   it('a tap on a tool’s joint reopens it from the tool or the bolt, and on a dowel from the dowel', () => {
     for (const [s, part] of [
-      [subject(1, { kind: 'tool', hardware: 'key-1', host: 'bolt-1', tool: 'key-1' }), 'key-1'],
-      [subject(1, { kind: 'tool', hardware: 'key-1', host: 'bolt-1', tool: 'key-1' }), 'bolt-1'],
+      [subject(1, { kind: 'tool', hardware: 'key-1', host: 'bolt-1', tool: 'key-1', grip: 'key-1' }), 'key-1'],
+      [subject(1, { kind: 'tool', hardware: 'key-1', host: 'bolt-1', tool: 'key-1', grip: 'key-1' }), 'bolt-1'],
       [subject(1), 'dowel-1'],
     ] as const) {
       const m = createInsetModel();
@@ -136,6 +137,19 @@ describe('the inset model', () => {
       m.tapOutside();
       expect(m.tapOn(part)).toBe(true);
       expect(m.state).toBe('active');
+    }
+  });
+
+  it('a tap on a hand turn’s leg or its stud reopens it, and its grip survives a step', () => {
+    const hand = subject(1, { kind: 'stud', hardware: 'stud-1', host: 'leg-1', grip: 'leg-1' });
+    for (const part of ['leg-1', 'stud-1']) {
+      const m = createInsetModel();
+      m.step({ offered: null, engaged: [hand], settled: nothing });
+      expect(m.subject?.grip).toBe('leg-1');
+      m.tapOutside();
+      expect(m.tapOn(part)).toBe(true);
+      expect(m.state).toBe('active');
+      expect(m.subject?.grip).toBe('leg-1');
     }
   });
 

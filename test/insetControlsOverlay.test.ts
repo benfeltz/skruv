@@ -127,7 +127,7 @@ describe('the inset controls overlay', () => {
   describe('the spinner', () => {
     it('is a bubble attached to the circle, the size of the manual’s tool bubble, the push bubble away', () => {
       const { controls, svg, turn, push } = mount();
-      controls.showTurn(FRAME, lookTurn({ progress: 0.25 }));
+      controls.showTurn(BUBBLE, lookTurn({ progress: 0.25 }));
       expect(svg.hasAttribute('hidden')).toBe(false);
       expect(turn.hasAttribute('hidden')).toBe(false);
       expect(push.hasAttribute('hidden')).toBe(true);
@@ -138,7 +138,7 @@ describe('the inset controls overlay', () => {
 
     it('holds a ring with the arc at the progress, in the bubble', () => {
       const { controls, turn } = mount();
-      controls.showTurn(FRAME, lookTurn({ progress: 0.25 }));
+      controls.showTurn(BUBBLE, lookTurn({ progress: 0.25 }));
       const ring = BUBBLE.radius * mark.radius;
       expect(turn.all('inset-controls__track')[0].attributes.r).toBe(String(ring));
       const arc = turn.all('inset-controls__arc')[0];
@@ -154,11 +154,10 @@ describe('the inset controls overlay', () => {
       expect(css).not.toMatch(/\.inset-controls__head \{[^}]*fill: #1c1c1c/);
     });
 
-    it('follows the circle and grows with it', () => {
+    it('is drawn wherever the bubble it is given is, and as big', () => {
       const { controls, turn } = mount();
-      const big = { centre: [500, 400] as [number, number], radius: 120 };
-      controls.showTurn(big, lookTurn());
-      const b = bubbleOf(big);
+      const b = bubbleOf({ centre: [500, 400], radius: 120 });
+      controls.showTurn(b, lookTurn());
       expect(turn.attributes.transform).toBe(`translate(${b.centre[0]} ${b.centre[1]})`);
       expect(turn.all('inset-controls__bubble')[0].attributes.r).toBe(String(b.radius));
     });
@@ -166,17 +165,17 @@ describe('the inset controls overlay', () => {
     it('hides each arrowhead whose way is at its stop', () => {
       const { controls, heads } = mount();
       const [tighten, loosen] = heads;
-      controls.showTurn(FRAME, lookTurn());
+      controls.showTurn(BUBBLE, lookTurn());
       expect([tighten.hasAttribute('hidden'), loosen.hasAttribute('hidden')]).toEqual([false, false]);
-      controls.showTurn(FRAME, lookTurn({ progress: 1, tighten: false }));
+      controls.showTurn(BUBBLE, lookTurn({ progress: 1, tighten: false }));
       expect([tighten.hasAttribute('hidden'), loosen.hasAttribute('hidden')]).toEqual([true, false]);
-      controls.showTurn(FRAME, lookTurn({ loosen: false }));
+      controls.showTurn(BUBBLE, lookTurn({ loosen: false }));
       expect([tighten.hasAttribute('hidden'), loosen.hasAttribute('hidden')]).toEqual([false, true]);
     });
 
     it('a clockwise quarter turn reports positive radians summing to about a quarter turn', () => {
       const { controls, turn, turns, total } = mount();
-      controls.showTurn(FRAME, lookTurn());
+      controls.showTurn(BUBBLE, lookTurn());
       sweep(turn, 0, 90);
       expect(turns.every((r) => r > 0)).toBe(true);
       expect(total()).toBeCloseTo(Math.PI / 2, 1);
@@ -185,7 +184,7 @@ describe('the inset controls overlay', () => {
 
     it('anticlockwise reports negative radians', () => {
       const { controls, turn, turns, total } = mount();
-      controls.showTurn(FRAME, lookTurn());
+      controls.showTurn(BUBBLE, lookTurn());
       sweep(turn, 0, -90);
       expect(turns.every((r) => r < 0)).toBe(true);
       expect(total()).toBeCloseTo(-Math.PI / 2, 1);
@@ -193,7 +192,7 @@ describe('the inset controls overlay', () => {
 
     it('reports nothing once the finger has lifted, and nothing for a press with no sweep', () => {
       const { controls, turn, turns } = mount();
-      controls.showTurn(FRAME, lookTurn());
+      controls.showTurn(BUBBLE, lookTurn());
       turn.fire('pointerdown', onBubble(0));
       turn.fire('pointerup', onBubble(0));
       turn.fire('pointermove', onBubble(40));
@@ -202,9 +201,8 @@ describe('the inset controls overlay', () => {
 
     it('sweeps about the bubble’s centre, wherever it was last shown', () => {
       const { controls, turn, total } = mount();
-      const moved = { centre: [500, 500] as [number, number], radius: 80 };
-      controls.showTurn(moved, lookTurn());
-      const b = bubbleOf(moved);
+      const b = bubbleOf({ centre: [500, 500], radius: 80 });
+      controls.showTurn(b, lookTurn());
       const r = b.radius * mark.radius;
       turn.fire('pointerdown', { clientX: b.centre[0] + r, clientY: b.centre[1] });
       turn.fire('pointermove', { clientX: b.centre[0], clientY: b.centre[1] + r });
@@ -215,7 +213,7 @@ describe('the inset controls overlay', () => {
   describe('the push control', () => {
     it('is a bubble attached the same way, paper with a down arrow while seated, the spinner away', () => {
       const { controls, turn, push } = mount();
-      controls.showPush(FRAME, { seated: false, head: 'in' });
+      controls.showPush(BUBBLE, { seated: false, head: 'in' });
       expect(push.hasAttribute('hidden')).toBe(false);
       expect(turn.hasAttribute('hidden')).toBe(true);
       expect(push.attributes['data-seated']).toBe('false');
@@ -228,7 +226,7 @@ describe('the inset controls overlay', () => {
       const { controls, push } = mount();
       const [, base] = push.all('inset-controls__arrow');
       for (const look of [{ seated: false, head: 'in' as const }, { seated: true, head: 'out' as const }]) {
-        controls.showPush(FRAME, look);
+        controls.showPush(BUBBLE, look);
         const [arrow] = push.all('inset-controls__arrow');
         const tipY = Number(arrow.attributes.points.split(' ')[1].split(',')[1]) - (look.head === 'in' ? Number(/translate\(0 ([-\d.e]+)\)/.exec(arrow.attributes.transform)![1]) * -1 : 0);
         expect(Number(base.attributes.y1)).toBe(Number(base.attributes.y2));
@@ -243,7 +241,7 @@ describe('the inset controls overlay', () => {
 
     it('fills green in the bubble and flips its arrowhead once pressed home', () => {
       const { controls, push } = mount();
-      controls.showPush(FRAME, { seated: true, head: 'out' });
+      controls.showPush(BUBBLE, { seated: true, head: 'out' });
       expect(push.attributes['data-seated']).toBe('true');
       expect(push.all('inset-controls__arrow')[0].attributes.transform).toContain('scale(1 -1)');
       expect(head.children[0].textContent).toMatch(/data-seated='true'\] \.inset-controls__bubble \{[^}]*fill: #2e9e4f/);
@@ -251,11 +249,11 @@ describe('the inset controls overlay', () => {
 
     it('a tap calls onPush while the head is in, onPull once it is out', () => {
       const { controls, push, calls } = mount();
-      controls.showPush(FRAME, { seated: false, head: 'in' });
+      controls.showPush(BUBBLE, { seated: false, head: 'in' });
       push.fire('pointerdown', { clientX: 200, clientY: 300 });
       push.fire('pointerup', { clientX: 200, clientY: 300 });
       expect(calls).toEqual({ push: 1, pull: 0 });
-      controls.showPush(FRAME, { seated: true, head: 'out' });
+      controls.showPush(BUBBLE, { seated: true, head: 'out' });
       push.fire('pointerdown', { clientX: 200, clientY: 300 });
       push.fire('pointerup', { clientX: 201, clientY: 301 });
       expect(calls).toEqual({ push: 1, pull: 1 });
@@ -263,7 +261,7 @@ describe('the inset controls overlay', () => {
 
     it('a press that moves past the tap distance calls nothing, and nor does a cancelled one', () => {
       const { controls, push, calls } = mount();
-      controls.showPush(FRAME, { seated: false, head: 'in' });
+      controls.showPush(BUBBLE, { seated: false, head: 'in' });
       push.fire('pointerdown', { clientX: 200, clientY: 300 });
       push.fire('pointerup', { clientX: 200, clientY: 300 + GESTURE.tapMaxDistance + 5 });
       push.fire('pointerdown', { clientX: 200, clientY: 300 });
@@ -274,7 +272,7 @@ describe('the inset controls overlay', () => {
 
     it('a pointerup with no press before it calls nothing', () => {
       const { controls, push, calls } = mount();
-      controls.showPush(FRAME, { seated: false, head: 'in' });
+      controls.showPush(BUBBLE, { seated: false, head: 'in' });
       push.fire('pointerup', { clientX: 200, clientY: 300 });
       expect(calls.push).toBe(0);
     });
@@ -282,7 +280,7 @@ describe('the inset controls overlay', () => {
 
   it('hide() hides the whole overlay', () => {
     const { controls, svg } = mount();
-    controls.showTurn(FRAME, lookTurn());
+    controls.showTurn(BUBBLE, lookTurn());
     controls.hide();
     expect(svg.hasAttribute('hidden')).toBe(true);
   });

@@ -8,7 +8,7 @@ import type { InsetSubject } from './insetModel.js';
 import type { InsetFrame } from './insetView.js';
 import type { ScreenPoint } from './dragMath.js';
 
-/** The spinner turns a tool; the push control seats a dowel, pin or fitting. */
+/** The spinner turns whatever its subject's `grip` is — a tool or a part circled by hand; the push control seats a dowel, pin or fitting. */
 export type ControlKind = 'turn' | 'push';
 
 /**
@@ -17,10 +17,10 @@ export type ControlKind = 'turn' | 'push';
  */
 export const RING_SIGN = 1;
 
-/** The control a subject gets: the spinner for a tool's turn, the push for a dowel, pin or fitting, none for an offered seat. */
+/** The control a subject gets: the spinner for a turn (a tool's or a hand's, whatever its `grip` is), the push for a dowel, pin or fitting, none for an offered seat. */
 export function controlFor(subject: InsetSubject): ControlKind | null {
   if (subject.joint < 0) return null;
-  if (subject.tool !== null) return 'turn';
+  if (subject.grip !== null) return 'turn';
   return isTapKind(subject.kind) ? 'push' : null;
 }
 

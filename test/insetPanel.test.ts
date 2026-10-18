@@ -77,6 +77,7 @@ const subject = (over: Partial<InsetSubject> = {}): InsetSubject => ({
   hardware: 'dowel-1',
   host: 'sidePanel-1',
   tool: null,
+  grip: null,
   centre: [0, 0, 0],
   axis: [0, -1, 0],
   progress: 0,
@@ -239,7 +240,8 @@ describe('the inset panel', () => {
 });
 
 describe('the inset panel’s controls (1.10.0.2)', () => {
-  const tool = (over: Partial<InsetSubject> = {}) => subject({ kind: 'tool', tool: 'key-1', hardware: 'key-1', host: 'bolt-1', ...over });
+  const tool = (over: Partial<InsetSubject> = {}) => subject({ kind: 'tool', tool: 'key-1', grip: 'key-1', hardware: 'key-1', host: 'bolt-1', ...over });
+  const hand = (over: Partial<InsetSubject> = {}) => subject({ kind: 'stud', hardware: 'stud-1', host: 'leg-1', grip: 'leg-1', ...over });
   // Where a control's group sits, from its transform.
   const at = (group: FakeElement): [number, number] => {
     const [x, y] = /translate\(([-\d.e]+) ([-\d.e]+)\)/.exec(group.attributes.transform)!.slice(1).map(Number);
@@ -256,6 +258,25 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
     const bubble = bubbleOf(frame());
     expect(at(turn())).toEqual(bubble.centre);
     expect(turn().all('inset-controls__bubble')[0].attributes.r).toBe(String(bubble.radius));
+  });
+
+  it('attaches a hand turn’s spinner exactly as a tool’s: the same small bubble at the lower right, in both orientations', () => {
+    for (const rect of [{ left: 0, top: 0, width: 390, height: 844 }, { left: 0, top: 0, width: 844, height: 390 }]) {
+      const { panel, turn, frame } = mount(rect);
+      panel.hook.candidates(null, [hand({ progress: 0.5, tighten: true, loosen: true })], nothing);
+      panel.update();
+      const bubble = bubbleOf(frame());
+      expect(at(turn())).toEqual(bubble.centre);
+      expect(turn().all('inset-controls__bubble')[0].attributes.r).toBe(String(bubble.radius));
+      expect(bubble.radius).toBeLessThan(frame().radius);
+    }
+  });
+
+  it('shows no control for an offered hand seat', () => {
+    const { panel, controls } = mount();
+    panel.hook.candidates(hand({ joint: -1 }), [], nothing);
+    panel.update();
+    expect(controls.attributes.hidden).toBe('');
   });
 
   it('attaches the push bubble the same way, wholly on screen, partly over the circle’s rim', () => {
@@ -321,6 +342,19 @@ describe('the inset panel’s controls (1.10.0.2)', () => {
     push().fire('pointerdown', { clientX: 1, clientY: 1 });
     push().fire('pointerup', { clientX: 1, clientY: 1 });
     expect(calls).toEqual([['press', 9], ['pull', 9]]);
+  });
+
+  it('drives a hand turn through the router’s crank path: a sweep of the spinner turns the leg, its sense the tool spinner’s', () => {
+    const { panel, turn, frame } = mount();
+    const calls: unknown[][] = [];
+    panel.connect({ turnGrip: (...args) => !!calls.push(['turn', ...args]), pressJoint: () => false, pullJoint: () => false });
+    panel.hook.candidates(null, [hand({ joint: 7 })], nothing);
+    panel.update();
+    const { centre, radius } = bubbleOf(frame());
+    const r = radius * INSET.controls.mark.radius;
+    turn().fire('pointerdown', { clientX: centre[0] + r, clientY: centre[1] });
+    turn().fire('pointermove', { clientX: centre[0], clientY: centre[1] + r });
+    expect(calls).toEqual([['turn', 'leg-1', expect.closeTo(Math.PI / 2, 5)]]);
   });
 
   it('does nothing from a control before the router is connected', () => {

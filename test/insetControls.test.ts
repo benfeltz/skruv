@@ -10,6 +10,7 @@ const subject = (over: Partial<InsetSubject> = {}): InsetSubject => ({
   hardware: 'dowel-1',
   host: 'side-1',
   tool: null,
+  grip: null,
   centre: [0, 0, 0],
   axis: [0, 1, 0],
   progress: 0,
@@ -18,7 +19,9 @@ const subject = (over: Partial<InsetSubject> = {}): InsetSubject => ({
   pressed: false,
   ...over,
 });
-const tool = (over: Partial<InsetSubject> = {}) => subject({ kind: 'tool', tool: 'key-1', hardware: 'key-1', host: 'bolt-1', ...over });
+const tool = (over: Partial<InsetSubject> = {}) => subject({ kind: 'tool', tool: 'key-1', hardware: 'key-1', host: 'bolt-1', grip: 'key-1', ...over });
+
+const hand = (over: Partial<InsetSubject> = {}) => subject({ kind: 'stud', hardware: 'stud-1', host: 'leg-1', grip: 'leg-1', ...over });
 
 const frame: InsetFrame = { centre: [500, 300], radius: 80 };
 
@@ -28,6 +31,12 @@ describe('which control a subject gets', () => {
     for (const kind of ['dowel', 'pin', 'fitting'] as const) expect(controlFor(subject({ kind }))).toBe('push');
     expect(controlFor(subject({ joint: -1 }))).toBeNull();
     expect(controlFor(subject({ kind: 'bolt' }))).toBeNull();
+  });
+
+  it('a ring for a hand turn too: its grip, no tool; a stud with no grip gets none', () => {
+    expect(controlFor(hand())).toBe('turn');
+    expect(controlFor(hand({ grip: null }))).toBeNull();
+    expect(controlFor(hand({ joint: -1 }))).toBeNull();
   });
 });
 

@@ -10,6 +10,7 @@ import type { Body, PhysicsJoint } from '../../src/physics/world.js';
 import type { GestureRouterOptions, InsetHook } from '../../src/scene/gestureRouter.js';
 import type { InsetSubject } from '../../src/game/insetModel.js';
 import type { ScreenPoint } from '../../src/game/dragMath.js';
+import type { Relatives } from '../../src/game/panelFit.js';
 import type { Dial } from '../../src/ui/turnRing.js';
 import type { Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
 
@@ -104,7 +105,7 @@ export function insetRecorder(): InsetRecorder {
 }
 
 /** The router mounted over `parts`, with the camera looking down at the origin from above; `inset` is the recorder it reports to, if any. */
-export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8], inset?: InsetRecorder) {
+export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8], inset?: InsetRecorder, relatives?: Relatives) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   camera.position.set(...cameraAt);
   camera.lookAt(0, 0, 0);
@@ -164,6 +165,7 @@ export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8], inset?: Ins
     events,
     turnRing,
     inset: inset?.hook,
+    relatives,
     rings,
     onTap: (part) => {
       taps.push(part);

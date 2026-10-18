@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { controlFor, pushLook, turnLook } from '../game/insetControls.js';
+import { bubbleOf, controlFor, pushLook, turnLook } from '../game/insetControls.js';
 import { createInsetModel } from '../game/insetModel.js';
 import { insetCameraPose, insetFrame, insideInset } from '../game/insetView.js';
 import { createInsetOverlay } from '../ui/inset.js';
@@ -25,7 +25,7 @@ export interface InsetPanelDeps {
  * feeds it each frame's candidates and its taps; `update()` runs after the router's update;
  * `render()` is the extra pass after the main render. The canvas fills the window, so its
  * client px are the circle's. Attached to the circle, as the manual's tool bubble is to its detail
- * inset, sits the subject's control — the spinner for a tool, the push bubble for a dowel — driving the router's
+ * inset, sits the subject's control — the spinner for a turn (a tool's or a part circled by hand, the same small bubble), the push bubble for a dowel — driving the router's
  * actions (`connect`, once the router exists); while the circle is offered or dismissed there is none.
  */
 export function createInsetPanel({ domElement, camera, container, lines }: InsetPanelDeps) {
@@ -38,7 +38,7 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
   // The subject the controls act on: the one shown while active, else null.
   let driven: InsetSubject | null = null;
   const controls = createInsetControls(container, {
-    onTurn: (radians) => driven?.tool && actions?.turnGrip(driven.tool, radians),
+    onTurn: (radians) => driven?.grip && actions?.turnGrip(driven.grip, radians),
     onPush: () => driven && actions?.pressJoint(driven.joint),
     onPull: () => driven && actions?.pullJoint(driven.joint),
   });
@@ -106,10 +106,10 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
       const kind = state === 'active' ? controlFor(subject) : null;
       driven = kind ? subject : null;
       if (!kind) return controls.hide();
-      if (kind === 'turn') controls.showTurn(frame, turnLook(subject));
-      else controls.showPush(frame, pushLook(subject));
+      if (kind === 'turn') controls.showTurn(bubbleOf(frame), turnLook(subject));
+      else controls.showPush(bubbleOf(frame), pushLook(subject));
     },
-    /** The router's actions the controls drive: its spinner turns the tool, its push bubble presses a dowel home and backs it out. */
+    /** The router's actions the controls drive: its spinner turns the tool or the hand-turned part, its push bubble presses a dowel home and backs it out. */
     connect(router: Pick<GestureRouter, 'turnGrip' | 'pressJoint' | 'pullJoint'>) {
       actions = router;
     },
