@@ -744,6 +744,12 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     settle();
   };
   window.addEventListener('resize', onResize);
+  // Turning a landscape phone end over end swaps the side the notch is on without changing the
+  // viewport's size, and iOS Safari does not reliably send `resize` for it: the orientation's own
+  // change (or, where `screen.orientation` is missing, `orientationchange`) reads the notch again.
+  const orientation = typeof screen !== 'undefined' ? screen.orientation : undefined;
+  if (orientation) orientation.addEventListener('change', onResize);
+  else window.addEventListener('orientationchange', onResize);
 
   const self: LiveSheet = { isOpen: () => open, thumb, blocking, strip: stripped, close: () => setOpen(false, { byRoomTap: true }) };
   sheets.add(self);
@@ -753,6 +759,8 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     clearTimeout(lingering ?? undefined);
     window.removeEventListener('keydown', onKey);
     window.removeEventListener('resize', onResize);
+    orientation?.removeEventListener('change', onResize);
+    window.removeEventListener('orientationchange', onResize);
     clearTimeout(peekTimer ?? undefined);
     carousel?.dispose();
     sheets.delete(self);

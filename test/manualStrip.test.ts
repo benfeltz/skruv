@@ -214,6 +214,26 @@ describe('the band, by orientation', () => {
     expect(dom.rootStyle.props['--rail-x']).toBe('calc(100vw - env(safe-area-inset-right) / 2)');
   });
 
+  it('turning the phone end over end swaps the side without a resize: the orientation change reads the notch again, or orientationchange where there is none', () => {
+    for (const orientationApi of [true, false]) {
+      dom.orientationListeners = orientationApi ? new Map() : null;
+      dom.safe.left = 59;
+      dom.safe.right = 0;
+      const { manual } = mountStrip({ viewport: LANDSCAPE });
+      expect(manual.thumb.dataset.band).toBe('right');
+      dom.safe.left = 0;
+      dom.safe.right = 59;
+      dom.rotate();
+      expect(manual.thumb.dataset.band).toBe('left');
+      expect(dom.rootStyle.dataset.strip).toBe('left');
+      manual.dispose();
+      mounted.pop();
+      // ...and takes its listener back.
+      dom.rotate();
+      expect(dom.rootStyle.props).toEqual({});
+    }
+  });
+
   it('turning back upright gives the whole width back: no backdrop, no notch column', () => {
     mountStrip({ viewport: LANDSCAPE });
     turn(LANDSCAPE, { left: 59, right: 0 });

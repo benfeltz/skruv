@@ -112,6 +112,10 @@ export interface FakeDom {
   viewport: { width: number; height: number };
   /** `document.documentElement`'s style and dataset, where the strip sets its root variables and `data-strip`. */
   rootStyle: FakeStyle;
+  /** `screen.orientation`'s listeners, or null to have no `screen.orientation` (the `orientationchange` fallback). */
+  orientationListeners: Map<string, Listener[]> | null;
+  /** Fires the orientation's `change` (the window's `orientationchange` where there is none), as turning the phone does. */
+  rotate(): void;
   /** The safe-area insets `getComputedStyle` reports on the strip's probe (CSS px): a test sets the notch here, then fires `resize`. */
   safe: { left: number; right: number };
   /** Presses a key on the window. */
@@ -129,6 +133,11 @@ export function installFakeDom(): FakeDom {
     viewport: { width: 1280, height: 800 },
     rootStyle: new FakeStyle(),
     safe: { left: 0, right: 0 },
+    orientationListeners: new Map(),
+    rotate: () => {
+      const listeners = dom.orientationListeners ? dom.orientationListeners : windowListeners;
+      listeners.get(dom.orientationListeners ? 'change' : 'orientationchange')?.forEach((fn) => fn({}));
+    },
     key: (name) => windowListeners.get('keydown')?.forEach((fn) => fn({ key: name })),
   };
   dom.head = new FakeElement('head', dom);
@@ -149,6 +158,15 @@ export function installFakeDom(): FakeDom {
     },
     addEventListener: (type: string, fn: Listener) => windowListeners.set(type, [...(windowListeners.get(type) ?? []), fn]),
     removeEventListener: (type: string, fn: Listener) => windowListeners.set(type, (windowListeners.get(type) ?? []).filter((f) => f !== fn)),
+  });
+  const orientation = {
+    addEventListener: (type: string, fn: Listener) => dom.orientationListeners?.set(type, [...(dom.orientationListeners.get(type) ?? []), fn]),
+    removeEventListener: (type: string, fn: Listener) => dom.orientationListeners?.set(type, (dom.orientationListeners.get(type) ?? []).filter((f) => f !== fn)),
+  };
+  vi.stubGlobal('screen', {
+    get orientation() {
+      return dom.orientationListeners ? orientation : undefined;
+    },
   });
   vi.stubGlobal('getComputedStyle', () => ({ paddingLeft: `${dom.safe.left}px`, paddingRight: `${dom.safe.right}px` }));
   return dom;
