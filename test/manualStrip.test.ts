@@ -295,6 +295,68 @@ describe('opening it on a touch: hold to peek, release to put it back', () => {
   });
 });
 
+describe('holding a side page peeks it in place', () => {
+  const held = (viewport = 1280) => {
+    const strip = mountStrip({ viewport });
+    return { ...strip, side: strip.slots()[3] };
+  };
+
+  it('opens that page without moving the band, and the release puts it back', () => {
+    const { manual, slots, side, view, changes } = held();
+    touchDown(side);
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs);
+    expect(manual.expanded).toBe(true);
+    expect((view.children[0].children[0].drawn as { index: number }).index).toBe(1);
+    expect(manual.currentPage).toBe(0);
+    expect(shown(slots())).toEqual([null, null, 0, 1, 2]);
+    touchUp(side);
+    expect(manual.expanded).toBe(false);
+    expect(manual.currentPage).toBe(0);
+    expect(shown(slots())).toEqual([null, null, 0, 1, 2]);
+    expect(changes).toEqual([
+      { page: 1, expanded: true },
+      { page: 0, expanded: false },
+    ]);
+  });
+
+  it('grows from and shrinks back to the held slot, not the centre', () => {
+    const { manual, centre, side } = held();
+    side.rect = { left: 500, top: 620, width: 72, height: 100 };
+    centre().rect = { left: 300, top: 600, width: 120, height: 167 };
+    manual.element.offsetWidth = 720;
+    touchDown(side);
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs);
+    expect(manual.element.style.transform).toBe('translate(-50%, 0)');
+    touchUp(side);
+    expect(manual.element.style.transform).toBe('translate(500px, 620px) scale(0.1)');
+  });
+
+  it('a hold on an empty slot peeks nothing', () => {
+    const { manual, slots } = held();
+    touchDown(slots()[0]);
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs * 2);
+    expect(manual.expanded).toBe(false);
+    touchUp(slots()[0]);
+    expect(manual.currentPage).toBe(0);
+  });
+
+  it('a quick tap on a side page still centres it, and a held page does not flip on release', () => {
+    const { manual, side } = held();
+    touchDown(side);
+    touchUp(side);
+    expect(manual.currentPage).toBe(1);
+    expect(manual.expanded).toBe(false);
+  });
+
+  it('the page on view is the one reported, so the glow follows it', () => {
+    const { side, changes, manual } = held();
+    touchDown(side);
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs);
+    expect(changes.at(-1)).toEqual({ page: 1, expanded: true });
+    expect(manual.currentPage).toBe(0);
+  });
+});
+
 describe('a second finger on the band cancels its gesture', () => {
   const finger = (target: FakeElement, pointerId: number, x: number) => down(target, { pointerType: 'touch', pointerId, x });
   const lift = (target: FakeElement, pointerId: number, x: number) => up(target, { pointerType: 'touch', pointerId, x });

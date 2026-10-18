@@ -14,8 +14,9 @@ import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 // back again: reference, never a checklist. Open, a page is flipped by a horizontal swipe,
 // the corner arrows or the arrow keys, and put down by a tap on the page, a swipe down, or
 // Escape; the strip is moved by a swipe, its arrows, a tap on a side page or the arrow keys,
-// opened by a click on the centre page (a mouse) or by holding it (a touch: the release puts
-// it back). A blocking sheet puts a scrim over the room while it is open, which takes any
+// opened by a click on the centre page (a mouse) or, on a touch, by holding any of its pages:
+// that page peeks in place, out of its own slot, and the release puts it back (the band does
+// not move). A blocking sheet puts a scrim over the room while it is open, which takes any
 // tap outside the page, puts the booklet down with it and swallows it whole; a non-blocking
 // one has no scrim, so only the strip and the open page take input and the room keeps every
 // gesture. Follows the src/ui pattern (own element, own style, colours from COLORS).
@@ -309,7 +310,7 @@ export interface BookletSheetOptions<Blocking extends boolean = boolean> {
  * The booklet sheet for `pages` (`{ count, canvas(index) }`, src/scene/bookletPages.ts or
  * src/scene/catalogPages.ts). Returns `{ scrim, thumb, element, currentPage, expanded,
  * onChange(fn), setOpen(value), dispose() }`: mount the scrim (null when not `blocking`),
- * thumb and element; `onChange(fn)` calls `fn({ page, expanded })` whenever either changes;
+ * thumb and element; `onChange(fn)` calls `fn({ page, expanded })` whenever either changes — `page` is the page on view: the current one, or a side page while a hold has it peeked (`currentPage` stays the current one);
  * `setOpen` opens or docks it from outside; `dispose()` takes it all back off the page.
  * Starts open on page 0, the cover, unless told otherwise — or another sheet is open: one
  * sheet is open at a time. State is the module's own and read-only outside it.
@@ -320,6 +321,11 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   const listeners = new Set<(state: { page: number; expanded: boolean }) => void>();
   let page = 0;
   let open = startsOpen;
+  // The side (or centre) page a hold has peeked open, and the slot it was held in: the open
+  // page shows it and grows from and shrinks back to that slot, while `page` — the band — stays.
+  let peeked: number | null = null;
+  let peekedAt: number | null = null;
+  const viewPage = () => (open ? (peeked ?? page) : page);
   // Asked to start open while another sheet is: it starts docked (one open at a time).
   if (anyOpen()) open = false;
   let lingering: ReturnType<typeof setTimeout> | null = null;
@@ -346,7 +352,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   const thumbCanvas = stripped ? null : pageCanvas(pageW, pageH);
   if (thumbCanvas) thumb.append(thumbCanvas);
   const carousel = stripped ? createStrip(name, pages.count, thumb) : null;
-  const anchor = () => carousel?.centre() ?? thumb;
+  const anchor = () => (carousel && peekedAt !== null ? carousel.slot(peekedAt) : carousel?.centre()) ?? thumb;
 
   const element = document.createElement('section');
   element.className = 'booklet-leaf';
@@ -405,16 +411,17 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   const drawer = (target: HTMLCanvasElement, index: number) => target.getContext('2d')!.drawImage(pages.canvas(index), 0, 0, target.width, target.height);
 
   function render() {
-    if (open) drawer(viewCanvas, page);
+    const shown = viewPage();
+    if (open) drawer(viewCanvas, shown);
     if (carousel) carousel.paint(page, drawer, open);
     else if (thumbCanvas) drawer(thumbCanvas, thumbShows === 'cover' ? 0 : page);
-    viewCanvas.setAttribute('aria-label', `Page ${page + 1} of ${pages.count}`);
+    viewCanvas.setAttribute('aria-label', `Page ${shown + 1} of ${pages.count}`);
     arrows.paint(page, pages.count);
     element.dataset.open = String(open);
     settle();
     showAction();
     syncSheets();
-    for (const fn of listeners) fn({ page, expanded: open });
+    for (const fn of listeners) fn({ page: shown, expanded: open });
   }
 
   const flip = (by: number) => {
@@ -526,6 +533,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   // and its release — or a lost capture — puts the page back. The strip's arrows are plain buttons with their own
   // click; a keyboard's click on a slot (detail 0 — a pointer's was handled here) does what a
   // tap does.
+  let stripPress: { id: number; x: number; y: number; slot: number | null; touch: boolean } | null = null;
   let peek: PeekState = 'idle';
   let peekTimer: ReturnType<typeof setTimeout> | null = null;
   const peekSend = (event: PeekEvent) => {
@@ -534,8 +542,19 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     if (peek === from) return;
     clearTimeout(peekTimer ?? undefined);
     if (peek === 'pressing') peekTimer = setTimeout(() => peekSend({ type: 'delay' }), BOOKLET_UI.strip.peekDelayMs);
-    if (peek === 'peeking') setOpen(true);
-    if (from === 'peeking') setOpen(false);
+    if (peek === 'peeking' && stripPress?.slot != null) {
+      // The held slot's page, set before the open so the grow starts from that slot.
+      peeked = slotWindow()[stripPress.slot];
+      peekedAt = stripPress.slot;
+      setOpen(true);
+      // Refused (another sheet is open): nothing was peeked.
+      if (!open) peeked = peekedAt = null;
+    }
+    if (from === 'peeking') {
+      // Closed first, so the shrink targets the held slot; then the slot is let go.
+      setOpen(false);
+      peeked = peekedAt = null;
+    }
   };
   const slotWindow = () => windowOf(page, pages.count, carousel!.visible());
   const tapSlot = (slot: number, touch: boolean) => {
@@ -546,7 +565,6 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     } else if (meaning !== null) flip(meaning - page);
   };
   if (carousel) {
-    let stripPress: { id: number; x: number; y: number; slot: number | null; touch: boolean } | null = null;
     thumb.addEventListener('pointerdown', (event) => {
       const control = (event.target as Element).closest('button');
       const slot = control?.dataset.slot;
@@ -563,7 +581,8 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
       const touch = event.pointerType !== 'mouse';
       stripPress = { id: event.pointerId, x: event.clientX, y: event.clientY, slot: slot === undefined ? null : Number(slot), touch };
       thumb.setPointerCapture(event.pointerId);
-      if (touch && stripPress.slot === centreSlot(carousel.visible())) peekSend({ type: 'press' });
+      // A hold peeks the page in any slot that has one.
+      if (touch && stripPress.slot !== null && slotWindow()[stripPress.slot] != null) peekSend({ type: 'press' });
     });
     thumb.addEventListener('pointermove', (event) => {
       if (!stripPress || event.pointerId !== stripPress.id) return;
@@ -748,6 +767,10 @@ function createStrip(name: string, count: number, root: HTMLElement) {
     prev,
     next,
     visible,
+    /** A slot's button, or undefined past the ones built: what a held page grows from. */
+    slot(at: number) {
+      return slots[at]?.button;
+    },
     /** The centre slot's button: the page that is current, and what the open page grows from. */
     centre() {
       if (slots.length === 0) rebuild(visible());
