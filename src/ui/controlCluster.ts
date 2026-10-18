@@ -1,10 +1,10 @@
 import { CLUSTER } from '../constants.js';
 
-// The control cluster: one column in the upper right that lays out the screen's small
-// buttons — Repack in the corner, Snap rotate below it, the ?tune gear below that. The
-// buttons size themselves and never position themselves; this element owns the corner, so
-// the catalog's thumbnail has the upper left alone and the bottom corners are free for the
-// manual's strip. Follows the src/ui pattern (own element, own style).
+// The control cluster: one row in the upper right that lays out the screen's small
+// controls — the menu button in the corner (first added, at the right), the ?tune gear to
+// its left. The controls size themselves and never position themselves; this element owns
+// the corner, so the catalog's thumbnail has the upper left alone and the bottom corners
+// are free for the manual's strip. Follows the src/ui pattern (own element, own style).
 
 const STYLE_ID = 'skruv-control-cluster';
 
@@ -18,15 +18,15 @@ function injectStyle() {
       right: calc(${CLUSTER.inset}px + env(safe-area-inset-right));
       top: calc(${CLUSTER.inset}px + env(safe-area-inset-top));
       display: flex;
-      flex-direction: column;
-      align-items: flex-end;
+      flex-direction: row-reverse;
+      align-items: flex-start;
       gap: ${CLUSTER.gap}px;
     }
   `;
   document.head.append(style);
 }
 
-/** `{ element, add(control) }`: mount `element` once; `add` appends a control below the rest. */
+/** `{ element, add(control) }`: mount `element` once; `add` appends a control to the left of the rest. */
 export function createControlCluster() {
   injectStyle();
   const element = document.createElement('div');

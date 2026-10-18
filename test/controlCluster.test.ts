@@ -4,7 +4,7 @@ import { createControlCluster } from '../src/ui/controlCluster.js';
 import { FakeElement, installFakeDom } from './support/fakeDom.js';
 import type { FakeDom } from './support/fakeDom.js';
 
-// 1.9.1.2: the upper-right column that lays out Repack, Snap rotate and the ?tune gear.
+// 1.9.7.1.1: the upper-right row — the menu button in the corner, the ?tune gear to its left.
 let dom: FakeDom;
 beforeEach(() => {
   dom = installFakeDom();
@@ -12,22 +12,21 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('the control cluster', () => {
-  it('stacks what is added in the order added: Repack, Snap rotate, the gear', () => {
+  it('takes what is added in the order added: the menu, then the gear (the row reverses them, so the gear lands to the left)', () => {
     const cluster = createControlCluster() as unknown as { element: FakeElement; add(control: FakeElement): void };
-    const [repack, snap, gear] = ['Repack', 'Snap rotate', 'gear'].map((text) => Object.assign(new FakeElement('button', dom), { textContent: text }));
-    cluster.add(repack);
-    cluster.add(snap);
+    const [menu, gear] = ['menu', 'gear'].map((text) => Object.assign(new FakeElement('button', dom), { textContent: text }));
+    cluster.add(menu);
     cluster.add(gear);
-    expect(cluster.element.children.map((child) => child.textContent)).toEqual(['Repack', 'Snap rotate', 'gear']);
+    expect(cluster.element.children.map((child) => child.textContent)).toEqual(['menu', 'gear']);
   });
 
-  it('is one fixed column in the upper right, at the safe-area inset', () => {
+  it('is one fixed row in the upper right, at the safe-area inset', () => {
     createControlCluster();
     const css = dom.head.children.find((node) => node.id === 'skruv-control-cluster')!.textContent;
     expect(css).toContain('position: fixed;');
     expect(css).toContain(`right: calc(${CLUSTER.inset}px + env(safe-area-inset-right));`);
     expect(css).toContain(`top: calc(${CLUSTER.inset}px + env(safe-area-inset-top));`);
-    expect(css).toContain('flex-direction: column;');
+    expect(css).toContain('flex-direction: row-reverse;');
     expect(css).toContain(`gap: ${CLUSTER.gap}px;`);
   });
 });
