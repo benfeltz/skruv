@@ -164,7 +164,8 @@ export interface GestureRouter {
 
 /**
  * What the router tells the detail inset (src/scene/insetPanel.ts): each frame the seat on offer to carried hardware
- * and the joints engaged (and the dowels pressed home, which stay on show), and the taps that are the inset's: one on its circle (consumed), one outside it, one on a part.
+ * (or a stud end to a carried leg or top) and the joints engaged — a tool's turn, a part circled by hand, a seated dowel
+ * (and the dowels pressed home, which stay on show), and the taps that are the inset's: one on its circle (consumed), one outside it, one on a part.
  */
 export interface InsetHook {
   candidates(offered: InsetSubject | null, engaged: readonly InsetSubject[], settled: (joint: number) => InsetSubject | null): void;
