@@ -1,22 +1,66 @@
 import { describe, expect, it } from 'vitest';
 import { BOOKLET_UI } from '../src/constants.js';
-import { centreSlot, tapOn, visibleCount, windowOf } from '../src/game/carouselModel.js';
+import { centreSlot, clampTravel, pitch, snapSteps, tapOn, visibleCount, windowOf } from '../src/game/carouselModel.js';
 
-const { breakpoint, narrow, wide } = BOOKLET_UI.strip;
+const { page, gap } = BOOKLET_UI.strip;
+const { gutter } = BOOKLET_UI.page;
+const strip = { page, gap };
+const step = pitch(strip);
 
-describe('how many pages the strip shows', () => {
-  it('is three below the breakpoint and five from it up', () => {
-    expect(narrow).toBe(3);
-    expect(wide).toBe(5);
-    expect(visibleCount(breakpoint - 1)).toBe(3);
-    expect(visibleCount(breakpoint)).toBe(5);
-    expect(visibleCount(390)).toBe(3);
-    expect(visibleCount(1440)).toBe(5);
+describe('how many pages the band shows', () => {
+  it('follows the long side: three on a phone\'s width, more on a long edge', () => {
+    expect(step).toBe(80);
+    expect(visibleCount(390, strip, gutter)).toBe(3);
+    expect(visibleCount(1280, strip, gutter)).toBe(15);
+    expect(visibleCount(800, strip, gutter)).toBe(9);
+  });
+
+  it('is always odd, so one page is the centre, and never below one', () => {
+    for (let extent = 0; extent < 2000; extent += 7) {
+      const count = visibleCount(extent, strip, gutter);
+      expect(count % 2).toBe(1);
+      expect(count).toBeGreaterThanOrEqual(1);
+    }
+    expect(visibleCount(0, strip, gutter)).toBe(1);
   });
 
   it('puts the current page in the middle slot', () => {
     expect(centreSlot(3)).toBe(1);
     expect(centreSlot(5)).toBe(2);
+  });
+});
+
+describe('how far the track may be pulled', () => {
+  it('lets the first page reach the centre and no further', () => {
+    expect(clampTravel(500, 0, 10, step)).toBe(0);
+    expect(clampTravel(30, 0, 10, step)).toBe(0);
+    expect(clampTravel(500, 3, 10, step)).toBe(3 * step);
+  });
+
+  it('lets the last page reach the centre and no further', () => {
+    expect(clampTravel(-500, 9, 10, step)).toBe(0);
+    expect(clampTravel(-500, 7, 10, step)).toBe(-2 * step);
+  });
+
+  it('leaves a pull in between as it is', () => {
+    expect(clampTravel(-112, 4, 10, step)).toBe(-112);
+    expect(clampTravel(25, 4, 10, step)).toBe(25);
+  });
+});
+
+describe('how many pages a release moves', () => {
+  it('is the nearest page, toward later pages for a pull toward the start of the band', () => {
+    expect(snapSteps(-112, step)).toBe(1);
+    expect(snapSteps(-170, step)).toBe(2);
+    expect(snapSteps(112, step)).toBe(-1);
+    expect(snapSteps(0, step)).toBe(0);
+    expect(snapSteps(-30, step)).toBe(0);
+    expect(snapSteps(30, step)).toBe(0);
+  });
+
+  it('counts half a pitch as a page, either way', () => {
+    expect(snapSteps(-step / 2, step)).toBe(1);
+    expect(snapSteps(step / 2, step)).toBe(-1);
   });
 });
 

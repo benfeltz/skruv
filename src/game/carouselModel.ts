@@ -1,14 +1,43 @@
-import { BOOKLET_UI } from '../constants.js';
+// The manual's carousel (1.9.1.2, a band by orientation since 1.9.7.1.2), worked out
+// headlessly: how many pages the band shows, how far its track may be pulled, how many pages
+// a release moves, which page sits in each slot round the current one, and what a tap on a
+// slot means. There are no arrows and no breakpoint: the band shows what its long side
+// takes. The strip does not wrap — slots past either end of the booklet are empty. Pure: the
+// band's DOM lives in src/ui/booklet.ts and only draws what this says. The caller passes the
+// band's constants (BOOKLET_UI.strip, BOOKLET_UI.page.gutter), so a test can pass its own.
 
-// The manual's carousel (1.9.1.2), worked out headlessly: how many pages the strip shows,
-// which page sits in each slot round the current one, and what a tap on a slot means. The
-// strip does not wrap — slots past either end of the booklet are empty. Pure: the strip's
-// DOM lives in src/ui/booklet.ts and only draws what this says.
+/** What the sizes below are made of: a page's width and the gap between pages (CSS px). */
+export interface StripSizes {
+  page: number;
+  gap: number;
+}
 
-/** How many pages the strip shows at this viewport width (CSS px): the narrow count below the breakpoint, the wide count at or above it. */
-export function visibleCount(viewportWidth: number): number {
-  const { breakpoint, narrow, wide } = BOOKLET_UI.strip;
-  return viewportWidth >= breakpoint ? wide : narrow;
+/** The distance between one page's start and the next's along the band. */
+export const pitch = ({ page, gap }: StripSizes): number => page + gap;
+
+/**
+ * How many pages the band shows along `extent` CSS px (its long side: the viewport's width in
+ * portrait, its height in landscape): the largest odd count whose pitches fit inside a
+ * `gutter` at each end, at least one. Odd, so one page is the centre.
+ */
+export function visibleCount(extent: number, strip: StripSizes, gutter: number): number {
+  const fit = Math.floor((extent - 2 * gutter + strip.gap) / pitch(strip));
+  return Math.max(1, fit % 2 === 0 ? fit - 1 : fit);
+}
+
+/**
+ * Where the track may be pulled to, in px along the band, from the current page `page` of
+ * `count`: positive travel pulls toward earlier pages, so the first page may go no further
+ * than the centre and neither may the last.
+ */
+export function clampTravel(travel: number, page: number, count: number, step: number): number {
+  return Math.min(page * step, Math.max(0 - (count - 1 - page) * step, travel));
+}
+
+/** How many pages a release at `travel` moves, to the nearest page (half a pitch counts as a page): positive toward later pages, which a pull toward the start of the band (negative travel) reaches. */
+export function snapSteps(travel: number, step: number): number {
+  const pages = Math.round(Math.abs(travel) / step);
+  return pages === 0 ? 0 : travel < 0 ? pages : -pages;
 }
 
 /** The slot that holds the current page: the middle of `visible` slots. */
