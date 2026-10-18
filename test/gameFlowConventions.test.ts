@@ -248,3 +248,26 @@ describe('the menu button wiring', () => {
     expect(main.indexOf('cluster.add(menu.element)')).toBeLessThan(main.indexOf('cluster.add(panel.tab)'));
   });
 });
+
+describe("the manual's band shrinks the room's view (1.9.7.1.2)", () => {
+  const booklet = read('src/ui/booklet.ts');
+  const cluster = read('src/ui/controlCluster.ts');
+
+  it("names the root variables once, and #app, the cluster and the lift line read exactly those", () => {
+    expect(booklet).toContain("const STRIP_VARS = { bottom: '--strip-bottom', left: '--strip-left', right: '--strip-right', backdrop: '--backdrop' } as const;");
+    const html = read('index.html');
+    expect(html).toContain('inset: 0 var(--strip-right, 0px) var(--strip-bottom, 0px) var(--strip-left, 0px);');
+    expect(html).toContain('background: var(--backdrop, #1b1d22);');
+    // The cluster sits just inside the view, past the notch's margin, never in its column (Ben's phone,
+    // 2026-10-18: the Dynamic Island covered it there); the lift line, hung under the menu, follows.
+    expect(cluster).toContain('env(safe-area-inset-left)');
+    expect(cluster).not.toContain('--rail-x');
+    expect(read('src/ui/liftLine.ts')).not.toContain('--rail-x');
+    // The cluster is always upper left, so the drop always opens rightward, into the room.
+    expect(read('src/ui/menuButton.ts')).not.toContain('data-strip');
+  });
+
+  it('has no arrow buttons on the strip: it is dragged, tapped and keyed', () => {
+    expect(booklet).not.toContain('booklet-arrow');
+  });
+});

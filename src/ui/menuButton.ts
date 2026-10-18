@@ -42,7 +42,7 @@ function injectStyle() {
     .menu-drop {
       position: absolute;
       top: calc(100% + ${MENU.drop.gap}px);
-      right: 0;
+      left: 0;
       display: flex;
       flex-direction: column;
       align-items: stretch;
@@ -51,6 +51,7 @@ function injectStyle() {
       border-radius: ${MENU.drop.radius}px;
       background: ${css(COLORS.uiSurface)}e6;
     }
+    /* The cluster is always on the screen's left (src/ui/controlCluster.ts): the drop opens rightward, into the room. */
     .menu-drop[hidden] {
       display: none;
     }

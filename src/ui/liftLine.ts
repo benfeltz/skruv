@@ -1,5 +1,6 @@
-import { COLORS, LIFT_LINE } from '../constants.js';
+import { CLUSTER, COLORS, LIFT_LINE } from '../constants.js';
 import { pressOnKnob } from '../game/liftLine.js';
+import { liftLineBox, type Rect } from '../game/screenLayout.js';
 
 // The elevation line: a vertical line with a knob for the held part's height. It only
 // reports touches and draws the knob — what a press does is the caller's (src/main.ts).
@@ -84,17 +85,48 @@ export function createLiftLine({ onPress, onMove, onRelease }: LiftLineHandlers)
   let shown = 0;
   let pointerId: number | null = null;
 
-  // The line's place on screen, its whole touch band inside the safe area at either edge.
+  // A control on screen, measured: null when it is not mounted (or there is no layout to ask).
+  function measured(selector: string): Rect | null {
+    if (typeof document.querySelector !== 'function') return null;
+    const found = document.querySelector(selector);
+    if (!found || typeof found.getBoundingClientRect !== 'function') return null;
+    const { left, top, right, bottom } = found.getBoundingClientRect();
+    return right > left && bottom > top ? { left, top, right, bottom } : null;
+  }
+
+  // The line's place on screen. With the control cluster on screen, under it on the menu's side and
+  // above the manual's band (src/game/screenLayout.ts), so it never lies over either; else, its whole
+  // touch band inside the safe area at either edge.
   function place() {
     const { x, top, bottom, knobRadius, lineWidth, hitWidth } = LIFT_LINE;
     const style = element.style;
     const half = hitWidth / 2;
+    track.style.width = `${lineWidth}px`;
+    knob.style.width = knob.style.height = `${knobRadius * 2}px`;
+    style.width = `${hitWidth}px`;
+    // Under the menu itself (the cluster's first control), below the whole cluster: the ?tune gear
+    // stands beside the menu in portrait and under it in landscape.
+    const whole = measured('.control-cluster');
+    const menu = measured('.control-cluster > :first-child');
+    const cluster = whole && { ...whole, left: (menu ?? whole).left, right: (menu ?? whole).right };
+    const box = cluster && liftLineBox({
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      cluster,
+      strip: measured('.booklet-strip'),
+      hitWidth,
+      knobRadius,
+      gap: CLUSTER.gap,
+    });
+    if (box) {
+      style.left = `${(box.left + box.right) / 2}px`;
+      style.top = `${box.top}px`;
+      style.height = `${box.bottom - box.top}px`;
+      return;
+    }
+    // Where LIFT_LINE puts it, its touch band inside the safe area at either edge.
     style.left = `clamp(calc(env(safe-area-inset-left) + ${half}px), ${x * 100}vw, calc(100vw - env(safe-area-inset-right) - ${half}px))`;
     style.top = `max(${top * 100}vh, calc(env(safe-area-inset-top) + ${knobRadius}px))`;
     style.height = `${(bottom - top) * 100}vh`;
-    style.width = `${hitWidth}px`;
-    track.style.width = `${lineWidth}px`;
-    knob.style.width = knob.style.height = `${knobRadius * 2}px`;
   }
 
   // The fraction under a pointer: 1 at the line's top, 0 at its bottom.

@@ -1,6 +1,6 @@
 import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, MENU, RENDER } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
-import { centreSlot, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
+import { centreSlot, clampTravel, pitch, restShift, slotCount, snapSteps, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
 import { peekNext } from '../game/peekGesture.js';
 import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 
@@ -8,32 +8,61 @@ import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 // the page alone — no surface, handle or control bar — over the room, its frame shadowed, its
 // number and arrows printed on it. It differs between the two only in how it is docked and
 // whether it blocks the room. Docked as a thumb (the catalog, upper left) it is a thumbnail
-// the page grows out of and shrinks back to; docked as a strip (the manual, bottom centre)
-// it is a carousel of three or five pages, the centre one larger and current, an arrow at
-// each end, and the page grows out of the centre slot. It flips freely, front to back and
-// back again: reference, never a checklist. Open, a page is flipped by a horizontal swipe,
-// the corner arrows or the arrow keys, and put down by a tap on the page, a swipe down, or
-// Escape; the strip is moved by a swipe, its arrows, a tap on a side page or the arrow keys,
-// opened by a click on the centre page (a mouse) or, on a touch, by holding any of its pages:
-// that page peeks in place, out of its own slot, and the release puts it back (the band does
-// not move). A blocking sheet puts a scrim over the room while it is open, which takes any
-// tap outside the page, puts the booklet down with it and swallows it whole; a non-blocking
-// one has no scrim, so only the strip and the open page take input and the room keeps every
-// gesture. Follows the src/ui pattern (own element, own style, colours from COLORS).
+// the page grows out of and shrinks back to; docked as a strip (the manual) it is a band
+// edge to edge — along the bottom of the screen in portrait, down the right edge in
+// landscape — of pages all one small size, the centre one current and gold-bordered, and the
+// page grows out of the centre slot. It flips freely, front to back and back again:
+// reference, never a checklist. Open, a page is flipped by a horizontal swipe, the corner
+// arrows or the arrow keys, and put down by a tap on the page, a swipe down, or Escape; the
+// band is moved by the arrow keys or a tap on a side page, opened by a click on the centre
+// page (a mouse) or, on a touch, by holding any of its pages: that page peeks in place, out
+// of its own slot, and the release puts it back (the band does not move). The band mounts
+// two root variables, `--strip-bottom` and `--strip-right`, that shrink the room's view
+// (index.html's #app) and move the control cluster, so the canvas never lies under it. A
+// blocking sheet puts a scrim over the room while it is open, which takes any tap outside the
+// page, puts the booklet down with it and swallows it whole; a non-blocking one has no
+// scrim, so only the strip and the open page take input and the room keeps every gesture.
+// Follows the src/ui pattern (own element, own style, colours from COLORS).
 
 const STYLE_ID = 'skruv-booklet';
 const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 const [pageW, pageH] = BOOKLET.pageSize;
+
+// The band's thickness, all from the page ratio: a page's height and a gutter either side along
+// the short axis (CSS px, before the safe-area inset).
+const stripPageH = Math.round((BOOKLET_UI.strip.page * pageH) / pageW);
+const bandBottom = stripPageH + 2 * BOOKLET_UI.page.gutter;
+const bandRight = BOOKLET_UI.strip.page + 2 * BOOKLET_UI.page.gutter;
+// The root variables the mounted band sets (index.html's #app and the manual's open page read them).
+// `bottom`, `left` and `right` are how far the room's view is inset from that edge; `backdrop` is
+// what shows where the view is not (black in landscape, beside the notch).
+const STRIP_VARS = { bottom: '--strip-bottom', left: '--strip-left', right: '--strip-right', backdrop: '--backdrop' } as const;
+// Which edge the band stands on, set on the root as data-strip for the CSS that moves with it.
+type Band = 'bottom' | 'right';
+type Axis = 'x' | 'y';
+const env = (side: 'left' | 'right' | 'bottom') => `env(safe-area-inset-${side})`;
+/**
+ * What the room's view is inset by for a band on `band`. Upright, the band's height above the home
+ * indicator's inset. In landscape the band always stands on the right and the menu and the lift line
+ * always on the left (Ben, 2026-10-18): which side the notch is on cannot be told reliably (Safari
+ * reports the same inset both sides, Chrome on iOS none), so both safe-area margins are kept, drawn
+ * black — the band inside the right one, the room's view inside the left. Where a browser reports no
+ * inset (Chrome keeps the page out of the notch itself) the margins are 0 and the band is flush.
+ */
+function viewVars(band: Band) {
+  if (band === 'bottom') return { bottom: `calc(${bandBottom}px + ${env('bottom')})`, left: '0px', right: '0px', backdrop: null };
+  return { bottom: '0px', left: env('left'), right: `calc(${bandRight}px + ${env('right')})`, backdrop: '#000' };
+}
+// In landscape the catalog's docked thumb sits at the top of the screen, in the room just beside the
+// band: this far (px) from the band's edge, past the right safe-area margin.
+const thumbBeside = bandRight + BOOKLET_UI.page.gutter;
 
 function injectStyle() {
   if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement('style');
   style.id = STYLE_ID;
   const { shadow, gutter, growMs, radius } = BOOKLET_UI.page;
-  const { strip, stripShort, stripNarrow } = BOOKLET_UI;
-  // What the strip and the gap above it take off the bottom of the screen (CSS pixels), at
-  // the full size and on a short viewport.
-  const reserveFor = (centreWidth: number) => strip.inset + Math.round((centreWidth * pageH) / pageW) + 2 * strip.surface.pad + strip.openGap;
+  const { strip } = BOOKLET_UI;
   // A portrait phone's open page reaches up past the control cluster's row (the menu button
   // in the upper right); its top is held below it. Elsewhere it is clear of the cluster
   // sideways, and only the gutter is kept.
@@ -55,10 +84,17 @@ function injectStyle() {
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
       transition: width 160ms ease-out, z-index 0s;
+      /* Over the manual's band, which a landscape thumb sits on. */
+      z-index: 1;
     }
+    /* The catalog's thumb ('topLeft' is the corner it used to have) sits in the upper right, from the
+       first load on: the menu and the lift line under it have the left, for the left thumb (Ben,
+       2026-10-18). */
     .booklet-thumb[data-corner='topLeft'] {
       top: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-top));
       bottom: auto;
+      left: auto;
+      right: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-right));
     }
     /* A mouse resting on the docked thumbnail grows it from its corner to a readable page,
        about a quarter of the screen, raised over its neighbours — still under the scrim (2) and the page (3).
@@ -179,37 +215,76 @@ function injectStyle() {
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
     }
-    /* The strip: the manual's docked form, along the bottom centre — under the scrim (2) and
-       the open page (3), over nothing but the room's lower edge. Its own box only takes
-       input, and the box is the drawn tray — paper with an ink edge — so the surface and the
-       hit area are one and the same. The padding and the outline sit outside the content
-       (content-box, as a slot's border does), which the row arithmetic in constants.ts counts.
-       The touch-action is none so a swipe along it is ours, not the browser's. */
+    /* The strip: the manual's docked form, a band edge to edge — along the bottom in portrait,
+       down the right edge in landscape (JS sets data-axis 'x' | 'y' from the same test as CSS's
+       orientation) — under the scrim (2) and the open page (3), the room's view ending where it
+       begins (the root variables, index.html). It is its own box and its own hit area: paper, with an
+       ink rule on its view side, no radius, no shadow. The slots past its edges are cut. The
+       touch-action is none so a drag along it is ours, not the browser's. */
     .booklet-strip {
-      --slot-centre: ${strip.centreWidth}px;
-      --slot-side: ${strip.sideWidth}px;
       position: fixed;
-      left: 50%;
-      bottom: calc(${strip.inset}px + env(safe-area-inset-bottom));
-      z-index: 1;
-      transform: translateX(-50%);
+      z-index: 0;
+      box-sizing: border-box;
       display: flex;
-      align-items: flex-end;
-      gap: ${strip.gap}px;
-      max-width: calc(100vw - ${2 * strip.gap}px);
-      padding: ${strip.surface.pad}px;
-      background: ${css(COLORS.bookletPaper)}${strip.surface.alpha};
-      border: ${strip.surface.outline}px solid ${css(COLORS.bookletInk)};
-      border-radius: ${strip.surface.radius}px;
+      overflow: hidden;
+      background: ${css(COLORS.bookletPaper)};
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
     }
-    .booklet-slots { display: flex; align-items: flex-end; justify-content: center; gap: ${strip.gap}px; }
+    .booklet-strip[data-band='bottom'] {
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: calc(${bandBottom}px + env(safe-area-inset-bottom));
+      padding-bottom: env(safe-area-inset-bottom);
+      box-shadow: inset 0 ${strip.rule}px 0 ${css(COLORS.bookletInk)};
+    }
+    /* Down the right edge (landscape), whichever side the notch is on: inside the right safe-area
+       margin (drawn black, the notch's when it is on the right), the whole height. */
+    .booklet-strip[data-band='right'] {
+      top: 0;
+      bottom: 0;
+      right: env(safe-area-inset-right);
+      width: ${bandRight}px;
+      padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
+      box-shadow: inset ${strip.rule}px 0 0 ${css(COLORS.bookletInk)};
+    }
+    /* Where the pages run, and are cut. */
+    .booklet-lane {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    /* The catalog's thumb, put down from the open catalog, sits at the top of the screen in landscape,
+       in the room beside the band with a gutter between (never on it or in its column). */
+    html[data-strip='right'] .booklet-thumb[data-corner='topLeft'] {
+      left: auto;
+      right: calc(${thumbBeside}px + env(safe-area-inset-right));
+    }
+    /* The pages in a row (a column in landscape), centred in the band and moved as one by an
+       inline transform: a drag follows the pointer (data-dragging, no transition) and a snap
+       slides back. */
+    .booklet-track {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: ${strip.gap}px;
+      transition: transform ${strip.snapMs}ms ease-out;
+    }
+    .booklet-track[data-axis='y'] { flex-direction: column; }
+    .booklet-track[data-dragging='true'] { transition: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .booklet-track { transition: none; }
+    }
     .booklet-slot {
       /* An explicit width, never a shrinking basis: Safari collapsed those to nothing. */
       flex: none;
-      width: var(--slot-side);
+      width: ${strip.page}px;
       aspect-ratio: ${pageW} / ${pageH};
       padding: 0;
       border: 2px solid ${css(COLORS.uiText)}33;
@@ -221,44 +296,26 @@ function injectStyle() {
       touch-action: none;
       -webkit-tap-highlight-color: transparent;
     }
-    .booklet-slot[data-centre='true'] {
-      width: var(--slot-centre);
-      border-color: ${css(COLORS.uiAccent)};
-    }
+    .booklet-slot[data-centre='true'] { border-color: ${css(COLORS.uiAccent)}; }
     .booklet-slot[data-empty='true'] { visibility: hidden; }
     .booklet-slot canvas { display: block; width: 100%; height: 100%; }
-    .booklet-arrow {
-      flex: none;
-      width: ${strip.arrow}px;
-      height: ${strip.arrow}px;
-      padding: 0;
-      border: 2px solid ${css(COLORS.uiText)}33;
-      border-radius: ${strip.arrow / 2}px;
-      background: ${css(COLORS.uiSurface)}${strip.arrowAlpha};
-      color: ${css(COLORS.uiText)};
-      font: 600 ${strip.arrowGlyph}px/1 system-ui, -apple-system, sans-serif;
-      cursor: pointer;
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .booklet-arrow[aria-disabled='true'] { opacity: 0.3; cursor: default; }
-    /* A manual page opens above its strip, resting on it, as wide as the room above allows. */
+    /* A manual page opens above its band, resting on it, as wide as the room above allows. Down the
+       right edge (landscape) it is centred in the view the band leaves instead. */
     .booklet-leaf[data-docked='strip'] {
-      --strip-reserve: ${reserveFor(strip.centreWidth)}px;
+      --strip-reserve: calc(var(${STRIP_VARS.bottom}, 0px) + ${strip.openGap}px);
       --strip-top: ${gutter}px;
       top: auto;
-      bottom: calc(var(--strip-reserve) + env(safe-area-inset-bottom));
-      width: min(calc(100vw - ${2 * gutter}px), ${pageW}px, calc((100dvh - var(--strip-reserve) - var(--strip-top) - env(safe-area-inset-bottom)) * ${pageW} / ${pageH}));
+      bottom: var(--strip-reserve);
+      width: min(calc(100vw - ${2 * gutter}px), ${pageW}px, calc((100dvh - var(--strip-reserve) - var(--strip-top)) * ${pageW} / ${pageH}));
     }
     @media (orientation: portrait) {
       .booklet-leaf[data-docked='strip'] { --strip-top: ${clusterBottom}px; }
     }
-    @media (max-width: ${stripNarrow.maxWidth}px) {
-      .booklet-strip { --slot-side: ${stripNarrow.sideWidth}px; }
-    }
-    @media (max-height: ${stripShort.maxHeight}px) {
-      .booklet-strip { --slot-centre: ${stripShort.centreWidth}px; --slot-side: ${stripShort.sideWidth}px; }
-      .booklet-leaf[data-docked='strip'] { --strip-reserve: ${reserveFor(stripShort.centreWidth)}px; }
+    .booklet-leaf[data-docked='strip'][data-axis='y'] {
+      left: calc((var(${STRIP_VARS.left}, 0px) + 100vw - var(${STRIP_VARS.right}, 0px)) / 2);
+      top: 50%;
+      bottom: auto;
+      width: min(calc(100vw - var(${STRIP_VARS.left}, 0px) - var(${STRIP_VARS.right}, 0px) - ${2 * gutter}px), ${pageW}px, calc((100dvh - ${2 * gutter}px) * ${pageW} / ${pageH}));
     }
   `;
   document.head.append(style);
@@ -351,13 +408,12 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   // A strip draws into its slots' own, small canvases instead.
   const thumbCanvas = stripped ? null : pageCanvas(pageW, pageH);
   if (thumbCanvas) thumb.append(thumbCanvas);
-  const carousel = stripped ? createStrip(name, pages.count, thumb) : null;
-  const anchor = () => (carousel && peekedAt !== null ? carousel.slot(peekedAt) : carousel?.centre()) ?? thumb;
-
   const element = document.createElement('section');
   element.className = 'booklet-leaf';
   element.dataset.docked = docked;
   element.setAttribute('aria-label', capitalised(name));
+  const carousel = stripped ? createStrip(name, pages.count, thumb, element) : null;
+  const anchor = () => (carousel && peekedAt !== null ? carousel.slot(peekedAt) : carousel?.centre()) ?? thumb;
 
   const close = document.createElement('button');
   close.type = 'button';
@@ -424,12 +480,17 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     for (const fn of listeners) fn({ page: shown, expanded: open });
   }
 
-  const flip = (by: number) => {
+  // Moves the page by `by`; the band slides the pages into place from where they stood, `travel`
+  // px (along the band) off their slots when a drag let go — the tap, the keys and the drag's
+  // release are all this one slide.
+  const flip = (by: number, travel = 0) => {
     const to = Math.min(pages.count - 1, Math.max(0, page + by));
     if (to === page) return;
+    const moved = to - page;
     page = to;
     notify(null);
     render();
+    carousel?.slide(travel + moved * carousel.pitch());
   };
 
   // The scrim is up whenever a blocking booklet is open. Put down by a tap, on the room or the
@@ -527,13 +588,13 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   view.addEventListener('pointercancel', endSwipe);
 
   // The strip's own gestures. A press on a slot (or a gap) is tracked from its down to its up
-  // or cancel: past the tap distance it is a swipe — one page, never a peek or a tap;
-  // within it, on a side slot it moves there, on the centre slot a mouse toggles the page
-  // and a touch holds it open: the peek state machine (src/game/peekGesture.ts) times that,
-  // and its release — or a lost capture — puts the page back. The strip's arrows are plain buttons with their own
-  // click; a keyboard's click on a slot (detail 0 — a pointer's was handled here) does what a
-  // tap does.
-  let stripPress: { id: number; x: number; y: number; slot: number | null; touch: boolean } | null = null;
+  // or cancel: past the tap distance along the band it is a drag — the pages follow the pointer
+  // and snap to the nearest page on release, never a peek or a tap; within it, on a side slot
+  // it moves there, on the centre slot a mouse toggles the page and a touch holds it open: the
+  // peek state machine (src/game/peekGesture.ts) times that, and its release — or a lost
+  // capture — puts the page back. A keyboard's click on a slot (detail 0 — a pointer's was
+  // handled here) does what a tap does.
+  let stripPress: { id: number; x: number; y: number; slot: number | null; touch: boolean; travel: number; dragging: boolean } | null = null;
   let peek: PeekState = 'idle';
   let peekTimer: ReturnType<typeof setTimeout> | null = null;
   const peekSend = (event: PeekEvent) => {
@@ -556,7 +617,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
       peeked = peekedAt = null;
     }
   };
-  const slotWindow = () => windowOf(page, pages.count, carousel!.visible());
+  const slotWindow = () => windowOf(page, pages.count, carousel!.total());
   const tapSlot = (slot: number, touch: boolean) => {
     const meaning = tapOn(slotWindow(), slot);
     if (meaning === 'centre') {
@@ -566,48 +627,61 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   };
   if (carousel) {
     thumb.addEventListener('pointerdown', (event) => {
-      const control = (event.target as Element).closest('button');
-      const slot = control?.dataset.slot;
+      const slot = (event.target as Element).closest('button')?.dataset.slot;
       if (event.button !== 0) return;
       // The band has no two-finger gesture, so a second finger ends the first one's as a cancel
-      // (no tap, no flip, a peek put back) and starts nothing: a pinch here is nobody's. The
-      // room is not told; fingers on the band were never the room's.
+      // (no tap, no flip, a peek put back, a drag slid back) and starts nothing: a pinch here is
+      // nobody's. The room is not told; fingers on the band were never the room's.
       if (stripPress) {
         if (event.pointerId !== stripPress.id) cancelStripPress();
         return;
       }
-      // The arrows keep their own job.
-      if (control && slot === undefined) return;
       const touch = event.pointerType !== 'mouse';
-      stripPress = { id: event.pointerId, x: event.clientX, y: event.clientY, slot: slot === undefined ? null : Number(slot), touch };
+      stripPress = { id: event.pointerId, x: event.clientX, y: event.clientY, slot: slot === undefined ? null : Number(slot), touch, travel: 0, dragging: false };
       thumb.setPointerCapture(event.pointerId);
       // A hold peeks the page in any slot that has one — while the manual is docked. Open, only
       // the centre slot's hold is armed, as it always was: a side slot's hold is a tap that
       // flips the open page, and must never close it on the release.
-      const holdable = stripPress.slot !== null && slotWindow()[stripPress.slot] != null && (!open || stripPress.slot === centreSlot(carousel.visible()));
+      const holdable = stripPress.slot !== null && slotWindow()[stripPress.slot] != null && (!open || stripPress.slot === centreSlot(carousel.total()));
       if (touch && holdable) peekSend({ type: 'press' });
     });
     thumb.addEventListener('pointermove', (event) => {
       if (!stripPress || event.pointerId !== stripPress.id) return;
-      peekSend({ type: 'move', distance: Math.hypot(event.clientX - stripPress.x, event.clientY - stripPress.y) });
+      const dx = event.clientX - stripPress.x;
+      const dy = event.clientY - stripPress.y;
+      peekSend({ type: 'move', distance: Math.hypot(dx, dy) });
+      // While peeking, travel does nothing: the release only closes.
+      if (peek === 'peeking') return;
+      const along = carousel.axis() === 'x' ? dx : dy;
+      if (!stripPress.dragging && Math.abs(along) <= GESTURE.tapMaxDistance) return;
+      stripPress.dragging = true;
+      stripPress.travel = clampTravel(along, page, pages.count, carousel.pitch(), BOOKLET_UI.strip.reach);
+      carousel.drag(stripPress.travel);
     });
-    function cancelStripPress() {
-      if (!stripPress) return;
-      const { touch } = stripPress;
+    // Lets the press go: a touch's peek is put back. Returns the press, for a drag to settle.
+    function releaseStripPress() {
+      const press = stripPress;
       stripPress = null;
-      if (touch) peekSend({ type: 'release' });
+      if (press?.touch) peekSend({ type: 'release' });
+      return press;
+    }
+    // A press cut short: nothing is flipped and a drag slides back.
+    function cancelStripPress() {
+      const press = releaseStripPress();
+      if (press?.dragging) carousel!.slide(press.travel);
     }
     const endStripPress = (event: PointerEvent) => {
       if (!stripPress || event.pointerId !== stripPress.id) return;
-      const { x, y, slot, touch } = stripPress;
+      const { x, y, slot, touch, dragging, travel } = stripPress;
       const wasPeeking = peek === 'peeking';
-      cancelStripPress();
-      if (event.type !== 'pointerup' || wasPeeking) return;
-      const dx = event.clientX - x;
-      const dy = event.clientY - y;
-      if (Math.hypot(dx, dy) <= GESTURE.tapMaxDistance) {
-        if (slot !== null) tapSlot(slot, touch);
-      } else if (Math.abs(dx) >= BOOKLET_UI.swipeDistance && Math.abs(dx) > Math.abs(dy)) flip(dx < 0 ? 1 : -1);
+      if (wasPeeking || event.type !== 'pointerup') return cancelStripPress();
+      releaseStripPress();
+      if (dragging) {
+        // To the nearest page, the pages sliding the rest of the way from where they were let go.
+        const steps = snapSteps(travel, carousel.pitch());
+        if (steps === 0) carousel.slide(travel);
+        else flip(steps, travel);
+      } else if (Math.hypot(event.clientX - x, event.clientY - y) <= GESTURE.tapMaxDistance && slot !== null) tapSlot(slot, touch);
     };
     thumb.addEventListener('pointerup', endStripPress);
     thumb.addEventListener('pointercancel', endStripPress);
@@ -618,8 +692,6 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
       const slot = (event.target as Element).closest('button')?.dataset.slot;
       if (event.detail === 0 && slot !== undefined) tapSlot(Number(slot), false);
     });
-    carousel.prev.addEventListener('click', () => flip(-1));
-    carousel.next.addEventListener('click', () => flip(1));
   }
 
   function onKey(event: KeyboardEvent) {
@@ -635,8 +707,10 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     }
     // A strip steps on the arrow keys docked too, unless another sheet is the one in hand.
     if (!open && !(stripped && !anyOpen(self))) return;
-    if (event.key === 'ArrowLeft') flip(-1);
-    else if (event.key === 'ArrowRight') flip(1);
+    // Left and Right step the band either way up; Up and Down too when it stands on the right edge.
+    const vertical = carousel?.axis() === 'y';
+    if (event.key === 'ArrowLeft' || (vertical && event.key === 'ArrowUp')) flip(-1);
+    else if (event.key === 'ArrowRight' || (vertical && event.key === 'ArrowDown')) flip(1);
   }
   window.addEventListener('keydown', onKey);
 
@@ -659,8 +733,9 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     element.getBoundingClientRect();
   };
   const settle = () => {
-    // A thumb's page is centred over the room; a strip's rests on the strip, centred across.
-    element.style.transform = open ? (stripped ? 'translate(-50%, 0)' : 'translate(-50%, -50%)') : dockedPose();
+    // A thumb's page is centred over the room; a strip's rests on the band, centred across, or on the right edge is centred in the view the band leaves.
+    const restsOnBand = stripped && carousel?.axis() === 'x';
+    element.style.transform = open ? (restsOnBand ? 'translate(-50%, 0)' : 'translate(-50%, -50%)') : dockedPose();
   };
   // A resize or a turn of the phone moves both boxes (and may change how many pages the strip
   // shows); the docked page follows.
@@ -679,6 +754,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     window.removeEventListener('keydown', onKey);
     window.removeEventListener('resize', onResize);
     clearTimeout(peekTimer ?? undefined);
+    carousel?.dispose();
     sheets.delete(self);
     syncSheets();
     listeners.clear();
@@ -727,63 +803,102 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
 }
 
 /**
- * The strip's DOM: an arrow at each end and, between them, a slot for each page the viewport
- * has room for (src/game/carouselModel.ts) — rebuilt when that count changes. `paint(page,
- * draw, open)` shows the pages round `page`, redrawing only a slot whose page changed.
+ * The strip's DOM: a track of slots, one for each page the band's long side has room for
+ * (src/game/carouselModel.ts) and the hidden ones past each end a drag needs — rebuilt when that count
+ * changes. `paint(page, draw, open)` shows the pages round `page`, redrawing only a slot whose page
+ * changed, and says the orientation to the band, the open page `leaf` and the root variables (the
+ * one place any of them is written); `dispose()` gives the room's view back.
  */
-function createStrip(name: string, count: number, root: HTMLElement) {
-  const prev = button('‹', 'Previous page');
-  const next = button('›', 'Next page');
-  prev.className = next.className = 'booklet-arrow';
-  const box = document.createElement('div');
-  box.className = 'booklet-slots';
+function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLElement) {
+  const { strip } = BOOKLET_UI;
+  const lane = document.createElement('div');
+  lane.className = 'booklet-lane';
+  const track = document.createElement('div');
+  track.className = 'booklet-track';
+  lane.append(track);
   root.setAttribute('role', 'group');
   root.setAttribute('aria-label', `${capitalised(name)} pages`);
-  root.append(prev, box, next);
+  root.append(lane);
+  const rootElement = document.documentElement;
 
-  // A slot shows a page at most `centreWidth` CSS px wide: its canvas is that at the device's
-  // pixel ratio (as the room's renderer is capped), not the page's full resolution.
+  // A slot shows a page `page` CSS px wide: its canvas is that at the device's pixel ratio (as
+  // the room's renderer is capped), not the page's full resolution.
   const ratio = Math.min(window.devicePixelRatio || 1, RENDER.maxPixelRatio);
-  const slotWidth = Math.round(BOOKLET_UI.strip.centreWidth * ratio);
+  const slotWidth = Math.round(strip.page * ratio);
   const slotHeight = Math.round((slotWidth * pageH) / pageW);
   let slots: { button: HTMLButtonElement; canvas: HTMLCanvasElement; shows: number | null | undefined }[] = [];
-  const visible = () => visibleCount(window.innerWidth);
-  function rebuild(total: number) {
+  // The band lies along the bottom in portrait and down the right in landscape: CSS's own test
+  // for orientation (height at least width is portrait).
+  const axis = (): Axis => (window.innerHeight >= window.innerWidth ? 'x' : 'y');
+  // A slot's length along the band: a page's width on the bottom, its height down the right edge.
+  const sizes = () => ({ slot: axis() === 'x' ? strip.page : stripPageH, gap: strip.gap });
+  // Down an edge the pages run below the catalog's thumb, which sits at the top of the band.
+  const extent = () => (axis() === 'x' ? window.innerWidth : window.innerHeight);
+  /** Which edge the band stands on: the bottom upright, the right in landscape. */
+  const band = (): Band => (axis() === 'x' ? 'bottom' : 'right');
+  /** How many pages the band's long side has room for. */
+  const visible = () => visibleCount(extent(), sizes(), BOOKLET_UI.page.gutter);
+  /** How many slots are built: those, the hidden ones past each end a drag needs, and those the track's rest shift brings in at either end. */
+  const total = () => slotCount(extent(), sizes(), BOOKLET_UI.page.gutter, strip.reach) + 2 * centreSlot(visible());
+  const shift =(px: number) => `translate${axis() === 'x' ? 'X' : 'Y'}(${px}px)`;
+  // Where the track rests (px along the band, restShift's slots), so the band never shows an empty
+  // slot beside its pages; and where it rested before the last paint, which a slide starts from.
+  let rest = 0;
+  let restBefore = 0;
+  function rebuild(built: number) {
     // A turn of the phone or a resized window may take away the slot that has focus.
     const hadFocus = slots.some(({ button: old }) => old === document.activeElement);
     for (const { button: old } of slots) old.remove();
-    slots = Array.from({ length: total }, (_, index) => {
+    slots = Array.from({ length: built }, (_, index) => {
       const slot = button('', '');
       slot.className = 'booklet-slot';
       slot.dataset.slot = String(index);
-      slot.dataset.centre = String(index === centreSlot(total));
-      slot.tabIndex = index === centreSlot(total) ? 0 : -1;
+      slot.dataset.centre = String(index === centreSlot(built));
+      slot.tabIndex = index === centreSlot(built) ? 0 : -1;
       const canvas = pageCanvas(slotWidth, slotHeight);
       slot.append(canvas);
-      box.append(slot);
+      track.append(slot);
       return { button: slot, canvas, shows: undefined };
     });
-    if (hadFocus) slots[centreSlot(total)].button.focus({ preventScroll: true });
+    if (hadFocus) slots[centreSlot(built)].button.focus({ preventScroll: true });
   }
 
   return {
-    prev,
-    next,
+    axis,
     visible,
+    total,
+    /** The distance from one slot to the next along the band, as it stands now. */
+    pitch: () => pitch(sizes()),
     /** A slot's button, or undefined past the ones built: what a held page grows from. */
     slot(at: number) {
       return slots[at]?.button;
     },
     /** The centre slot's button: the page that is current, and what the open page grows from. */
     centre() {
-      if (slots.length === 0) rebuild(visible());
+      if (slots.length === 0) rebuild(total());
       return slots[centreSlot(slots.length)].button;
     },
     paint(page: number, draw: (target: HTMLCanvasElement, index: number) => void, open: boolean) {
-      const total = visible();
-      if (total !== slots.length) rebuild(total);
-      const shown = windowOf(page, count, total);
-      const centre = centreSlot(total);
+      const built = total();
+      if (built !== slots.length) rebuild(built);
+      const now = axis();
+      // The track rests where the band shows no empty slot (a turn of the phone leaves no stale
+      // offset along the old axis); a drag in hand keeps its own place.
+      restBefore = rest;
+      rest = restShift(page, count, visible()) * pitch(sizes());
+      if (track.dataset.dragging !== 'true') track.style.transform = shift(rest);
+      const edge = band();
+      root.dataset.axis = track.dataset.axis = leaf.dataset.axis = now;
+      root.dataset.band = edge;
+      rootElement.dataset.strip = edge;
+      const vars = viewVars(edge);
+      for (const key of ['bottom', 'left', 'right', 'backdrop'] as const) {
+        const value = vars[key];
+        if (value === null) rootElement.style.removeProperty(STRIP_VARS[key]);
+        else rootElement.style.setProperty(STRIP_VARS[key], value);
+      }
+      const shown = windowOf(page, count, built);
+      const centre = centreSlot(built);
       shown.forEach((index, at) => {
         const slot = slots[at];
         slot.button.dataset.empty = String(index === null);
@@ -795,8 +910,26 @@ function createStrip(name: string, count: number, root: HTMLElement) {
         if (index !== null && slot.shows !== index) draw(slot.canvas, index);
         slot.shows = index;
       });
-      prev.setAttribute('aria-disabled', String(page === 0));
-      next.setAttribute('aria-disabled', String(page === count - 1));
+    },
+    /** The track follows a drag: `travel` px along the band from where it rests, no transition. */
+    drag(travel: number) {
+      restBefore = rest;
+      track.dataset.dragging = 'true';
+      track.style.transform = shift(rest + travel);
+    },
+    /** The track slides to rest from `from` px off where it rested before the last paint (the pages stay put on screen as the page changes): set there without a transition, flushed, then let go. */
+    slide(from: number) {
+      track.dataset.dragging = 'true';
+      track.style.transform = shift(restBefore + from);
+      track.getBoundingClientRect();
+      delete track.dataset.dragging;
+      track.style.transform = shift(rest);
+      restBefore = rest;
+    },
+    /** The room's view is whole again: the band is gone. */
+    dispose() {
+      for (const name of Object.values(STRIP_VARS)) rootElement.style.removeProperty(name);
+      delete rootElement.dataset.strip;
     },
   };
 }

@@ -107,6 +107,8 @@ beforeEach(() => {
     body,
     head,
     visibilityState: 'visible',
+    // The manual's band sets its root variables here.
+    documentElement: { style: { setProperty() {}, removeProperty() {} }, dataset: {} },
     createElement: (tag: string) => new FakeElement(tag),
     createElementNS: (_ns: string, tag: string) => new FakeElement(tag),
     getElementById: (id: string) => head.children.find((node) => node.id === id) ?? null,
@@ -116,6 +118,8 @@ beforeEach(() => {
   vi.stubGlobal('window', {
     // Rapier's step reads its timers off window.performance; without it the WASM panics.
     performance: globalThis.performance,
+    innerWidth: 390,
+    innerHeight: 844,
     addEventListener: windowTarget.addEventListener.bind(windowTarget),
     removeEventListener: windowTarget.removeEventListener.bind(windowTarget),
   });
@@ -479,17 +483,18 @@ describe('the manual in the room (1.9.1.2)', () => {
       });
       return count;
     };
-    const [prev, , next] = [world.booklet.thumb.children[0], world.booklet.thumb.children[1], world.booklet.thumb.children[2]] as unknown as FakeElement[];
+    // The band has no arrows: the arrow keys step it.
+    const key = (name: string) => windowTarget.dispatch('keydown', { key: name });
     // On the cover: nothing, and nothing is open.
     expect(world.booklet.expanded).toBe(false);
     expect(lit()).toBe(0);
-    next.dispatch('click', {});
+    key('ArrowRight');
     expect(world.booklet.currentPage).toBe(1);
     expect(world.booklet.expanded).toBe(false);
     expect(lit()).toBeGreaterThan(0);
-    next.dispatch('click', {});
+    key('ArrowRight');
     expect(lit()).toBe(0);
-    prev.dispatch('click', {});
+    key('ArrowLeft');
     expect(lit()).toBeGreaterThan(0);
     world.dispose();
   });

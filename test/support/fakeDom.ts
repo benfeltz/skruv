@@ -2,10 +2,27 @@ import { vi } from 'vitest';
 
 // A minimal fake DOM, enough for src/ui/booklet.ts: elements that hold children, listeners,
 // attributes and a dataset, events that bubble from the target up, one focused element, and
-// window key listeners and a viewport width. test/bookletSplash.test.ts carries its own copy of the same shape.
+// window key listeners, a viewport width and height, and a root element whose style records custom properties. test/bookletSplash.test.ts carries its own copy of the same shape.
 
 type FakeEvent = { type: string; target: FakeElement; pointerId: number; pointerType: string; button: number; detail: number; clientX: number; clientY: number; timeStamp: number };
 type Listener = (event: object) => void;
+
+/** The root element's style: just the custom properties a test reads back. */
+export class FakeStyle {
+  props: Record<string, string> = {};
+  /** The root's `data-*`, as `dataset`. */
+  dataset: Record<string, string> = {};
+  setProperty(name: string, value: string) {
+    this.props[name] = value;
+  }
+  removeProperty(name: string) {
+    delete this.props[name];
+  }
+  /** The element the document hands out as `documentElement`: this style, and its dataset. */
+  asRoot() {
+    return { style: this, dataset: this.dataset };
+  }
+}
 
 export class FakeElement {
   tag: string;
@@ -91,8 +108,18 @@ export interface FakeDom {
   body: FakeElement;
   focused: FakeElement | null;
   windowListeners: Map<string, Listener[]>;
-  /** The viewport's width, as `window.innerWidth`: a test sets it, then fires `resize`. */
-  viewport: { width: number };
+  /** The viewport's size, as `window.innerWidth` and `innerHeight`: a test sets it, then fires `resize`. */
+  viewport: { width: number; height: number };
+  /** `document.documentElement`'s style and dataset, where the strip sets its root variables and `data-strip`. */
+  rootStyle: FakeStyle;
+  /** The screen's rotation, as `screen.orientation.angle` and `window.orientation` (90: turned counter-clockwise, the notch at the left; 270: the notch at the right). */
+  angle: number;
+  /** `screen.orientation`'s listeners, or null to have no `screen.orientation` (the `orientationchange` fallback). */
+  orientationListeners: Map<string, Listener[]> | null;
+  /** Fires the orientation's `change` (the window's `orientationchange` where there is none), as turning the phone does. */
+  rotate(): void;
+  /** The safe-area insets `getComputedStyle` reports on the strip's probe (CSS px): a test sets the notch here, then fires `resize`. */
+  safe: { left: number; right: number };
   /** Presses a key on the window. */
   key(name: string): void;
 }
@@ -105,7 +132,15 @@ export function installFakeDom(): FakeDom {
     body: undefined as unknown as FakeElement,
     focused: null,
     windowListeners,
-    viewport: { width: 1280 },
+    viewport: { width: 1280, height: 800 },
+    rootStyle: new FakeStyle(),
+    safe: { left: 0, right: 0 },
+    angle: 90,
+    orientationListeners: new Map(),
+    rotate: () => {
+      const listeners = dom.orientationListeners ? dom.orientationListeners : windowListeners;
+      listeners.get(dom.orientationListeners ? 'change' : 'orientationchange')?.forEach((fn) => fn({}));
+    },
     key: (name) => windowListeners.get('keydown')?.forEach((fn) => fn({ key: name })),
   };
   dom.head = new FakeElement('head', dom);
@@ -113,6 +148,7 @@ export function installFakeDom(): FakeDom {
   vi.stubGlobal('document', {
     head: dom.head,
     body: dom.body,
+    documentElement: dom.rootStyle.asRoot(),
     createElement: (tag: string) => new FakeElement(tag, dom),
     getElementById: (id: string) => dom.head.children.find((node) => node.id === id) ?? null,
   });
@@ -120,8 +156,24 @@ export function installFakeDom(): FakeDom {
     get innerWidth() {
       return dom.viewport.width;
     },
+    get orientation() {
+      return dom.angle;
+    },
+    get innerHeight() {
+      return dom.viewport.height;
+    },
     addEventListener: (type: string, fn: Listener) => windowListeners.set(type, [...(windowListeners.get(type) ?? []), fn]),
     removeEventListener: (type: string, fn: Listener) => windowListeners.set(type, (windowListeners.get(type) ?? []).filter((f) => f !== fn)),
   });
+  const orientation = {
+    addEventListener: (type: string, fn: Listener) => dom.orientationListeners?.set(type, [...(dom.orientationListeners.get(type) ?? []), fn]),
+    removeEventListener: (type: string, fn: Listener) => dom.orientationListeners?.set(type, (dom.orientationListeners.get(type) ?? []).filter((f) => f !== fn)),
+  };
+  vi.stubGlobal('screen', {
+    get orientation() {
+      return dom.orientationListeners ? { ...orientation, angle: dom.angle } : undefined;
+    },
+  });
+  vi.stubGlobal('getComputedStyle', () => ({ paddingLeft: `${dom.safe.left}px`, paddingRight: `${dom.safe.right}px` }));
   return dom;
 }

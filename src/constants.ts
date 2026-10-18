@@ -428,43 +428,29 @@ export const BOOKLET_UI = {
   // the shadow and the radius.
   page: { shadow: '0 12px 40px #0008', gutter: 12, growMs: 220, radius: 6 },
   // The manual's docked strip (src/ui/booklet.ts `docked: 'strip'`, laid out by
-  // src/game/carouselModel.ts): pages along the bottom centre, the centre one larger and
-  // current, an arrow button at each end. `narrow` pages show below `breakpoint` (CSS px of
-  // viewport width), `wide` at or above it. `centreWidth` and `sideWidth` are page widths,
-  // `gap` the space between slots, `arrow` an arrow button's side (a thumb-sized target),
-  // `inset` the strip's distance from the screen's bottom edge. `peekDelayMs` is how long a
-  // touch rests on the centre page before it pops open (a touch that moves past the tap
-  // distance first is a swipe, never a peek).
-  // `openGap` is the space between the strip and the open page above it.
-  // Its look: a slot's corner `radius` (px) and `shadow`; the arrows' glyph size (px) and the
-  // hex alpha of their surface, so the room shows faintly through.
-  // `surface` is the tray drawn behind the arrows and pages, and it is the strip's own box, so what is drawn is
-  // what takes the touch: its `pad` round them, its ink `outline` (px, the inset ring's weight; it sits outside
-  // the padding, like a slot's border), its corner `radius` and the hex `alpha` of its paper.
+  // src/game/carouselModel.ts): a band edge to edge along the bottom of the screen in portrait
+  // (its height `page` x pageH / pageW plus two `page.gutter`s: 124 px) and down the right edge
+  // in landscape (its width `page` plus two gutters: 96 px). Every page in it is `page` CSS px
+  // wide, the centre one current and told by its gold border; the band shows as many as its
+  // long side takes (an odd count) plus the hidden slots at each end a drag of up to `reach` pages
+  // needs, so a drag shows the next page arriving from under the edge and never empty paper
+  // (src/game/carouselModel.ts `slotCount`). `gap` is the space between slots, `rule` the ink
+  // line (px, the inset ring's weight) on the band's view side, `snapMs` the slide to a page
+  // after a drag, a tap or a key. `peekDelayMs` is how long a touch rests on a page before it
+  // pops open (a touch that moves past the tap distance first is a drag, never a peek).
+  // `openGap` is the space between the band and the open page above it in portrait.
+  // A slot's corner `radius` (px) and `shadow`.
   strip: {
-    breakpoint: 600,
-    narrow: 3,
-    wide: 5,
-    centreWidth: 120,
-    sideWidth: 72,
+    page: 72,
     gap: 8,
-    arrow: 44,
-    inset: 12,
     openGap: 12,
     peekDelayMs: 280,
     radius: 6,
     shadow: '0 4px 14px #0006',
-    arrowGlyph: 22,
-    arrowAlpha: 'e6',
-    surface: { pad: 6, outline: 3, radius: 12, alpha: 'cc' },
+    rule: 3,
+    reach: 1,
+    snapMs: 180,
   },
-  // ...and on a short viewport (a phone held sideways: `maxHeight` CSS px or less) the strip
-  // draws smaller, so the open page above it keeps a readable size.
-  stripShort: { maxHeight: 480, centreWidth: 72, sideWidth: 44 },
-  // ...and on a narrow phone (`maxWidth` CSS px or less) the side pages draw narrower, so the
-  // arrows, three slots and their gaps fit the width (the arrows 2 x 44, the gaps 4 x 8, the
-  // centre 120 and two sides of 44 make 328, and the tray's padding 2 x 6 makes 340, within the 344 the strip may take).
-  stripNarrow: { maxWidth: 400, sideWidth: 44 },
 };
 
 // The catalog (1.9.1): the game's front door, a second booklet of items to build
