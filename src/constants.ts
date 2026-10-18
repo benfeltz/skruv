@@ -432,8 +432,9 @@ export const BOOKLET_UI = {
   // (its height `page` x pageH / pageW plus two `page.gutter`s: 124 px) and down the right edge
   // in landscape (its width `page` plus two gutters: 96 px). Every page in it is `page` CSS px
   // wide, the centre one current and told by its gold border; the band shows as many as its
-  // long side takes (an odd count) plus `buffer` hidden slots at each end, so a drag shows the
-  // next page arriving from under the edge. `gap` is the space between slots, `rule` the ink
+  // long side takes (an odd count) plus the hidden slots at each end a drag of up to `reach` pages
+  // needs, so a drag shows the next page arriving from under the edge and never empty paper
+  // (src/game/carouselModel.ts `slotCount`). `gap` is the space between slots, `rule` the ink
   // line (px, the inset ring's weight) on the band's view side, `snapMs` the slide to a page
   // after a drag, a tap or a key. `peekDelayMs` is how long a touch rests on a page before it
   // pops open (a touch that moves past the tap distance first is a drag, never a peek).
@@ -447,7 +448,7 @@ export const BOOKLET_UI = {
     radius: 6,
     shadow: '0 4px 14px #0006',
     rule: 3,
-    buffer: 1,
+    reach: 1,
     snapMs: 180,
   },
 };

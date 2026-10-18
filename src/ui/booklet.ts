@@ -1,6 +1,6 @@
 import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, MENU, RENDER } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
-import { centreSlot, clampTravel, pitch, snapSteps, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
+import { centreSlot, clampTravel, pitch, slotCount, snapSteps, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
 import { peekNext } from '../game/peekGesture.js';
 import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 
@@ -452,7 +452,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     page = to;
     notify(null);
     render();
-    carousel?.slide(travel + moved * carousel.pitch);
+    carousel?.slide(travel + moved * carousel.pitch());
   };
 
   // The scrim is up whenever a blocking booklet is open. Put down by a tap, on the room or the
@@ -617,7 +617,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
       const along = carousel.axis() === 'x' ? dx : dy;
       if (!stripPress.dragging && Math.abs(along) <= GESTURE.tapMaxDistance) return;
       stripPress.dragging = true;
-      stripPress.travel = clampTravel(along, page, pages.count, carousel.pitch);
+      stripPress.travel = clampTravel(along, page, pages.count, carousel.pitch(), BOOKLET_UI.strip.reach);
       carousel.drag(stripPress.travel);
     });
     // Lets the press go: a touch's peek is put back. Returns the press, for a drag to settle.
@@ -640,7 +640,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
       releaseStripPress();
       if (dragging) {
         // To the nearest page, the pages sliding the rest of the way from where they were let go.
-        const steps = snapSteps(travel, carousel.pitch);
+        const steps = snapSteps(travel, carousel.pitch());
         if (steps === 0) carousel.slide(travel);
         else flip(steps, travel);
       } else if (Math.hypot(event.clientX - x, event.clientY - y) <= GESTURE.tapMaxDistance && slot !== null) tapSlot(slot, touch);
@@ -766,7 +766,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
 
 /**
  * The strip's DOM: a track of slots, one for each page the band's long side has room for
- * (src/game/carouselModel.ts) and `buffer` more hidden past each end — rebuilt when that count
+ * (src/game/carouselModel.ts) and the hidden ones past each end a drag needs — rebuilt when that count
  * changes. `paint(page, draw, open)` shows the pages round `page`, redrawing only a slot whose page
  * changed, and says the orientation to the band, the open page `leaf` and the root variables (the
  * one place any of them is written); `dispose()` gives the room's view back.
@@ -788,10 +788,13 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
   // The band lies along the bottom in portrait and down the right in landscape: CSS's own test
   // for orientation (height at least width is portrait).
   const axis = (): Axis => (window.innerHeight >= window.innerWidth ? 'x' : 'y');
+  // A slot's length along the band: a page's width on the bottom, its height down the right edge.
+  const sizes = () => ({ slot: axis() === 'x' ? strip.page : stripPageH, gap: strip.gap });
+  const extent = () => (axis() === 'x' ? window.innerWidth : window.innerHeight);
   /** How many pages the band's long side has room for. */
-  const visible = () => visibleCount(axis() === 'x' ? window.innerWidth : window.innerHeight, strip, BOOKLET_UI.page.gutter);
-  /** How many slots are built: those, and the hidden ones past each end. */
-  const total = () => visible() + 2 * strip.buffer;
+  const visible = () => visibleCount(extent(), sizes(), BOOKLET_UI.page.gutter);
+  /** How many slots are built: those, and the hidden ones past each end a drag needs. */
+  const total = () => slotCount(extent(), sizes(), BOOKLET_UI.page.gutter, strip.reach);
   let lastAxis: Axis | null = null;
   const shift = (px: number) => `translate${axis() === 'x' ? 'X' : 'Y'}(${px}px)`;
   function rebuild(built: number) {
@@ -816,7 +819,8 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
     axis,
     visible,
     total,
-    pitch: pitch(strip),
+    /** The distance from one slot to the next along the band, as it stands now. */
+    pitch: () => pitch(sizes()),
     /** A slot's button, or undefined past the ones built: what a held page grows from. */
     slot(at: number) {
       return slots[at]?.button;

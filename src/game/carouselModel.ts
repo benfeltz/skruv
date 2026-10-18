@@ -6,14 +6,14 @@
 // band's DOM lives in src/ui/booklet.ts and only draws what this says. The caller passes the
 // band's constants (BOOKLET_UI.strip, BOOKLET_UI.page.gutter), so a test can pass its own.
 
-/** What the sizes below are made of: a page's width and the gap between pages (CSS px). */
+/** What the sizes below are made of: a slot's length along the band (a page's width on the bottom, its height down the right edge) and the gap between slots (CSS px). */
 export interface StripSizes {
-  page: number;
+  slot: number;
   gap: number;
 }
 
-/** The distance between one page's start and the next's along the band. */
-export const pitch = ({ page, gap }: StripSizes): number => page + gap;
+/** The distance between one slot's start and the next's along the band. */
+export const pitch = ({ slot, gap }: StripSizes): number => slot + gap;
 
 /**
  * How many pages the band shows along `extent` CSS px (its long side: the viewport's width in
@@ -26,12 +26,25 @@ export function visibleCount(extent: number, strip: StripSizes, gutter: number):
 }
 
 /**
- * Where the track may be pulled to, in px along the band, from the current page `page` of
- * `count`: positive travel pulls toward earlier pages, so the first page may go no further
- * than the centre and neither may the last.
+ * How many slots to build so a drag of up to `reach` pages never shows empty paper: the visible
+ * ones (`visibleCount`) and, at each end, enough more to fill the room the odd count leaves
+ * beside them and the band's whole extent with the track `reach` pitches off centre. Odd.
  */
-export function clampTravel(travel: number, page: number, count: number, step: number): number {
-  return Math.min(page * step, Math.max(0 - (count - 1 - page) * step, travel));
+export function slotCount(extent: number, strip: StripSizes, gutter: number, reach: number): number {
+  const step = pitch(strip);
+  const shown = visibleCount(extent, strip, gutter);
+  const spare = Math.max(0, extent - (shown * step - strip.gap)) / 2;
+  return shown + 2 * Math.ceil(spare / step + reach);
+}
+
+/**
+ * Where the track may be pulled to, in px along the band, from the current page `page` of
+ * `count`: positive travel pulls toward earlier pages. No further than `reach` pages (what
+ * `slotCount` built slots for), and the first and the last page may go no further than the
+ * centre, so the band never shows past either end of the booklet.
+ */
+export function clampTravel(travel: number, page: number, count: number, step: number, reach: number): number {
+  return Math.min(Math.min(page, reach) * step, Math.max(0 - Math.min(count - 1 - page, reach) * step, travel));
 }
 
 /** How many pages a release at `travel` moves, to the nearest page (half a pitch counts as a page): positive toward later pages, which a pull toward the start of the band (negative travel) reaches. */
