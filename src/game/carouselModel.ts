@@ -56,13 +56,16 @@ export function snapSteps(travel: number, step: number): number {
 /**
  * Which side of the screen the notch is on in landscape, from the safe-area insets (CSS px) and
  * the screen's rotation `angle` (degrees; 90 is turned counter-clockwise, the notch at the left):
- * the larger inset is the notch's. Phones report the same inset on both sides, so then the angle
- * says (and without one, the left). Null when there are no insets: no notch, no margin.
+ * the larger inset is the notch's. Safari reports the same inset on both sides, and Chrome on iOS
+ * none at all (it keeps the page out of the notch itself), so then the angle says. Without a
+ * landscape angle: the left when there are insets, else null (no notch: a desktop window).
+ * Where the notch is decides the band's side; whether there is a margin to draw is the insets'.
  */
 export function notchSide(left: number, right: number, angle: number | undefined): 'left' | 'right' | null {
-  if (left <= 0 && right <= 0) return null;
   if (left !== right) return left > right ? 'left' : 'right';
-  return angle === 270 || angle === -90 ? 'right' : 'left';
+  if (angle === 270 || angle === -90) return 'right';
+  if (angle === 90 || angle === -270) return 'left';
+  return left > 0 ? 'left' : null;
 }
 
 /** The slot that holds the current page: the middle of `visible` slots. */

@@ -45,12 +45,21 @@ const STRIP_VARS = { bottom: '--strip-bottom', left: '--strip-left', right: '--s
 type Band = 'bottom' | 'left' | 'right';
 type Axis = 'x' | 'y';
 const env = (side: 'left' | 'right' | 'bottom') => `env(safe-area-inset-${side})`;
-/** What the room's view is inset by, and where the notch column's middle is (null: no notch), for a band on `band` with the notch on `notch` (null: none). */
-function viewVars(band: Band, notch: 'left' | 'right' | null) {
+/**
+ * What the room's view is inset by, and where the notch column's middle is (null: none), for a band on
+ * `band` with the notch on `notch` (null: none) and the safe-area `insets` the browser reports. The
+ * notch's side places the band; a margin and its column exist only where an inset does (Chrome on iOS
+ * reports none: it keeps the page out of the notch itself, and its own margin is black).
+ */
+function viewVars(band: Band, notch: 'left' | 'right' | null, insets: { left: number; right: number }) {
   if (band === 'bottom') return { bottom: `calc(${bandBottom}px + ${env('bottom')})`, left: '0px', right: '0px', rail: null, backdrop: null };
   const black = '#000';
-  if (band === 'right') return { bottom: '0px', left: notch === 'left' ? env('left') : '0px', right: `${bandRight}px`, rail: notch === 'left' ? `calc(${env('left')} / 2)` : null, backdrop: black };
-  return { bottom: '0px', left: `${bandRight}px`, right: notch === 'right' ? env('right') : '0px', rail: notch === 'right' ? `calc(100vw - ${env('right')} / 2)` : null, backdrop: black };
+  if (band === 'right') {
+    const margin = notch === 'left' && insets.left > 0;
+    return { bottom: '0px', left: margin ? env('left') : '0px', right: `${bandRight}px`, rail: margin ? `calc(${env('left')} / 2)` : null, backdrop: black };
+  }
+  const margin = notch === 'right' && insets.right > 0;
+  return { bottom: '0px', left: `${bandRight}px`, right: margin ? env('right') : '0px', rail: margin ? `calc(100vw - ${env('right')} / 2)` : null, backdrop: black };
 }
 // In landscape the catalog's docked thumb sits at the top of the screen, in the room just beside the
 // band: this far (px) from the band's edge.
@@ -971,7 +980,7 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
       root.dataset.band = edge;
       rootElement.dataset.strip = edge;
       const notchAt = axis() === 'x' ? null : notchOf();
-      const vars = viewVars(edge, notchAt);
+      const vars = viewVars(edge, notchAt, notch);
       showReadout(edge, notchAt);
       for (const key of ['bottom', 'left', 'right', 'rail', 'backdrop'] as const) {
         const value = vars[key];

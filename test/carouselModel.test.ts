@@ -115,9 +115,16 @@ describe('which side the notch is on in landscape', () => {
     expect(notchSide(47, 47, undefined)).toBe('left');
   });
 
-  it('is nowhere with no insets: no notch, no margin', () => {
-    expect(notchSide(0, 0, 90)).toBeNull();
-    expect(notchSide(0, 0, 270)).toBeNull();
+  // Ben's phone, 2026-10-18: Chrome on iOS reports no insets at all, and the band sat on the notch.
+  it('is told by the rotation when the browser reports no insets, as Chrome on iOS does', () => {
+    expect(notchSide(0, 0, 90)).toBe('left');
+    expect(notchSide(0, 0, 270)).toBe('right');
+    expect(notchSide(0, 0, -90)).toBe('right');
+  });
+
+  it('is nowhere with no insets and no landscape rotation: a desktop window', () => {
+    expect(notchSide(0, 0, undefined)).toBeNull();
+    expect(notchSide(0, 0, 0)).toBeNull();
   });
 });
 

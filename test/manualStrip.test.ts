@@ -232,6 +232,22 @@ describe('the band, by orientation', () => {
     expect(dom.rootStyle.props['--strip-right']).toBe(`${bandRight}px`);
   });
 
+  // Ben's phone, 2026-10-18: Chrome on iOS reports no insets (its own margin keeps the page out of
+  // the notch), so the band follows the rotation alone and draws no margin or column of its own.
+  it('with no insets but a landscape rotation, as in Chrome on iOS, the band goes opposite the notch and no margin is drawn', () => {
+    dom.angle = 270;
+    const { manual } = mountStrip({ viewport: LANDSCAPE });
+    expect(manual.thumb.dataset.band).toBe('left');
+    expect(dom.rootStyle.props['--strip-left']).toBe(`${bandRight}px`);
+    expect(dom.rootStyle.props['--strip-right']).toBe('0px');
+    expect(dom.rootStyle.props['--rail-x']).toBeUndefined();
+    dom.angle = 90;
+    dom.rotate();
+    expect(manual.thumb.dataset.band).toBe('right');
+    expect(dom.rootStyle.props['--strip-left']).toBe('0px');
+    expect(dom.rootStyle.props['--rail-x']).toBeUndefined();
+  });
+
   // Ben's phone, 2026-10-18: turned end over end, iOS sent the turn before its rotation changed,
   // and the band stayed on the notch. The turn is read again once it has settled.
   it('reads a turn again once it has settled, when the rotation changes after the turn event', () => {
