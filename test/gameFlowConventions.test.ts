@@ -233,3 +233,17 @@ describe('tap the open manual to put it down, swipe to flip (1.6.2)', () => {
     expect(sheetTap).toMatch(/setOpen\(false, \{ byRoomTap: true \}\)/);
   });
 });
+
+// 1.9.7.1.1: Repack and Snap rotate are reached through the menu button in the upper-right row.
+describe('the menu button wiring', () => {
+  it('holds Repack and Snap rotate, and sits in the cluster', () => {
+    expect(main).toMatch(/menu\.add\(\s*createResetButton/);
+    expect(main).toMatch(/menu\.add\(snapRotate\.element\)/);
+    expect(main).toMatch(/cluster\.add\(menu\.element\)/);
+  });
+
+  it("closes the menu after Repack's confirming tap, and adds the gear after the menu", () => {
+    expect(main).toMatch(/items\.current\?\.repack\(\);\s+menu\.close\(\);/);
+    expect(main.indexOf('cluster.add(menu.element)')).toBeLessThan(main.indexOf('cluster.add(panel.tab)'));
+  });
+});

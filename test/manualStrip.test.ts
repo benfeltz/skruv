@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BOOKLET, BOOKLET_UI, CLUSTER, COLORS, GESTURE, INSET, RESET } from '../src/constants.js';
+import { BOOKLET, BOOKLET_UI, CLUSTER, COLORS, GESTURE, INSET, MENU } from '../src/constants.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
 import { FakeElement, installFakeDom } from './support/fakeDom.js';
 import type { FakeDom } from './support/fakeDom.js';
@@ -542,13 +542,13 @@ describe("the open manual page's room above the strip", () => {
     expect(room(stripShort.centreWidth)).toBeGreaterThanOrEqual(210);
   });
 
-  it("holds a portrait page's top below Repack and Snap rotate, the cluster's two buttons", () => {
+  it("holds a portrait page's top below the menu button, the cluster's one row", () => {
     const rules = css();
-    const below = CLUSTER.inset + 2 * RESET.height + CLUSTER.gap + page.gutter;
+    const below = CLUSTER.inset + MENU.size + page.gutter;
     expect(rules).toContain('@media (orientation: portrait) {');
     expect(rules).toContain(`--strip-top: ${below}px;`);
-    // ...which clears the cluster's bottom edge (Repack, a gap, Snap rotate) by the gutter.
-    expect(below - page.gutter).toBe(CLUSTER.inset + 2 * RESET.height + CLUSTER.gap);
+    // ...which clears the cluster's bottom edge (the menu button's row) by the gutter.
+    expect(below - page.gutter).toBe(CLUSTER.inset + MENU.size);
   });
 });
 
