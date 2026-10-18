@@ -232,6 +232,22 @@ describe('the band, by orientation', () => {
     expect(dom.rootStyle.props['--strip-right']).toBe(`${bandRight}px`);
   });
 
+  // Ben's phone, 2026-10-18: turned end over end, iOS sent the turn before its rotation changed,
+  // and the band stayed on the notch. The turn is read again once it has settled.
+  it('reads a turn again once it has settled, when the rotation changes after the turn event', () => {
+    dom.safe.left = 59;
+    dom.safe.right = 59;
+    dom.angle = 90;
+    const { manual } = mountStrip({ viewport: LANDSCAPE });
+    expect(manual.thumb.dataset.band).toBe('right');
+    // The event first, the rotation after it.
+    dom.rotate();
+    dom.angle = 270;
+    expect(manual.thumb.dataset.band).toBe('right');
+    vi.advanceTimersByTime(BOOKLET_UI.turnSettleMs);
+    expect(manual.thumb.dataset.band).toBe('left');
+  });
+
   it('turning back upright gives the whole width back: no backdrop, no notch column', () => {
     mountStrip({ viewport: LANDSCAPE });
     turn(LANDSCAPE, { left: 59, right: 0 });
