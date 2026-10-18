@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { bubbleOf, controlFor, pushLook, turnLook } from '../game/insetControls.js';
 import { createInsetModel } from '../game/insetModel.js';
-import { insetCameraPose, insetFrame, insideInset } from '../game/insetView.js';
+import { insetCameraPose, insetFrame, inWindow, insideInset, safeWithin } from '../game/insetView.js';
 import { createInsetOverlay } from '../ui/inset.js';
 import { createInsetControls } from '../ui/insetControls.js';
 import { createInset } from './inset.js';
@@ -23,8 +23,8 @@ export interface InsetPanelDeps {
  * what it frames, the view maths place the circle and aim its camera, the render pass draws
  * it and the overlay inks its ring and tail. This only composes them. The router's `hook`
  * feeds it each frame's candidates and its taps; `update()` runs after the router's update;
- * `render()` is the extra pass after the main render. The canvas fills the window, so its
- * client px are the circle's. Attached to the circle, as the manual's tool bubble is to its detail
+ * `render()` is the extra pass after the main render. The canvas no longer fills the window (the band takes an edge), but its
+ * client px are still the circle's; the safe insets that reach into it are what the circle keeps clear of. Attached to the circle, as the manual's tool bubble is to its detail
  * inset, sits the subject's control — the spinner for a turn (a tool's or a part circled by hand, the same small bubble), the push bubble for a dowel — driving the router's
  * actions (`connect`, once the router exists); while the circle is offered or dismissed there is none.
  */
@@ -46,16 +46,23 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
   let offered: InsetSubject | null = null;
   let engaged: readonly InsetSubject[] = [];
   let settled: (joint: number) => InsetSubject | null = () => null;
-  // The circle this frame, or null while nothing shows.
+  // The circle this frame in window px (the overlay, the controls and the taps live there), or null while nothing shows;
+  // `drawn` is the same circle in the canvas's own px, which the render pass draws in.
   let frame: InsetFrame | null = null;
+  let drawn: InsetFrame | null = null;
   // The canvas's box and the circle in it, read from layout only when the window has been resized
   // (a rotation included), never per frame: a read after last frame's attribute writes forces a layout flush.
   let box: { left: number; top: number; width: number; height: number } | null = null;
   let placed: InsetFrame | null = null;
+  let placement: InsetFrame | null = null;
   const resized = () => {
     box = null;
+    probe.invalidate();
   };
   window.addEventListener('resize', resized);
+  // A turn end over end keeps the canvas's size but moves the notch and the band: not every browser says so with a resize.
+  const orientation = typeof screen === 'undefined' ? undefined : screen.orientation;
+  orientation?.addEventListener('change', resized);
   // A press on the canvas owns the finger until it lifts: the controls go inert, so a part carried over one keeps its moves.
   const pressed = () => controls.setInert(true);
   const lifted = () => controls.setInert(false);
@@ -85,18 +92,21 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
       const { state, subject } = model;
       if (!subject || (state !== 'offered' && state !== 'active')) {
         frame = null;
+        drawn = null;
         driven = null;
         overlay.hide();
         controls.hide();
         return;
       }
-      if (!box || !placed) {
+      if (!box || !placed || !placement) {
         const { left, top, width, height } = domElement.getBoundingClientRect();
         box = { left, top, width, height };
-        placed = insetFrame({ width, height }, probe.read(width, height));
+        placed = insetFrame({ width, height }, safeWithin(box, { width: window.innerWidth, height: window.innerHeight }, probe.read()));
+        placement = inWindow(placed, box);
       }
       const rect = box;
-      frame = placed;
+      drawn = placed;
+      frame = placement;
       camera.getWorldDirection(forward);
       forward.y = 0;
       pass.aim(insetCameraPose(subject.centre, subject.axis, [forward.x, forward.y, forward.z]));
@@ -115,20 +125,22 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
     },
     /** The extra pass after the main render, only while the circle shows. */
     render(renderer: THREE.WebGLRenderer, scene: THREE.Scene) {
-      if (!frame) return;
-      pass.resize(frame, renderer.getPixelRatio());
-      pass.render(renderer, scene, frame);
+      if (!frame || !drawn) return;
+      pass.resize(drawn, renderer.getPixelRatio());
+      pass.render(renderer, scene, drawn);
     },
     /** Back to hidden, its memory cleared: a repack. */
     reset() {
       model.reset();
       frame = null;
+      drawn = null;
       driven = null;
       overlay.hide();
       controls.hide();
     },
     dispose() {
       window.removeEventListener('resize', resized);
+      orientation?.removeEventListener('change', resized);
       domElement.removeEventListener('pointerdown', pressed, { capture: true });
       window.removeEventListener('pointerup', lifted);
       window.removeEventListener('pointercancel', lifted);
@@ -143,24 +155,27 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
 export type InsetPanel = ReturnType<typeof createInsetPanel>;
 
 // The safe-area insets in CSS px, which only CSS can say: a hidden probe padded by env(), read
-// again whenever the viewport changes (a rotation moves the notch).
+// again whenever the window is resized or turned (a rotation moves the notch).
 function createSafeProbe(container: HTMLElement) {
   const element = document.createElement('div');
   element.setAttribute('aria-hidden', 'true');
-  element.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;width:0;height:0;padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 0';
+  element.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;width:0;height:0;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0';
   container.append(element);
-  const safe: SafeInsets = { top: 0, right: 0 };
-  let width = NaN;
-  let height = NaN;
+  const safe: SafeInsets = { top: 0, right: 0, bottom: 0 };
+  let stale = true;
   return {
     element,
-    read(viewWidth: number, viewHeight: number): SafeInsets {
-      if (viewWidth !== width || viewHeight !== height) {
-        width = viewWidth;
-        height = viewHeight;
+    /** The next read asks CSS again: the window turned or resized. */
+    invalidate() {
+      stale = true;
+    },
+    read(): SafeInsets {
+      if (stale) {
+        stale = false;
         const style = getComputedStyle(element);
         safe.top = parseFloat(style.paddingTop) || 0;
         safe.right = parseFloat(style.paddingRight) || 0;
+        safe.bottom = parseFloat(style.paddingBottom) || 0;
       }
       return safe;
     },

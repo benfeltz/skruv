@@ -1,9 +1,9 @@
 import { MOUSE, TOUCH } from 'three';
-import type { Camera } from 'three';
+import type { PerspectiveCamera } from 'three';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CAMERA, CAMERA_LIMITS, ROOM } from '../constants.js';
-import { clampCamera, clampTargetAlongView, panSpeedAt, pivotAlongView, seatOnFloor } from './cameraLimits.js';
+import { clampCamera, clampTargetAlongView, panSpeedAt, pivotAlongView, seatOnFloor, zoomOutLimit } from './cameraLimits.js';
 
 /** How far along `direction` (unit) from `origin` the first part is, or null for none. */
 export type PickDistance = (origin: Vec3, direction: Vec3) => number | null;
@@ -21,10 +21,13 @@ export type PickDistance = (origin: Vec3, direction: Vec3) => number | null;
  * screen. With `CAMERA.pivotOnParts` 0 (?tune) it is the floor pivot as before 1.8.3.2,
  * re-seated every update instead.
  *
+ * The zoom-out limit is landscape's, scaled by the aspect of a view taller than wide (cameraLimits.js
+ * `zoomOutLimit`): the camera follows the view's aspect, so a turn of the phone re-limits it.
+ *
  * `enable()`/`disable()` is the seam the gesture router drives to hand touches to part
  * manipulation — callers never reach into OrbitControls directly.
  */
-export function createCameraControls(camera: Camera, domElement: HTMLElement, { pickDistance }: { pickDistance?: PickDistance } = {}) {
+export function createCameraControls(camera: PerspectiveCamera, domElement: HTMLElement, { pickDistance }: { pickDistance?: PickDistance } = {}) {
   const controls = new OrbitControls(camera, domElement);
 
   controls.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN };
@@ -46,10 +49,20 @@ export function createCameraControls(camera: Camera, domElement: HTMLElement, { 
   controls.dampingFactor = CAMERA_LIMITS.dampingFactor;
 
   controls.minDistance = CAMERA_LIMITS.minDistance;
-  controls.maxDistance = CAMERA_LIMITS.maxDistance;
   controls.minPolarAngle = CAMERA_LIMITS.minPolarAngle;
   controls.maxPolarAngle = CAMERA_LIMITS.maxPolarAngle;
   controls.zoomToCursor = true;
+
+  // The limits in force: CAMERA_LIMITS with the zoom-out limit of the camera's aspect, rebuilt only when it changes.
+  let limits: typeof CAMERA_LIMITS = CAMERA_LIMITS;
+  let aspect = NaN;
+  function followAspect() {
+    if (camera.aspect === aspect) return;
+    aspect = camera.aspect;
+    limits = { ...CAMERA_LIMITS, maxDistance: zoomOutLimit(aspect, CAMERA_LIMITS) };
+    controls.maxDistance = limits.maxDistance;
+  }
+  followAspect();
 
   // Where OrbitControls has the camera, unclamped — its orbit and zoom kept whole. The
   // floor clamp only moves the camera as drawn, so orbiting under the floor slides along
@@ -80,7 +93,7 @@ export function createCameraControls(camera: Camera, domElement: HTMLElement, { 
     const target = controls.target.toArray();
     const direction = controls.target.clone().sub(free).normalize().toArray();
     const hit = pickDistance ? pickDistance(eye, direction) : null;
-    controls.target.set(...pivotAlongView(eye, target, hit, ROOM, CAMERA_LIMITS));
+    controls.target.set(...pivotAlongView(eye, target, hit, ROOM, limits));
   }
   controls.addEventListener('start', pickPivot);
 
@@ -92,7 +105,7 @@ export function createCameraControls(camera: Camera, domElement: HTMLElement, { 
     unconfine();
     // pivotOnParts 0 (the floor pivot as before): orbit and zoom about the floor spot in
     // view, re-seated every update. Read here, so a live ?tune flip lands at once.
-    if (!CAMERA.pivotOnParts) controls.target.set(...seatOnFloor(free.toArray(), controls.target.toArray(), CAMERA_LIMITS));
+    if (!CAMERA.pivotOnParts) controls.target.set(...seatOnFloor(free.toArray(), controls.target.toArray(), limits));
     const changed = orbitUpdate(deltaSeconds);
     confine();
     return changed;
@@ -104,6 +117,7 @@ export function createCameraControls(camera: Camera, domElement: HTMLElement, { 
   return {
     /** Call once per frame — applies damping. */
     update(deltaSeconds: number) {
+      followAspect();
       controls.panSpeed = panSpeedAt(free.distanceTo(controls.target), CAMERA_LIMITS);
       controls.update(deltaSeconds);
     },

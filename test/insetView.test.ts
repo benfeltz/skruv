@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { INSET } from '../src/constants.js';
+import { BOOKLET, BOOKLET_UI, INSET } from '../src/constants.js';
 import { bubbleOf, bubbleOverhang } from '../src/game/insetControls.js';
-import { insetCameraPose, insetFrame, insetLayout, insetOrtho, insideInset } from '../src/game/insetView.js';
+import { insetCameraPose, insetFrame, insetLayout, insetOrtho, inWindow, insideInset, safeWithin } from '../src/game/insetView.js';
 import type { Vec3 } from '../tools/validate/lib/geometry.js';
 
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -32,16 +32,23 @@ describe('insetFrame', () => {
   });
 
   it('keeps the portrait circle below the top safe inset', () => {
-    const { centre, radius } = insetFrame({ width: 390, height: 844 }, { top: 47, right: 0 });
+    const { centre, radius } = insetFrame({ width: 390, height: 844 }, { top: 47, right: 0, bottom: 0 });
     expect(centre[1] - radius).toBeCloseTo(47 + INSET.portrait.top);
   });
 
-  it('sits on the right under the cluster in landscape, clear of the safe insets', () => {
+  it('sits in the lower right in landscape, clear of the safe insets', () => {
     const viewport = { width: 844, height: 390 };
-    const { centre, radius } = insetFrame(viewport, { top: 0, right: 47 });
-    expect(centre[0] + radius + bubbleOverhang({ centre, radius })).toBeCloseTo(844 - 47 - INSET.landscape.right);
-    expect(centre[1] - radius).toBeCloseTo(INSET.landscape.top);
-    expect(centre[1] + radius).toBeLessThan(viewport.height);
+    const { centre, radius } = insetFrame(viewport, { top: 0, right: 0, bottom: 21 });
+    const hang = bubbleOverhang({ centre, radius });
+    expect(centre[0] + radius + hang).toBeCloseTo(844 - INSET.landscape.right);
+    expect(centre[1] + radius + hang).toBeCloseTo(390 - 21 - INSET.landscape.bottom);
+    expect(centre[1] - radius).toBeGreaterThan(0);
+  });
+
+  it('clears the catalog’s thumb at the top right', () => {
+    const [pageW, pageH] = BOOKLET.pageSize;
+    const { centre, radius } = insetFrame({ width: 701, height: 390 }, { top: 0, right: 0, bottom: 21 });
+    expect(centre[1] - radius).toBeGreaterThan(BOOKLET_UI.cornerInset + (BOOKLET_UI.thumbWidth * pageH) / pageW);
   });
 
   // The control's bubble hangs off the circle's lower right: it must stay wholly on screen, and in landscape inside
@@ -54,20 +61,51 @@ describe('insetFrame', () => {
     [844, 390],
     [1000, 800],
   ])('keeps the control’s bubble on screen and inside the old clearances at %i x %i', (width, height) => {
-    const safe = { top: 47, right: 20 };
+    const safe = { top: 47, right: 20, bottom: 21 };
     const viewport = { width, height };
     const frame = insetFrame(viewport, safe);
     const { centre, radius } = bubbleOf(frame);
     expect(centre[0] + radius).toBeLessThanOrEqual(width - safe.right + 1e-9);
     expect(centre[0] - radius).toBeGreaterThanOrEqual(0);
-    expect(centre[1] + radius).toBeLessThanOrEqual(height);
-    expect(frame.centre[1] - frame.radius).toBeCloseTo(safe.top + INSET[insetLayout(viewport)].top, 6);
-    if (insetLayout(viewport) === 'landscape') expect(centre[0] + radius).toBeCloseTo(width - safe.right - INSET.landscape.right, 6);
+    expect(centre[1] + radius).toBeLessThanOrEqual(height - safe.bottom + 1e-9);
+    if (insetLayout(viewport) === 'portrait') expect(frame.centre[1] - frame.radius).toBeCloseTo(safe.top + INSET.portrait.top, 6);
+    else {
+      expect(centre[0] + radius).toBeCloseTo(width - safe.right - INSET.landscape.right, 6);
+      expect(centre[1] + radius).toBeCloseTo(height - safe.bottom - INSET.landscape.bottom, 6);
+    }
   });
 
   it('takes its layout from the argument when given', () => {
     const forced = insetFrame({ width: 390, height: 844 }, undefined, 'landscape');
     expect(forced.centre[0]).toBeGreaterThan(195);
+  });
+});
+
+describe('safeWithin', () => {
+  it('gives a canvas at the screen’s edges the insets whole', () => {
+    const safe = { top: 47, right: 20, bottom: 34 };
+    expect(safeWithin({ left: 0, top: 0, width: 390, height: 844 }, { width: 390, height: 844 }, safe)).toEqual(safe);
+  });
+
+  it('leaves out the right inset the band stands in, in landscape', () => {
+    const box = { left: 47, top: 0, width: 701, height: 390 };
+    expect(safeWithin(box, { width: 844, height: 390 }, { top: 0, right: 47, bottom: 21 })).toEqual({ top: 0, right: 0, bottom: 21 });
+  });
+
+  it('leaves out the bottom inset the band stands in, in portrait', () => {
+    const box = { left: 0, top: 0, width: 390, height: 844 - 124 - 34 };
+    expect(safeWithin(box, { width: 390, height: 844 }, { top: 47, right: 0, bottom: 34 })).toEqual({ top: 47, right: 0, bottom: 0 });
+  });
+
+  it('floors at 0 when the margin is larger than the inset', () => {
+    const box = { left: 100, top: 100, width: 100, height: 100 };
+    expect(safeWithin(box, { width: 400, height: 400 }, { top: 10, right: 10, bottom: 10 })).toEqual({ top: 0, right: 0, bottom: 0 });
+  });
+});
+
+describe('inWindow', () => {
+  it('moves a canvas-px circle by where its canvas stands', () => {
+    expect(inWindow({ centre: [100, 50], radius: 30 }, { left: 47, top: 10 })).toEqual({ centre: [147, 60], radius: 30 });
   });
 });
 
