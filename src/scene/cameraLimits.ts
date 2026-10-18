@@ -24,6 +24,15 @@ export function startPosition(position: Vec3, target: Vec3, scale: number): Vec3
   return position.map((v, i) => target[i] + (v - target[i]) * scale) as Vec3;
 }
 
+/**
+ * How far the camera may zoom out for a view `aspect` wide per tall. The field of view is vertical, so a view
+ * taller than wide shows less width at the same distance: the limit grows by the aspect, and the width shown at it
+ * equals the height landscape shows at its own. The horizontal field of view is not fixed (Ben, 2026-10-18).
+ */
+export function zoomOutLimit(aspect: number, { maxDistance }: Pick<Limits, 'maxDistance'>) {
+  return aspect > 0 && Number.isFinite(aspect) ? maxDistance * Math.max(1, 1 / aspect) : maxDistance;
+}
+
 /** The orbit target, held over the floor and inside the walls. */
 export function clampTarget([x, y, z]: Vec3, room: Room, limits: Pick<Limits, 'targetMargin' | 'targetHeight'>): Vec3 {
   const reachX = room.width / 2 - limits.targetMargin;

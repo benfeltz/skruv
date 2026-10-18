@@ -4,7 +4,7 @@ import { CAMERA, CAMERA_LIMITS, ROOM } from '../src/constants.js';
 import { PART_TYPES } from '../src/game/item.js';
 import { createPackedWorldLayout } from '../src/game/boxLayout.js';
 import { LIVE_KNOBS } from '../src/game/tunables.js';
-import { clampCamera, clampTarget, clampTargetAlongView, panSpeedAt, pivotAlongView, seatOnFloor, startPosition } from '../src/scene/cameraLimits.js';
+import { clampCamera, clampTarget, clampTargetAlongView, panSpeedAt, pivotAlongView, seatOnFloor, startPosition, zoomOutLimit } from '../src/scene/cameraLimits.js';
 import type { Vec3 } from '../tools/validate/lib/geometry.js';
 
 const room = { width: 10, depth: 8, height: 3 };
@@ -18,6 +18,33 @@ describe('clampTarget', () => {
   it('holds the target inside the walls and between its heights', () => {
     expect(clampTarget([9, 5, -9], room, limits)).toEqual([4.5, 2, -3.5]);
     expect(clampTarget([-9, -1, 9], room, limits)).toEqual([-4.5, 0, 3.5]);
+  });
+});
+
+describe('zoomOutLimit (1.9.7.1.3 portrait zoom)', () => {
+  const halfTan = Math.tan((CAMERA.fov * Math.PI) / 360);
+
+  it('leaves landscape and the square at maxDistance', () => {
+    expect(zoomOutLimit(844 / 390, CAMERA_LIMITS)).toBe(CAMERA_LIMITS.maxDistance);
+    expect(zoomOutLimit(1, CAMERA_LIMITS)).toBe(CAMERA_LIMITS.maxDistance);
+  });
+
+  it('scales a taller view by its aspect', () => {
+    expect(zoomOutLimit(390 / 844, CAMERA_LIMITS)).toBeCloseTo((CAMERA_LIMITS.maxDistance * 844) / 390);
+  });
+
+  it.each([390 / 844, 320 / 568, 0.75])('shows at aspect %f the width landscape shows in height', (aspect) => {
+    expect(2 * zoomOutLimit(aspect, CAMERA_LIMITS) * halfTan * aspect).toBeCloseTo(2 * CAMERA_LIMITS.maxDistance * halfTan);
+  });
+
+  it('takes in the room’s width on a phone held upright', () => {
+    const aspect = 390 / 844;
+    expect(2 * zoomOutLimit(aspect, CAMERA_LIMITS) * halfTan * aspect).toBeGreaterThan(ROOM.width);
+  });
+
+  it('falls back to maxDistance for an aspect it cannot use', () => {
+    expect(zoomOutLimit(0, CAMERA_LIMITS)).toBe(CAMERA_LIMITS.maxDistance);
+    expect(zoomOutLimit(NaN, CAMERA_LIMITS)).toBe(CAMERA_LIMITS.maxDistance);
   });
 });
 

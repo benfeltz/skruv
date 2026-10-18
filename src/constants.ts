@@ -605,7 +605,8 @@ export const CAMERA_LIMITS = {
   floorClearance: 0.05,
   // Close enough that a dowel and the hole it goes in fill much of a phone screen.
   minDistance: 0.15,
-  // Far enough to take in the whole room from over the walls.
+  // Far enough to take in the whole room from over the walls. Landscape's: a taller-than-wide view zooms out further
+  // by its aspect (cameraLimits.ts `zoomOutLimit`).
   maxDistance: 8,
   // Panning slows with zoom; closer than panReference (m) it is sped back up, by at most
   // maxPanBoost, so moving around a close-up doesn't crawl.
