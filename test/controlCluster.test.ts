@@ -40,15 +40,15 @@ describe('the control cluster', () => {
     expect(css).toContain(`gap: ${CLUSTER.gap}px;`);
   });
 
-  it("goes to the side without the manual's band in landscape, a column just inside the room's view", () => {
+  // Ben, 2026-10-18: the band always stands on the right in landscape, so the cluster stays upper left,
+  // a column just inside the room's view (past the safe-area margin: in Safari the Dynamic Island
+  // covered the menu in the notch's margin). With no inset reported (Chrome on iOS), the page's edge.
+  it('stays on the left in landscape, a column just inside the room\'s view', () => {
     createControlCluster();
     const css = rules();
-    // Just inside the room's view, past the notch's margin and never in it (Ben's phone, 2026-10-18:
-    // in Safari the Dynamic Island covered the menu in the margin). With no inset reported (Chrome on
-    // iOS), CLUSTER.inset from the page's edge. The band on the right keeps it upper left.
     expect(css).toContain(`html[data-strip='right'] .control-cluster {\n      flex-direction: column;`);
-    expect(css).toContain(`html[data-strip='left'] .control-cluster {\n      left: auto;\n      right: calc(${CLUSTER.inset}px + env(safe-area-inset-right));`);
+    expect(css).not.toContain("data-strip='left'");
     expect(css).not.toContain('--rail-x');
-    expect(css.match(/flex-direction: column;/g)).toHaveLength(2);
+    expect(css.match(/flex-direction: column;/g)).toHaveLength(1);
   });
 });

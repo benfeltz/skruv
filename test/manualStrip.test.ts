@@ -184,115 +184,59 @@ describe('the band, by orientation', () => {
     expect(dom.rootStyle.dataset.strip).toBeUndefined();
   });
 
-  it('puts the band on the right with no notch: flush, the view inset by exactly the band, the backdrop black, no notch column', () => {
+  // Ben, 2026-10-18: which side the notch is on cannot be told reliably (Safari reports the same
+  // inset on both sides, Chrome on iOS none), so in landscape the band always stands on the right and
+  // the menu and the lift line always on the left. Both safe-area margins are kept, drawn black.
+  it('stands on the right in landscape: the view inset by the band and the right margin, and by the left margin, the backdrop black', () => {
     const { manual } = mountStrip({ viewport: LANDSCAPE });
     expect(dom.rootStyle.props).toEqual({
       '--strip-bottom': '0px',
-      '--strip-left': '0px',
-      '--strip-right': `${bandRight}px`,
+      '--strip-left': 'env(safe-area-inset-left)',
+      '--strip-right': `calc(${bandRight}px + env(safe-area-inset-right))`,
       '--backdrop': '#000',
     });
     expect(manual.thumb.dataset.band).toBe('right');
     expect(dom.rootStyle.dataset.strip).toBe('right');
   });
 
-  it("puts the band on the side without the notch, flush: a notch on the left means the band on the right, the left margin the notch's real inset and its middle named", () => {
-    dom.safe.left = 59;
-    const { manual } = mountStrip({ viewport: LANDSCAPE });
-    expect(manual.thumb.dataset.band).toBe('right');
-    expect(dom.rootStyle.props['--strip-left']).toBe('env(safe-area-inset-left)');
-    expect(dom.rootStyle.props['--strip-right']).toBe(`${bandRight}px`);
-    expect(dom.rootStyle.props['--rail-x']).toBe('calc(env(safe-area-inset-left) / 2)');
-    expect(dom.rootStyle.props['--backdrop']).toBe('#000');
-  });
-
-  it("a notch on the right means the band on the left, flush, and the right margin the notch's real inset", () => {
-    const { manual } = mountStrip({ viewport: LANDSCAPE });
-    turn(LANDSCAPE, { left: 0, right: 59 });
-    expect(manual.thumb.dataset.band).toBe('left');
-    expect(dom.rootStyle.dataset.strip).toBe('left');
-    expect(dom.rootStyle.props['--strip-left']).toBe(`${bandRight}px`);
-    expect(dom.rootStyle.props['--strip-right']).toBe('env(safe-area-inset-right)');
-    expect(dom.rootStyle.props['--rail-x']).toBe('calc(100vw - env(safe-area-inset-right) / 2)');
-  });
-
-  it('with the same inset on both sides, as phones report in landscape, the rotation says where the notch is: the band flush on the other side, no margin shown there', () => {
-    dom.safe.left = 47;
-    dom.safe.right = 47;
-    dom.angle = 270;
-    const { manual } = mountStrip({ viewport: LANDSCAPE });
-    // Notch on the right: the band on the left with no inset padding, the black margin on the right only.
-    expect(manual.thumb.dataset.band).toBe('left');
-    expect(dom.rootStyle.props['--strip-left']).toBe(`${bandRight}px`);
-    expect(dom.rootStyle.props['--strip-right']).toBe('env(safe-area-inset-right)');
-    dom.angle = 90;
-    dom.rotate();
-    expect(manual.thumb.dataset.band).toBe('right');
-    expect(dom.rootStyle.props['--strip-left']).toBe('env(safe-area-inset-left)');
-    expect(dom.rootStyle.props['--strip-right']).toBe(`${bandRight}px`);
-  });
-
-  // Ben's phone, 2026-10-18: Chrome on iOS reports no insets (its own margin keeps the page out of
-  // the notch), so the band follows the rotation alone and draws no margin or column of its own.
-  it('with no insets but a landscape rotation, as in Chrome on iOS, the band goes opposite the notch and no margin is drawn', () => {
-    dom.angle = 270;
-    const { manual } = mountStrip({ viewport: LANDSCAPE });
-    expect(manual.thumb.dataset.band).toBe('left');
-    expect(dom.rootStyle.props['--strip-left']).toBe(`${bandRight}px`);
-    expect(dom.rootStyle.props['--strip-right']).toBe('0px');
-    expect(dom.rootStyle.props['--rail-x']).toBeUndefined();
-    dom.angle = 90;
-    dom.rotate();
-    expect(manual.thumb.dataset.band).toBe('right');
-    expect(dom.rootStyle.props['--strip-left']).toBe('0px');
-    expect(dom.rootStyle.props['--rail-x']).toBeUndefined();
-  });
-
-  // Ben's phone, 2026-10-18: turned end over end, iOS sent the turn before its rotation changed,
-  // and the band stayed on the notch. The turn is read again once it has settled.
-  it('reads a turn again once it has settled, when the rotation changes after the turn event', () => {
+  it('stays on the right whichever way the phone is turned, with insets on both sides or none', () => {
     dom.safe.left = 59;
     dom.safe.right = 59;
-    dom.angle = 90;
+    dom.angle = 270;
     const { manual } = mountStrip({ viewport: LANDSCAPE });
     expect(manual.thumb.dataset.band).toBe('right');
-    // The event first, the rotation after it.
+    dom.angle = 90;
     dom.rotate();
-    dom.angle = 270;
+    turn(LANDSCAPE, { left: 0, right: 0 });
     expect(manual.thumb.dataset.band).toBe('right');
-    vi.advanceTimersByTime(BOOKLET_UI.turnSettleMs);
-    expect(manual.thumb.dataset.band).toBe('left');
+    expect(dom.rootStyle.dataset.strip).toBe('right');
   });
 
-  it('turning back upright gives the whole width back: no backdrop, no notch column', () => {
+  it('turning back upright gives the whole width back: no backdrop', () => {
     mountStrip({ viewport: LANDSCAPE });
-    turn(LANDSCAPE, { left: 59, right: 0 });
+    turn(LANDSCAPE, { left: 59, right: 59 });
     turn(PORTRAIT, { left: 0, right: 0 });
     expect(dom.rootStyle.props['--backdrop']).toBeUndefined();
-    expect(dom.rootStyle.props['--rail-x']).toBeUndefined();
     expect(dom.rootStyle.props['--strip-left']).toBe('0px');
     expect(dom.rootStyle.dataset.strip).toBe('bottom');
   });
 
-  it('is edge to edge: the whole bottom upright, the whole height of the side without the notch in landscape, each from the page ratio', () => {
+  it('is edge to edge: the whole bottom upright, the whole height of the right edge in landscape inside its safe-area margin, each from the page ratio', () => {
     mountStrip();
     const css = rules();
-    const portrait = css.slice(css.indexOf(".booklet-strip[data-band='bottom'] {"), css.indexOf('/* Down an edge'));
-    const right = css.slice(css.indexOf(".booklet-strip[data-band='right'] {\n"), css.indexOf("\n    .booklet-strip[data-band='left'] {\n"));
-    const left = css.slice(css.indexOf("\n    .booklet-strip[data-band='left'] {\n"), css.indexOf('/* Where the pages run'));
+    const portrait = css.slice(css.indexOf(".booklet-strip[data-band='bottom'] {"), css.indexOf('/* Down the right edge'));
+    const right = css.slice(css.indexOf(".booklet-strip[data-band='right'] {\n"), css.indexOf('/* Where the pages run'));
     expect(pageHeight).toBe(100);
     expect(portrait).toContain('left: 0;');
     expect(portrait).toContain('right: 0;');
     expect(portrait).toContain('bottom: 0;');
     expect(portrait).toContain(`height: calc(${pageHeight + 2 * page.gutter}px + env(safe-area-inset-bottom));`);
-    expect(css).toContain(".booklet-strip[data-band='right'], .booklet-strip[data-band='left'] {\n      top: 0;\n      bottom: 0;");
-    expect(right).toContain('right: 0;');
-    // Flush against its edge: no safe-area padding on that side.
+    expect(right).toContain('top: 0;');
+    expect(right).toContain('bottom: 0;');
+    expect(right).toContain('right: env(safe-area-inset-right);');
     expect(right).toContain(`width: ${bandRight}px;`);
     expect(right).toContain('padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;');
-    expect(left).toContain('left: 0;');
-    expect(left).toContain(`width: ${bandRight}px;`);
-    expect(left).toContain('padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;');
+    expect(css).not.toContain("data-band='left'");
   });
 
   it('is paper with an ink rule on its view side, its slots cut at its edges, and nothing softer', () => {
@@ -303,7 +247,6 @@ describe('the band, by orientation', () => {
     expect(band).toContain(`background: ${hex(COLORS.bookletPaper)};`);
     expect(css).toContain(`box-shadow: inset 0 ${strip.rule}px 0 ${hex(COLORS.bookletInk)};`);
     expect(css).toContain(`box-shadow: inset ${strip.rule}px 0 0 ${hex(COLORS.bookletInk)};`);
-    expect(css).toContain(`box-shadow: inset -${strip.rule}px 0 0 ${hex(COLORS.bookletInk)};`);
     expect(band).not.toContain('border-radius');
     expect(strip.rule).toBe(INSET.ring.width);
   });
@@ -312,8 +255,8 @@ describe('the band, by orientation', () => {
     mountStrip();
     const css = rules();
     const beside = bandRight + page.gutter;
-    expect(css).toContain(`html[data-strip='right'] .booklet-thumb[data-corner='topLeft'] {\n      left: auto;\n      right: ${beside}px;`);
-    expect(css).toContain(`html[data-strip='left'] .booklet-thumb[data-corner='topLeft'] {\n      left: ${beside}px;\n      right: auto;`);
+    expect(css).toContain(`html[data-strip='right'] .booklet-thumb[data-corner='topLeft'] {\n      left: auto;\n      right: calc(${beside}px + env(safe-area-inset-right));`);
+    expect(css).not.toContain("html[data-strip='left']");
     // Ben, 2026-10-18: the upper right from the first load on (the menu and the lift line have the left,
     // for the left thumb), so nothing swaps sides when a model is picked.
     expect(css).toContain(`.booklet-thumb[data-corner='topLeft'] {\n      top: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-top));\n      bottom: auto;\n      left: auto;\n      right: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-right));`);

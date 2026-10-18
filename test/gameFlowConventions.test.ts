@@ -254,7 +254,7 @@ describe("the manual's band shrinks the room's view (1.9.7.1.2)", () => {
   const cluster = read('src/ui/controlCluster.ts');
 
   it("names the root variables once, and #app, the cluster and the lift line read exactly those", () => {
-    expect(booklet).toContain("const STRIP_VARS = { bottom: '--strip-bottom', left: '--strip-left', right: '--strip-right', rail: '--rail-x', backdrop: '--backdrop' } as const;");
+    expect(booklet).toContain("const STRIP_VARS = { bottom: '--strip-bottom', left: '--strip-left', right: '--strip-right', backdrop: '--backdrop' } as const;");
     const html = read('index.html');
     expect(html).toContain('inset: 0 var(--strip-right, 0px) var(--strip-bottom, 0px) var(--strip-left, 0px);');
     expect(html).toContain('background: var(--backdrop, #1b1d22);');
@@ -262,9 +262,9 @@ describe("the manual's band shrinks the room's view (1.9.7.1.2)", () => {
     // 2026-10-18: the Dynamic Island covered it there); the lift line, hung under the menu, follows.
     expect(cluster).toContain('env(safe-area-inset-left)');
     expect(cluster).not.toContain('--rail-x');
-    expect(read('src/ui/liftLine.ts')).toContain('var(--rail-x, clamp(');
-    // The cluster sits upper left, so the drop opens rightward; beside a left band it is on the right and opens leftward.
-    expect(read('src/ui/menuButton.ts')).toContain("html[data-strip='left'] .menu-drop");
+    expect(read('src/ui/liftLine.ts')).not.toContain('--rail-x');
+    // The cluster is always upper left, so the drop always opens rightward, into the room.
+    expect(read('src/ui/menuButton.ts')).not.toContain('data-strip');
   });
 
   it('has no arrow buttons on the strip: it is dragged, tapped and keyed', () => {

@@ -14,21 +14,20 @@ const gap = CLUSTER.gap;
 const band = 124;
 const thumb = { width: 72, height: 100 };
 
-/** A screen's controls as laid out for `viewport`, the band on `edge`, the notch's black column `notch` px wide on `notchAt`. */
-function screen(width: number, height: number, edge: 'bottom' | 'left' | 'right', notch = 0) {
+/** A screen's controls as laid out for a `width` x `height` viewport: the band along the bottom upright, else down the right edge, with a safe-area margin `inset` px on each side (Safari's, both sides; Chrome on iOS reports none). */
+function screen(width: number, height: number, inset = 0) {
   const menu = MENU.size;
-  if (edge === 'bottom') {
+  if (height >= width) {
     // Portrait: the menu upper left (the lift line under it, for the left thumb), the catalog upper right.
     const cluster = rect(CLUSTER.inset, CLUSTER.inset, menu, menu);
     return { viewport: { width, height }, cluster, strip: rect(0, height - band, width, band), catalog: rect(width - CLUSTER.inset - thumb.width, CLUSTER.inset, thumb.width, thumb.height) };
   }
-  // Landscape: the band down the side without the notch, the cluster (menu over gear) in the other side's column.
-  const column = Math.max(notch, CLUSTER.inset * 2 + menu);
-  const clusterLeft = edge === 'right' ? column / 2 - menu / 2 : width - column / 2 - menu / 2;
-  const cluster = rect(clusterLeft, CLUSTER.inset, menu, 2 * menu + CLUSTER.gap);
-  const strip = edge === 'right' ? rect(width - band, 0, band, height) : rect(0, 0, band, height);
-  const catalogLeft = edge === 'right' ? width - band - gap - thumb.width : band + gap;
-  return { viewport: { width, height }, cluster, strip, catalog: rect(catalogLeft, CLUSTER.inset, thumb.width, thumb.height) };
+  // Landscape (Ben, 2026-10-18): the band always down the right, inside the right margin; the cluster
+  // (menu over gear) always on the left, just inside the left margin; the catalog beside the band.
+  const cluster = rect(inset + CLUSTER.inset, CLUSTER.inset, menu, 2 * menu + CLUSTER.gap);
+  const strip = rect(width - inset - band, 0, band, height);
+  const catalog = rect(width - inset - band - gap - thumb.width, CLUSTER.inset, thumb.width, thumb.height);
+  return { viewport: { width, height }, cluster, strip, catalog };
 }
 
 /** The line's box widened by the knob, which overhangs both ends. */
@@ -36,10 +35,9 @@ const withKnob = (line: Rect): Rect => ({ ...line, top: line.top - knobRadius, b
 
 describe('the lift line', () => {
   const cases = [
-    ['portrait', screen(390, 760, 'bottom')],
-    ['landscape, notch at the left', screen(844, 390, 'right', 59)],
-    ['landscape, notch at the right', screen(844, 390, 'left', 59)],
-    ['landscape, no notch', screen(844, 390, 'right')],
+    ['portrait', screen(390, 760)],
+    ['landscape, a safe-area margin each side (Safari)', screen(932, 376, 59)],
+    ['landscape, no margins reported (Chrome on iOS, a desktop window)', screen(814, 374)],
   ] as const;
 
   for (const [name, { viewport, cluster, strip, catalog }] of cases) {
@@ -61,7 +59,7 @@ describe('the lift line', () => {
   }
 
   it('portrait: ends above the manual\'s band, on the left for the left thumb', () => {
-    const { viewport, cluster, strip } = screen(390, 760, 'bottom');
+    const { viewport, cluster, strip } = screen(390, 760);
     const line = liftLineBox({ viewport, cluster, strip, hitWidth, knobRadius, gap })!;
     expect(line.bottom + knobRadius).toBeLessThanOrEqual(strip.top - gap);
     expect(line.right).toBeLessThan(viewport.width / 2);

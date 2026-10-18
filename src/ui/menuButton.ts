@@ -51,12 +51,7 @@ function injectStyle() {
       border-radius: ${MENU.drop.radius}px;
       background: ${css(COLORS.uiSurface)}e6;
     }
-    /* The cluster is on the screen's left (src/ui/controlCluster.ts), so the drop opens rightward into
-       the room; with the band down the left edge the cluster is on the right, and it opens leftward. */
-    html[data-strip='left'] .menu-drop {
-      left: auto;
-      right: 0;
-    }
+    /* The cluster is always on the screen's left (src/ui/controlCluster.ts): the drop opens rightward, into the room. */
     .menu-drop[hidden] {
       display: none;
     }

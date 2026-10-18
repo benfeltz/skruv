@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, BOOKLET_UI } from '../src/constants.js';
-import { centreSlot, clampTravel, pitch, restShift, slotCount, snapSteps, notchSide, tapOn, visibleCount, windowOf } from '../src/game/carouselModel.js';
+import { centreSlot, clampTravel, pitch, restShift, slotCount, snapSteps, tapOn, visibleCount, windowOf } from '../src/game/carouselModel.js';
 
 const { page, gap, reach } = BOOKLET_UI.strip;
 const { gutter } = BOOKLET_UI.page;
@@ -97,34 +97,6 @@ describe('how many pages a release moves', () => {
   it('counts half a pitch as a page, either way', () => {
     expect(snapSteps(-step / 2, step)).toBe(1);
     expect(snapSteps(step / 2, step)).toBe(-1);
-  });
-});
-
-describe('which side the notch is on in landscape', () => {
-  it('is the side with the larger safe-area inset', () => {
-    expect(notchSide(59, 0, 270)).toBe('left');
-    expect(notchSide(0, 59, 90)).toBe('right');
-    expect(notchSide(34, 47, 90)).toBe('right');
-    expect(notchSide(47, 34, 270)).toBe('left');
-  });
-
-  it('is told by the rotation when the phone reports the same inset on both sides', () => {
-    expect(notchSide(47, 47, 90)).toBe('left');
-    expect(notchSide(47, 47, 270)).toBe('right');
-    expect(notchSide(47, 47, -90)).toBe('right');
-    expect(notchSide(47, 47, undefined)).toBe('left');
-  });
-
-  // Ben's phone, 2026-10-18: Chrome on iOS reports no insets at all, and the band sat on the notch.
-  it('is told by the rotation when the browser reports no insets, as Chrome on iOS does', () => {
-    expect(notchSide(0, 0, 90)).toBe('left');
-    expect(notchSide(0, 0, 270)).toBe('right');
-    expect(notchSide(0, 0, -90)).toBe('right');
-  });
-
-  it('is nowhere with no insets and no landscape rotation: a desktop window', () => {
-    expect(notchSide(0, 0, undefined)).toBeNull();
-    expect(notchSide(0, 0, 0)).toBeNull();
   });
 });
 

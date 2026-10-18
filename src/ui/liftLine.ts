@@ -123,8 +123,8 @@ export function createLiftLine({ onPress, onMove, onRelease }: LiftLineHandlers)
       style.height = `${box.bottom - box.top}px`;
       return;
     }
-    // In the notch's margin when the manual's band has made one (--rail-x, src/ui/booklet.ts), else where LIFT_LINE puts it.
-    style.left = `var(--rail-x, clamp(calc(env(safe-area-inset-left) + ${half}px), ${x * 100}vw, calc(100vw - env(safe-area-inset-right) - ${half}px)))`;
+    // Where LIFT_LINE puts it, its touch band inside the safe area at either edge.
+    style.left = `clamp(calc(env(safe-area-inset-left) + ${half}px), ${x * 100}vw, calc(100vw - env(safe-area-inset-right) - ${half}px))`;
     style.top = `max(${top * 100}vh, calc(env(safe-area-inset-top) + ${knobRadius}px))`;
     style.height = `${(bottom - top) * 100}vh`;
   }

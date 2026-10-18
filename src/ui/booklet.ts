@@ -1,6 +1,6 @@
 import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, MENU, RENDER } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
-import { centreSlot, clampTravel, pitch, restShift, slotCount, snapSteps, notchSide, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
+import { centreSlot, clampTravel, pitch, restShift, slotCount, snapSteps, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
 import { peekNext } from '../game/peekGesture.js';
 import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 
@@ -33,36 +33,28 @@ const [pageW, pageH] = BOOKLET.pageSize;
 const stripPageH = Math.round((BOOKLET_UI.strip.page * pageH) / pageW);
 const bandBottom = stripPageH + 2 * BOOKLET_UI.page.gutter;
 const bandRight = BOOKLET_UI.strip.page + 2 * BOOKLET_UI.page.gutter;
-// The root variables the mounted band sets (index.html's #app, the manual's open page, the control
-// cluster and the lift line read them). `bottom`, `left` and `right` are how far the room's view
-// is inset from that edge: the band's thickness (no safe-area padding: it sits flush against its
-// edge) on the edge it stands on, the notch's real safe-area inset (drawn black) on the notch's
-// edge, and 0 elsewhere. `rail` is the x of the notch column's middle, where the lift line and the
-// menu sit, set only when there is a notch. `backdrop` is what shows where the view is not
-// (black beside the notch).
-const STRIP_VARS = { bottom: '--strip-bottom', left: '--strip-left', right: '--strip-right', rail: '--rail-x', backdrop: '--backdrop' } as const;
+// The root variables the mounted band sets (index.html's #app and the manual's open page read them).
+// `bottom`, `left` and `right` are how far the room's view is inset from that edge; `backdrop` is
+// what shows where the view is not (black in landscape, beside the notch).
+const STRIP_VARS = { bottom: '--strip-bottom', left: '--strip-left', right: '--strip-right', backdrop: '--backdrop' } as const;
 // Which edge the band stands on, set on the root as data-strip for the CSS that moves with it.
-type Band = 'bottom' | 'left' | 'right';
+type Band = 'bottom' | 'right';
 type Axis = 'x' | 'y';
 const env = (side: 'left' | 'right' | 'bottom') => `env(safe-area-inset-${side})`;
 /**
- * What the room's view is inset by, and where the notch column's middle is (null: none), for a band on
- * `band` with the notch on `notch` (null: none) and the safe-area `insets` the browser reports. The
- * notch's side places the band; a margin and its column exist only where an inset does (Chrome on iOS
- * reports none: it keeps the page out of the notch itself, and its own margin is black).
+ * What the room's view is inset by for a band on `band`. Upright, the band's height above the home
+ * indicator's inset. In landscape the band always stands on the right and the menu and the lift line
+ * always on the left (Ben, 2026-10-18): which side the notch is on cannot be told reliably (Safari
+ * reports the same inset both sides, Chrome on iOS none), so both safe-area margins are kept, drawn
+ * black — the band inside the right one, the room's view inside the left. Where a browser reports no
+ * inset (Chrome keeps the page out of the notch itself) the margins are 0 and the band is flush.
  */
-function viewVars(band: Band, notch: 'left' | 'right' | null, insets: { left: number; right: number }) {
-  if (band === 'bottom') return { bottom: `calc(${bandBottom}px + ${env('bottom')})`, left: '0px', right: '0px', rail: null, backdrop: null };
-  const black = '#000';
-  if (band === 'right') {
-    const margin = notch === 'left' && insets.left > 0;
-    return { bottom: '0px', left: margin ? env('left') : '0px', right: `${bandRight}px`, rail: margin ? `calc(${env('left')} / 2)` : null, backdrop: black };
-  }
-  const margin = notch === 'right' && insets.right > 0;
-  return { bottom: '0px', left: `${bandRight}px`, right: margin ? env('right') : '0px', rail: margin ? `calc(100vw - ${env('right')} / 2)` : null, backdrop: black };
+function viewVars(band: Band) {
+  if (band === 'bottom') return { bottom: `calc(${bandBottom}px + ${env('bottom')})`, left: '0px', right: '0px', backdrop: null };
+  return { bottom: '0px', left: env('left'), right: `calc(${bandRight}px + ${env('right')})`, backdrop: '#000' };
 }
 // In landscape the catalog's docked thumb sits at the top of the screen, in the room just beside the
-// band: this far (px) from the band's edge.
+// band: this far (px) from the band's edge, past the right safe-area margin.
 const thumbBeside = bandRight + BOOKLET_UI.page.gutter;
 
 function injectStyle() {
@@ -248,38 +240,15 @@ function injectStyle() {
       padding-bottom: env(safe-area-inset-bottom);
       box-shadow: inset 0 ${strip.rule}px 0 ${css(COLORS.bookletInk)};
     }
-    /* Down an edge (landscape): the side without the notch, flush against that screen edge. */
-    .booklet-strip[data-band='right'], .booklet-strip[data-band='left'] {
+    /* Down the right edge (landscape), whichever side the notch is on: inside the right safe-area
+       margin (drawn black, the notch's when it is on the right), the whole height. */
+    .booklet-strip[data-band='right'] {
       top: 0;
       bottom: 0;
-    }
-    .booklet-strip[data-band='right'] {
-      right: 0;
+      right: env(safe-area-inset-right);
       width: ${bandRight}px;
       padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
       box-shadow: inset ${strip.rule}px 0 0 ${css(COLORS.bookletInk)};
-    }
-    .booklet-strip[data-band='left'] {
-      left: 0;
-      width: ${bandRight}px;
-      padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
-      box-shadow: inset -${strip.rule}px 0 0 ${css(COLORS.bookletInk)};
-    }
-    /* ?layout's readout of what the phone reports (createStrip), over everything, taking no touch. */
-    .booklet-readout {
-      position: fixed;
-      z-index: 20;
-      left: 50%;
-      top: env(safe-area-inset-top);
-      transform: translateX(-50%);
-      max-width: 90vw;
-      pointer-events: none;
-      padding: ${BOOKLET_UI.notice.padding}px;
-      border-radius: ${BOOKLET_UI.notice.radius}px;
-      background: ${css(COLORS.uiSurface)};
-      color: ${css(COLORS.uiText)};
-      font: 600 ${BOOKLET_UI.notice.size}px/${BOOKLET_UI.notice.lineHeight} system-ui, -apple-system, sans-serif;
-      text-align: center;
     }
     /* Where the pages run, and are cut. */
     .booklet-lane {
@@ -295,11 +264,7 @@ function injectStyle() {
        in the room beside the band with a gutter between (never on it or in its column). */
     html[data-strip='right'] .booklet-thumb[data-corner='topLeft'] {
       left: auto;
-      right: ${thumbBeside}px;
-    }
-    html[data-strip='left'] .booklet-thumb[data-corner='topLeft'] {
-      left: ${thumbBeside}px;
-      right: auto;
+      right: calc(${thumbBeside}px + env(safe-area-inset-right));
     }
     /* The pages in a row (a column in landscape), centred in the band and moved as one by an
        inline transform: a drag follows the pointer (data-dragging, no transition) and a snap
@@ -779,19 +744,6 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     settle();
   };
   window.addEventListener('resize', onResize);
-  // Turning a landscape phone end over end swaps the side the notch is on without changing the
-  // viewport's size, and iOS Safari does not reliably send `resize` for it. Both turn events read
-  // the notch again, at once and once more when the turn has settled: iOS sends them before its
-  // own `window.orientation` changes (Ben's phone, 2026-10-18: the band stayed on the notch).
-  const orientation = typeof screen !== 'undefined' ? screen.orientation : undefined;
-  let turnTimer: ReturnType<typeof setTimeout> | null = null;
-  const onTurn = () => {
-    onResize();
-    clearTimeout(turnTimer ?? undefined);
-    turnTimer = setTimeout(onResize, BOOKLET_UI.turnSettleMs);
-  };
-  orientation?.addEventListener('change', onTurn);
-  window.addEventListener('orientationchange', onTurn);
 
   const self: LiveSheet = { isOpen: () => open, thumb, blocking, strip: stripped, close: () => setOpen(false, { byRoomTap: true }) };
   sheets.add(self);
@@ -801,9 +753,6 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     clearTimeout(lingering ?? undefined);
     window.removeEventListener('keydown', onKey);
     window.removeEventListener('resize', onResize);
-    orientation?.removeEventListener('change', onTurn);
-    window.removeEventListener('orientationchange', onTurn);
-    clearTimeout(turnTimer ?? undefined);
     clearTimeout(peekTimer ?? undefined);
     carousel?.dispose();
     sheets.delete(self);
@@ -872,21 +821,6 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
   root.append(lane);
   const rootElement = document.documentElement;
 
-  // The safe-area insets in CSS px, which only CSS can say: a hidden probe padded by env(), read
-  // again at each paint (a rotation moves the notch, and paints). Without a style engine, no notch.
-  const probe = document.createElement('div');
-  probe.setAttribute('aria-hidden', 'true');
-  probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;width:0;height:0;padding:0 env(safe-area-inset-right) 0 env(safe-area-inset-left)';
-  document.body.append(probe);
-  const notch = { left: 0, right: 0 };
-  function readNotch() {
-    if (typeof getComputedStyle !== 'function') return notch;
-    const style = getComputedStyle(probe);
-    notch.left = parseFloat(style.paddingLeft) || 0;
-    notch.right = parseFloat(style.paddingRight) || 0;
-    return notch;
-  }
-
   // A slot shows a page `page` CSS px wide: its canvas is that at the device's pixel ratio (as
   // the room's renderer is capped), not the page's full resolution.
   const ratio = Math.min(window.devicePixelRatio || 1, RENDER.maxPixelRatio);
@@ -900,36 +834,8 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
   const sizes = () => ({ slot: axis() === 'x' ? strip.page : stripPageH, gap: strip.gap });
   // Down an edge the pages run below the catalog's thumb, which sits at the top of the band.
   const extent = () => (axis() === 'x' ? window.innerWidth : window.innerHeight);
-  // The screen's rotation in degrees. iOS Safari's own `window.orientation` (90 turned
-  // counter-clockwise, the notch at the left; -90 the other way) first: it is what iOS keeps
-  // right, where `screen.orientation.angle` is newer there. Elsewhere the standard angle.
-  const rotation = (): number | undefined => {
-    if (typeof window.orientation === 'number') return window.orientation;
-    return typeof screen !== 'undefined' && screen.orientation ? screen.orientation.angle : undefined;
-  };
-  /** Which side the notch is on, from the insets and the screen's rotation, or null. */
-  const notchOf = () => {
-    const { left, right } = readNotch();
-    return notchSide(left, right, rotation());
-  };
-  // `?layout` on the URL shows what the phone reports, for checking the notch on a device: the
-  // insets, both rotation readings, the axis, the notch's side and the band's edge.
-  const readout = typeof location !== 'undefined' && new URLSearchParams(location.search).has('layout') ? document.createElement('div') : null;
-  if (readout) {
-    readout.className = 'booklet-readout';
-    document.body.append(readout);
-  }
-  function showReadout(edge: Band, notchAt: 'left' | 'right' | null) {
-    if (!readout) return;
-    const { left, right } = notch;
-    const angle = typeof screen !== 'undefined' && screen.orientation ? screen.orientation.angle : 'none';
-    readout.textContent = `insets L${left} R${right} · window.orientation ${String(window.orientation)} · screen angle ${angle} · ${window.innerWidth}×${window.innerHeight} · axis ${axis()} · notch ${notchAt ?? 'none'} · band ${edge}`;
-  }
-  /** Which edge the band stands on: the bottom upright, else the side without the notch. */
-  const band = (): Band => {
-    if (axis() === 'x') return 'bottom';
-    return notchOf() === 'right' ? 'left' : 'right';
-  };
+  /** Which edge the band stands on: the bottom upright, the right in landscape. */
+  const band = (): Band => (axis() === 'x' ? 'bottom' : 'right');
   /** How many pages the band's long side has room for. */
   const visible = () => visibleCount(extent(), sizes(), BOOKLET_UI.page.gutter);
   /** How many slots are built: those, the hidden ones past each end a drag needs, and those the track's rest shift brings in at either end. */
@@ -985,10 +891,8 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
       root.dataset.axis = track.dataset.axis = leaf.dataset.axis = now;
       root.dataset.band = edge;
       rootElement.dataset.strip = edge;
-      const notchAt = axis() === 'x' ? null : notchOf();
-      const vars = viewVars(edge, notchAt, notch);
-      showReadout(edge, notchAt);
-      for (const key of ['bottom', 'left', 'right', 'rail', 'backdrop'] as const) {
+      const vars = viewVars(edge);
+      for (const key of ['bottom', 'left', 'right', 'backdrop'] as const) {
         const value = vars[key];
         if (value === null) rootElement.style.removeProperty(STRIP_VARS[key]);
         else rootElement.style.setProperty(STRIP_VARS[key], value);
@@ -1026,8 +930,6 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
     dispose() {
       for (const name of Object.values(STRIP_VARS)) rootElement.style.removeProperty(name);
       delete rootElement.dataset.strip;
-      probe.remove();
-      readout?.remove();
     },
   };
 }

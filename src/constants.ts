@@ -413,9 +413,6 @@ export const BOOKLET_UI = {
   // After a tap on the room puts the booklet down, the scrim stays this long to catch the
   // click a touch synthesises after the lift.
   scrimLingerMs: 400,
-  // A turn of the phone is read again this long after its event: iOS sends the event before
-  // `window.orientation` changes when a landscape phone is turned end over end.
-  turnSettleMs: 300,
   // A mouse over the docked thumbnail grows it to fit this share of the screen's width and
   // height (a quarter of the screen), big enough to read the page.
   thumbHoverShare: 0.5,
