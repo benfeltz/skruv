@@ -4,9 +4,9 @@ import { createBookletSheet } from '../src/ui/booklet.js';
 import { FakeElement, installFakeDom } from './support/fakeDom.js';
 import type { FakeDom } from './support/fakeDom.js';
 
-// 1.9.1.2: the manual docked as a carousel strip along the bottom, opened without blocking
-// the room. Driven headlessly on the fake DOM; how the swipe, the hold and the strip's size
-// feel on a phone is the manual plan.
+// 1.9.1.2: the manual docked as a carousel band (along the bottom in portrait, down the right
+// in landscape: 1.9.7.1.2), opened without blocking the room. Driven headlessly on the fake DOM;
+// how the drag, the hold and the band's look feel on a phone is the manual plan.
 
 let dom: FakeDom;
 const mounted: { dispose(): void }[] = [];
@@ -23,8 +23,12 @@ afterEach(() => {
 const COUNT = 10;
 type FakeSheet<Scrim> = Omit<ReturnType<typeof createBookletSheet>, 'scrim' | 'thumb' | 'element'> & { scrim: Scrim; thumb: FakeElement; element: FakeElement };
 
-function mountStrip(options: { page?: number; viewport?: number } = {}) {
-  if (options.viewport) dom.viewport.width = options.viewport;
+const PORTRAIT = { width: 390, height: 844 };
+const LANDSCAPE = { width: 844, height: 390 };
+
+function mountStrip(options: { page?: number; viewport?: { width: number; height: number } } = {}) {
+  dom.viewport.width = (options.viewport ?? PORTRAIT).width;
+  dom.viewport.height = (options.viewport ?? PORTRAIT).height;
   const manual = createBookletSheet({
     pages: { count: COUNT, canvas: (index) => ({ index }) as unknown as CanvasImageSource },
     docked: 'strip',
@@ -35,12 +39,12 @@ function mountStrip(options: { page?: number; viewport?: number } = {}) {
   dom.body.append(manual.thumb, manual.element);
   const changes: { page: number; expanded: boolean }[] = [];
   manual.onChange((change) => changes.push(change));
-  const [prev, box, next] = manual.thumb.children;
-  const slots = () => box.children;
+  const [track] = manual.thumb.children;
+  const slots = () => track.children;
   const view = manual.element.children[1];
-  for (let i = 0; i < (options.page ?? 0); i++) next.fire('click');
+  for (let i = 0; i < (options.page ?? 0); i++) dom.key('ArrowRight');
   changes.length = 0;
-  return { manual, prev, next, slots, centre: () => slots()[Math.floor(slots().length / 2)], view, changes };
+  return { manual, track, slots, centre: () => slots()[Math.floor(slots().length / 2)], view, changes };
 }
 
 // What each slot shows: a page number, or null for an empty slot.
@@ -54,36 +58,39 @@ const touchDown = (target: FakeElement, x = 100, y = 100) => down(target, { poin
 const touchUp = (target: FakeElement, x = 100, y = 100) => up(target, { pointerType: 'touch', x, y });
 
 describe('what the strip shows', () => {
-  it('is three pages on a phone, the centre current, empty past the cover', () => {
-    const { slots } = mountStrip({ viewport: 390 });
-    expect(slots()).toHaveLength(3);
-    expect(shown(slots())).toEqual([null, 0, 1]);
-  });
-
-  it('is five pages on a desktop', () => {
-    const { slots } = mountStrip({ viewport: 1280 });
-    expect(slots()).toHaveLength(5);
+  it('is three pages and a hidden one past each end on a phone held upright, the centre current, empty past the cover', () => {
+    const { slots } = mountStrip({ viewport: PORTRAIT });
+    expect(slots()).toHaveLength(3 + 2 * BOOKLET_UI.strip.buffer);
     expect(shown(slots())).toEqual([null, null, 0, 1, 2]);
   });
 
+  it('follows the width in portrait and the height in landscape', () => {
+    expect(mountStrip({ viewport: { width: 1000, height: 1200 } }).slots()).toHaveLength(11 + 2);
+    mounted.pop()!.dispose();
+    // 1280 x 800 is landscape: the band stands on the right edge, so the long side is the height.
+    expect(mountStrip({ viewport: { width: 1280, height: 800 } }).slots()).toHaveLength(9 + 2);
+    mounted.pop()!.dispose();
+    expect(mountStrip({ viewport: LANDSCAPE }).slots()).toHaveLength(3 + 2);
+  });
+
   it('puts the current page in the middle, with its neighbours either side, and empty slots past the last', () => {
-    const { slots, manual } = mountStrip({ viewport: 1280, page: 4 });
+    const { slots, manual } = mountStrip({ page: 4 });
     expect(shown(slots())).toEqual([2, 3, 4, 5, 6]);
     expect(manual.currentPage).toBe(4);
-    const last = mountStrip({ viewport: 1280, page: COUNT - 1 });
+    const last = mountStrip({ page: COUNT - 1 });
     expect(shown(last.slots())).toEqual([COUNT - 3, COUNT - 2, COUNT - 1, null, null]);
   });
 
-  it('marks the centre slot as the large current one, the others not', () => {
-    const { slots } = mountStrip({ viewport: 1280 });
+  it('marks the centre slot as the current one, the others not', () => {
+    const { slots } = mountStrip();
     expect(slots().map((slot) => slot.dataset.centre)).toEqual(['false', 'false', 'true', 'false', 'false']);
   });
 
   it("draws the slots into small canvases, not the page's full resolution, and builds no thumbnail canvas", () => {
-    const { slots } = mountStrip({ viewport: 1280 });
+    const { slots } = mountStrip();
     const canvas = slots()[2].children[0] as unknown as { width: number; height: number };
     // The fake window has no device pixel ratio: one canvas pixel per CSS pixel.
-    expect(canvas.width).toBe(BOOKLET_UI.strip.centreWidth);
+    expect(canvas.width).toBe(BOOKLET_UI.strip.page);
     expect(canvas.width * canvas.height).toBeLessThan(BOOKLET.pageSize[0] * BOOKLET.pageSize[1] * 0.05);
     expect(slots().every((slot) => slot.children.length === 1)).toBe(true);
   });
@@ -95,7 +102,7 @@ describe('what the strip shows', () => {
   });
 
   it('keeps focus on the strip when a resize rebuilds its slots', () => {
-    const { centre } = mountStrip({ viewport: 1280, page: 3 });
+    const { centre } = mountStrip({ viewport: { width: 1000, height: 1200 }, page: 3 });
     // The fake document's active element is the focused one, as a real document's is.
     vi.stubGlobal('document', { ...document, get activeElement() { return dom.focused; } });
     centre().focus();
@@ -105,42 +112,100 @@ describe('what the strip shows', () => {
     expect(dom.focused?.dataset.centre).toBe('true');
   });
 
-  it('re-lays out when the viewport crosses the breakpoint', () => {
-    const { slots, manual } = mountStrip({ viewport: 1280, page: 3 });
-    expect(slots()).toHaveLength(5);
+  it('re-lays out when the viewport turns', () => {
+    const { slots, manual, track } = mountStrip({ viewport: { width: 1000, height: 1200 }, page: 3 });
+    expect(slots()).toHaveLength(13);
     dom.viewport.width = 390;
+    dom.viewport.height = 844;
     dom.windowListeners.get('resize')!.forEach((fn) => fn({}));
-    expect(slots()).toHaveLength(3);
-    expect(shown(slots())).toEqual([2, 3, 4]);
+    expect(slots()).toHaveLength(5);
+    expect(shown(slots())).toEqual([1, 2, 3, 4, 5]);
     expect(manual.currentPage).toBe(3);
+    expect(track.dataset.axis).toBe('x');
+  });
+});
+
+describe('the band, by orientation', () => {
+  const rules = () => dom.head.children.find((node) => node.id === 'skruv-booklet')!.textContent;
+  const [pageW, pageH] = BOOKLET.pageSize;
+  const { strip, page } = BOOKLET_UI;
+  const pageHeight = Math.round((strip.page * pageH) / pageW);
+  const hex = (value: number) => `#${value.toString(16).padStart(6, '0')}`;
+
+  it("says its axis to the band, the track and the open page, and follows a turn", () => {
+    const { manual, track } = mountStrip({ viewport: PORTRAIT });
+    expect(manual.thumb.dataset.axis).toBe('x');
+    expect(track.dataset.axis).toBe('x');
+    expect(manual.element.dataset.axis).toBe('x');
+    dom.viewport.width = LANDSCAPE.width;
+    dom.viewport.height = LANDSCAPE.height;
+    dom.windowListeners.get('resize')!.forEach((fn) => fn({}));
+    expect(manual.thumb.dataset.axis).toBe('y');
+    expect(track.dataset.axis).toBe('y');
+    expect(manual.element.dataset.axis).toBe('y');
+  });
+
+  it('calls a square viewport portrait, as CSS does', () => {
+    const { manual } = mountStrip({ viewport: { width: 800, height: 800 } });
+    expect(manual.thumb.dataset.axis).toBe('x');
+  });
+
+  it('sets the root variables for the room\'s view: the bottom in portrait, the right in landscape, and clears them on dispose', () => {
+    const bottom = `calc(${pageHeight + 2 * page.gutter}px + env(safe-area-inset-bottom))`;
+    const right = `calc(${strip.page + 2 * page.gutter}px + env(safe-area-inset-right))`;
+    const { manual } = mountStrip({ viewport: PORTRAIT });
+    expect(dom.rootStyle.props).toEqual({ '--strip-bottom': bottom, '--strip-right': '0px' });
+    dom.viewport.width = LANDSCAPE.width;
+    dom.viewport.height = LANDSCAPE.height;
+    dom.windowListeners.get('resize')!.forEach((fn) => fn({}));
+    expect(dom.rootStyle.props).toEqual({ '--strip-bottom': '0px', '--strip-right': right });
+    manual.dispose();
+    expect(dom.rootStyle.props).toEqual({});
+  });
+
+  it('is edge to edge: the whole bottom in portrait, the whole right edge in landscape, each from the page ratio', () => {
+    mountStrip();
+    const css = rules();
+    const portrait = css.slice(css.indexOf(".booklet-strip[data-axis='x'] {"), css.indexOf(".booklet-strip[data-axis='y'] {"));
+    const landscape = css.slice(css.indexOf(".booklet-strip[data-axis='y'] {"), css.indexOf('.booklet-track {'));
+    expect(pageHeight).toBe(100);
+    expect(portrait).toContain('left: 0;');
+    expect(portrait).toContain('right: 0;');
+    expect(portrait).toContain('bottom: 0;');
+    expect(portrait).toContain(`height: calc(${pageHeight + 2 * page.gutter}px + env(safe-area-inset-bottom));`);
+    expect(landscape).toContain('top: 0;');
+    expect(landscape).toContain('right: 0;');
+    expect(landscape).toContain('bottom: 0;');
+    expect(landscape).toContain(`width: calc(${strip.page + 2 * page.gutter}px + env(safe-area-inset-right));`);
+  });
+
+  it('is paper with an ink rule on its view side, its slots cut at its edges, and nothing softer', () => {
+    mountStrip();
+    const css = rules();
+    const band = css.slice(css.indexOf('.booklet-strip {'), css.indexOf(".booklet-strip[data-axis='x'] {"));
+    expect(band).toContain('overflow: hidden;');
+    expect(band).toContain(`background: ${hex(COLORS.bookletPaper)};`);
+    expect(css).toContain(`box-shadow: inset 0 ${strip.rule}px 0 ${hex(COLORS.bookletInk)};`);
+    expect(css).toContain(`box-shadow: inset ${strip.rule}px 0 0 ${hex(COLORS.bookletInk)};`);
+    expect(band).not.toContain('border-radius');
+    expect(strip.rule).toBe(INSET.ring.width);
+  });
+
+  it('draws every page one size from the page ratio, the centre told by its gold border, and has no arrows', () => {
+    mountStrip();
+    const css = rules();
+    const slot = css.slice(css.indexOf('.booklet-slot {'), css.indexOf(".booklet-slot[data-centre='true']"));
+    expect(slot).toContain('flex: none;');
+    expect(slot).toContain(`width: ${strip.page}px;`);
+    expect(css).toContain(`.booklet-slot[data-centre='true'] { border-color: ${hex(COLORS.uiAccent)}; }`);
+    expect(css).not.toContain('--slot-');
+    expect(css).not.toContain('.booklet-arrow');
   });
 });
 
 describe('moving along the strip', () => {
-  it('an end arrow moves one page, and does nothing past the ends', () => {
-    const { prev, next, manual, changes } = mountStrip();
-    prev.fire('click');
-    expect(manual.currentPage).toBe(0);
-    expect(changes).toEqual([]);
-    next.fire('click');
-    next.fire('click');
-    expect(manual.currentPage).toBe(2);
-    prev.fire('click');
-    expect(manual.currentPage).toBe(1);
-    expect(prev.attributes['aria-disabled']).toBe('false');
-  });
-
-  it('marks an end arrow inert at its end, never disabled', () => {
-    const { prev, next, manual } = mountStrip();
-    expect(prev.attributes['aria-disabled']).toBe('true');
-    expect(prev.disabled).toBe(false);
-    for (let i = 0; i < COUNT; i++) next.fire('click');
-    expect(manual.currentPage).toBe(COUNT - 1);
-    expect(next.attributes['aria-disabled']).toBe('true');
-  });
-
   it('a swipe along the strip moves one page, whichever way, and never opens it', () => {
-    const { manual, slots } = mountStrip({ viewport: 1280, page: 3 });
+    const { manual, slots } = mountStrip({ page: 3 });
     touchDown(slots()[3]);
     touchUp(slots()[3], 100 - BOOKLET_UI.swipeDistance, 100);
     expect(manual.currentPage).toBe(4);
@@ -152,7 +217,7 @@ describe('moving along the strip', () => {
   });
 
   it('a tap on a side page centres it', () => {
-    const { manual, slots } = mountStrip({ viewport: 1280, page: 4 });
+    const { manual, slots } = mountStrip({ page: 4 });
     touchDown(slots()[4]);
     touchUp(slots()[4]);
     expect(manual.currentPage).toBe(6);
@@ -162,7 +227,7 @@ describe('moving along the strip', () => {
   });
 
   it('a tap on an empty slot does nothing', () => {
-    const { manual, slots } = mountStrip({ viewport: 1280 });
+    const { manual, slots } = mountStrip();
     down(slots()[0]);
     up(slots()[0]);
     expect(manual.currentPage).toBe(0);
@@ -296,8 +361,8 @@ describe('opening it on a touch: hold to peek, release to put it back', () => {
 });
 
 describe('holding a side page peeks it in place', () => {
-  const held = (viewport = 1280) => {
-    const strip = mountStrip({ viewport });
+  const held = () => {
+    const strip = mountStrip();
     return { ...strip, side: strip.slots()[3] };
   };
 
@@ -350,8 +415,8 @@ describe('holding a side page peeks it in place', () => {
 
   it('with the manual open, a hold on a side page still flips to it and never closes the page', () => {
     const { manual, side, changes } = held();
-    down(manual.thumb.children[1].children[2]);
-    up(manual.thumb.children[1].children[2]);
+    down(manual.thumb.children[0].children[2]);
+    up(manual.thumb.children[0].children[2]);
     expect(manual.expanded).toBe(true);
     changes.length = 0;
     touchDown(side);
@@ -377,7 +442,7 @@ describe('a second finger on the band cancels its gesture', () => {
   const lift = (target: FakeElement, pointerId: number, x: number) => up(target, { pointerType: 'touch', pointerId, x });
 
   it('a pinch with both fingers on the band flips nothing and peeks nothing', () => {
-    const { manual, slots, centre, changes } = mountStrip({ viewport: 1280, page: 3 });
+    const { manual, slots, centre, changes } = mountStrip({ page: 3 });
     finger(centre(), 1, 100);
     finger(slots()[3], 2, 200);
     // The first finger spreads past the swipe distance and lifts.
@@ -391,7 +456,7 @@ describe('a second finger on the band cancels its gesture', () => {
   });
 
   it('a second finger puts a peeked page back, and the first finger\'s lift changes nothing', () => {
-    const { manual, slots, centre, changes } = mountStrip({ viewport: 1280, page: 3 });
+    const { manual, slots, centre, changes } = mountStrip({ page: 3 });
     finger(centre(), 1, 100);
     vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs);
     expect(manual.expanded).toBe(true);
@@ -408,7 +473,7 @@ describe('a second finger on the band cancels its gesture', () => {
   });
 
   it('the next single press works', () => {
-    const { manual, slots, centre } = mountStrip({ viewport: 1280, page: 3 });
+    const { manual, slots, centre } = mountStrip({ page: 3 });
     finger(centre(), 1, 100);
     finger(slots()[3], 2, 200);
     lift(centre(), 1, 100);
@@ -467,10 +532,11 @@ describe('opening it with a mouse or a key: click to open, click the page to clo
   });
 
   it('flips the open page by the strip and the keys, the page following the centre', () => {
-    const { manual, centre, next } = mountStrip({ viewport: 1280 });
+    const { manual, centre, slots } = mountStrip();
     down(centre());
     up(centre());
-    next.fire('click');
+    down(slots()[3]);
+    up(slots()[3]);
     dom.key('ArrowRight');
     expect(manual.currentPage).toBe(2);
     expect(manual.expanded).toBe(true);
@@ -526,20 +592,12 @@ describe("the open manual page's room above the strip", () => {
     mountStrip();
     return dom.head.children.find((node) => node.id === 'skruv-booklet')!.textContent;
   };
-  const [pageW, pageH] = BOOKLET.pageSize;
-  const { strip, stripShort, page } = BOOKLET_UI;
-  const reserve = (centreWidth: number) => strip.inset + Math.round((centreWidth * pageH) / pageW) + 2 * strip.surface.pad + strip.openGap;
+  const { strip, page } = BOOKLET_UI;
 
-  it('reserves the strip and the gap, and shrinks the strip on a short viewport so the page keeps its size', () => {
+  it('rests on the band: the root variable and the gap', () => {
     const rules = css();
-    expect(rules).toContain(`--strip-reserve: ${reserve(strip.centreWidth)}px;`);
-    expect(rules).toContain(`@media (max-height: ${stripShort.maxHeight}px) {`);
-    expect(rules).toContain(`--strip-reserve: ${reserve(stripShort.centreWidth)}px;`);
-    // A phone held sideways: the page above the compact strip is bigger than above the full one.
-    const sideways = 360;
-    const room = (centreWidth: number) => sideways - reserve(centreWidth) - page.gutter;
-    expect(room(stripShort.centreWidth)).toBeGreaterThan(room(strip.centreWidth));
-    expect(room(stripShort.centreWidth)).toBeGreaterThanOrEqual(210);
+    expect(rules).toContain(`--strip-reserve: calc(var(--strip-bottom, 0px) + ${strip.openGap}px);`);
+    expect(rules).toContain('bottom: var(--strip-reserve);');
   });
 
   it("holds a portrait page's top below the menu button, the cluster's one row", () => {
@@ -549,42 +607,6 @@ describe("the open manual page's room above the strip", () => {
     expect(rules).toContain(`--strip-top: ${below}px;`);
     // ...which clears the cluster's bottom edge (the menu button's row) by the gutter.
     expect(below - page.gutter).toBe(CLUSTER.inset + MENU.size);
-  });
-});
-
-// Ben's iPhone: the side slots collapsed to slivers beside the centre page.
-describe('the slots keep their width in every browser', () => {
-  it('gives each slot an explicit width — never a shrinking flex basis — that fits a narrow phone', () => {
-    mountStrip();
-    const rules = dom.head.children.find((node) => node.id === 'skruv-booklet')!.textContent;
-    const slot = rules.slice(rules.indexOf('.booklet-slot {'), rules.indexOf(".booklet-slot[data-centre='true']"));
-    expect(slot).toContain('flex: none;');
-    expect(slot).toContain('width: var(--slot-side);');
-    expect(rules).not.toMatch(/flex: 0 1 var\(--slot/);
-    const { strip, stripNarrow } = BOOKLET_UI;
-    expect(rules).toContain(`@media (max-width: ${stripNarrow.maxWidth}px) {`);
-    // Two arrows, four gaps, the centre and two sides, inside a 360 px phone less its gutters.
-    const row = 2 * strip.arrow + 4 * strip.gap + strip.centreWidth + 2 * stripNarrow.sideWidth;
-    expect(row + 2 * strip.surface.pad).toBeLessThanOrEqual(360 - 2 * strip.gap);
-  });
-});
-
-// 1.9.7.2: the band is a drawn tray, and its drawn edge is its touch footprint.
-describe('the band is a drawn surface', () => {
-  it("draws the strip's own box: padding, paper, an ink outline and rounded corners, each from the constants", () => {
-    mountStrip();
-    const rules = dom.head.children.find((node) => node.id === 'skruv-booklet')!.textContent;
-    const rule = rules.slice(rules.indexOf('.booklet-strip {'), rules.indexOf('.booklet-slots {'));
-    const { surface } = BOOKLET_UI.strip;
-    const hex = (value: number) => `#${value.toString(16).padStart(6, '0')}`;
-    expect(rule).toContain(`padding: ${surface.pad}px;`);
-    expect(rule).toContain(`background: ${hex(COLORS.bookletPaper)}${surface.alpha};`);
-    expect(rule).toContain(`border: ${surface.outline}px solid ${hex(COLORS.bookletInk)};`);
-    expect(rule).toContain(`border-radius: ${surface.radius}px;`);
-    // Content-box: the padding and the outline add to the row, as the narrow fit counts them.
-    expect(rule).not.toContain('box-sizing');
-    // The outline is the inset ring's weight.
-    expect(surface.outline).toBe(INSET.ring.width);
   });
 });
 

@@ -24,7 +24,8 @@ describe('the control cluster', () => {
     createControlCluster();
     const css = dom.head.children.find((node) => node.id === 'skruv-control-cluster')!.textContent;
     expect(css).toContain('position: fixed;');
-    expect(css).toContain(`right: calc(${CLUSTER.inset}px + env(safe-area-inset-right));`);
+    // Left of the manual's band when it runs down the right edge.
+    expect(css).toContain(`right: calc(var(--strip-right, 0px) + ${CLUSTER.inset}px + env(safe-area-inset-right));`);
     expect(css).toContain(`top: calc(${CLUSTER.inset}px + env(safe-area-inset-top));`);
     expect(css).toContain('flex-direction: row-reverse;');
     // Above an open manual page (z-index 3), so the menu's drop is reachable over it.

@@ -79,8 +79,8 @@ beforeEach(() => {
   vi.useFakeTimers();
   const head = new FakeElement('head');
   body = new FakeElement('body');
-  vi.stubGlobal('document', { head, body, createElement: (tag: string) => new FakeElement(tag), getElementById: () => null });
-  vi.stubGlobal('window', { addEventListener() {}, removeEventListener() {} });
+  vi.stubGlobal('document', { head, body, documentElement: { style: { setProperty() {}, removeProperty() {} } }, createElement: (tag: string) => new FakeElement(tag), getElementById: () => null });
+  vi.stubGlobal('window', { innerWidth: 390, innerHeight: 844, addEventListener() {}, removeEventListener() {} });
 });
 const live: { dispose(): void }[] = [];
 afterEach(() => {

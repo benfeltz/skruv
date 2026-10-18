@@ -28,9 +28,11 @@
         user-select: none;
         -webkit-touch-callout: none;
       }
+      /* The manual's band sets these while it is mounted (src/ui/booklet.ts), so the canvas
+         never lies under it; unset, the room is whole. */
       #app {
         position: fixed;
-        inset: 0;
+        inset: 0 var(--strip-right, 0px) var(--strip-bottom, 0px) 0;
       }
       #app canvas {
         display: block;
