@@ -256,7 +256,7 @@ describe("the manual's band shrinks the room's view (1.9.7.1.2)", () => {
   it("names the two root variables once, and #app and the control cluster read exactly those", () => {
     expect(booklet).toContain("const STRIP_VARS = { bottom: '--strip-bottom', right: '--strip-right' } as const;");
     expect(read('index.html')).toContain('inset: 0 var(--strip-right, 0px) var(--strip-bottom, 0px) 0;');
-    expect(cluster).toContain('right: calc(var(--strip-right, 0px) +');
+    expect(cluster).toContain('right: calc(max(var(--strip-right, 0px), env(safe-area-inset-right))');
   });
 
   it('has no arrow buttons on the strip: it is dragged, tapped and keyed', () => {

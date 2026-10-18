@@ -17,8 +17,8 @@ function injectStyle() {
       position: fixed;
       /* Above an open manual page (3) so the menu's drop is reachable over it; below the ?tune drawer (10). */
       z-index: 4;
-      /* Left of the manual's band when it runs down the right edge (landscape). */
-      right: calc(var(--strip-right, 0px) + ${CLUSTER.inset}px + env(safe-area-inset-right));
+      /* Left of the manual's band when it runs down the right edge (landscape); the band's variable already counts the notch, so the larger of the two, never both. */
+      right: calc(max(var(--strip-right, 0px), env(safe-area-inset-right)) + ${CLUSTER.inset}px);
       top: calc(${CLUSTER.inset}px + env(safe-area-inset-top));
       display: flex;
       flex-direction: row-reverse;
