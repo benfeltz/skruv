@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INSET } from '../src/constants.js';
 import { bubbleOf } from '../src/game/insetControls.js';
-import { insetFrame } from '../src/game/insetView.js';
+import { insetFrame, inWindow } from '../src/game/insetView.js';
 import { createInsetPanel } from '../src/scene/insetPanel.js';
 import type { InsetSubject } from '../src/game/insetModel.js';
 import type { Part } from '../src/game/partMesh.js';
@@ -46,6 +46,7 @@ class FakeElement {
 }
 
 const resizeListeners = new Set<() => void>();
+const screenListeners = new Set<() => void>();
 const windowListeners = new Map<string, (() => void)[]>();
 beforeEach(() => {
   resizeListeners.clear();
@@ -69,6 +70,8 @@ beforeEach(() => {
     createElementNS: () => new FakeElement(),
     getElementById: () => null,
   });
+  screenListeners.clear();
+  vi.stubGlobal('screen', { orientation: { addEventListener: (_: string, fn: () => void) => screenListeners.add(fn), removeEventListener: (_: string, fn: () => void) => screenListeners.delete(fn) } });
   vi.stubGlobal('getComputedStyle', () => ({ paddingTop: '47px', paddingRight: '0px', paddingBottom: '0px' }));
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -97,7 +100,7 @@ function mount(initial = { left: 0, top: 0, width: 390, height: 844 }) {
   let rect = initial;
   let reads = 0;
   // The canvas fills the window here.
-  const fill = () => Object.assign(window, { innerWidth: rect.width, innerHeight: rect.height });
+  const fill = () => Object.assign(window, { innerWidth: rect.left + rect.width, innerHeight: rect.top + rect.height });
   fill();
   const camera = new THREE.PerspectiveCamera(50, rect.width / rect.height, 0.01, 100);
   camera.position.set(0, 0.5, 0.6);
@@ -158,6 +161,30 @@ describe('the inset panel', () => {
     expect(renders[0].scene).toBe(scene);
     expect(svg.attributes.hidden).toBeUndefined();
     expect(svg.attributes['data-state']).toBe('offered');
+  });
+
+  it('puts the ring, the taps and the controls in window px beside a canvas that starts past the notch', () => {
+    const { panel, svg, frame, reads } = mount({ left: 47, top: 0, width: 701, height: 390 });
+    panel.hook.candidates(null, [subject()], nothing);
+    panel.update();
+    const { centre, radius } = inWindow(frame(), { left: 47, top: 0 });
+    const ring = svg.children[0].children[0];
+    expect(Number(ring.attributes.cx)).toBeCloseTo(centre[0]);
+    expect(Number(ring.attributes.cy)).toBeCloseTo(centre[1]);
+    // A press on the picture's right-hand edge is on the circle; the same point in canvas px would not be.
+    expect(panel.hook.covers([centre[0] + radius - 1, centre[1]])).toBe(true);
+    expect(panel.hook.covers([centre[0] + radius + 1, centre[1]])).toBe(false);
+    expect(reads()).toBe(1);
+  });
+
+  it('places the circle again when the screen turns, without a resize', () => {
+    const { panel, reads } = mount();
+    panel.hook.candidates(null, [subject()], nothing);
+    panel.update();
+    expect(reads()).toBe(1);
+    for (const fn of screenListeners) fn();
+    panel.update();
+    expect(reads()).toBe(2);
   });
 
   it('goes active, full ink, when the parts engage', () => {

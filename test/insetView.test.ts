@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, BOOKLET_UI, INSET } from '../src/constants.js';
 import { bubbleOf, bubbleOverhang } from '../src/game/insetControls.js';
-import { insetCameraPose, insetFrame, insetLayout, insetOrtho, insideInset, safeWithin } from '../src/game/insetView.js';
+import { insetCameraPose, insetFrame, insetLayout, insetOrtho, inWindow, insideInset, safeWithin } from '../src/game/insetView.js';
 import type { Vec3 } from '../tools/validate/lib/geometry.js';
 
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -100,6 +100,12 @@ describe('safeWithin', () => {
   it('floors at 0 when the margin is larger than the inset', () => {
     const box = { left: 100, top: 100, width: 100, height: 100 };
     expect(safeWithin(box, { width: 400, height: 400 }, { top: 10, right: 10, bottom: 10 })).toEqual({ top: 0, right: 0, bottom: 0 });
+  });
+});
+
+describe('inWindow', () => {
+  it('moves a canvas-px circle by where its canvas stands', () => {
+    expect(inWindow({ centre: [100, 50], radius: 30 }, { left: 47, top: 10 })).toEqual({ centre: [147, 60], radius: 30 });
   });
 });
 
