@@ -18,8 +18,9 @@ const thumb = { width: 72, height: 100 };
 function screen(width: number, height: number, edge: 'bottom' | 'left' | 'right', notch = 0) {
   const menu = MENU.size;
   if (edge === 'bottom') {
-    const cluster = rect(width - CLUSTER.inset - menu, CLUSTER.inset, menu, menu);
-    return { viewport: { width, height }, cluster, strip: rect(0, height - band, width, band), catalog: rect(CLUSTER.inset, CLUSTER.inset, thumb.width, thumb.height) };
+    // Portrait: the menu upper left (the lift line under it, for the left thumb), the catalog upper right.
+    const cluster = rect(CLUSTER.inset, CLUSTER.inset, menu, menu);
+    return { viewport: { width, height }, cluster, strip: rect(0, height - band, width, band), catalog: rect(width - CLUSTER.inset - thumb.width, CLUSTER.inset, thumb.width, thumb.height) };
   }
   // Landscape: the band down the side without the notch, the cluster (menu over gear) in the other side's column.
   const column = Math.max(notch, CLUSTER.inset * 2 + menu);
@@ -59,10 +60,11 @@ describe('the lift line', () => {
     });
   }
 
-  it('portrait: ends above the manual\'s band', () => {
+  it('portrait: ends above the manual\'s band, on the left for the left thumb', () => {
     const { viewport, cluster, strip } = screen(390, 760, 'bottom');
     const line = liftLineBox({ viewport, cluster, strip, hitWidth, knobRadius, gap })!;
     expect(line.bottom + knobRadius).toBeLessThanOrEqual(strip.top - gap);
+    expect(line.right).toBeLessThan(viewport.width / 2);
   });
 
   it('gives no line when a band shares its column beside the menu', () => {

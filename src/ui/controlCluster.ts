@@ -24,6 +24,14 @@ function injectStyle() {
       align-items: flex-start;
       gap: ${CLUSTER.gap}px;
     }
+    /* Portrait, with the manual's band along the bottom: the upper left, the menu in the corner and
+       the ?tune gear to its right, so the lift line under the menu falls to the left thumb (Ben,
+       2026-10-18); the catalog's thumb takes the upper right (src/ui/booklet.ts). */
+    html[data-strip='bottom'] .control-cluster {
+      right: auto;
+      left: calc(${CLUSTER.inset}px + env(safe-area-inset-left));
+      flex-direction: row;
+    }
     /* Landscape, with the manual's band down one edge: the controls go to the other side, a column
        centred in the notch's margin (--rail-x, set when there is a notch) or, with no notch, in the
        corner. The band's side is html[data-strip]. */

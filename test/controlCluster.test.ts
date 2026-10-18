@@ -45,4 +45,11 @@ describe('the control cluster', () => {
     expect(css).toContain(`right: calc(100vw - var(--rail-x, calc(100vw - ${CLUSTER.inset + half}px)) - ${half}px);`);
     expect(css.match(/flex-direction: column;/g)).toHaveLength(2);
   });
+
+  // Ben, 2026-10-18: the lift line hangs under the menu, so with the menu upper left it falls to the left thumb.
+  it('goes to the upper left in portrait, with the band along the bottom: the menu in the corner, the gear to its right', () => {
+    createControlCluster();
+    const css = dom.head.children.find((node) => node.id === 'skruv-control-cluster')!.textContent;
+    expect(css).toContain(`html[data-strip='bottom'] .control-cluster {\n      right: auto;\n      left: calc(${CLUSTER.inset}px + env(safe-area-inset-left));\n      flex-direction: row;`);
+  });
 });

@@ -295,6 +295,12 @@ function injectStyle() {
     html[data-strip='left'] .booklet-thumb[data-corner='topLeft'] {
       left: ${thumbBeside}px;
     }
+    /* Portrait, with the band along the bottom: the upper right, the menu and the lift line under it
+       having the left for the left thumb (Ben, 2026-10-18). */
+    html[data-strip='bottom'] .booklet-thumb[data-corner='topLeft'] {
+      left: auto;
+      right: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-right));
+    }
     /* The pages in a row (a column in landscape), centred in the band and moved as one by an
        inline transform: a drag follows the pointer (data-dragging, no transition) and a snap
        slides back. */

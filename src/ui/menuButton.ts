@@ -51,8 +51,9 @@ function injectStyle() {
       border-radius: ${MENU.drop.radius}px;
       background: ${css(COLORS.uiSurface)}e6;
     }
-    /* The cluster on the screen's left (the band down the right edge): the drop opens into the room. */
-    html[data-strip='right'] .menu-drop {
+    /* The cluster on the screen's left (the band down the right edge, or along the bottom in
+       portrait): the drop opens into the room. */
+    html[data-strip='right'] .menu-drop, html[data-strip='bottom'] .menu-drop {
       right: auto;
       left: 0;
     }
