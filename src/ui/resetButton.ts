@@ -38,7 +38,7 @@ function injectStyle() {
   document.head.append(style);
 }
 
-/** `{ element }`; `onReset()` runs on the confirming second tap. */
+/** `{ element, disarm }`; `onReset()` runs on the confirming second tap; `disarm()` drops a first tap's arming. */
 export function createResetButton({ onReset }: { onReset: () => void }) {
   injectStyle();
   const element = document.createElement('button');
@@ -61,5 +61,5 @@ export function createResetButton({ onReset }: { onReset: () => void }) {
   });
   arm(false);
 
-  return { element };
+  return { element, disarm: () => arm(false) };
 }

@@ -93,6 +93,17 @@ describe('the menu button', () => {
     expect(menu.isOpen()).toBe(false);
   });
 
+  it('runs a control\'s onClose when the drop closes, once per close', () => {
+    const { menu, control } = mount();
+    const onClose = vi.fn();
+    menu.add(control('Repack') as unknown as HTMLElement, { onClose });
+    menu.open();
+    dom.key('Escape');
+    expect(onClose).toHaveBeenCalledTimes(1);
+    menu.close();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('dispose removes the window listeners and the element', () => {
     const { menu, element } = mount();
     const parent = new FakeElement('div', dom);

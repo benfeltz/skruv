@@ -38,12 +38,11 @@ function injectStyle() {
       outline: 2px solid ${css(COLORS.uiAccent)};
       outline-offset: 3px;
     }
-    /* Above the canvas and the manual's strip (1), below an open booklet page (3). */
+    /* Stacks within the control cluster, which sits above the manual's pages. */
     .menu-drop {
       position: absolute;
       top: calc(100% + ${MENU.drop.gap}px);
       right: 0;
-      z-index: 2;
       display: flex;
       flex-direction: column;
       align-items: stretch;
@@ -64,6 +63,8 @@ function injectStyle() {
  * appends a control to the drop. The drop closes on a tap outside the menu, on Escape, and
  * after a click on a control in it — except one that has just armed (`data-armed='true'`,
  * which Repack publishes on its first tap), so the confirming second tap stays reachable.
+ * `add(control, { onClose })` runs `onClose` whenever the drop closes, so a control can drop
+ * state it holds (Repack's arming) rather than carry it across a close and reopen.
  */
 export function createMenuButton({ name }: { name: string }) {
   injectStyle();
@@ -83,6 +84,7 @@ export function createMenuButton({ name }: { name: string }) {
   element.append(button, drop);
 
   let opened = false;
+  const closers: Array<() => void> = [];
   const render = () => {
     drop.hidden = !opened;
     button.setAttribute('aria-expanded', String(opened));
@@ -92,8 +94,10 @@ export function createMenuButton({ name }: { name: string }) {
     render();
   };
   const close = () => {
+    const wasOpen = opened;
     opened = false;
     render();
+    if (wasOpen) for (const onClose of closers) onClose();
   };
 
   const onPointerDown = (event: { target: unknown }) => {
@@ -113,8 +117,9 @@ export function createMenuButton({ name }: { name: string }) {
 
   return {
     element,
-    add(control: HTMLElement) {
+    add(control: HTMLElement, { onClose }: { onClose?: () => void } = {}) {
       drop.append(control);
+      if (onClose) closers.push(onClose);
     },
     open,
     close,

@@ -237,7 +237,8 @@ describe('tap the open manual to put it down, swipe to flip (1.6.2)', () => {
 // 1.9.7.1.1: Repack and Snap rotate are reached through the menu button in the upper-right row.
 describe('the menu button wiring', () => {
   it('holds Repack and Snap rotate, and sits in the cluster', () => {
-    expect(main).toMatch(/menu\.add\(\s*createResetButton/);
+    expect(main).toMatch(/const repack = createResetButton\(/);
+    expect(main).toMatch(/menu\.add\(repack\.element, \{ onClose: repack\.disarm \}\)/);
     expect(main).toMatch(/menu\.add\(snapRotate\.element\)/);
     expect(main).toMatch(/cluster\.add\(menu\.element\)/);
   });

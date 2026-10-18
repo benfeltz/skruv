@@ -27,6 +27,8 @@ describe('the control cluster', () => {
     expect(css).toContain(`right: calc(${CLUSTER.inset}px + env(safe-area-inset-right));`);
     expect(css).toContain(`top: calc(${CLUSTER.inset}px + env(safe-area-inset-top));`);
     expect(css).toContain('flex-direction: row-reverse;');
+    // Above an open manual page (z-index 3), so the menu's drop is reachable over it.
+    expect(css).toContain('z-index: 4;');
     expect(css).toContain(`gap: ${CLUSTER.gap}px;`);
   });
 });

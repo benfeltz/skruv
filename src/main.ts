@@ -140,14 +140,14 @@ requestAnimationFrame(() => document.getElementById('pre-splash')?.remove());
 // gear (added after it) to its left.
 const cluster = createControlCluster();
 const menu = createMenuButton({ name: 'Menu' });
-menu.add(
-  createResetButton({
-    onReset: () => {
-      items.current?.repack();
-      menu.close();
-    },
-  }).element,
-);
+const repack = createResetButton({
+  onReset: () => {
+    items.current?.repack();
+    menu.close();
+  },
+});
+// Closing the menu drops Repack's arming, so a reopened menu starts at a first tap.
+menu.add(repack.element, { onClose: repack.disarm });
 menu.add(snapRotate.element);
 cluster.add(menu.element);
 document.body.append(cluster.element);
