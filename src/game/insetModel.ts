@@ -24,6 +24,8 @@ export interface InsetSubject {
   hardware: PartId;
   host: PartId;
   tool: PartId | null;
+  /** What `turnGrip` turns — the tool of a tool turn, the part of a hand turn, null for a tap kind or an offered seat. */
+  grip: PartId | null;
   centre: Vec3;
   axis: Vec3;
   /** How far in the fastener is, 0..1: a tool turn's least-advanced joint; a tap kind's 0 (seated) or 1 (pressed home). */
@@ -51,8 +53,12 @@ export interface InsetInput {
 const keyOf = (s: InsetSubject) => (s.joint >= 0 ? `joint:${s.joint}` : `seat:${s.hardware}>${s.host}`);
 
 // The parts a tap on reopens a put-away subject: its hardware and tool, and the fastener a tool is on —
-// never a host panel, which a tap selects or presses its dowels home through.
-const partsOf = (s: InsetSubject): PartId[] => (s.tool === null ? [s.hardware] : [s.hardware, s.host, s.tool]);
+// never a host panel, which a tap selects or presses its dowels home through. A hand turn's grip is the part
+// circled (a leg on its stud), which a tap reopens too.
+const partsOf = (s: InsetSubject): PartId[] => {
+  if (s.tool !== null) return [s.hardware, s.host, s.tool];
+  return s.grip === null ? [s.hardware] : [s.hardware, s.grip];
+};
 
 export function createInsetModel() {
   let state: InsetState = 'hidden';
