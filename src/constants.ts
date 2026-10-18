@@ -905,10 +905,11 @@ export const INSET = {
   // 0 looks straight down the hole, 90 side-on. The camera sits `distance` metres out along that direction.
   camera: { frameHeight: 0.14, tilt: 55, distance: 1 },
   // Portrait (height > width): the circle in the top centre, between the catalog thumb and the control cluster.
-  // Landscape: on the right under the control cluster. `share` is the circle's diameter as a share of the shorter
-  // screen side, clamped to [min, max] (CSS px); `top`/`right` are insets from the safe-area edges.
+  // Landscape: the lower right of the view, clear of the catalog's thumb above it and the band beside it (the band is
+  // outside the view). `share` is the circle's diameter as a share of the shorter side, clamped to [min, max] (CSS px);
+  // `top` (portrait), `right` and `bottom` are insets from the view's edges less the safe insets that reach into it.
   portrait: { share: 0.42, min: 140, max: 280, top: 16 },
-  landscape: { share: 0.36, min: 140, max: 260, right: 16, top: 72 },
+  landscape: { share: 0.36, min: 140, max: 260, right: 16, bottom: 16 },
   // The ring's weight (CSS px) and its alpha while offered and while active; the tail's weight and the dot at the
   // joint; and the ms the ring takes to fade between states.
   ring: { width: 3, offeredAlpha: 0.4, activeAlpha: 1 },

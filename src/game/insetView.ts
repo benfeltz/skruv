@@ -18,6 +18,7 @@ export interface Viewport {
 export interface SafeInsets {
   top: number;
   right: number;
+  bottom: number;
 }
 
 /** The circle on screen: its `centre` and `radius` in CSS px. */
@@ -70,17 +71,17 @@ export function insetLayout({ width, height }: Viewport): InsetLayout {
 
 /**
  * The circle for a viewport: its diameter a share of the shorter side clamped to the
- * layout's min and max; in portrait top-centre, in landscape on the right under the
- * control cluster, both inside `safe`, with room left on the right for the control's bubble in landscape.
+ * layout's min and max; in portrait top-centre, in landscape the lower right, both inside `safe`,
+ * with room left on the right and below for the control's bubble in landscape.
  */
-export function insetFrame(viewport: Viewport, safe: SafeInsets = { top: 0, right: 0 }, layout: InsetLayout = insetLayout(viewport)): InsetFrame {
+export function insetFrame(viewport: Viewport, safe: SafeInsets = { top: 0, right: 0, bottom: 0 }, layout: InsetLayout = insetLayout(viewport)): InsetFrame {
   const { share, min, max } = INSET[layout];
   const diameter = Math.min(max, Math.max(min, share * Math.min(viewport.width, viewport.height)));
   const radius = diameter / 2;
   if (layout === 'portrait') return { centre: [viewport.width / 2, safe.top + INSET.portrait.top + radius], radius };
-  // The control's bubble hangs off the circle's lower right: the right offset is to its edge when it reaches past the rim.
+  // The control's bubble hangs off the circle's lower right: the offsets are to its edge when it reaches past the rim.
   const hang = bubbleOverhang({ centre: [0, 0], radius });
-  return { centre: [viewport.width - safe.right - INSET.landscape.right - hang - radius, safe.top + INSET.landscape.top + radius], radius };
+  return { centre: [viewport.width - safe.right - INSET.landscape.right - hang - radius, viewport.height - safe.bottom - INSET.landscape.bottom - hang - radius], radius };
 }
 
 /** Whether a client-px `point` is on or inside the circle. */
