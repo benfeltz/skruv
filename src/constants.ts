@@ -645,12 +645,22 @@ export const BOX = {
   friction: 1,
 };
 
-// The control cluster (src/ui/controlCluster.ts): the column of buttons in the upper right —
-// Repack, Snap rotate, and the ?tune gear — the one owner of that corner. Its inset from the
-// screen corner and the gap between its buttons (CSS pixels).
+// The control cluster (src/ui/controlCluster.ts): the row in the upper right — the menu
+// button in the corner (first added, at the right), the ?tune gear to its left — the one
+// owner of that corner. Its inset from the screen corner and the gap between its controls
+// (CSS pixels).
 export const CLUSTER = {
   inset: 16,
   gap: 8,
+};
+
+// The menu button (src/ui/menuButton.ts): a hamburger holding Repack and Snap rotate. Its
+// square size and glyph size, and the drop under it: the gap below the button, the padding
+// inside the drop and its corner radius (CSS pixels).
+export const MENU = {
+  size: 44,
+  glyph: 22,
+  drop: { gap: 8, pad: 8, radius: 18 },
 };
 
 // Repack and recovery (src/ui/resetButton.ts, src/main.ts).
