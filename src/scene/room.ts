@@ -5,6 +5,8 @@ import { COLORS, LAYER, STAGE } from '../constants.js';
 import { advance, phaseFromClock, skyColourAt } from '../game/skyCycle.js';
 import type { Rgb } from '../game/skyCycle.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { floorBase, floorPlanks } from '../game/floorPlanks.js';
+import type { Plank } from '../game/floorPlanks.js';
 import { sizeAndCentre, stageBoxes, wallBox, wallPieces, windowBoxes, windowOpeningBoxes } from '../game/stageBoxes.js';
 import type { StageBox, StageBoxName, WallName } from '../game/stageBoxes.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
@@ -36,17 +38,52 @@ export function createRoom() {
 
   // One group per box: the mesh and its ink travel together, so hiding it hides both.
   const pieces = new Map<StageBoxName, THREE.Group>();
+  const addPiece = (name: StageBoxName, piece: THREE.Group) => {
+    piece.name = name;
+    pieces.set(name, piece);
+    group.add(piece);
+  };
+
+  // A plank's box, its tone written as a vertex colour on every vertex, so all the boards merge into one lit mesh.
+  const plankColour = new THREE.Color();
+  const plankGeometry = (plank: Plank) => {
+    const geometry = boxGeometry({ name: 'slab', ...plank, outward: [0, 0, 0] });
+    plankColour.setHex(STAGE.floor.tones[plank.tone]!);
+    const count = geometry.getAttribute('position').count;
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: count }, () => [plankColour.r, plankColour.g, plankColour.b]).flat(), 3));
+    return geometry;
+  };
+
+  // The slab is drawn as a base lowered by the planks' thickness under the planks, which top it at y = 0 over its whole
+  // footprint; the collider is the undrawn slab, untouched. The planks' ink is every board's sharp edges, one draw.
+  const buildFloor = (slab: StageBox<'slab'>) => {
+    const baseGeometry = boxGeometry({ ...slab, ...floorBase(slab) });
+    const base = new THREE.Mesh(baseGeometry, floor);
+    base.name = 'slabBase';
+    const planks = floorPlanks(slab).map(plankGeometry);
+    const boards = new THREE.Mesh(mergeGeometries(planks)!, new THREE.MeshStandardMaterial({ vertexColors: true }));
+    boards.name = 'floorPlanks';
+    for (const mesh of [base, boards]) mesh.receiveShadow = true;
+    const boardInk = mergeGeometries(planks.map((plank) => edgesOf(plank)))!;
+    const floorInk = new LineSegments2(new LineSegmentsGeometry().setPositions(boardInk.getAttribute('position').array as Float32Array), ink.lines);
+    floorInk.name = 'floorInk';
+    const piece = new THREE.Group();
+    piece.add(base, boards, inkEdges(edgesGeometry(baseGeometry), ink.lines), floorInk);
+    return piece;
+  };
+
   for (const box of stageBoxes()) {
     if (box.name.includes('Wall')) continue;
+    if (box.name === 'slab') {
+      addPiece(box.name, buildFloor(box as StageBox<'slab'>));
+      continue;
+    }
     const geometry = boxGeometry(box);
-    const mesh = new THREE.Mesh(geometry, box.name === 'slab' ? floor : wall);
+    const mesh = new THREE.Mesh(geometry, wall);
     mesh.receiveShadow = true;
-    const edges = inkEdges(edgesGeometry(geometry), ink.lines);
     const piece = new THREE.Group();
-    piece.name = box.name;
-    piece.add(mesh, edges);
-    pieces.set(box.name, piece);
-    group.add(piece);
+    piece.add(mesh, inkEdges(edgesGeometry(geometry), ink.lines));
+    addPiece(box.name, piece);
   }
 
   // Each wall is one group — its pieces merged into one mesh, the trim into another, one ink

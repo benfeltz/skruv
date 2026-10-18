@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
 import { COLORS, LAYER, ROOM, STAGE } from '../src/constants.js';
+import { floorPlanks, slabBox } from '../src/game/floorPlanks.js';
 import { sceneryMouth } from '../src/game/stageBoxes.js';
 import { createRoom } from '../src/scene/room.js';
 
@@ -106,11 +107,42 @@ describe('the room as built', () => {
   });
 
   it('draws every box with its ink: a mesh and its edge lines in one group', () => {
-    for (const piece of pieces.values()) expect(piece.children).toHaveLength(2);
+    for (const [name, piece] of pieces) if (name !== 'slab') expect(piece.children).toHaveLength(2);
+  });
+
+  describe('the hardwood floor', () => {
+    const slabPiece = pieces.get('slab')!;
+    const planks = slabPiece.getObjectByName('floorPlanks') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+    const planksAt = floorPlanks();
+
+    it('holds the base, the planks and two inks in the slab piece', () => {
+      expect(names(slabPiece)).toEqual(['floorInk', 'floorPlanks', 'inkEdges', 'slabBase']);
+    });
+
+    it('tops the planks at y 0 over the slab\'s footprint and the base under them', () => {
+      const b = bounds(planks);
+      expect(b.max.y).toBeCloseTo(0, 6);
+      expect(b.min.y).toBeCloseTo(-STAGE.floor.plankThickness, 6);
+      const slab = slabBox();
+      expect([b.min.x, b.min.z, b.max.x, b.max.z]).toEqual([slab.min[0], slab.min[2], slab.max[0], slab.max[2]].map((v) => expect.closeTo(v, 5)));
+      expect(bounds(slabPiece.getObjectByName('slabBase')!).max.y).toBeCloseTo(-STAGE.floor.plankThickness, 6);
+    });
+
+    it('draws the planks in vertex colours on one lit, shadow-receiving mesh', () => {
+      expect(planks.material.vertexColors).toBe(true);
+      expect(planks.receiveShadow).toBe(true);
+      expect(planks.geometry.getAttribute('color')).toBeDefined();
+    });
+
+    it('outlines every board in one draw on the shared ink', () => {
+      const floorInk = slabPiece.getObjectByName('floorInk') as unknown as { material: unknown; geometry: { instanceCount: number } };
+      expect(floorInk.material).toBe(room.ink.lines);
+      expect(floorInk.geometry.instanceCount).toBe(12 * planksAt.length);
+    });
   });
 
   it('hands out the one ink it draws with', () => {
-    const slabInk = room.pieces.get('slab')!.children[1] as unknown as { material: unknown };
+    const slabInk = room.pieces.get('slab')!.getObjectByName('inkEdges') as unknown as { material: unknown };
     expect(room.ink.lines).toBe(slabInk.material);
     expect(room.ink.hull.color.getHex()).toBe(COLORS.ink);
   });
@@ -170,7 +202,7 @@ describe('the room per frame', () => {
   it('keeps the ink resolution at the canvas CSS size, whatever the pixel ratio', () => {
     const { pieces, update } = createRoom();
     update(at(0, 2, 3), renderer(1170, 2532), 0);
-    const lines = pieces.get('slab')!.children[1] as unknown as { material: { resolution: THREE.Vector2 } };
+    const lines = pieces.get('slab')!.getObjectByName('inkEdges') as unknown as { material: { resolution: THREE.Vector2 } };
     expect(lines.material.resolution.toArray()).toEqual([1170, 2532]);
   });
 
