@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BOOKLET, BOOKLET_UI, CLUSTER, GESTURE, RESET } from '../src/constants.js';
+import { BOOKLET, BOOKLET_UI, CLUSTER, COLORS, GESTURE, INSET, RESET } from '../src/constants.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
 import { FakeElement, installFakeDom } from './support/fakeDom.js';
 import type { FakeDom } from './support/fakeDom.js';
@@ -295,6 +295,130 @@ describe('opening it on a touch: hold to peek, release to put it back', () => {
   });
 });
 
+describe('holding a side page peeks it in place', () => {
+  const held = (viewport = 1280) => {
+    const strip = mountStrip({ viewport });
+    return { ...strip, side: strip.slots()[3] };
+  };
+
+  it('opens that page without moving the band, and the release puts it back', () => {
+    const { manual, slots, side, view, changes } = held();
+    touchDown(side);
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs);
+    expect(manual.expanded).toBe(true);
+    expect((view.children[0].children[0].drawn as { index: number }).index).toBe(1);
+    expect(manual.currentPage).toBe(0);
+    expect(shown(slots())).toEqual([null, null, 0, 1, 2]);
+    touchUp(side);
+    expect(manual.expanded).toBe(false);
+    expect(manual.currentPage).toBe(0);
+    expect(shown(slots())).toEqual([null, null, 0, 1, 2]);
+    expect(changes).toEqual([
+      { page: 1, expanded: true },
+      { page: 0, expanded: false },
+    ]);
+  });
+
+  it('grows from and shrinks back to the held slot, not the centre', () => {
+    const { manual, centre, side } = held();
+    side.rect = { left: 500, top: 620, width: 72, height: 100 };
+    centre().rect = { left: 300, top: 600, width: 120, height: 167 };
+    manual.element.offsetWidth = 720;
+    touchDown(side);
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs);
+    expect(manual.element.style.transform).toBe('translate(-50%, 0)');
+    touchUp(side);
+    expect(manual.element.style.transform).toBe('translate(500px, 620px) scale(0.1)');
+  });
+
+  it('a hold on an empty slot peeks nothing', () => {
+    const { manual, slots } = held();
+    touchDown(slots()[0]);
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs * 2);
+    expect(manual.expanded).toBe(false);
+    touchUp(slots()[0]);
+    expect(manual.currentPage).toBe(0);
+  });
+
+  it('a quick tap on a side page still centres it, and a held page does not flip on release', () => {
+    const { manual, side } = held();
+    touchDown(side);
+    touchUp(side);
+    expect(manual.currentPage).toBe(1);
+    expect(manual.expanded).toBe(false);
+  });
+
+  it('with the manual open, a hold on a side page still flips to it and never closes the page', () => {
+    const { manual, side, changes } = held();
+    down(manual.thumb.children[1].children[2]);
+    up(manual.thumb.children[1].children[2]);
+    expect(manual.expanded).toBe(true);
+    changes.length = 0;
+    touchDown(side);
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs * 2);
+    expect(manual.expanded).toBe(true);
+    touchUp(side);
+    expect(manual.expanded).toBe(true);
+    expect(manual.currentPage).toBe(1);
+    expect(changes.every((change) => change.expanded)).toBe(true);
+  });
+
+  it('the page on view is the one reported, so the glow follows it', () => {
+    const { side, changes, manual } = held();
+    touchDown(side);
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs);
+    expect(changes.at(-1)).toEqual({ page: 1, expanded: true });
+    expect(manual.currentPage).toBe(0);
+  });
+});
+
+describe('a second finger on the band cancels its gesture', () => {
+  const finger = (target: FakeElement, pointerId: number, x: number) => down(target, { pointerType: 'touch', pointerId, x });
+  const lift = (target: FakeElement, pointerId: number, x: number) => up(target, { pointerType: 'touch', pointerId, x });
+
+  it('a pinch with both fingers on the band flips nothing and peeks nothing', () => {
+    const { manual, slots, centre, changes } = mountStrip({ viewport: 1280, page: 3 });
+    finger(centre(), 1, 100);
+    finger(slots()[3], 2, 200);
+    // The first finger spreads past the swipe distance and lifts.
+    centre().fire('pointermove', { pointerType: 'touch', pointerId: 1, clientX: 100 - 2 * BOOKLET_UI.swipeDistance, clientY: 100 });
+    lift(centre(), 1, 100 - 2 * BOOKLET_UI.swipeDistance);
+    lift(slots()[3], 2, 200);
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs * 2);
+    expect(manual.currentPage).toBe(3);
+    expect(manual.expanded).toBe(false);
+    expect(changes).toEqual([]);
+  });
+
+  it('a second finger puts a peeked page back, and the first finger\'s lift changes nothing', () => {
+    const { manual, slots, centre, changes } = mountStrip({ viewport: 1280, page: 3 });
+    finger(centre(), 1, 100);
+    vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs);
+    expect(manual.expanded).toBe(true);
+    finger(slots()[3], 2, 200);
+    expect(manual.expanded).toBe(false);
+    lift(centre(), 1, 100);
+    lift(slots()[3], 2, 200);
+    expect(manual.currentPage).toBe(3);
+    expect(manual.expanded).toBe(false);
+    expect(changes).toEqual([
+      { page: 3, expanded: true },
+      { page: 3, expanded: false },
+    ]);
+  });
+
+  it('the next single press works', () => {
+    const { manual, slots, centre } = mountStrip({ viewport: 1280, page: 3 });
+    finger(centre(), 1, 100);
+    finger(slots()[3], 2, 200);
+    lift(centre(), 1, 100);
+    lift(slots()[3], 2, 200);
+    down(slots()[3], { pointerType: 'touch', pointerId: 3 });
+    up(slots()[3], { pointerType: 'touch', pointerId: 3 });
+    expect(manual.currentPage).toBe(4);
+  });
+});
+
 describe('opening it with a mouse or a key: click to open, click the page to close', () => {
   it('a click on the centre page opens it, with no hold', () => {
     const { manual, centre, changes } = mountStrip();
@@ -404,7 +528,7 @@ describe("the open manual page's room above the strip", () => {
   };
   const [pageW, pageH] = BOOKLET.pageSize;
   const { strip, stripShort, page } = BOOKLET_UI;
-  const reserve = (centreWidth: number) => strip.inset + Math.round((centreWidth * pageH) / pageW) + strip.openGap;
+  const reserve = (centreWidth: number) => strip.inset + Math.round((centreWidth * pageH) / pageW) + 2 * strip.surface.pad + strip.openGap;
 
   it('reserves the strip and the gap, and shrinks the strip on a short viewport so the page keeps its size', () => {
     const rules = css();
@@ -441,7 +565,26 @@ describe('the slots keep their width in every browser', () => {
     expect(rules).toContain(`@media (max-width: ${stripNarrow.maxWidth}px) {`);
     // Two arrows, four gaps, the centre and two sides, inside a 360 px phone less its gutters.
     const row = 2 * strip.arrow + 4 * strip.gap + strip.centreWidth + 2 * stripNarrow.sideWidth;
-    expect(row).toBeLessThanOrEqual(360 - 2 * strip.gap);
+    expect(row + 2 * strip.surface.pad).toBeLessThanOrEqual(360 - 2 * strip.gap);
+  });
+});
+
+// 1.9.7.2: the band is a drawn tray, and its drawn edge is its touch footprint.
+describe('the band is a drawn surface', () => {
+  it("draws the strip's own box: padding, paper, an ink outline and rounded corners, each from the constants", () => {
+    mountStrip();
+    const rules = dom.head.children.find((node) => node.id === 'skruv-booklet')!.textContent;
+    const rule = rules.slice(rules.indexOf('.booklet-strip {'), rules.indexOf('.booklet-slots {'));
+    const { surface } = BOOKLET_UI.strip;
+    const hex = (value: number) => `#${value.toString(16).padStart(6, '0')}`;
+    expect(rule).toContain(`padding: ${surface.pad}px;`);
+    expect(rule).toContain(`background: ${hex(COLORS.bookletPaper)}${surface.alpha};`);
+    expect(rule).toContain(`border: ${surface.outline}px solid ${hex(COLORS.bookletInk)};`);
+    expect(rule).toContain(`border-radius: ${surface.radius}px;`);
+    // Content-box: the padding and the outline add to the row, as the narrow fit counts them.
+    expect(rule).not.toContain('box-sizing');
+    // The outline is the inset ring's weight.
+    expect(surface.outline).toBe(INSET.ring.width);
   });
 });
 

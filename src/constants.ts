@@ -438,6 +438,9 @@ export const BOOKLET_UI = {
   // `openGap` is the space between the strip and the open page above it.
   // Its look: a slot's corner `radius` (px) and `shadow`; the arrows' glyph size (px) and the
   // hex alpha of their surface, so the room shows faintly through.
+  // `surface` is the tray drawn behind the arrows and pages, and it is the strip's own box, so what is drawn is
+  // what takes the touch: its `pad` round them, its ink `outline` (px, the inset ring's weight; it sits outside
+  // the padding, like a slot's border), its corner `radius` and the hex `alpha` of its paper.
   strip: {
     breakpoint: 600,
     narrow: 3,
@@ -453,14 +456,15 @@ export const BOOKLET_UI = {
     shadow: '0 4px 14px #0006',
     arrowGlyph: 22,
     arrowAlpha: 'e6',
+    surface: { pad: 6, outline: 3, radius: 12, alpha: 'cc' },
   },
   // ...and on a short viewport (a phone held sideways: `maxHeight` CSS px or less) the strip
   // draws smaller, so the open page above it keeps a readable size.
   stripShort: { maxHeight: 480, centreWidth: 72, sideWidth: 44 },
   // ...and on a narrow phone (`maxWidth` CSS px or less) the side pages draw narrower, so the
   // arrows, three slots and their gaps fit the width (the arrows 2 x 44, the gaps 4 x 8, the
-  // centre 120 and two sides of 48 make 336).
-  stripNarrow: { maxWidth: 400, sideWidth: 48 },
+  // centre 120 and two sides of 44 make 328, and the tray's padding 2 x 6 makes 340, within the 344 the strip may take).
+  stripNarrow: { maxWidth: 400, sideWidth: 44 },
 };
 
 // The catalog (1.9.1): the game's front door, a second booklet of items to build

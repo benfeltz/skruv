@@ -198,7 +198,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   document.body.append(booklet.thumb, booklet.element);
   undo.push(() => booklet.dispose());
 
-  // The centre page's parts glow, whether or not it is open — the player's own set only,
+  // The page on view's parts glow — the centre page, open or not, or a side page while it is held peeked — the player's own set only,
   // never the box and its lid. A page with no parts (cover, inventory, controls) lights none.
   const playerParts = parts.filter((part) => part !== flatpack.base && part !== flatpack.lid);
   const highlight = createHighlight(playerParts);
