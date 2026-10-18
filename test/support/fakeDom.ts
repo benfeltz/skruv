@@ -112,6 +112,8 @@ export interface FakeDom {
   viewport: { width: number; height: number };
   /** `document.documentElement`'s style and dataset, where the strip sets its root variables and `data-strip`. */
   rootStyle: FakeStyle;
+  /** The screen's rotation, as `screen.orientation.angle` and `window.orientation` (90: turned counter-clockwise, the notch at the left; 270: the notch at the right). */
+  angle: number;
   /** `screen.orientation`'s listeners, or null to have no `screen.orientation` (the `orientationchange` fallback). */
   orientationListeners: Map<string, Listener[]> | null;
   /** Fires the orientation's `change` (the window's `orientationchange` where there is none), as turning the phone does. */
@@ -133,6 +135,7 @@ export function installFakeDom(): FakeDom {
     viewport: { width: 1280, height: 800 },
     rootStyle: new FakeStyle(),
     safe: { left: 0, right: 0 },
+    angle: 90,
     orientationListeners: new Map(),
     rotate: () => {
       const listeners = dom.orientationListeners ? dom.orientationListeners : windowListeners;
@@ -153,6 +156,9 @@ export function installFakeDom(): FakeDom {
     get innerWidth() {
       return dom.viewport.width;
     },
+    get orientation() {
+      return dom.angle;
+    },
     get innerHeight() {
       return dom.viewport.height;
     },
@@ -165,7 +171,7 @@ export function installFakeDom(): FakeDom {
   };
   vi.stubGlobal('screen', {
     get orientation() {
-      return dom.orientationListeners ? orientation : undefined;
+      return dom.orientationListeners ? { ...orientation, angle: dom.angle } : undefined;
     },
   });
   vi.stubGlobal('getComputedStyle', () => ({ paddingLeft: `${dom.safe.left}px`, paddingRight: `${dom.safe.right}px` }));

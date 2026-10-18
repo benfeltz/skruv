@@ -76,13 +76,12 @@ describe('what the strip shows', () => {
     // Pages 80 apart along a 1000 px wide band, then the hidden ones.
     expect(mountStrip({ viewport: { width: 1000, height: 1200 } }).slots()).toHaveLength(slotCount(1000, { slot: 72, gap: 8 }, 12, 1));
     mounted.pop()!.dispose();
-    // 1280 x 800 is landscape: the band stands on an edge, so the long side is the height less the
-    // thumb's reserve at its top, and a slot is a page's height (108 apart): 5 shown, not the 9 that 80 apart would give.
-    const reserve = BOOKLET_UI.page.gutter + BOOKLET_UI.cornerInset + Math.round((BOOKLET_UI.thumbWidth * BOOKLET.pageSize[1]) / BOOKLET.pageSize[0]);
-    expect(mountStrip({ viewport: { width: 1280, height: 800 } }).slots()).toHaveLength(slotCount(800 - reserve, { slot: 100, gap: 8 }, 12, 1));
-    expect(visibleCount(800 - reserve, { slot: 100, gap: 8 }, 12)).toBe(5);
+    // 1280 x 800 is landscape: the band stands on an edge, so the long side is the height, and a
+    // slot is a page's height (108 apart): 7 shown, not the 9 that 80 apart would give.
+    expect(mountStrip({ viewport: { width: 1280, height: 800 } }).slots()).toHaveLength(slotCount(800, { slot: 100, gap: 8 }, 12, 1));
+    expect(visibleCount(800, { slot: 100, gap: 8 }, 12)).toBe(7);
     mounted.pop()!.dispose();
-    expect(mountStrip({ viewport: LANDSCAPE }).slots()).toHaveLength(slotCount(390 - reserve, { slot: 100, gap: 8 }, 12, 1));
+    expect(mountStrip({ viewport: LANDSCAPE }).slots()).toHaveLength(slotCount(390, { slot: 100, gap: 8 }, 12, 1));
   });
 
   it('puts the current page in the middle, with its neighbours either side, and empty slots past the last', () => {
@@ -181,57 +180,52 @@ describe('the band, by orientation', () => {
     expect(dom.rootStyle.dataset.strip).toBeUndefined();
   });
 
-  it('puts the band on the right with no notch: the view is inset by the band, the backdrop black, no notch column', () => {
+  it('puts the band on the right with no notch: flush, the view inset by exactly the band, the backdrop black, no notch column', () => {
     const { manual } = mountStrip({ viewport: LANDSCAPE });
     expect(dom.rootStyle.props).toEqual({
       '--strip-bottom': '0px',
-      '--strip-left': 'env(safe-area-inset-left)',
-      '--strip-right': `calc(${bandRight}px + env(safe-area-inset-right))`,
+      '--strip-left': '0px',
+      '--strip-right': `${bandRight}px`,
       '--backdrop': '#000',
     });
     expect(manual.thumb.dataset.band).toBe('right');
     expect(dom.rootStyle.dataset.strip).toBe('right');
   });
 
-  it('puts the band on the side without the notch: a notch on the left means the band on the right, with the notch column black and its middle named', () => {
+  it("puts the band on the side without the notch, flush: a notch on the left means the band on the right, the left margin the notch's real inset and its middle named", () => {
     dom.safe.left = 59;
     const { manual } = mountStrip({ viewport: LANDSCAPE });
-    dom.safe.left = 59;
-    turn(LANDSCAPE, { left: 59, right: 0 });
     expect(manual.thumb.dataset.band).toBe('right');
     expect(dom.rootStyle.props['--strip-left']).toBe('env(safe-area-inset-left)');
+    expect(dom.rootStyle.props['--strip-right']).toBe(`${bandRight}px`);
     expect(dom.rootStyle.props['--rail-x']).toBe('calc(env(safe-area-inset-left) / 2)');
     expect(dom.rootStyle.props['--backdrop']).toBe('#000');
   });
 
-  it('a notch on the right means the band on the left, the view inset by the notch on the right', () => {
+  it("a notch on the right means the band on the left, flush, and the right margin the notch's real inset", () => {
     const { manual } = mountStrip({ viewport: LANDSCAPE });
     turn(LANDSCAPE, { left: 0, right: 59 });
     expect(manual.thumb.dataset.band).toBe('left');
     expect(dom.rootStyle.dataset.strip).toBe('left');
-    expect(dom.rootStyle.props['--strip-left']).toBe(`calc(${bandRight}px + env(safe-area-inset-left))`);
+    expect(dom.rootStyle.props['--strip-left']).toBe(`${bandRight}px`);
     expect(dom.rootStyle.props['--strip-right']).toBe('env(safe-area-inset-right)');
     expect(dom.rootStyle.props['--rail-x']).toBe('calc(100vw - env(safe-area-inset-right) / 2)');
   });
 
-  it('turning the phone end over end swaps the side without a resize: the orientation change reads the notch again, or orientationchange where there is none', () => {
-    for (const orientationApi of [true, false]) {
-      dom.orientationListeners = orientationApi ? new Map() : null;
-      dom.safe.left = 59;
-      dom.safe.right = 0;
-      const { manual } = mountStrip({ viewport: LANDSCAPE });
-      expect(manual.thumb.dataset.band).toBe('right');
-      dom.safe.left = 0;
-      dom.safe.right = 59;
-      dom.rotate();
-      expect(manual.thumb.dataset.band).toBe('left');
-      expect(dom.rootStyle.dataset.strip).toBe('left');
-      manual.dispose();
-      mounted.pop();
-      // ...and takes its listener back.
-      dom.rotate();
-      expect(dom.rootStyle.props).toEqual({});
-    }
+  it('with the same inset on both sides, as phones report in landscape, the rotation says where the notch is: the band flush on the other side, no margin shown there', () => {
+    dom.safe.left = 47;
+    dom.safe.right = 47;
+    dom.angle = 270;
+    const { manual } = mountStrip({ viewport: LANDSCAPE });
+    // Notch on the right: the band on the left with no inset padding, the black margin on the right only.
+    expect(manual.thumb.dataset.band).toBe('left');
+    expect(dom.rootStyle.props['--strip-left']).toBe(`${bandRight}px`);
+    expect(dom.rootStyle.props['--strip-right']).toBe('env(safe-area-inset-right)');
+    dom.angle = 90;
+    dom.rotate();
+    expect(manual.thumb.dataset.band).toBe('right');
+    expect(dom.rootStyle.props['--strip-left']).toBe('env(safe-area-inset-left)');
+    expect(dom.rootStyle.props['--strip-right']).toBe(`${bandRight}px`);
   });
 
   it('turning back upright gives the whole width back: no backdrop, no notch column', () => {
@@ -257,9 +251,12 @@ describe('the band, by orientation', () => {
     expect(portrait).toContain(`height: calc(${pageHeight + 2 * page.gutter}px + env(safe-area-inset-bottom));`);
     expect(css).toContain(".booklet-strip[data-band='right'], .booklet-strip[data-band='left'] {\n      top: 0;\n      bottom: 0;");
     expect(right).toContain('right: 0;');
-    expect(right).toContain(`width: calc(${bandRight}px + env(safe-area-inset-right));`);
+    // Flush against its edge: no safe-area padding on that side.
+    expect(right).toContain(`width: ${bandRight}px;`);
+    expect(right).toContain('padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;');
     expect(left).toContain('left: 0;');
-    expect(left).toContain(`width: calc(${bandRight}px + env(safe-area-inset-left));`);
+    expect(left).toContain(`width: ${bandRight}px;`);
+    expect(left).toContain('padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;');
   });
 
   it('is paper with an ink rule on its view side, its slots cut at its edges, and nothing softer', () => {
@@ -275,13 +272,13 @@ describe('the band, by orientation', () => {
     expect(strip.rule).toBe(INSET.ring.width);
   });
 
-  it("runs the pages in a lane below the catalog's thumb down an edge, and puts that thumb at the top of the band's side", () => {
+  it("puts the catalog's thumb at the top of the screen in the room beside the band, a gutter clear of it, and leaves the band's lane the whole height", () => {
     mountStrip();
     const css = rules();
-    const reserve = page.gutter + BOOKLET_UI.cornerInset + Math.round((BOOKLET_UI.thumbWidth * pageH) / pageW);
-    expect(css).toContain(`.booklet-strip[data-axis='y'] .booklet-lane { margin-top: ${reserve}px; }`);
-    expect(css).toContain("html[data-strip='right'] .booklet-thumb[data-corner='topLeft'] {");
-    expect(css).toContain(`right: calc(env(safe-area-inset-right) + ${(bandRight - BOOKLET_UI.thumbWidth) / 2}px);`);
+    const beside = bandRight + page.gutter;
+    expect(css).toContain(`html[data-strip='right'] .booklet-thumb[data-corner='topLeft'] {\n      left: auto;\n      right: ${beside}px;`);
+    expect(css).toContain(`html[data-strip='left'] .booklet-thumb[data-corner='topLeft'] {\n      left: ${beside}px;`);
+    expect(css).not.toContain('margin-top');
     // Over the band (z-index 0), under the scrim.
     expect(css.slice(css.indexOf('.booklet-strip {'), css.indexOf(".booklet-strip[data-band='bottom']"))).toContain('z-index: 0;');
   });

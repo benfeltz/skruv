@@ -1,6 +1,6 @@
 import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, MENU, RENDER } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
-import { centreSlot, clampTravel, pitch, slotCount, snapSteps, stripSide, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
+import { centreSlot, clampTravel, pitch, slotCount, snapSteps, notchSide, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
 import { peekNext } from '../game/peekGesture.js';
 import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 
@@ -35,25 +35,26 @@ const bandBottom = stripPageH + 2 * BOOKLET_UI.page.gutter;
 const bandRight = BOOKLET_UI.strip.page + 2 * BOOKLET_UI.page.gutter;
 // The root variables the mounted band sets (index.html's #app, the manual's open page, the control
 // cluster and the lift line read them). `bottom`, `left` and `right` are how far the room's view
-// is inset from that edge: the band's thickness on the edge it stands on, the notch's safe-area
-// inset (drawn black) on the notch's edge, and 0 elsewhere. `rail` is the x of the notch column's
-// middle, where the lift line and the menu sit, set only when there is a notch. `backdrop` is
-// what shows where the view is not (black beside the notch).
+// is inset from that edge: the band's thickness (no safe-area padding: it sits flush against its
+// edge) on the edge it stands on, the notch's real safe-area inset (drawn black) on the notch's
+// edge, and 0 elsewhere. `rail` is the x of the notch column's middle, where the lift line and the
+// menu sit, set only when there is a notch. `backdrop` is what shows where the view is not
+// (black beside the notch).
 const STRIP_VARS = { bottom: '--strip-bottom', left: '--strip-left', right: '--strip-right', rail: '--rail-x', backdrop: '--backdrop' } as const;
 // Which edge the band stands on, set on the root as data-strip for the CSS that moves with it.
 type Band = 'bottom' | 'left' | 'right';
 type Axis = 'x' | 'y';
 const env = (side: 'left' | 'right' | 'bottom') => `env(safe-area-inset-${side})`;
-/** What the room's view is inset by, and where the notch column's middle is (null: no notch), for a band on `band`. */
-function viewVars(band: Band, notch: { left: number; right: number }) {
+/** What the room's view is inset by, and where the notch column's middle is (null: no notch), for a band on `band` with the notch on `notch` (null: none). */
+function viewVars(band: Band, notch: 'left' | 'right' | null) {
   if (band === 'bottom') return { bottom: `calc(${bandBottom}px + ${env('bottom')})`, left: '0px', right: '0px', rail: null, backdrop: null };
   const black = '#000';
-  if (band === 'right') return { bottom: '0px', left: env('left'), right: `calc(${bandRight}px + ${env('right')})`, rail: notch.left > 0 ? `calc(${env('left')} / 2)` : null, backdrop: black };
-  return { bottom: '0px', left: `calc(${bandRight}px + ${env('left')})`, right: env('right'), rail: `calc(100vw - ${env('right')} / 2)`, backdrop: black };
+  if (band === 'right') return { bottom: '0px', left: notch === 'left' ? env('left') : '0px', right: `${bandRight}px`, rail: notch === 'left' ? `calc(${env('left')} / 2)` : null, backdrop: black };
+  return { bottom: '0px', left: `${bandRight}px`, right: notch === 'right' ? env('right') : '0px', rail: notch === 'right' ? `calc(100vw - ${env('right')} / 2)` : null, backdrop: black };
 }
-// What the catalog's docked thumb and the band's top need in landscape: the thumb sits at the top of
-// the band, so the pages run in the lane below it (its inset, its height from the page ratio, a gutter).
-const thumbReserve = BOOKLET_UI.cornerInset + Math.round((BOOKLET_UI.thumbWidth * pageH) / pageW) + BOOKLET_UI.page.gutter;
+// In landscape the catalog's docked thumb sits at the top of the screen, in the room just beside the
+// band: this far (px) from the band's edge.
+const thumbBeside = bandRight + BOOKLET_UI.page.gutter;
 
 function injectStyle() {
   if (document.getElementById(STYLE_ID)) return;
@@ -233,21 +234,21 @@ function injectStyle() {
       padding-bottom: env(safe-area-inset-bottom);
       box-shadow: inset 0 ${strip.rule}px 0 ${css(COLORS.bookletInk)};
     }
-    /* Down an edge (landscape): the side without the notch; the lane starts below the catalog's thumb. */
+    /* Down an edge (landscape): the side without the notch, flush against that screen edge. */
     .booklet-strip[data-band='right'], .booklet-strip[data-band='left'] {
       top: 0;
       bottom: 0;
     }
     .booklet-strip[data-band='right'] {
       right: 0;
-      width: calc(${bandRight}px + env(safe-area-inset-right));
-      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0;
+      width: ${bandRight}px;
+      padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
       box-shadow: inset ${strip.rule}px 0 0 ${css(COLORS.bookletInk)};
     }
     .booklet-strip[data-band='left'] {
       left: 0;
-      width: calc(${bandRight}px + env(safe-area-inset-left));
-      padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) env(safe-area-inset-left);
+      width: ${bandRight}px;
+      padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
       box-shadow: inset -${strip.rule}px 0 0 ${css(COLORS.bookletInk)};
     }
     /* Where the pages run, and are cut. */
@@ -260,11 +261,14 @@ function injectStyle() {
       justify-content: center;
       overflow: hidden;
     }
-    .booklet-strip[data-axis='y'] .booklet-lane { margin-top: ${thumbReserve}px; }
-    /* The catalog's thumb, put down from the open catalog, sits at the top of the band's side in landscape. */
+    /* The catalog's thumb, put down from the open catalog, sits at the top of the screen in landscape,
+       in the room beside the band with a gutter between (never on it or in its column). */
     html[data-strip='right'] .booklet-thumb[data-corner='topLeft'] {
       left: auto;
-      right: calc(env(safe-area-inset-right) + ${(bandRight - BOOKLET_UI.thumbWidth) / 2}px);
+      right: ${thumbBeside}px;
+    }
+    html[data-strip='left'] .booklet-thumb[data-corner='topLeft'] {
+      left: ${thumbBeside}px;
     }
     /* The pages in a row (a column in landscape), centred in the band and moved as one by an
        inline transform: a drag follows the pointer (data-dragging, no transition) and a snap
@@ -856,12 +860,16 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
   // A slot's length along the band: a page's width on the bottom, its height down the right edge.
   const sizes = () => ({ slot: axis() === 'x' ? strip.page : stripPageH, gap: strip.gap });
   // Down an edge the pages run below the catalog's thumb, which sits at the top of the band.
-  const extent = () => (axis() === 'x' ? window.innerWidth : window.innerHeight - thumbReserve);
+  const extent = () => (axis() === 'x' ? window.innerWidth : window.innerHeight);
+  /** Which side the notch is on, from the insets and the screen's rotation, or null. */
+  const notchOf = () => {
+    const { left, right } = readNotch();
+    return notchSide(left, right, typeof screen !== 'undefined' && screen.orientation ? screen.orientation.angle : window.orientation);
+  };
   /** Which edge the band stands on: the bottom upright, else the side without the notch. */
   const band = (): Band => {
     if (axis() === 'x') return 'bottom';
-    const { left, right } = readNotch();
-    return stripSide(left, right);
+    return notchOf() === 'right' ? 'left' : 'right';
   };
   /** How many pages the band's long side has room for. */
   const visible = () => visibleCount(extent(), sizes(), BOOKLET_UI.page.gutter);
@@ -913,7 +921,7 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
       root.dataset.axis = track.dataset.axis = leaf.dataset.axis = now;
       root.dataset.band = edge;
       rootElement.dataset.strip = edge;
-      const vars = viewVars(edge, readNotch());
+      const vars = viewVars(edge, axis() === 'x' ? null : notchOf());
       for (const key of ['bottom', 'left', 'right', 'rail', 'backdrop'] as const) {
         const value = vars[key];
         if (value === null) rootElement.style.removeProperty(STRIP_VARS[key]);

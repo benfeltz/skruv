@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, BOOKLET_UI } from '../src/constants.js';
-import { centreSlot, clampTravel, pitch, slotCount, snapSteps, stripSide, tapOn, visibleCount, windowOf } from '../src/game/carouselModel.js';
+import { centreSlot, clampTravel, pitch, slotCount, snapSteps, notchSide, tapOn, visibleCount, windowOf } from '../src/game/carouselModel.js';
 
 const { page, gap, reach } = BOOKLET_UI.strip;
 const { gutter } = BOOKLET_UI.page;
@@ -100,17 +100,24 @@ describe('how many pages a release moves', () => {
   });
 });
 
-describe('which side the band stands on in landscape', () => {
-  it('is the side without the notch: the larger safe-area inset is the notch', () => {
-    expect(stripSide(59, 0)).toBe('right');
-    expect(stripSide(0, 59)).toBe('left');
-    expect(stripSide(47, 34)).toBe('right');
-    expect(stripSide(34, 47)).toBe('left');
+describe('which side the notch is on in landscape', () => {
+  it('is the side with the larger safe-area inset', () => {
+    expect(notchSide(59, 0, 270)).toBe('left');
+    expect(notchSide(0, 59, 90)).toBe('right');
+    expect(notchSide(34, 47, 90)).toBe('right');
+    expect(notchSide(47, 34, 270)).toBe('left');
   });
 
-  it('is the right with no notch, or the same inset both sides', () => {
-    expect(stripSide(0, 0)).toBe('right');
-    expect(stripSide(20, 20)).toBe('right');
+  it('is told by the rotation when the phone reports the same inset on both sides', () => {
+    expect(notchSide(47, 47, 90)).toBe('left');
+    expect(notchSide(47, 47, 270)).toBe('right');
+    expect(notchSide(47, 47, -90)).toBe('right');
+    expect(notchSide(47, 47, undefined)).toBe('left');
+  });
+
+  it('is nowhere with no insets: no notch, no margin', () => {
+    expect(notchSide(0, 0, 90)).toBeNull();
+    expect(notchSide(0, 0, 270)).toBeNull();
   });
 });
 

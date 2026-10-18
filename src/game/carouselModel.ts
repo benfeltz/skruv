@@ -54,11 +54,16 @@ export function snapSteps(travel: number, step: number): number {
 }
 
 /**
- * Which side of the screen the band stands on in landscape, from the safe-area insets (CSS
- * px): the side without the notch — the larger inset is the notch's — and the right when
- * neither side has one.
+ * Which side of the screen the notch is on in landscape, from the safe-area insets (CSS px) and
+ * the screen's rotation `angle` (degrees; 90 is turned counter-clockwise, the notch at the left):
+ * the larger inset is the notch's. Phones report the same inset on both sides, so then the angle
+ * says (and without one, the left). Null when there are no insets: no notch, no margin.
  */
-export const stripSide = (left: number, right: number): 'left' | 'right' => (right > left ? 'left' : 'right');
+export function notchSide(left: number, right: number, angle: number | undefined): 'left' | 'right' | null {
+  if (left <= 0 && right <= 0) return null;
+  if (left !== right) return left > right ? 'left' : 'right';
+  return angle === 270 || angle === -90 ? 'right' : 'left';
+}
 
 /** The slot that holds the current page: the middle of `visible` slots. */
 export const centreSlot = (visible: number): number => Math.floor(visible / 2);
