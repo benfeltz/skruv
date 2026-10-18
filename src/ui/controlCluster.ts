@@ -32,8 +32,10 @@ function injectStyle() {
       left: calc(var(--rail-x, ${CLUSTER.inset + MENU.size / 2}px) - ${MENU.size / 2}px);
       flex-direction: column;
     }
+    /* With no notch column (Chrome on iOS reports no inset) the corner, as on the left: inset from
+       the edge, never past it (Ben's phone, 2026-10-18: the menu sat half off the page). */
     html[data-strip='left'] .control-cluster {
-      right: calc(100vw - var(--rail-x, 100vw) - ${MENU.size / 2}px);
+      right: calc(100vw - var(--rail-x, calc(100vw - ${CLUSTER.inset + MENU.size / 2}px)) - ${MENU.size / 2}px);
       flex-direction: column;
     }
   `;

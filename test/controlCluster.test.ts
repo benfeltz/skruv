@@ -39,9 +39,10 @@ describe('the control cluster', () => {
     // Notch on the left (band on the right): left, around --rail-x.
     expect(css).toContain("html[data-strip='right'] .control-cluster {");
     expect(css).toContain(`left: calc(var(--rail-x, ${CLUSTER.inset + half}px) - ${half}px);`);
-    // Notch on the right (band on the left): right, around --rail-x.
+    // Notch on the right (band on the left): right, around --rail-x; with no notch column (Chrome on
+    // iOS reports no inset), the corner — CLUSTER.inset from the edge, never past it.
     expect(css).toContain("html[data-strip='left'] .control-cluster {");
-    expect(css).toContain(`right: calc(100vw - var(--rail-x, 100vw) - ${half}px);`);
+    expect(css).toContain(`right: calc(100vw - var(--rail-x, calc(100vw - ${CLUSTER.inset + half}px)) - ${half}px);`);
     expect(css.match(/flex-direction: column;/g)).toHaveLength(2);
   });
 });
