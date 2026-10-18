@@ -64,6 +64,10 @@ export const STAGE = {
     plankThickness: 0.02,
     plankLength: [0.9, 1.8] satisfies [number, number],
     seed: 4127,
+    // No board is shorter than `minEnd` (a leftover at the edge folds into its neighbour), and a butt joint keeps
+    // `jointGap` from every joint of the row before, so no two read as one seam across rows.
+    minEnd: 0.06,
+    jointGap: 0.12,
     tones: [0xc9b79c, 0xbfa88a, 0xd4c3a8],
   },
   // The double-hung windows, all one design, spaced evenly along their wall: one in the left

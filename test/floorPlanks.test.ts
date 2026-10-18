@@ -4,7 +4,7 @@ import { floorBase, floorPlanks, slabBox } from '../src/game/floorPlanks.js';
 import type { Plank } from '../src/game/floorPlanks.js';
 
 const slab = slabBox();
-const { plankWidth, plankThickness, plankLength } = STAGE.floor;
+const { plankWidth, plankThickness, plankLength, minEnd, jointGap } = STAGE.floor;
 const EPS = 1e-6;
 
 /** The planks grouped into rows by their near z, each row in x order. */
@@ -56,11 +56,15 @@ describe('floorPlanks', () => {
     }
   });
 
-  it('never lines an interior butt joint up with the row before', () => {
+  it('leaves no sliver: every board is at least minEnd long', () => {
+    for (const p of planks) expect(p.max[0] - p.min[0]).toBeGreaterThanOrEqual(minEnd - EPS);
+  });
+
+  it('keeps every butt joint jointGap from every joint of the row before', () => {
     const all = rows(planks);
     const joints = (row: Plank[]) => row.slice(0, -1).map((p) => p.max[0]);
     all.slice(1).forEach((row, i) => {
-      for (const a of joints(row)) for (const b of joints(all[i]!)) expect(Math.abs(a - b)).toBeGreaterThan(EPS);
+      for (const a of joints(row)) for (const b of joints(all[i]!)) expect(Math.abs(a - b)).toBeGreaterThanOrEqual(jointGap - 1e-6);
     });
   });
 
