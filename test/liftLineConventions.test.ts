@@ -90,7 +90,8 @@ describe('every path ends the hold (regression risk: a hold that never ends)', (
 describe('layering', () => {
   it('keeps the line control free of physics, Three and the scene', () => {
     const imports = [...read('src/ui/liftLine.ts').matchAll(/from\s+'([^']+)'/g)].map(([, path]) => path);
-    expect(imports).toEqual(['../constants.js', '../game/liftLine.js']);
+    // Its place comes from the pure screen layout (src/game/screenLayout.ts), which keeps it off the menu and the band.
+    expect(imports).toEqual(['../constants.js', '../game/liftLine.js', '../game/screenLayout.js']);
   });
 
   it('keeps the hold seam free of Three', () => {

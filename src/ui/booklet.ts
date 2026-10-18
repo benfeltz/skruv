@@ -1,6 +1,6 @@
 import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, MENU, RENDER } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
-import { centreSlot, clampTravel, pitch, slotCount, snapSteps, notchSide, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
+import { centreSlot, clampTravel, pitch, restShift, slotCount, snapSteps, notchSide, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
 import { peekNext } from '../game/peekGesture.js';
 import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 
@@ -250,6 +250,22 @@ function injectStyle() {
       width: ${bandRight}px;
       padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
       box-shadow: inset -${strip.rule}px 0 0 ${css(COLORS.bookletInk)};
+    }
+    /* ?layout's readout of what the phone reports (createStrip), over everything, taking no touch. */
+    .booklet-readout {
+      position: fixed;
+      z-index: 20;
+      left: 50%;
+      top: env(safe-area-inset-top);
+      transform: translateX(-50%);
+      max-width: 90vw;
+      pointer-events: none;
+      padding: ${BOOKLET_UI.notice.padding}px;
+      border-radius: ${BOOKLET_UI.notice.radius}px;
+      background: ${css(COLORS.uiSurface)};
+      color: ${css(COLORS.uiText)};
+      font: 600 ${BOOKLET_UI.notice.size}px/${BOOKLET_UI.notice.lineHeight} system-ui, -apple-system, sans-serif;
+      text-align: center;
     }
     /* Where the pages run, and are cut. */
     .booklet-lane {
@@ -861,11 +877,31 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
   const sizes = () => ({ slot: axis() === 'x' ? strip.page : stripPageH, gap: strip.gap });
   // Down an edge the pages run below the catalog's thumb, which sits at the top of the band.
   const extent = () => (axis() === 'x' ? window.innerWidth : window.innerHeight);
+  // The screen's rotation in degrees. iOS Safari's own `window.orientation` (90 turned
+  // counter-clockwise, the notch at the left; -90 the other way) first: it is what iOS keeps
+  // right, where `screen.orientation.angle` is newer there. Elsewhere the standard angle.
+  const rotation = (): number | undefined => {
+    if (typeof window.orientation === 'number') return window.orientation;
+    return typeof screen !== 'undefined' && screen.orientation ? screen.orientation.angle : undefined;
+  };
   /** Which side the notch is on, from the insets and the screen's rotation, or null. */
   const notchOf = () => {
     const { left, right } = readNotch();
-    return notchSide(left, right, typeof screen !== 'undefined' && screen.orientation ? screen.orientation.angle : window.orientation);
+    return notchSide(left, right, rotation());
   };
+  // `?layout` on the URL shows what the phone reports, for checking the notch on a device: the
+  // insets, both rotation readings, the axis, the notch's side and the band's edge.
+  const readout = typeof location !== 'undefined' && new URLSearchParams(location.search).has('layout') ? document.createElement('div') : null;
+  if (readout) {
+    readout.className = 'booklet-readout';
+    document.body.append(readout);
+  }
+  function showReadout(edge: Band, notchAt: 'left' | 'right' | null) {
+    if (!readout) return;
+    const { left, right } = notch;
+    const angle = typeof screen !== 'undefined' && screen.orientation ? screen.orientation.angle : 'none';
+    readout.textContent = `insets L${left} R${right} · window.orientation ${String(window.orientation)} · screen angle ${angle} · ${window.innerWidth}×${window.innerHeight} · axis ${axis()} · notch ${notchAt ?? 'none'} · band ${edge}`;
+  }
   /** Which edge the band stands on: the bottom upright, else the side without the notch. */
   const band = (): Band => {
     if (axis() === 'x') return 'bottom';
@@ -873,10 +909,13 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
   };
   /** How many pages the band's long side has room for. */
   const visible = () => visibleCount(extent(), sizes(), BOOKLET_UI.page.gutter);
-  /** How many slots are built: those, and the hidden ones past each end a drag needs. */
-  const total = () => slotCount(extent(), sizes(), BOOKLET_UI.page.gutter, strip.reach);
-  let lastAxis: Axis | null = null;
-  const shift = (px: number) => `translate${axis() === 'x' ? 'X' : 'Y'}(${px}px)`;
+  /** How many slots are built: those, the hidden ones past each end a drag needs, and those the track's rest shift brings in at either end. */
+  const total = () => slotCount(extent(), sizes(), BOOKLET_UI.page.gutter, strip.reach) + 2 * centreSlot(visible());
+  const shift =(px: number) => `translate${axis() === 'x' ? 'X' : 'Y'}(${px}px)`;
+  // Where the track rests (px along the band, restShift's slots), so the band never shows an empty
+  // slot beside its pages; and where it rested before the last paint, which a slide starts from.
+  let rest = 0;
+  let restBefore = 0;
   function rebuild(built: number) {
     // A turn of the phone or a resized window may take away the slot that has focus.
     const hadFocus = slots.some(({ button: old }) => old === document.activeElement);
@@ -914,14 +953,18 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
       const built = total();
       if (built !== slots.length) rebuild(built);
       const now = axis();
-      // A turn of the phone leaves no stale offset along the old axis.
-      if (now !== lastAxis) track.style.transform = shift(0);
-      lastAxis = now;
+      // The track rests where the band shows no empty slot (a turn of the phone leaves no stale
+      // offset along the old axis); a drag in hand keeps its own place.
+      restBefore = rest;
+      rest = restShift(page, count, visible()) * pitch(sizes());
+      if (track.dataset.dragging !== 'true') track.style.transform = shift(rest);
       const edge = band();
       root.dataset.axis = track.dataset.axis = leaf.dataset.axis = now;
       root.dataset.band = edge;
       rootElement.dataset.strip = edge;
-      const vars = viewVars(edge, axis() === 'x' ? null : notchOf());
+      const notchAt = axis() === 'x' ? null : notchOf();
+      const vars = viewVars(edge, notchAt);
+      showReadout(edge, notchAt);
       for (const key of ['bottom', 'left', 'right', 'rail', 'backdrop'] as const) {
         const value = vars[key];
         if (value === null) rootElement.style.removeProperty(STRIP_VARS[key]);
@@ -943,22 +986,25 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
     },
     /** The track follows a drag: `travel` px along the band from where it rests, no transition. */
     drag(travel: number) {
+      restBefore = rest;
       track.dataset.dragging = 'true';
-      track.style.transform = shift(travel);
+      track.style.transform = shift(rest + travel);
     },
-    /** The track slides home to rest from `from` px off it, the page just painted: set there without a transition, flushed, then let go to 0. */
+    /** The track slides to rest from `from` px off where it rested before the last paint (the pages stay put on screen as the page changes): set there without a transition, flushed, then let go. */
     slide(from: number) {
       track.dataset.dragging = 'true';
-      track.style.transform = shift(from);
+      track.style.transform = shift(restBefore + from);
       track.getBoundingClientRect();
       delete track.dataset.dragging;
-      track.style.transform = shift(0);
+      track.style.transform = shift(rest);
+      restBefore = rest;
     },
     /** The room's view is whole again: the band is gone. */
     dispose() {
       for (const name of Object.values(STRIP_VARS)) rootElement.style.removeProperty(name);
       delete rootElement.dataset.strip;
       probe.remove();
+      readout?.remove();
     },
   };
 }

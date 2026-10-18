@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, BOOKLET_UI } from '../src/constants.js';
-import { centreSlot, clampTravel, pitch, slotCount, snapSteps, notchSide, tapOn, visibleCount, windowOf } from '../src/game/carouselModel.js';
+import { centreSlot, clampTravel, pitch, restShift, slotCount, snapSteps, notchSide, tapOn, visibleCount, windowOf } from '../src/game/carouselModel.js';
 
 const { page, gap, reach } = BOOKLET_UI.strip;
 const { gutter } = BOOKLET_UI.page;
@@ -154,5 +154,38 @@ describe('a tap on a slot', () => {
   it('on an empty slot does nothing', () => {
     expect(tapOn(slots, 0)).toBeNull();
     expect(tapOn(slots, 1)).toBeNull();
+  });
+});
+
+// Ben, 2026-10-18: no padding beside the strip. The track rests off centre near either end so no
+// visible slot is empty; the current page keeps its gold border wherever it then sits.
+describe('where the track rests', () => {
+  /** The pages the visible slots show, the track shifted `restShift` slots. */
+  const shown = (current: number, count: number, visible: number) => {
+    const shiftBy = restShift(current, count, visible);
+    return windowOf(current, count, visible + 2 * Math.abs(shiftBy)).slice(Math.abs(shiftBy) - shiftBy, Math.abs(shiftBy) - shiftBy + visible);
+  };
+
+  it('fills the band from the first page: no empty slot before it', () => {
+    expect(restShift(0, 12, 5)).toBe(-2);
+    expect(restShift(1, 12, 5)).toBe(-1);
+    expect(shown(0, 12, 5)).toEqual([0, 1, 2, 3, 4]);
+    expect(shown(1, 12, 5)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it('fills it to the last page: no empty slot after it', () => {
+    expect(restShift(11, 12, 5)).toBe(2);
+    expect(shown(11, 12, 5)).toEqual([7, 8, 9, 10, 11]);
+  });
+
+  it('keeps the current page in the middle between the ends', () => {
+    expect(restShift(5, 12, 5)).toBe(0);
+    expect(shown(5, 12, 5)).toEqual([3, 4, 5, 6, 7]);
+  });
+
+  it('starts a booklet shorter than the band at the band\'s start', () => {
+    expect(restShift(0, 2, 5)).toBe(-2);
+    expect(shown(0, 2, 5)).toEqual([0, 1, null, null, null]);
+    expect(shown(1, 2, 5)).toEqual([0, 1, null, null, null]);
   });
 });

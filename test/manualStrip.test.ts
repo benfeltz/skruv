@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOOKLET, BOOKLET_UI, CLUSTER, COLORS, GESTURE, INSET, MENU } from '../src/constants.js';
-import { slotCount, visibleCount } from '../src/game/carouselModel.js';
+import { centreSlot, slotCount, visibleCount } from '../src/game/carouselModel.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
 import { FakeElement, installFakeDom } from './support/fakeDom.js';
 import type { FakeDom } from './support/fakeDom.js';
@@ -28,6 +28,10 @@ const PITCH = BOOKLET_UI.strip.page + BOOKLET_UI.strip.gap;
 // Down the right edge a slot's length along the band is a page's height.
 const TALL_PITCH = Math.round((BOOKLET_UI.strip.page * BOOKLET.pageSize[1]) / BOOKLET.pageSize[0]) + BOOKLET_UI.strip.gap;
 const PORTRAIT = { width: 390, height: 844 };
+// The slots a band builds: those its long side shows, the hidden ones a drag needs, and those the
+// track's rest shift (no empty slot beside the pages at either end) brings in.
+const built = (extent: number, sizes: { slot: number; gap: number }) =>
+  slotCount(extent, sizes, 12, 1) + 2 * centreSlot(visibleCount(extent, sizes, 12));
 const LANDSCAPE = { width: 844, height: 390 };
 
 function mountStrip(options: { page?: number; viewport?: { width: number; height: number } } = {}) {
@@ -65,36 +69,36 @@ const touchDown = (target: FakeElement, x = 100, y = 100) => down(target, { poin
 const touchUp = (target: FakeElement, x = 100, y = 100) => up(target, { pointerType: 'touch', x, y });
 
 describe('what the strip shows', () => {
-  it('is three pages and a hidden one past each end on a phone held upright, the centre current, empty past the cover', () => {
+  it('is three pages and the hidden ones past each end on a phone held upright, the current one in the centre slot, empty past the cover', () => {
     const { slots } = mountStrip({ viewport: PORTRAIT });
-    // Three shown, and the hidden ones a drag of a page's reach fills the band with.
-    expect(slots()).toHaveLength(7);
-    expect(shown(slots())).toEqual([null, null, null, 0, 1, 2, 3]);
+    // Three shown, the hidden ones a drag of a page's reach fills the band with, and one more each end for the rest shift.
+    expect(slots()).toHaveLength(9);
+    expect(shown(slots())).toEqual([null, null, null, null, 0, 1, 2, 3, 4]);
   });
 
   it('follows the width in portrait and the height in landscape, a slot counting its length along the band', () => {
     // Pages 80 apart along a 1000 px wide band, then the hidden ones.
-    expect(mountStrip({ viewport: { width: 1000, height: 1200 } }).slots()).toHaveLength(slotCount(1000, { slot: 72, gap: 8 }, 12, 1));
+    expect(mountStrip({ viewport: { width: 1000, height: 1200 } }).slots()).toHaveLength(built(1000, { slot: 72, gap: 8 }));
     mounted.pop()!.dispose();
     // 1280 x 800 is landscape: the band stands on an edge, so the long side is the height, and a
     // slot is a page's height (108 apart): 7 shown, not the 9 that 80 apart would give.
-    expect(mountStrip({ viewport: { width: 1280, height: 800 } }).slots()).toHaveLength(slotCount(800, { slot: 100, gap: 8 }, 12, 1));
+    expect(mountStrip({ viewport: { width: 1280, height: 800 } }).slots()).toHaveLength(built(800, { slot: 100, gap: 8 }));
     expect(visibleCount(800, { slot: 100, gap: 8 }, 12)).toBe(7);
     mounted.pop()!.dispose();
-    expect(mountStrip({ viewport: LANDSCAPE }).slots()).toHaveLength(slotCount(390, { slot: 100, gap: 8 }, 12, 1));
+    expect(mountStrip({ viewport: LANDSCAPE }).slots()).toHaveLength(built(390, { slot: 100, gap: 8 }));
   });
 
   it('puts the current page in the middle, with its neighbours either side, and empty slots past the last', () => {
     const { slots, manual } = mountStrip({ page: 4 });
-    expect(shown(slots())).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(shown(slots())).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
     expect(manual.currentPage).toBe(4);
     const last = mountStrip({ page: COUNT - 1 });
-    expect(shown(last.slots())).toEqual([COUNT - 4, COUNT - 3, COUNT - 2, COUNT - 1, null, null, null]);
+    expect(shown(last.slots())).toEqual([COUNT - 5, COUNT - 4, COUNT - 3, COUNT - 2, COUNT - 1, null, null, null, null]);
   });
 
   it('marks the centre slot as the current one, the others not', () => {
     const { slots } = mountStrip();
-    expect(slots().map((slot) => slot.dataset.centre)).toEqual(['false', 'false', 'false', 'true', 'false', 'false', 'false']);
+    expect(slots().map((slot) => slot.dataset.centre)).toEqual(['false', 'false', 'false', 'false', 'true', 'false', 'false', 'false', 'false']);
   });
 
   it("draws the slots into small canvases, not the page's full resolution, and builds no thumbnail canvas", () => {
@@ -126,12 +130,12 @@ describe('what the strip shows', () => {
 
   it('re-lays out when the viewport turns', () => {
     const { slots, manual, track } = mountStrip({ viewport: { width: 1000, height: 1200 }, page: 3 });
-    expect(slots()).toHaveLength(15);
+    expect(slots()).toHaveLength(built(1000, { slot: 72, gap: 8 }));
     dom.viewport.width = 390;
     dom.viewport.height = 844;
     dom.windowListeners.get('resize')!.forEach((fn) => fn({}));
-    expect(slots()).toHaveLength(7);
-    expect(shown(slots())).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(slots()).toHaveLength(9);
+    expect(shown(slots())).toEqual([null, 0, 1, 2, 3, 4, 5, 6, 7]);
     expect(manual.currentPage).toBe(3);
     expect(track.dataset.axis).toBe('x');
   });
@@ -298,11 +302,11 @@ describe('the band, by orientation', () => {
 describe('moving along the strip', () => {
   it('a tap on a side page centres it', () => {
     const { manual, slots } = mountStrip({ page: 4 });
-    touchDown(slots()[5]);
-    touchUp(slots()[5]);
+    touchDown(slots()[6]);
+    touchUp(slots()[6]);
     expect(manual.currentPage).toBe(6);
-    down(slots()[2]);
-    up(slots()[2]);
+    down(slots()[3]);
+    up(slots()[3]);
     expect(manual.currentPage).toBe(5);
   });
 
@@ -379,7 +383,7 @@ describe('the band scrolls as a carousel', () => {
     expect(manual.expanded).toBe(false);
     expect(changes).toEqual([{ page: 4, expanded: false }]);
     // The new page is painted at once; the pages then slide the rest of the way home.
-    expect(shown(slots())).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(shown(slots())).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
     expect(track.style.transform).toBe('translateX(0px)');
     expect(track.dataset.dragging).toBeUndefined();
   });
@@ -414,12 +418,14 @@ describe('the band scrolls as a carousel', () => {
   it('stops at the ends: pulling past the last page is clamped, and a release there stays', () => {
     const { manual, slots, track } = mountStrip({ page: COUNT - 1 });
     const at = pull(slots()[2], -5 * PITCH);
-    expect(track.style.transform).toBe('translateX(0px)');
+    // The last page rests a slot toward the end (no empty slot after it), and the pull goes no further.
+    expect(track.style.transform).toBe(`translateX(${PITCH}px)`);
     up(slots()[2], at);
     expect(manual.currentPage).toBe(COUNT - 1);
     const first = mountStrip();
     const back = pull(first.slots()[4], 5 * PITCH);
-    expect(first.track.style.transform).toBe('translateX(0px)');
+    // The first page rests a slot toward the start.
+    expect(first.track.style.transform).toBe(`translateX(${-PITCH}px)`);
     up(first.slots()[4], back);
     expect(first.manual.currentPage).toBe(0);
   });
@@ -467,7 +473,8 @@ describe('the band scrolls as a carousel', () => {
     down(next);
     up(next);
     expect(manual.currentPage).toBe(4);
-    expect(sets).toEqual([`translateY(${TALL_PITCH}px)`, 'translateY(0px)']);
+    // The paint puts the track at rest first; then the slide.
+    expect(sets.slice(-2)).toEqual([`translateY(${TALL_PITCH}px)`, 'translateY(0px)']);
   });
 
   it('a tap on a side page slides it to the centre', () => {
@@ -475,12 +482,12 @@ describe('the band scrolls as a carousel', () => {
     const sets: string[] = [];
     let current = '';
     Object.defineProperty(track.style, 'transform', { get: () => current, set: (value: string) => sets.push((current = value)), configurable: true });
-    down(slots()[4]);
-    up(slots()[4]);
+    down(slots()[5]);
+    up(slots()[5]);
     expect(manual.currentPage).toBe(5);
-    expect(sets).toEqual([`translateX(${PITCH}px)`, 'translateX(0px)']);
-    down(slots()[2]);
-    up(slots()[2]);
+    expect(sets.slice(-2)).toEqual([`translateX(${PITCH}px)`, 'translateX(0px)']);
+    down(slots()[3]);
+    up(slots()[3]);
     expect(manual.currentPage).toBe(4);
     expect(sets.slice(-2)).toEqual([`translateX(${-PITCH}px)`, 'translateX(0px)']);
   });
@@ -637,7 +644,7 @@ describe('opening it on a touch: hold to peek, release to put it back', () => {
 describe('holding a side page peeks it in place', () => {
   const held = () => {
     const strip = mountStrip();
-    return { ...strip, side: strip.slots()[4] };
+    return { ...strip, side: strip.slots()[5] };
   };
 
   it('opens that page without moving the band, and the release puts it back', () => {
@@ -647,11 +654,11 @@ describe('holding a side page peeks it in place', () => {
     expect(manual.expanded).toBe(true);
     expect((view.children[0].children[0].drawn as { index: number }).index).toBe(1);
     expect(manual.currentPage).toBe(0);
-    expect(shown(slots())).toEqual([null, null, null, 0, 1, 2, 3]);
+    expect(shown(slots())).toEqual([null, null, null, null, 0, 1, 2, 3, 4]);
     touchUp(side);
     expect(manual.expanded).toBe(false);
     expect(manual.currentPage).toBe(0);
-    expect(shown(slots())).toEqual([null, null, null, 0, 1, 2, 3]);
+    expect(shown(slots())).toEqual([null, null, null, null, 0, 1, 2, 3, 4]);
     expect(changes).toEqual([
       { page: 1, expanded: true },
       { page: 0, expanded: false },
@@ -689,8 +696,8 @@ describe('holding a side page peeks it in place', () => {
 
   it('with the manual open, a hold on a side page still flips to it and never closes the page', () => {
     const { manual, side, changes } = held();
-    down(manual.thumb.children[0].children[0].children[3]);
-    up(manual.thumb.children[0].children[0].children[3]);
+    down(manual.thumb.children[0].children[0].children[4]);
+    up(manual.thumb.children[0].children[0].children[4]);
     expect(manual.expanded).toBe(true);
     changes.length = 0;
     touchDown(side);
@@ -752,8 +759,8 @@ describe('a second finger on the band cancels its gesture', () => {
     finger(slots()[4], 2, 200);
     lift(centre(), 1, 100);
     lift(slots()[4], 2, 200);
-    down(slots()[4], { pointerType: 'touch', pointerId: 3 });
-    up(slots()[4], { pointerType: 'touch', pointerId: 3 });
+    down(slots()[5], { pointerType: 'touch', pointerId: 3 });
+    up(slots()[5], { pointerType: 'touch', pointerId: 3 });
     expect(manual.currentPage).toBe(4);
   });
 });
@@ -809,8 +816,8 @@ describe('opening it with a mouse or a key: click to open, click the page to clo
     const { manual, centre, slots } = mountStrip();
     down(centre());
     up(centre());
-    down(slots()[4]);
-    up(slots()[4]);
+    down(slots()[5]);
+    up(slots()[5]);
     dom.key('ArrowRight');
     expect(manual.currentPage).toBe(2);
     expect(manual.expanded).toBe(true);

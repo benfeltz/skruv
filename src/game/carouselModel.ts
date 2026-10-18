@@ -69,6 +69,21 @@ export function notchSide(left: number, right: number, angle: number | undefined
 export const centreSlot = (visible: number): number => Math.floor(visible / 2);
 
 /**
+ * How many slots the track rests off centre so the band never shows an empty slot beside its
+ * pages (Ben, 2026-10-18: no padding beside the strip): near the first page the pages slide
+ * toward the start (negative), near the last toward the end (positive); between, 0, the current
+ * page in the middle. A booklet shorter than the band starts at the band's start. The current
+ * page keeps its gold border wherever it then sits.
+ */
+export function restShift(page: number, count: number, visible: number): number {
+  const side = centreSlot(visible);
+  const before = Math.max(0, side - page);
+  const after = Math.max(0, side - (count - 1 - page));
+  if (count < visible) return -before;
+  return after - before;
+}
+
+/**
  * The page index in each of `visible` slots, with `page` in the centre slot; a slot past
  * either end of a `count`-page booklet is null.
  */
