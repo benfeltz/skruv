@@ -32,7 +32,7 @@ function injectStyle() {
   const { strip, stripShort, stripNarrow } = BOOKLET_UI;
   // What the strip and the gap above it take off the bottom of the screen (CSS pixels), at
   // the full size and on a short viewport.
-  const reserveFor = (centreWidth: number) => strip.inset + Math.round((centreWidth * pageH) / pageW) + strip.openGap;
+  const reserveFor = (centreWidth: number) => strip.inset + Math.round((centreWidth * pageH) / pageW) + 2 * strip.surface.pad + strip.openGap;
   // A portrait phone's open page reaches up past the control cluster's buttons (Repack and
   // Snap rotate, in the upper right); its top is held below them. Elsewhere it is clear of
   // the cluster sideways, and only the gutter is kept.
@@ -180,7 +180,10 @@ function injectStyle() {
     }
     /* The strip: the manual's docked form, along the bottom centre — under the scrim (2) and
        the open page (3), over nothing but the room's lower edge. Its own box only takes
-       input; the touch-action is none so a swipe along it is ours, not the browser's. */
+       input, and the box is the drawn tray — paper with an ink edge — so the surface and the
+       hit area are one and the same. The padding and the outline sit outside the content
+       (content-box, as a slot's border does), which the row arithmetic in constants.ts counts.
+       The touch-action is none so a swipe along it is ours, not the browser's. */
     .booklet-strip {
       --slot-centre: ${strip.centreWidth}px;
       --slot-side: ${strip.sideWidth}px;
@@ -193,6 +196,10 @@ function injectStyle() {
       align-items: flex-end;
       gap: ${strip.gap}px;
       max-width: calc(100vw - ${2 * strip.gap}px);
+      padding: ${strip.surface.pad}px;
+      background: ${css(COLORS.bookletPaper)}${strip.surface.alpha};
+      border: ${strip.surface.outline}px solid ${css(COLORS.bookletInk)};
+      border-radius: ${strip.surface.radius}px;
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;

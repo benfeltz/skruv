@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BOOKLET, BOOKLET_UI, CLUSTER, GESTURE, RESET } from '../src/constants.js';
+import { BOOKLET, BOOKLET_UI, CLUSTER, COLORS, GESTURE, INSET, RESET } from '../src/constants.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
 import { FakeElement, installFakeDom } from './support/fakeDom.js';
 import type { FakeDom } from './support/fakeDom.js';
@@ -404,7 +404,7 @@ describe("the open manual page's room above the strip", () => {
   };
   const [pageW, pageH] = BOOKLET.pageSize;
   const { strip, stripShort, page } = BOOKLET_UI;
-  const reserve = (centreWidth: number) => strip.inset + Math.round((centreWidth * pageH) / pageW) + strip.openGap;
+  const reserve = (centreWidth: number) => strip.inset + Math.round((centreWidth * pageH) / pageW) + 2 * strip.surface.pad + strip.openGap;
 
   it('reserves the strip and the gap, and shrinks the strip on a short viewport so the page keeps its size', () => {
     const rules = css();
@@ -441,7 +441,26 @@ describe('the slots keep their width in every browser', () => {
     expect(rules).toContain(`@media (max-width: ${stripNarrow.maxWidth}px) {`);
     // Two arrows, four gaps, the centre and two sides, inside a 360 px phone less its gutters.
     const row = 2 * strip.arrow + 4 * strip.gap + strip.centreWidth + 2 * stripNarrow.sideWidth;
-    expect(row).toBeLessThanOrEqual(360 - 2 * strip.gap);
+    expect(row + 2 * strip.surface.pad).toBeLessThanOrEqual(360 - 2 * strip.gap);
+  });
+});
+
+// 1.9.7.2: the band is a drawn tray, and its drawn edge is its touch footprint.
+describe('the band is a drawn surface', () => {
+  it("draws the strip's own box: padding, paper, an ink outline and rounded corners, each from the constants", () => {
+    mountStrip();
+    const rules = dom.head.children.find((node) => node.id === 'skruv-booklet')!.textContent;
+    const rule = rules.slice(rules.indexOf('.booklet-strip {'), rules.indexOf('.booklet-slots {'));
+    const { surface } = BOOKLET_UI.strip;
+    const hex = (value: number) => `#${value.toString(16).padStart(6, '0')}`;
+    expect(rule).toContain(`padding: ${surface.pad}px;`);
+    expect(rule).toContain(`background: ${hex(COLORS.bookletPaper)}${surface.alpha};`);
+    expect(rule).toContain(`border: ${surface.outline}px solid ${hex(COLORS.bookletInk)};`);
+    expect(rule).toContain(`border-radius: ${surface.radius}px;`);
+    // Content-box: the padding and the outline add to the row, as the narrow fit counts them.
+    expect(rule).not.toContain('box-sizing');
+    // The outline is the inset ring's weight.
+    expect(surface.outline).toBe(INSET.ring.width);
   });
 });
 
