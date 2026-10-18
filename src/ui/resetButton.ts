@@ -1,13 +1,14 @@
 import { COLORS, RESET } from '../constants.js';
 
-// The repack button, first in the control cluster (src/ui/controlCluster.ts): everything of the player's back in the box. A first tap
-// only arms it ("Tap again to repack"); a second within RESET.confirmMs repacks, and the
-// arm lapses on its own. Follows the src/ui pattern (own element, own style).
+// The repack button, in the menu (src/ui/menuButton.ts): everything of the player's back in
+// the box. It is a hold: a bar fills inside the button over RESET.holdMs of unbroken press,
+// and the repack runs when it is full. Letting go, sliding off or closing the menu empties
+// the bar and repacks nothing. The button keeps its size and its label throughout — the
+// fill is the only thing that changes. Follows the src/ui pattern (own element, own style).
 
 const STYLE_ID = 'skruv-reset-button';
 const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 const LABEL = 'Repack';
-const ARMED_LABEL = 'Tap again to repack';
 
 function injectStyle() {
   if (document.getElementById(STYLE_ID)) return;
@@ -15,20 +16,40 @@ function injectStyle() {
   style.id = STYLE_ID;
   style.textContent = `
     .reset-button {
+      display: grid;
+      align-items: center;
       min-height: ${RESET.height}px;
       padding: 0 16px;
       border: 2px solid ${css(COLORS.uiText)}33;
       border-radius: 22px;
+      overflow: hidden;
       background: ${css(COLORS.uiSurface)}e6;
       color: ${css(COLORS.uiText)};
       font: 600 15px/1 system-ui, -apple-system, sans-serif;
       touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
       -webkit-tap-highlight-color: transparent;
       cursor: pointer;
     }
-    .reset-button[data-armed='true'] {
+    .reset-button > * {
+      grid-area: 1 / 1;
+    }
+    .reset-fill {
+      justify-self: start;
+      align-self: stretch;
+      width: 0;
+      margin: 0 -16px;
+      background: ${css(COLORS.uiAccent)}66;
+      pointer-events: none;
+    }
+    .reset-label {
+      position: relative;
+      text-align: center;
+    }
+    .reset-button[data-holding='true'] {
       border-color: ${css(COLORS.uiAccent)};
-      color: ${css(COLORS.uiAccent)};
     }
     .reset-button:focus-visible {
       outline: 2px solid ${css(COLORS.uiAccent)};
@@ -38,28 +59,61 @@ function injectStyle() {
   document.head.append(style);
 }
 
-/** `{ element }`; `onReset()` runs on the confirming second tap. */
+/**
+ * `{ element, cancel }`; `onReset()` runs when a hold of RESET.holdMs completes. `cancel()`
+ * drops a hold in progress (the menu calls it as it closes).
+ */
 export function createResetButton({ onReset }: { onReset: () => void }) {
   injectStyle();
   const element = document.createElement('button');
   element.type = 'button';
   element.className = 'reset-button';
+  element.setAttribute('aria-label', 'Repack: hold to put every part back in the box');
+  // A tap on the button leaves the menu open: only a completed hold closes it (the caller).
+  element.dataset.menuStay = 'true';
+  const fill = document.createElement('span');
+  fill.className = 'reset-fill';
+  const label = document.createElement('span');
+  label.className = 'reset-label';
+  label.textContent = LABEL;
+  element.append(fill, label);
   let timer: ReturnType<typeof setTimeout> | null = null;
 
-  function arm(armed: boolean) {
-    clearTimeout(timer ?? undefined);
-    timer = armed ? setTimeout(() => arm(false), RESET.confirmMs) : null;
-    element.dataset.armed = String(armed);
-    element.textContent = armed ? ARMED_LABEL : LABEL;
-    element.setAttribute('aria-label', armed ? 'Tap again to put every part back in the box' : 'Repack: put every part back in the box');
+  function stop() {
+    if (timer === null) return;
+    clearTimeout(timer);
+    timer = null;
+    element.dataset.holding = 'false';
+    fill.style.transition = 'none';
+    fill.style.width = '0';
   }
 
-  element.addEventListener('click', () => {
-    if (element.dataset.armed !== 'true') return arm(true);
-    arm(false);
-    onReset();
-  });
-  arm(false);
+  function start() {
+    if (timer !== null) return;
+    element.dataset.holding = 'true';
+    fill.style.transition = 'none';
+    fill.style.width = '0';
+    void element.offsetWidth; // flush the empty bar, so the fill below animates from it
+    fill.style.transition = `width ${RESET.holdMs}ms linear`;
+    fill.style.width = 'calc(100% + 32px)';
+    timer = setTimeout(() => {
+      stop();
+      onReset();
+    }, RESET.holdMs);
+  }
 
-  return { element };
+  element.addEventListener('pointerdown', (event) => {
+    if ((event as PointerEvent).button === 0) start();
+  });
+  for (const type of ['pointerup', 'pointercancel', 'pointerleave', 'blur']) element.addEventListener(type, stop);
+  element.addEventListener('keydown', (event) => {
+    const { key, repeat } = event as KeyboardEvent;
+    if ((key === 'Enter' || key === ' ') && !repeat) start();
+  });
+  element.addEventListener('keyup', stop);
+  // A long press is a hold here, not a context menu.
+  element.addEventListener('contextmenu', (event) => event.preventDefault());
+  element.dataset.holding = 'false';
+
+  return { element, cancel: stop };
 }

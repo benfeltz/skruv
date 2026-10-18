@@ -1,4 +1,4 @@
-import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, RENDER, RESET } from '../constants.js';
+import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, MENU, RENDER } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
 import { centreSlot, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
 import { peekNext } from '../game/peekGesture.js';
@@ -34,10 +34,10 @@ function injectStyle() {
   // What the strip and the gap above it take off the bottom of the screen (CSS pixels), at
   // the full size and on a short viewport.
   const reserveFor = (centreWidth: number) => strip.inset + Math.round((centreWidth * pageH) / pageW) + 2 * strip.surface.pad + strip.openGap;
-  // A portrait phone's open page reaches up past the control cluster's buttons (Repack and
-  // Snap rotate, in the upper right); its top is held below them. Elsewhere it is clear of
-  // the cluster sideways, and only the gutter is kept.
-  const clusterBottom = CLUSTER.inset + 2 * RESET.height + CLUSTER.gap + gutter;
+  // A portrait phone's open page reaches up past the control cluster's row (the menu button
+  // in the upper right); its top is held below it. Elsewhere it is clear of the cluster
+  // sideways, and only the gutter is kept.
+  const clusterBottom = CLUSTER.inset + MENU.size + gutter;
   style.textContent = `
     .booklet-thumb {
       position: fixed;

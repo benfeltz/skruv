@@ -30,10 +30,10 @@ describe('repack reset (decision 9)', () => {
     expect(repack).toMatch(/const upright = baseRest\(box\);\n\s+physics\.place\(flatpack\.base\.body, upright\.position, upright\.rotation\);/);
   });
 
-  it('asks for a confirming second tap, inside the RESET window', () => {
+  it('runs only when a hold of RESET.holdMs completes — no tap-again label, no enlarged state', () => {
     const button = read('src/ui/resetButton.ts');
-    expect(button).toMatch(/setTimeout\(\(\) => arm\(false\), RESET\.confirmMs\)/);
-    expect(button).toMatch(/if \(element\.dataset\.armed !== 'true'\) return arm\(true\);/);
+    expect(button).toMatch(/\}, RESET\.holdMs\);/);
+    expect(button).not.toMatch(/Tap again|ARMED_LABEL|data-armed/);
   });
 });
 
@@ -231,5 +231,20 @@ describe('tap the open manual to put it down, swipe to flip (1.6.2)', () => {
   it("leaves every button on the sheet its own job, and closes as the room's tap does", () => {
     expect(sheetTap).toMatch(/\(event\.target as Element\)\.closest\('button'\)/);
     expect(sheetTap).toMatch(/setOpen\(false, \{ byRoomTap: true \}\)/);
+  });
+});
+
+// 1.9.7.1.1: Repack and Snap rotate are reached through the menu button in the upper-right row.
+describe('the menu button wiring', () => {
+  it('holds Repack and Snap rotate, and sits in the cluster', () => {
+    expect(main).toMatch(/const repack = createResetButton\(/);
+    expect(main).toMatch(/menu\.add\(repack\.element, \{ onClose: repack\.cancel \}\)/);
+    expect(main).toMatch(/menu\.add\(snapRotate\.element\)/);
+    expect(main).toMatch(/cluster\.add\(menu\.element\)/);
+  });
+
+  it("closes the menu after Repack's confirming tap, and adds the gear after the menu", () => {
+    expect(main).toMatch(/items\.current\?\.repack\(\);\s+menu\.close\(\);/);
+    expect(main.indexOf('cluster.add(menu.element)')).toBeLessThan(main.indexOf('cluster.add(panel.tab)'));
   });
 });

@@ -19,6 +19,7 @@ import { createBookletPages } from './scene/bookletPages.js';
 import { createCatalogPages } from './scene/catalogPages.js';
 import { createCatalogSheet } from './ui/catalogSheet.js';
 import { createControlCluster } from './ui/controlCluster.js';
+import { createMenuButton } from './ui/menuButton.js';
 import { createResetButton } from './ui/resetButton.js';
 import { createToggleButton } from './ui/toggleButton.js';
 
@@ -69,7 +70,7 @@ const cameraControls = createCameraControls(camera, renderer.domElement, {
 });
 
 // Rotation is free by default; the toggle turns 90° detents on. It is mounted in the control
-// cluster below, after Repack.
+// menu below, after Repack.
 const snapRotate = createToggleButton({ label: 'Snap rotate' });
 
 // Haptics: every moment buzzes a named cue through the buzzer slot. The web's buzzer plays
@@ -135,10 +136,20 @@ catalogPages.prerender();
 // The real sheet now covers index.html's stand-in; it goes in the frame that first paints it.
 requestAnimationFrame(() => document.getElementById('pre-splash')?.remove());
 
-// The upper-right column: Repack in the corner, Snap rotate under it, the ?tune gear last.
+// The upper-right row: the menu in the corner holding Repack and Snap rotate, the ?tune
+// gear (added after it) to its left.
 const cluster = createControlCluster();
-cluster.add(createResetButton({ onReset: () => items.current?.repack() }).element);
-cluster.add(snapRotate.element);
+const menu = createMenuButton({ name: 'Menu' });
+const repack = createResetButton({
+  onReset: () => {
+    items.current?.repack();
+    menu.close();
+  },
+});
+// Closing the menu drops a Repack hold in progress.
+menu.add(repack.element, { onClose: repack.cancel });
+menu.add(snapRotate.element);
+cluster.add(menu.element);
 document.body.append(cluster.element);
 
 // Under sustained load the room renders every other frame; everything else runs every frame.

@@ -645,21 +645,31 @@ export const BOX = {
   friction: 1,
 };
 
-// The control cluster (src/ui/controlCluster.ts): the column of buttons in the upper right —
-// Repack, Snap rotate, and the ?tune gear — the one owner of that corner. Its inset from the
-// screen corner and the gap between its buttons (CSS pixels).
+// The control cluster (src/ui/controlCluster.ts): the row in the upper right — the menu
+// button in the corner (first added, at the right), the ?tune gear to its left — the one
+// owner of that corner. Its inset from the screen corner and the gap between its controls
+// (CSS pixels).
 export const CLUSTER = {
   inset: 16,
   gap: 8,
+};
+
+// The menu button (src/ui/menuButton.ts): a hamburger holding Repack and Snap rotate. Its
+// square size and glyph size, and the drop under it: the gap below the button, the padding
+// inside the drop and its corner radius (CSS pixels).
+export const MENU = {
+  size: 44,
+  glyph: 22,
+  drop: { gap: 8, pad: 8, radius: 18 },
 };
 
 // Repack and recovery (src/ui/resetButton.ts, src/main.ts).
 export const RESET = {
   // The button's height (CSS pixels); its place is the control cluster's (CLUSTER).
   height: 44,
-  // The repack button arms on a first tap and repacks only on a second within this many
-  // ms — cheap insurance against a fat finger wiping a build.
-  confirmMs: 2500,
+  // The repack button is a hold: a bar fills inside it over this many ms of unbroken press,
+  // and the repack runs when it is full — cheap insurance against a fat finger wiping a build.
+  holdMs: 900,
   // Every this many seconds, any loose player part found outside the room (by more than
   // `escapeMargin` m) is set down again beside the box.
   sweepInterval: 2,
