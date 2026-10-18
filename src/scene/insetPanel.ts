@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import { controlFor, pushLook, turnLook } from '../game/insetControls.js';
+import { bubbleFor, bubbleOf, controlFor, pushLook, turnLook } from '../game/insetControls.js';
 import { createInsetModel } from '../game/insetModel.js';
-import { insetCameraPose, insetFrame, insideInset } from '../game/insetView.js';
+import { insetCameraPose, insetFrame, insetLayout, insideInset } from '../game/insetView.js';
 import { createInsetOverlay } from '../ui/inset.js';
 import { createInsetControls } from '../ui/insetControls.js';
 import { createInset } from './inset.js';
 import type { InsetSubject } from '../game/insetModel.js';
-import type { InsetFrame, SafeInsets } from '../game/insetView.js';
+import type { InsetFrame, InsetLayout, SafeInsets } from '../game/insetView.js';
 import type { GestureRouter, InsetHook } from './gestureRouter.js';
 
 /** What the panel is built over: the canvas it frames in, the main camera, and where its ring and tail go. */
@@ -25,7 +25,8 @@ export interface InsetPanelDeps {
  * feeds it each frame's candidates and its taps; `update()` runs after the router's update;
  * `render()` is the extra pass after the main render. The canvas fills the window, so its
  * client px are the circle's. Attached to the circle, as the manual's tool bubble is to its detail
- * inset, sits the subject's control — the spinner for a tool, the push bubble for a dowel — driving the router's
+ * inset, sits the subject's control — the spinner for a turn (small for a tool's, the circle's own size for a part
+ * circled by hand), the push bubble for a dowel — driving the router's
  * actions (`connect`, once the router exists); while the circle is offered or dismissed there is none.
  */
 export function createInsetPanel({ domElement, camera, container, lines }: InsetPanelDeps) {
@@ -38,7 +39,7 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
   // The subject the controls act on: the one shown while active, else null.
   let driven: InsetSubject | null = null;
   const controls = createInsetControls(container, {
-    onTurn: (radians) => driven?.tool && actions?.turnGrip(driven.tool, radians),
+    onTurn: (radians) => driven?.grip && actions?.turnGrip(driven.grip, radians),
     onPush: () => driven && actions?.pressJoint(driven.joint),
     onPull: () => driven && actions?.pullJoint(driven.joint),
   });
@@ -52,6 +53,8 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
   // (a rotation included), never per frame: a read after last frame's attribute writes forces a layout flush.
   let box: { left: number; top: number; width: number; height: number } | null = null;
   let placed: InsetFrame | null = null;
+  // Which way round the window is, read with the box: where a hand turn's spinner is attached.
+  let layout: InsetLayout = 'portrait';
   const resized = () => {
     box = null;
   };
@@ -93,7 +96,8 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
       if (!box || !placed) {
         const { left, top, width, height } = domElement.getBoundingClientRect();
         box = { left, top, width, height };
-        placed = insetFrame({ width, height }, probe.read(width, height));
+        layout = insetLayout({ width, height });
+        placed = insetFrame({ width, height }, probe.read(width, height), layout);
       }
       const rect = box;
       frame = placed;
@@ -106,10 +110,10 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
       const kind = state === 'active' ? controlFor(subject) : null;
       driven = kind ? subject : null;
       if (!kind) return controls.hide();
-      if (kind === 'turn') controls.showTurn(frame, turnLook(subject));
-      else controls.showPush(frame, pushLook(subject));
+      if (kind === 'turn') controls.showTurn(bubbleFor(subject, frame, layout), turnLook(subject));
+      else controls.showPush(bubbleOf(frame), pushLook(subject));
     },
-    /** The router's actions the controls drive: its spinner turns the tool, its push bubble presses a dowel home and backs it out. */
+    /** The router's actions the controls drive: its spinner turns the tool or the hand-turned part, its push bubble presses a dowel home and backs it out. */
     connect(router: Pick<GestureRouter, 'turnGrip' | 'pressJoint' | 'pullJoint'>) {
       actions = router;
     },
