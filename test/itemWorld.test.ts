@@ -108,7 +108,7 @@ beforeEach(() => {
     head,
     visibilityState: 'visible',
     // The manual's band sets its root variables here.
-    documentElement: { style: { setProperty() {}, removeProperty() {} } },
+    documentElement: { style: { setProperty() {}, removeProperty() {} }, dataset: {} },
     createElement: (tag: string) => new FakeElement(tag),
     createElementNS: (_ns: string, tag: string) => new FakeElement(tag),
     getElementById: (id: string) => head.children.find((node) => node.id === id) ?? null,

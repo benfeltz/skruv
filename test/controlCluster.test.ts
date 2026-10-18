@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CLUSTER } from '../src/constants.js';
+import { CLUSTER, MENU } from '../src/constants.js';
 import { createControlCluster } from '../src/ui/controlCluster.js';
 import { FakeElement, installFakeDom } from './support/fakeDom.js';
 import type { FakeDom } from './support/fakeDom.js';
@@ -24,12 +24,24 @@ describe('the control cluster', () => {
     createControlCluster();
     const css = dom.head.children.find((node) => node.id === 'skruv-control-cluster')!.textContent;
     expect(css).toContain('position: fixed;');
-    // Left of the manual's band when it runs down the right edge; that variable already counts the notch, so the notch is not added again.
-    expect(css).toContain(`right: calc(max(var(--strip-right, 0px), env(safe-area-inset-right)) + ${CLUSTER.inset}px);`);
+    expect(css).toContain(`right: calc(${CLUSTER.inset}px + env(safe-area-inset-right));`);
     expect(css).toContain(`top: calc(${CLUSTER.inset}px + env(safe-area-inset-top));`);
     expect(css).toContain('flex-direction: row-reverse;');
     // Above an open manual page (z-index 3), so the menu's drop is reachable over it.
     expect(css).toContain('z-index: 4;');
     expect(css).toContain(`gap: ${CLUSTER.gap}px;`);
+  });
+
+  it("goes to the side without the manual's band in landscape, a column centred in the notch's margin, or in the corner with no notch", () => {
+    createControlCluster();
+    const css = dom.head.children.find((node) => node.id === 'skruv-control-cluster')!.textContent;
+    const half = MENU.size / 2;
+    // Notch on the left (band on the right): left, around --rail-x.
+    expect(css).toContain("html[data-strip='right'] .control-cluster {");
+    expect(css).toContain(`left: calc(var(--rail-x, ${CLUSTER.inset + half}px) - ${half}px);`);
+    // Notch on the right (band on the left): right, around --rail-x.
+    expect(css).toContain("html[data-strip='left'] .control-cluster {");
+    expect(css).toContain(`right: calc(100vw - var(--rail-x, 100vw) - ${half}px);`);
+    expect(css.match(/flex-direction: column;/g)).toHaveLength(2);
   });
 });

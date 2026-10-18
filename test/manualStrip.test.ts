@@ -43,7 +43,8 @@ function mountStrip(options: { page?: number; viewport?: { width: number; height
   dom.body.append(manual.thumb, manual.element);
   const changes: { page: number; expanded: boolean }[] = [];
   manual.onChange((change) => changes.push(change));
-  const [track] = manual.thumb.children;
+  const [lane] = manual.thumb.children;
+  const [track] = lane.children;
   const slots = () => track.children;
   const view = manual.element.children[1];
   for (let i = 0; i < (options.page ?? 0); i++) dom.key('ArrowRight');
@@ -72,15 +73,16 @@ describe('what the strip shows', () => {
   });
 
   it('follows the width in portrait and the height in landscape, a slot counting its length along the band', () => {
-    // Pages 80 apart along a 1000 px wide band: 11 shown (994 - ...), then the hidden ones.
+    // Pages 80 apart along a 1000 px wide band, then the hidden ones.
     expect(mountStrip({ viewport: { width: 1000, height: 1200 } }).slots()).toHaveLength(slotCount(1000, { slot: 72, gap: 8 }, 12, 1));
     mounted.pop()!.dispose();
-    // 1280 x 800 is landscape: the band stands on the right edge, so the long side is the height
-    // and a slot is a page's height (108 apart): 7 shown, not the 9 that 80 apart would give.
-    expect(mountStrip({ viewport: { width: 1280, height: 800 } }).slots()).toHaveLength(slotCount(800, { slot: 100, gap: 8 }, 12, 1));
-    expect(visibleCount(800, { slot: 100, gap: 8 }, 12)).toBe(7);
+    // 1280 x 800 is landscape: the band stands on an edge, so the long side is the height less the
+    // thumb's reserve at its top, and a slot is a page's height (108 apart): 5 shown, not the 9 that 80 apart would give.
+    const reserve = BOOKLET_UI.page.gutter + BOOKLET_UI.cornerInset + Math.round((BOOKLET_UI.thumbWidth * BOOKLET.pageSize[1]) / BOOKLET.pageSize[0]);
+    expect(mountStrip({ viewport: { width: 1280, height: 800 } }).slots()).toHaveLength(slotCount(800 - reserve, { slot: 100, gap: 8 }, 12, 1));
+    expect(visibleCount(800 - reserve, { slot: 100, gap: 8 }, 12)).toBe(5);
     mounted.pop()!.dispose();
-    expect(mountStrip({ viewport: LANDSCAPE }).slots()).toHaveLength(7);
+    expect(mountStrip({ viewport: LANDSCAPE }).slots()).toHaveLength(slotCount(390 - reserve, { slot: 100, gap: 8 }, 12, 1));
   });
 
   it('puts the current page in the middle, with its neighbours either side, and empty slots past the last', () => {
@@ -108,7 +110,8 @@ describe('what the strip shows', () => {
   it('has no scrim: nothing over the room but the strip and the page', () => {
     const { manual } = mountStrip();
     expect(manual.scrim).toBeNull();
-    expect(dom.body.children).toEqual([manual.thumb, manual.element]);
+    // (The strip's hidden safe-area probe is in the body too.)
+    expect(dom.body.children.filter((node) => node.attributes['aria-hidden'] !== 'true')).toEqual([manual.thumb, manual.element]);
   });
 
   it('keeps focus on the strip when a resize rebuilds its slots', () => {
@@ -160,45 +163,107 @@ describe('the band, by orientation', () => {
     expect(manual.thumb.dataset.axis).toBe('x');
   });
 
-  it('sets the root variables for the room\'s view: the bottom in portrait, the right in landscape, and clears them on dispose', () => {
-    const bottom = `calc(${pageHeight + 2 * page.gutter}px + env(safe-area-inset-bottom))`;
-    const right = `calc(${strip.page + 2 * page.gutter}px + env(safe-area-inset-right))`;
-    const { manual } = mountStrip({ viewport: PORTRAIT });
-    expect(dom.rootStyle.props).toEqual({ '--strip-bottom': bottom, '--strip-right': '0px' });
-    dom.viewport.width = LANDSCAPE.width;
-    dom.viewport.height = LANDSCAPE.height;
+  const turn = (viewport: { width: number; height: number }, safe = { left: 0, right: 0 }) => {
+    dom.viewport.width = viewport.width;
+    dom.viewport.height = viewport.height;
+    dom.safe.left = safe.left;
+    dom.safe.right = safe.right;
     dom.windowListeners.get('resize')!.forEach((fn) => fn({}));
-    expect(dom.rootStyle.props).toEqual({ '--strip-bottom': '0px', '--strip-right': right });
+  };
+  const bandRight = strip.page + 2 * page.gutter;
+
+  it("sets the root variables for the room's view: the bottom upright, and clears them on dispose", () => {
+    const { manual } = mountStrip({ viewport: PORTRAIT });
+    expect(dom.rootStyle.props).toEqual({ '--strip-bottom': `calc(${pageHeight + 2 * page.gutter}px + env(safe-area-inset-bottom))`, '--strip-left': '0px', '--strip-right': '0px' });
+    expect(dom.rootStyle.dataset.strip).toBe('bottom');
     manual.dispose();
     expect(dom.rootStyle.props).toEqual({});
+    expect(dom.rootStyle.dataset.strip).toBeUndefined();
   });
 
-  it('is edge to edge: the whole bottom in portrait, the whole right edge in landscape, each from the page ratio', () => {
+  it('puts the band on the right with no notch: the view is inset by the band, the backdrop black, no notch column', () => {
+    const { manual } = mountStrip({ viewport: LANDSCAPE });
+    expect(dom.rootStyle.props).toEqual({
+      '--strip-bottom': '0px',
+      '--strip-left': 'env(safe-area-inset-left)',
+      '--strip-right': `calc(${bandRight}px + env(safe-area-inset-right))`,
+      '--backdrop': '#000',
+    });
+    expect(manual.thumb.dataset.band).toBe('right');
+    expect(dom.rootStyle.dataset.strip).toBe('right');
+  });
+
+  it('puts the band on the side without the notch: a notch on the left means the band on the right, with the notch column black and its middle named', () => {
+    dom.safe.left = 59;
+    const { manual } = mountStrip({ viewport: LANDSCAPE });
+    dom.safe.left = 59;
+    turn(LANDSCAPE, { left: 59, right: 0 });
+    expect(manual.thumb.dataset.band).toBe('right');
+    expect(dom.rootStyle.props['--strip-left']).toBe('env(safe-area-inset-left)');
+    expect(dom.rootStyle.props['--rail-x']).toBe('calc(env(safe-area-inset-left) / 2)');
+    expect(dom.rootStyle.props['--backdrop']).toBe('#000');
+  });
+
+  it('a notch on the right means the band on the left, the view inset by the notch on the right', () => {
+    const { manual } = mountStrip({ viewport: LANDSCAPE });
+    turn(LANDSCAPE, { left: 0, right: 59 });
+    expect(manual.thumb.dataset.band).toBe('left');
+    expect(dom.rootStyle.dataset.strip).toBe('left');
+    expect(dom.rootStyle.props['--strip-left']).toBe(`calc(${bandRight}px + env(safe-area-inset-left))`);
+    expect(dom.rootStyle.props['--strip-right']).toBe('env(safe-area-inset-right)');
+    expect(dom.rootStyle.props['--rail-x']).toBe('calc(100vw - env(safe-area-inset-right) / 2)');
+  });
+
+  it('turning back upright gives the whole width back: no backdrop, no notch column', () => {
+    mountStrip({ viewport: LANDSCAPE });
+    turn(LANDSCAPE, { left: 59, right: 0 });
+    turn(PORTRAIT, { left: 0, right: 0 });
+    expect(dom.rootStyle.props['--backdrop']).toBeUndefined();
+    expect(dom.rootStyle.props['--rail-x']).toBeUndefined();
+    expect(dom.rootStyle.props['--strip-left']).toBe('0px');
+    expect(dom.rootStyle.dataset.strip).toBe('bottom');
+  });
+
+  it('is edge to edge: the whole bottom upright, the whole height of the side without the notch in landscape, each from the page ratio', () => {
     mountStrip();
     const css = rules();
-    const portrait = css.slice(css.indexOf(".booklet-strip[data-axis='x'] {"), css.indexOf(".booklet-strip[data-axis='y'] {"));
-    const landscape = css.slice(css.indexOf(".booklet-strip[data-axis='y'] {"), css.indexOf('.booklet-track {'));
+    const portrait = css.slice(css.indexOf(".booklet-strip[data-band='bottom'] {"), css.indexOf('/* Down an edge'));
+    const right = css.slice(css.indexOf(".booklet-strip[data-band='right'] {\n"), css.indexOf("\n    .booklet-strip[data-band='left'] {\n"));
+    const left = css.slice(css.indexOf("\n    .booklet-strip[data-band='left'] {\n"), css.indexOf('/* Where the pages run'));
     expect(pageHeight).toBe(100);
     expect(portrait).toContain('left: 0;');
     expect(portrait).toContain('right: 0;');
     expect(portrait).toContain('bottom: 0;');
     expect(portrait).toContain(`height: calc(${pageHeight + 2 * page.gutter}px + env(safe-area-inset-bottom));`);
-    expect(landscape).toContain('top: 0;');
-    expect(landscape).toContain('right: 0;');
-    expect(landscape).toContain('bottom: 0;');
-    expect(landscape).toContain(`width: calc(${strip.page + 2 * page.gutter}px + env(safe-area-inset-right));`);
+    expect(css).toContain(".booklet-strip[data-band='right'], .booklet-strip[data-band='left'] {\n      top: 0;\n      bottom: 0;");
+    expect(right).toContain('right: 0;');
+    expect(right).toContain(`width: calc(${bandRight}px + env(safe-area-inset-right));`);
+    expect(left).toContain('left: 0;');
+    expect(left).toContain(`width: calc(${bandRight}px + env(safe-area-inset-left));`);
   });
 
   it('is paper with an ink rule on its view side, its slots cut at its edges, and nothing softer', () => {
     mountStrip();
     const css = rules();
-    const band = css.slice(css.indexOf('.booklet-strip {'), css.indexOf(".booklet-strip[data-axis='x'] {"));
+    const band = css.slice(css.indexOf('.booklet-strip {'), css.indexOf(".booklet-strip[data-band='bottom'] {"));
     expect(band).toContain('overflow: hidden;');
     expect(band).toContain(`background: ${hex(COLORS.bookletPaper)};`);
     expect(css).toContain(`box-shadow: inset 0 ${strip.rule}px 0 ${hex(COLORS.bookletInk)};`);
     expect(css).toContain(`box-shadow: inset ${strip.rule}px 0 0 ${hex(COLORS.bookletInk)};`);
+    expect(css).toContain(`box-shadow: inset -${strip.rule}px 0 0 ${hex(COLORS.bookletInk)};`);
     expect(band).not.toContain('border-radius');
     expect(strip.rule).toBe(INSET.ring.width);
+  });
+
+  it("runs the pages in a lane below the catalog's thumb down an edge, and puts that thumb at the top of the band's side", () => {
+    mountStrip();
+    const css = rules();
+    const reserve = page.gutter + BOOKLET_UI.cornerInset + Math.round((BOOKLET_UI.thumbWidth * pageH) / pageW);
+    expect(css).toContain(`.booklet-strip[data-axis='y'] .booklet-lane { margin-top: ${reserve}px; }`);
+    expect(css).toContain("html[data-strip='right'] .booklet-thumb[data-corner='topLeft'] {");
+    expect(css).toContain(`right: calc(env(safe-area-inset-right) + ${(bandRight - BOOKLET_UI.thumbWidth) / 2}px);`);
+    // Over the band (z-index 0), under the scrim.
+    expect(css.slice(css.indexOf('.booklet-strip {'), css.indexOf(".booklet-strip[data-band='bottom']"))).toContain('z-index: 0;');
   });
 
   it('draws every page one size from the page ratio, the centre told by its gold border, and has no arrows', () => {
@@ -364,14 +429,15 @@ describe('the band scrolls as a carousel', () => {
   it('on the right edge a vertical pull moves the track down the band, a slot being a page tall, and flips; a horizontal one is only a wobble', () => {
     const { manual, slots, track } = mountStrip({ viewport: LANDSCAPE, page: 3 });
     // A page's height and the gap: 108 apart, not the 80 of the bottom band.
+    const next = slots()[Math.floor(slots().length / 2) + 1];
     const along = TALL_PITCH * 0.7;
-    const at = pull(slots()[4], -along, 'y');
+    const at = pull(next, -along, 'y');
     expect(track.style.transform).toBe(`translateY(${-along}px)`);
-    up(slots()[4], at);
+    up(next, at);
     expect(manual.currentPage).toBe(4);
-    const across = pull(slots()[4], -2 * PITCH, 'x');
+    const across = pull(next, -2 * PITCH, 'x');
     expect(track.style.transform).toBe('translateY(0px)');
-    up(slots()[4], across);
+    up(next, across);
     expect(manual.currentPage).toBe(4);
   });
 
@@ -380,8 +446,9 @@ describe('the band scrolls as a carousel', () => {
     const sets: string[] = [];
     let current = '';
     Object.defineProperty(track.style, 'transform', { get: () => current, set: (value: string) => sets.push((current = value)), configurable: true });
-    down(slots()[4]);
-    up(slots()[4]);
+    const next = slots()[Math.floor(slots().length / 2) + 1];
+    down(next);
+    up(next);
     expect(manual.currentPage).toBe(4);
     expect(sets).toEqual([`translateY(${TALL_PITCH}px)`, 'translateY(0px)']);
   });
@@ -605,8 +672,8 @@ describe('holding a side page peeks it in place', () => {
 
   it('with the manual open, a hold on a side page still flips to it and never closes the page', () => {
     const { manual, side, changes } = held();
-    down(manual.thumb.children[0].children[3]);
-    up(manual.thumb.children[0].children[3]);
+    down(manual.thumb.children[0].children[0].children[3]);
+    up(manual.thumb.children[0].children[0].children[3]);
     expect(manual.expanded).toBe(true);
     changes.length = 0;
     touchDown(side);
@@ -793,10 +860,10 @@ describe("the open manual page's room above the strip", () => {
   it('is centred in the view the band leaves down the right edge', () => {
     const rules = css();
     const landscape = rules.slice(rules.indexOf(".booklet-leaf[data-docked='strip'][data-axis='y'] {"));
-    expect(landscape).toContain('left: calc((100vw - var(--strip-right, 0px)) / 2);');
+    expect(landscape).toContain('left: calc((var(--strip-left, 0px) + 100vw - var(--strip-right, 0px)) / 2);');
     expect(landscape).toContain('top: 50%;');
     expect(landscape).toContain('bottom: auto;');
-    expect(landscape).toContain(`width: min(calc(100vw - var(--strip-right, 0px) - ${2 * page.gutter}px), ${BOOKLET.pageSize[0]}px, calc((100dvh - ${2 * page.gutter}px) * ${BOOKLET.pageSize[0]} / ${BOOKLET.pageSize[1]}));`);
+    expect(landscape).toContain(`width: min(calc(100vw - var(--strip-left, 0px) - var(--strip-right, 0px) - ${2 * page.gutter}px), ${BOOKLET.pageSize[0]}px, calc((100dvh - ${2 * page.gutter}px) * ${BOOKLET.pageSize[0]} / ${BOOKLET.pageSize[1]}));`);
   });
 
   it('opens at the bottom centre of its anchor in portrait and the centre of the view in landscape; docked, it sits on the slot', () => {

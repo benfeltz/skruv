@@ -89,7 +89,8 @@ export function createLiftLine({ onPress, onMove, onRelease }: LiftLineHandlers)
     const { x, top, bottom, knobRadius, lineWidth, hitWidth } = LIFT_LINE;
     const style = element.style;
     const half = hitWidth / 2;
-    style.left = `clamp(calc(env(safe-area-inset-left) + ${half}px), ${x * 100}vw, calc(100vw - env(safe-area-inset-right) - ${half}px))`;
+    // In the notch's margin when the manual's band has made one (--rail-x, src/ui/booklet.ts), else where LIFT_LINE puts it.
+    style.left = `var(--rail-x, clamp(calc(env(safe-area-inset-left) + ${half}px), ${x * 100}vw, calc(100vw - env(safe-area-inset-right) - ${half}px)))`;
     style.top = `max(${top * 100}vh, calc(env(safe-area-inset-top) + ${knobRadius}px))`;
     style.height = `${(bottom - top) * 100}vh`;
     style.width = `${hitWidth}px`;

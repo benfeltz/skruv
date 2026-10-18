@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, BOOKLET_UI } from '../src/constants.js';
-import { centreSlot, clampTravel, pitch, slotCount, snapSteps, tapOn, visibleCount, windowOf } from '../src/game/carouselModel.js';
+import { centreSlot, clampTravel, pitch, slotCount, snapSteps, stripSide, tapOn, visibleCount, windowOf } from '../src/game/carouselModel.js';
 
 const { page, gap, reach } = BOOKLET_UI.strip;
 const { gutter } = BOOKLET_UI.page;
@@ -97,6 +97,20 @@ describe('how many pages a release moves', () => {
   it('counts half a pitch as a page, either way', () => {
     expect(snapSteps(-step / 2, step)).toBe(1);
     expect(snapSteps(step / 2, step)).toBe(-1);
+  });
+});
+
+describe('which side the band stands on in landscape', () => {
+  it('is the side without the notch: the larger safe-area inset is the notch', () => {
+    expect(stripSide(59, 0)).toBe('right');
+    expect(stripSide(0, 59)).toBe('left');
+    expect(stripSide(47, 34)).toBe('right');
+    expect(stripSide(34, 47)).toBe('left');
+  });
+
+  it('is the right with no notch, or the same inset both sides', () => {
+    expect(stripSide(0, 0)).toBe('right');
+    expect(stripSide(20, 20)).toBe('right');
   });
 });
 

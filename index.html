@@ -22,17 +22,17 @@
         margin: 0;
         height: 100%;
         overflow: hidden;
-        background: #1b1d22;
+        background: var(--backdrop, #1b1d22);
         overscroll-behavior: none;
         -webkit-user-select: none;
         user-select: none;
         -webkit-touch-callout: none;
       }
       /* The manual's band sets these while it is mounted (src/ui/booklet.ts), so the canvas
-         never lies under it; unset, the room is whole. */
+         never lies under it or the notch (drawn black: --backdrop); unset, the room is whole. */
       #app {
         position: fixed;
-        inset: 0 var(--strip-right, 0px) var(--strip-bottom, 0px) 0;
+        inset: 0 var(--strip-right, 0px) var(--strip-bottom, 0px) var(--strip-left, 0px);
       }
       #app canvas {
         display: block;

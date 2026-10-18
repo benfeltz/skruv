@@ -10,11 +10,17 @@ type Listener = (event: object) => void;
 /** The root element's style: just the custom properties a test reads back. */
 export class FakeStyle {
   props: Record<string, string> = {};
+  /** The root's `data-*`, as `dataset`. */
+  dataset: Record<string, string> = {};
   setProperty(name: string, value: string) {
     this.props[name] = value;
   }
   removeProperty(name: string) {
     delete this.props[name];
+  }
+  /** The element the document hands out as `documentElement`: this style, and its dataset. */
+  asRoot() {
+    return { style: this, dataset: this.dataset };
   }
 }
 
@@ -104,8 +110,10 @@ export interface FakeDom {
   windowListeners: Map<string, Listener[]>;
   /** The viewport's size, as `window.innerWidth` and `innerHeight`: a test sets it, then fires `resize`. */
   viewport: { width: number; height: number };
-  /** `document.documentElement`'s style, where the strip sets its root variables. */
+  /** `document.documentElement`'s style and dataset, where the strip sets its root variables and `data-strip`. */
   rootStyle: FakeStyle;
+  /** The safe-area insets `getComputedStyle` reports on the strip's probe (CSS px): a test sets the notch here, then fires `resize`. */
+  safe: { left: number; right: number };
   /** Presses a key on the window. */
   key(name: string): void;
 }
@@ -120,6 +128,7 @@ export function installFakeDom(): FakeDom {
     windowListeners,
     viewport: { width: 1280, height: 800 },
     rootStyle: new FakeStyle(),
+    safe: { left: 0, right: 0 },
     key: (name) => windowListeners.get('keydown')?.forEach((fn) => fn({ key: name })),
   };
   dom.head = new FakeElement('head', dom);
@@ -127,7 +136,7 @@ export function installFakeDom(): FakeDom {
   vi.stubGlobal('document', {
     head: dom.head,
     body: dom.body,
-    documentElement: { style: dom.rootStyle },
+    documentElement: dom.rootStyle.asRoot(),
     createElement: (tag: string) => new FakeElement(tag, dom),
     getElementById: (id: string) => dom.head.children.find((node) => node.id === id) ?? null,
   });
@@ -141,5 +150,6 @@ export function installFakeDom(): FakeDom {
     addEventListener: (type: string, fn: Listener) => windowListeners.set(type, [...(windowListeners.get(type) ?? []), fn]),
     removeEventListener: (type: string, fn: Listener) => windowListeners.set(type, (windowListeners.get(type) ?? []).filter((f) => f !== fn)),
   });
+  vi.stubGlobal('getComputedStyle', () => ({ paddingLeft: `${dom.safe.left}px`, paddingRight: `${dom.safe.right}px` }));
   return dom;
 }

@@ -253,10 +253,14 @@ describe("the manual's band shrinks the room's view (1.9.7.1.2)", () => {
   const booklet = read('src/ui/booklet.ts');
   const cluster = read('src/ui/controlCluster.ts');
 
-  it("names the two root variables once, and #app and the control cluster read exactly those", () => {
-    expect(booklet).toContain("const STRIP_VARS = { bottom: '--strip-bottom', right: '--strip-right' } as const;");
-    expect(read('index.html')).toContain('inset: 0 var(--strip-right, 0px) var(--strip-bottom, 0px) 0;');
-    expect(cluster).toContain('right: calc(max(var(--strip-right, 0px), env(safe-area-inset-right))');
+  it("names the root variables once, and #app, the cluster and the lift line read exactly those", () => {
+    expect(booklet).toContain("const STRIP_VARS = { bottom: '--strip-bottom', left: '--strip-left', right: '--strip-right', rail: '--rail-x', backdrop: '--backdrop' } as const;");
+    const html = read('index.html');
+    expect(html).toContain('inset: 0 var(--strip-right, 0px) var(--strip-bottom, 0px) var(--strip-left, 0px);');
+    expect(html).toContain('background: var(--backdrop, #1b1d22);');
+    expect(cluster).toContain('var(--rail-x,');
+    expect(read('src/ui/liftLine.ts')).toContain('var(--rail-x, clamp(');
+    expect(read('src/ui/menuButton.ts')).toContain("html[data-strip='right'] .menu-drop");
   });
 
   it('has no arrow buttons on the strip: it is dragged, tapped and keyed', () => {

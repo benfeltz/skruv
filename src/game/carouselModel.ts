@@ -53,6 +53,13 @@ export function snapSteps(travel: number, step: number): number {
   return pages === 0 ? 0 : travel < 0 ? pages : -pages;
 }
 
+/**
+ * Which side of the screen the band stands on in landscape, from the safe-area insets (CSS
+ * px): the side without the notch — the larger inset is the notch's — and the right when
+ * neither side has one.
+ */
+export const stripSide = (left: number, right: number): 'left' | 'right' => (right > left ? 'left' : 'right');
+
 /** The slot that holds the current page: the middle of `visible` slots. */
 export const centreSlot = (visible: number): number => Math.floor(visible / 2);
 

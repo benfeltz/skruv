@@ -1,6 +1,6 @@
 import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, MENU, RENDER } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
-import { centreSlot, clampTravel, pitch, slotCount, snapSteps, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
+import { centreSlot, clampTravel, pitch, slotCount, snapSteps, stripSide, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
 import { peekNext } from '../game/peekGesture.js';
 import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 
@@ -33,14 +33,27 @@ const [pageW, pageH] = BOOKLET.pageSize;
 const stripPageH = Math.round((BOOKLET_UI.strip.page * pageH) / pageW);
 const bandBottom = stripPageH + 2 * BOOKLET_UI.page.gutter;
 const bandRight = BOOKLET_UI.strip.page + 2 * BOOKLET_UI.page.gutter;
-// The root variables the mounted band sets (index.html's #app and the control cluster read them);
-// the room's view is whole (0) on the axis the band is not on.
-const STRIP_VARS = { bottom: '--strip-bottom', right: '--strip-right' } as const;
-const bandSize = {
-  x: { bottom: `calc(${bandBottom}px + env(safe-area-inset-bottom))`, right: '0px' },
-  y: { bottom: '0px', right: `calc(${bandRight}px + env(safe-area-inset-right))` },
-} as const;
-type Axis = keyof typeof bandSize;
+// The root variables the mounted band sets (index.html's #app, the manual's open page, the control
+// cluster and the lift line read them). `bottom`, `left` and `right` are how far the room's view
+// is inset from that edge: the band's thickness on the edge it stands on, the notch's safe-area
+// inset (drawn black) on the notch's edge, and 0 elsewhere. `rail` is the x of the notch column's
+// middle, where the lift line and the menu sit, set only when there is a notch. `backdrop` is
+// what shows where the view is not (black beside the notch).
+const STRIP_VARS = { bottom: '--strip-bottom', left: '--strip-left', right: '--strip-right', rail: '--rail-x', backdrop: '--backdrop' } as const;
+// Which edge the band stands on, set on the root as data-strip for the CSS that moves with it.
+type Band = 'bottom' | 'left' | 'right';
+type Axis = 'x' | 'y';
+const env = (side: 'left' | 'right' | 'bottom') => `env(safe-area-inset-${side})`;
+/** What the room's view is inset by, and where the notch column's middle is (null: no notch), for a band on `band`. */
+function viewVars(band: Band, notch: { left: number; right: number }) {
+  if (band === 'bottom') return { bottom: `calc(${bandBottom}px + ${env('bottom')})`, left: '0px', right: '0px', rail: null, backdrop: null };
+  const black = '#000';
+  if (band === 'right') return { bottom: '0px', left: env('left'), right: `calc(${bandRight}px + ${env('right')})`, rail: notch.left > 0 ? `calc(${env('left')} / 2)` : null, backdrop: black };
+  return { bottom: '0px', left: `calc(${bandRight}px + ${env('left')})`, right: env('right'), rail: `calc(100vw - ${env('right')} / 2)`, backdrop: black };
+}
+// What the catalog's docked thumb and the band's top need in landscape: the thumb sits at the top of
+// the band, so the pages run in the lane below it (its inset, its height from the page ratio, a gutter).
+const thumbReserve = BOOKLET_UI.cornerInset + Math.round((BOOKLET_UI.thumbWidth * pageH) / pageW) + BOOKLET_UI.page.gutter;
 
 function injectStyle() {
   if (document.getElementById(STYLE_ID)) return;
@@ -69,6 +82,8 @@ function injectStyle() {
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
       transition: width 160ms ease-out, z-index 0s;
+      /* Over the manual's band, which a landscape thumb sits on. */
+      z-index: 1;
     }
     .booklet-thumb[data-corner='topLeft'] {
       top: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-top));
@@ -201,32 +216,55 @@ function injectStyle() {
        touch-action is none so a drag along it is ours, not the browser's. */
     .booklet-strip {
       position: fixed;
-      z-index: 1;
+      z-index: 0;
       box-sizing: border-box;
       display: flex;
-      align-items: center;
-      justify-content: center;
       overflow: hidden;
       background: ${css(COLORS.bookletPaper)};
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
     }
-    .booklet-strip[data-axis='x'] {
+    .booklet-strip[data-band='bottom'] {
       left: 0;
       right: 0;
       bottom: 0;
-      height: ${bandSize.x.bottom};
+      height: calc(${bandBottom}px + env(safe-area-inset-bottom));
       padding-bottom: env(safe-area-inset-bottom);
       box-shadow: inset 0 ${strip.rule}px 0 ${css(COLORS.bookletInk)};
     }
-    .booklet-strip[data-axis='y'] {
+    /* Down an edge (landscape): the side without the notch; the lane starts below the catalog's thumb. */
+    .booklet-strip[data-band='right'], .booklet-strip[data-band='left'] {
       top: 0;
-      right: 0;
       bottom: 0;
-      width: ${bandSize.y.right};
+    }
+    .booklet-strip[data-band='right'] {
+      right: 0;
+      width: calc(${bandRight}px + env(safe-area-inset-right));
       padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0;
       box-shadow: inset ${strip.rule}px 0 0 ${css(COLORS.bookletInk)};
+    }
+    .booklet-strip[data-band='left'] {
+      left: 0;
+      width: calc(${bandRight}px + env(safe-area-inset-left));
+      padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) env(safe-area-inset-left);
+      box-shadow: inset -${strip.rule}px 0 0 ${css(COLORS.bookletInk)};
+    }
+    /* Where the pages run, and are cut. */
+    .booklet-lane {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .booklet-strip[data-axis='y'] .booklet-lane { margin-top: ${thumbReserve}px; }
+    /* The catalog's thumb, put down from the open catalog, sits at the top of the band's side in landscape. */
+    html[data-strip='right'] .booklet-thumb[data-corner='topLeft'] {
+      left: auto;
+      right: calc(env(safe-area-inset-right) + ${(bandRight - BOOKLET_UI.thumbWidth) / 2}px);
     }
     /* The pages in a row (a column in landscape), centred in the band and moved as one by an
        inline transform: a drag follows the pointer (data-dragging, no transition) and a snap
@@ -274,10 +312,10 @@ function injectStyle() {
       .booklet-leaf[data-docked='strip'] { --strip-top: ${clusterBottom}px; }
     }
     .booklet-leaf[data-docked='strip'][data-axis='y'] {
-      left: calc((100vw - var(${STRIP_VARS.right}, 0px)) / 2);
+      left: calc((var(${STRIP_VARS.left}, 0px) + 100vw - var(${STRIP_VARS.right}, 0px)) / 2);
       top: 50%;
       bottom: auto;
-      width: min(calc(100vw - var(${STRIP_VARS.right}, 0px) - ${2 * gutter}px), ${pageW}px, calc((100dvh - ${2 * gutter}px) * ${pageW} / ${pageH}));
+      width: min(calc(100vw - var(${STRIP_VARS.left}, 0px) - var(${STRIP_VARS.right}, 0px) - ${2 * gutter}px), ${pageW}px, calc((100dvh - ${2 * gutter}px) * ${pageW} / ${pageH}));
     }
   `;
   document.head.append(style);
@@ -773,11 +811,30 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
  */
 function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLElement) {
   const { strip } = BOOKLET_UI;
+  const lane = document.createElement('div');
+  lane.className = 'booklet-lane';
   const track = document.createElement('div');
   track.className = 'booklet-track';
+  lane.append(track);
   root.setAttribute('role', 'group');
   root.setAttribute('aria-label', `${capitalised(name)} pages`);
-  root.append(track);
+  root.append(lane);
+  const rootElement = document.documentElement;
+
+  // The safe-area insets in CSS px, which only CSS can say: a hidden probe padded by env(), read
+  // again at each paint (a rotation moves the notch, and paints). Without a style engine, no notch.
+  const probe = document.createElement('div');
+  probe.setAttribute('aria-hidden', 'true');
+  probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;width:0;height:0;padding:0 env(safe-area-inset-right) 0 env(safe-area-inset-left)';
+  document.body.append(probe);
+  const notch = { left: 0, right: 0 };
+  function readNotch() {
+    if (typeof getComputedStyle !== 'function') return notch;
+    const style = getComputedStyle(probe);
+    notch.left = parseFloat(style.paddingLeft) || 0;
+    notch.right = parseFloat(style.paddingRight) || 0;
+    return notch;
+  }
 
   // A slot shows a page `page` CSS px wide: its canvas is that at the device's pixel ratio (as
   // the room's renderer is capped), not the page's full resolution.
@@ -790,7 +847,14 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
   const axis = (): Axis => (window.innerHeight >= window.innerWidth ? 'x' : 'y');
   // A slot's length along the band: a page's width on the bottom, its height down the right edge.
   const sizes = () => ({ slot: axis() === 'x' ? strip.page : stripPageH, gap: strip.gap });
-  const extent = () => (axis() === 'x' ? window.innerWidth : window.innerHeight);
+  // Down an edge the pages run below the catalog's thumb, which sits at the top of the band.
+  const extent = () => (axis() === 'x' ? window.innerWidth : window.innerHeight - thumbReserve);
+  /** Which edge the band stands on: the bottom upright, else the side without the notch. */
+  const band = (): Band => {
+    if (axis() === 'x') return 'bottom';
+    const { left, right } = readNotch();
+    return stripSide(left, right);
+  };
   /** How many pages the band's long side has room for. */
   const visible = () => visibleCount(extent(), sizes(), BOOKLET_UI.page.gutter);
   /** How many slots are built: those, and the hidden ones past each end a drag needs. */
@@ -837,9 +901,16 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
       // A turn of the phone leaves no stale offset along the old axis.
       if (now !== lastAxis) track.style.transform = shift(0);
       lastAxis = now;
+      const edge = band();
       root.dataset.axis = track.dataset.axis = leaf.dataset.axis = now;
-      document.documentElement.style.setProperty(STRIP_VARS.bottom, bandSize[now].bottom);
-      document.documentElement.style.setProperty(STRIP_VARS.right, bandSize[now].right);
+      root.dataset.band = edge;
+      rootElement.dataset.strip = edge;
+      const vars = viewVars(edge, readNotch());
+      for (const key of ['bottom', 'left', 'right', 'rail', 'backdrop'] as const) {
+        const value = vars[key];
+        if (value === null) rootElement.style.removeProperty(STRIP_VARS[key]);
+        else rootElement.style.setProperty(STRIP_VARS[key], value);
+      }
       const shown = windowOf(page, count, built);
       const centre = centreSlot(built);
       shown.forEach((index, at) => {
@@ -869,8 +940,9 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
     },
     /** The room's view is whole again: the band is gone. */
     dispose() {
-      document.documentElement.style.removeProperty(STRIP_VARS.bottom);
-      document.documentElement.style.removeProperty(STRIP_VARS.right);
+      for (const name of Object.values(STRIP_VARS)) rootElement.style.removeProperty(name);
+      delete rootElement.dataset.strip;
+      probe.remove();
     },
   };
 }
