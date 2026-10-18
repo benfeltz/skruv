@@ -693,16 +693,27 @@ describe('8. the inset sees hand turns (1.10.0.3)', () => {
     expect(b.last().offered).toBeNull();
   });
 
-  it('follows the turn: home it has the loosen head only, and nothing is unseated or dropped on the way', () => {
+  it('follows the turn: partway it has both heads, and nothing is unseated or dropped on the way', () => {
     const b = bench();
     set(b, b.inLeg, 0.5);
     b.hold(1);
     expect(b.last().engaged[0]).toMatchObject({ progress: 0.5, tighten: true, loosen: true });
-    set(b, b.inLeg, 1);
-    b.hold(1);
-    expect(b.last().engaged[0]).toMatchObject({ progress: 1, tighten: false, loosen: true });
     expect(b.assembly.get(b.inLeg.id)).toBeDefined();
     expect(b.released).not.toContain(b.leg.body);
+  });
+
+  it('ends at home, as a tool’s does when the key drops: no subject, so a finished table shows no inset — and nothing falls off', () => {
+    const b = bench();
+    set(b, b.inLeg, 1);
+    b.hold(1);
+    expect(b.assembly.turnOf('leg-1')?.state).toBe('home');
+    expect(b.last().engaged).toEqual([]);
+    expect(b.assembly.get(b.inLeg.id)).toBeDefined();
+    expect(b.released).not.toContain(b.leg.body);
+    // Backed off a little, it is engaged again with both heads.
+    set(b, b.inLeg, 0.9);
+    b.hold(1);
+    expect(b.last().engaged[0]).toMatchObject({ grip: 'leg-1', tighten: true, loosen: true });
   });
 
   it('keeps a backed-out leg engaged, loose and seated, with the tighten head only', () => {

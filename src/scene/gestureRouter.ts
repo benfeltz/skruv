@@ -1261,12 +1261,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return { joint: -1, kind: KIND.STUD, hardware: end.part.id, host: id, tool: null, grip: id, centre: end.position, axis: [-end.axis[0], -end.axis[1], -end.axis[2]], progress: 0, tighten: false, loosen: false, pressed: false };
   }
 
-  // Every joint the inset could frame: each seated tool's, each part circled by hand (framed at its near joint, the hole it
-  // turns on), and each dowel, pin or fitting seated and not yet pushed home.
+  // Every joint the inset could frame: each seated tool's, each part circled by hand until it is home (framed at the turn's
+  // first joint — the near one, the hole it turns as a nut on, else the far one, where its stud screws into the top; at home
+  // the inset ends, as a tool's does when the key drops, so a finished table shows none), and each dowel, pin or fitting
+  // seated and not yet pushed home.
   function engagedSubjects(joints: readonly AssemblyJoint[], world: readonly Turn[]): InsetSubject[] {
     if (!inset) return [];
     const byTool = joints.flatMap((joint) => (joint.kind === KIND.TOOL ? [insetSubject(joint, joint.hardware)] : isTapKind(joint.kind) && joint.fastener.state === STATE.SEATED ? [insetSubject(joint, null)] : []));
-    const byHand = world.flatMap((turn) => (turn.grip.kind === 'hand' && turn.joints.length > 0 ? [insetSubject(turn.joints[0], null, turn.grip.part)] : []));
+    const byHand = world.flatMap((turn) => (turn.grip.kind === 'hand' && turn.joints.length > 0 && !isTurnHome(turn) ? [insetSubject(turn.joints[0], null, turn.grip.part)] : []));
     return [...byTool, ...byHand];
   }
 
