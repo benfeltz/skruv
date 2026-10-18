@@ -53,6 +53,19 @@ export const STAGE = {
   slabThickness: 0.1,
   lipHeight: 0.03,
   lipThickness: 0.03,
+  // The hardwood floor (src/game/floorPlanks.ts, drawn by src/scene/room.ts): boards `plankWidth` wide and
+  // `plankThickness` thick laid in a running bond along the long wall over the whole slab top, their tops the floor
+  // at y = 0 (the slab's drawn base sits under them; the collider is untouched). Lengths are drawn between
+  // `plankLength`'s bounds by a seeded generator, so the floor is the same on every device. Metres. `tones` are the
+  // planks' wood colours, drawn by the same layout (they live here, not in COLORS, which holds single colours);
+  // COLORS.floor is the slab base under them.
+  floor: {
+    plankWidth: 0.12,
+    plankThickness: 0.02,
+    plankLength: [0.9, 1.8] satisfies [number, number],
+    seed: 4127,
+    tones: [0xc9b79c, 0xbfa88a, 0xd4c3a8],
+  },
   // The double-hung windows, all one design, spaced evenly along their wall: one in the left
   // wall (centred, z = 0) and two in the long back wall. All in metres.
   window: {
