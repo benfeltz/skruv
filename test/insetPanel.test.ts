@@ -32,6 +32,9 @@ class FakeElement {
     this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]);
   }
   setPointerCapture() {}
+  getBoundingClientRect() {
+    return { left: 0, top: 0 };
+  }
   fire(type: string, init: object = {}) {
     for (const fn of this.listeners.get(type) ?? []) fn({ type, pointerId: 1, target: this, ...init });
   }
