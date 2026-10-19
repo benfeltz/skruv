@@ -6,7 +6,7 @@
   "description": "The Capacitor shell of the web build at ../web.",
   "scripts": {
     "web": "npm --prefix .. run build",
-    "sync": "npm run web && cap sync ios",
+    "sync": "npm run web && cap sync",
     "ios:build": "scripts/ios.sh build",
     "ios:install": "scripts/ios.sh install",
     "ios:launch": "scripts/ios.sh launch",
@@ -15,6 +15,7 @@
     "ios:testflight": "scripts/ios.sh testflight"
   },
   "dependencies": {
+    "@capacitor/android": "8.5.2",
     "@capacitor/core": "8.5.2",
     "@capacitor/haptics": "8.0.2",
     "@capacitor/ios": "8.5.2"

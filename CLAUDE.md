@@ -13,12 +13,15 @@ Mobile-first, browser-playable 3D flatpack-assembly game. Strict TypeScript, Thr
 | Validate an item | `npx tsx tools/validate/index.ts items/johnny` (and `items/blank`, `items/overkall`; once: `npm ci --prefix tools/validate`) |
 | Typecheck | `npm run typecheck` (`tsc --noEmit`) |
 | Lint | `npm run lint` (ESLint: `@eslint/js` + `typescript-eslint` recommended); the pre-commit hook runs `eslint --fix` on staged `.ts` |
+| Shell, local phone loop | `cd app && npm ci && scripts/ios.sh build` (then `install`, `launch`, or `all` / `sim`; the script's header lists them) |
 
 CI: every PR runs the typecheck, lint, validator, tests and build (`.github/workflows/ci.yml`). Deploy: every merge to `main` typechecks, lints, validates, tests and publishes `web/dist` to GitHub Pages via `.github/workflows/deploy.yml`. A PR or merge touching only `app/`, `docs/` or Markdown skips both workflows (`paths-ignore`). The site is served at the domain root (custom domain skruv.site): `web/vite.config.ts` sets `base: '/'`; a non-root base 404s every asset.
 
 ## Layout
 
 ```
+app/
+  the Capacitor shell: capacitor.config.ts, package.json, scripts/ios.sh (local iPhone loop), ios/ and android/ native projects; builds web/dist
 web/
   index.html, public/, vite.config.ts  the teaser's own files; the build reads ../src (`vite build web`)
 items/
