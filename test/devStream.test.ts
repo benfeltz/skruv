@@ -23,6 +23,16 @@ beforeAll(async () => {
 
 afterAll(() => server?.close());
 
+// web/index.html names ../src/main.ts, which a browser resolves to /src/main.ts against the
+// page: the dev server must answer that as JavaScript, not with the index.html fallback.
+describe('dev server entry', () => {
+  it('serves /src/main.ts as a module', async () => {
+    const { port } = server!.httpServer!.address() as AddressInfo;
+    const response = await fetch(`http://127.0.0.1:${port}/src/main.ts`);
+    expect(response.headers.get('content-type')).toMatch(/javascript/);
+  });
+});
+
 // A refused upgrade resolves with no socket; the tests only read `ws` after 'open'.
 interface Connection {
   status: number | string | undefined;

@@ -115,5 +115,9 @@ export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   // Served at the domain root (custom domain skruv.site) — a non-root base 404s every asset.
   base: '/',
+  // index.html names ../src/main.ts, which the browser asks the dev server for as /src/main.ts —
+  // a path under this root that does not exist; the alias points it at the repo's src/. A build
+  // resolves the entry from the file and never needs it.
+  resolve: { alias: { '/src': fileURLToPath(new URL('../src', import.meta.url)) } },
   plugins: [devStream(), pickableCheck()],
 });
