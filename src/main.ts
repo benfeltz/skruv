@@ -1,4 +1,4 @@
-import { CATALOG, LAYER, RENDER, TUNE } from './constants.js';
+import { CATALOG, LAYER, RENDER, STAGE, TUNE } from './constants.js';
 import { catalogEntries, createCatalog } from './game/catalogModel.js';
 import { pickableSet } from './game/pickable.js';
 import { ANY, createBus, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
@@ -15,6 +15,7 @@ import { createItemWorld } from './scene/itemWorld.js';
 import { createLoop } from './scene/loop.js';
 import { createRoom } from './scene/room.js';
 import { createScene } from './scene/scene.js';
+import { createStageLight } from './scene/stageLight.js';
 import { createBookletPages } from './scene/bookletPages.js';
 import { createCatalogPages } from './scene/catalogPages.js';
 import { createCatalogSheet } from './ui/catalogSheet.js';
@@ -42,6 +43,9 @@ document.addEventListener('visibilitychange', () => events.emit(sessionEvent(doc
 const { renderer, scene, camera, startPose } = createScene(document.getElementById('app')!);
 const room = createRoom();
 scene.add(room.group);
+// The stage's light follows the sky's phase; without its group in the scene the room is dark.
+const stageLight = createStageLight();
+scene.add(stageLight.group);
 // The room sits on its own layer, which the detail inset's camera leaves out (src/scene/inset.ts).
 camera.layers.enable(LAYER.room);
 // And the rotate gizmo's rings, which the inset leaves out as it leaves out every control.
@@ -158,6 +162,8 @@ const fps = createFpsGuard();
 createLoop((delta, rawDelta) => {
   cameraControls.update(delta);
   room.update(camera.position, renderer, delta);
+  // The room has just advanced the sky and mirrored its phase into the scrub knob.
+  stageLight.update(STAGE.sky.phase);
   items.current?.update(delta);
   // Measured on the true delta: the clamped one would floor every slow device at 15 fps.
   const { render, sample } = fps.frame(rawDelta);

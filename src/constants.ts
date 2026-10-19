@@ -584,7 +584,6 @@ export const LIGHTS = {
   // At midday; the stage's light scales both down with the sky (STAGE.light).
   hemisphereIntensity: 1.2,
   sunIntensity: 1.6,
-  sunPosition: [-4, 7, 2] satisfies Vec3,
   // How far out the sun stands along its arc; the shadow camera's extent covers the room from there.
   sunDistance: 8.3,
   shadowMapSize: 1024,

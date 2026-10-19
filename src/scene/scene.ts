@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { CAMERA, COLORS, LIGHTS, RENDER } from '../constants.js';
+import { CAMERA, COLORS, RENDER } from '../constants.js';
 import { startPosition } from './cameraLimits.js';
 import { clampPixelRatio } from './clamp.js';
 
 /**
- * Renderer, camera and lights mounted in `container`; keeps size and DPR in sync.
+ * Renderer and camera mounted in `container`; keeps size and DPR in sync.
  * `startPose()` is where the camera starts on this device — `{ position, target }`, a
  * phone's pulled back by CAMERA.mobileStartScale — read again when that knob turns.
  */
@@ -29,19 +29,6 @@ export function createScene(container: HTMLElement) {
   const camera = new THREE.PerspectiveCamera(CAMERA.fov, 1, CAMERA.near, CAMERA.far);
   camera.position.set(...startPose().position);
   camera.lookAt(...CAMERA.startTarget);
-
-  scene.add(
-    new THREE.HemisphereLight(COLORS.skyLight, COLORS.groundLight, LIGHTS.hemisphereIntensity),
-  );
-
-  const sun = new THREE.DirectionalLight(COLORS.sunLight, LIGHTS.sunIntensity);
-  sun.position.set(...LIGHTS.sunPosition);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(LIGHTS.shadowMapSize, LIGHTS.shadowMapSize);
-  sun.shadow.normalBias = LIGHTS.shadowNormalBias;
-  const extent = LIGHTS.shadowExtent;
-  Object.assign(sun.shadow.camera, { left: -extent, right: extent, top: extent, bottom: -extent });
-  scene.add(sun);
 
   function resize() {
     const { clientWidth: width, clientHeight: height } = container;
