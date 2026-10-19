@@ -116,7 +116,7 @@ describe('the room as built', () => {
     const planksAt = floorPlanks();
 
     it('holds the base, the planks and two inks in the slab piece', () => {
-      expect(names(slabPiece)).toEqual(['floorInk', 'floorPlanks', 'inkEdges', 'slabBase']);
+      expect(names(slabPiece)).toEqual(['floorInk', 'floorPlanks', 'inkEdges', 'slabBase', 'windowPatches']);
     });
 
     it('tops the planks at y 0 over the slab\'s footprint and the base under them', () => {
@@ -312,7 +312,8 @@ describe('the sky turns', () => {
       room.group.traverse((o) => {
         expect(o).not.toBeInstanceOf(THREE.Light);
         const material = (o as THREE.Mesh).material as (THREE.Material & { color?: THREE.Color }) | undefined;
-        if (material?.color && !/Scenery/.test(o.name) && !/Scenery/.test(o.parent?.name ?? '')) colours.push(`${o.name}:${material.color.getHex()}`);
+        // The scenery and the windows' sunlight follow the sky; the room's own materials hold still.
+        if (material?.color && !/Scenery|WindowPatch/.test(o.name) && !/Scenery/.test(o.parent?.name ?? '')) colours.push(`${o.name}:${material.color.getHex()}`);
       });
       return colours;
     };
@@ -439,7 +440,7 @@ describe('the sky turns', () => {
         expect(o).not.toBeInstanceOf(THREE.Light);
         const material = (o as THREE.Mesh).material as THREE.Material & { color?: THREE.Color } | undefined;
         // The backlight behind a back panel and the sun-or-moon disc follow the sky too; everything else holds still.
-        const follows = /Scenery(Backlight|Paper)$/.test(o.name) || /Scenery(Body|Cloud\d)$/.test(o.parent?.name ?? '');
+        const follows = /Scenery(Backlight|Paper)$|WindowPatch\d+$/.test(o.name) || /Scenery(Body|Cloud\d)$/.test(o.parent?.name ?? '');
         if (material?.color && material !== sky && !follows) colours.push([o.name, material.color.getHex()]);
       });
       return colours;
@@ -480,5 +481,77 @@ describe('the room’s render layer', () => {
     main.layers.enable(LAYER.room);
     expect(room.group.layers.test(plain.layers)).toBe(false);
     expect(room.group.layers.test(main.layers)).toBe(true);
+  });
+});
+
+describe('the window light', () => {
+  const saved = { phase: STAGE.sky.phase, nightFloor: STAGE.light.nightFloor };
+  afterEach(() => { STAGE.sky.phase = saved.phase; STAGE.light.nightFloor = saved.nightFloor; });
+
+  const patchesOf = (room: ReturnType<typeof createRoom>) => {
+    const found: THREE.Mesh[] = [];
+    room.pieces.get('slab')!.traverse((o) => { if (/WindowPatch\d+$/.test(o.name)) found.push(o as THREE.Mesh); });
+    return found;
+  };
+  const scrub = (room: ReturnType<typeof createRoom>, phase: number) => {
+    // The room takes a scrub only when the knob moves off its mirror, so step away first.
+    STAGE.sky.phase = (phase + 0.5) % 1;
+    room.update(at(0, 2, 3), renderer(), 0);
+    STAGE.sky.phase = phase;
+    return room.update(at(0, 2, 3), renderer(), 0);
+  };
+
+  it('lies three sheared decals on the slab piece, on the room layer', () => {
+    const patches = patchesOf(createRoom());
+    expect(patches).toHaveLength(3);
+    for (const mesh of patches) expect(mesh.layers.isEnabled(LAYER.room)).toBe(true);
+  });
+
+  it('lights every window at noon, on the floor and inside the slab', () => {
+    const room = createRoom();
+    scrub(room, 0.5);
+    const patches = patchesOf(room);
+    for (const mesh of patches) {
+      expect(mesh.visible).toBe(true);
+      const position = mesh.geometry.getAttribute('position');
+      const drawn = mesh.geometry.drawRange.count / 3 + 2;
+      for (let v = 0; v < drawn; v++) {
+        expect(position.getY(v)).toBe(0);
+        expect(Math.abs(position.getX(v))).toBeLessThanOrEqual(ROOM.width / 2 + 1e-6);
+        expect(Math.abs(position.getZ(v))).toBeLessThanOrEqual(ROOM.depth / 2 + 1e-6);
+      }
+    }
+    const back = patches.find((m) => m.name === 'backWindowPatch0')!;
+    expect(back.geometry.getAttribute('position').getZ(0)).toBeGreaterThan(-ROOM.depth / 2);
+  });
+
+  it('is gone at night, and at dawn lights only the left window', () => {
+    const room = createRoom();
+    scrub(room, 0);
+    expect(patchesOf(room).every((m) => !m.visible)).toBe(true);
+    scrub(room, 0.25 + 0.01);
+    for (const mesh of patchesOf(room)) expect(mesh.visible).toBe(mesh.name.startsWith('left'));
+  });
+
+  it('returns the sky phase', () => {
+    const room = createRoom();
+    expect(scrub(room, 0.42)).toBeCloseTo(0.42);
+  });
+
+  it('scales with the night floor away from noon and not at noon', () => {
+    const room = createRoom();
+    const opacity = () => (patchesOf(room)[0]!.material as THREE.MeshBasicMaterial).opacity;
+    STAGE.light.nightFloor = 1;
+    scrub(room, 0.5);
+    const bright = opacity();
+    STAGE.light.nightFloor = 0.1;
+    scrub(room, 0.5);
+    expect(opacity()).toBeCloseTo(bright);
+    STAGE.light.nightFloor = 1;
+    scrub(room, 0.3);
+    const full = opacity();
+    STAGE.light.nightFloor = 0.1;
+    scrub(room, 0.3);
+    expect(opacity()).toBeLessThan(full);
   });
 });

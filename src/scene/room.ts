@@ -13,6 +13,7 @@ import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 import { createInk, edgesGeometry, edgesOf, inkEdges } from './ink.js';
 import { createScenery } from './scenery.js';
 import { STAGE_WALLS, wallHidden } from './stageCutaway.js';
+import { createWindowPatches } from './windowPatches.js';
 
 /**
  * The diorama: a base slab whose top is the floor, a back wall and a left wall with a window in it, and a low lip on
@@ -115,6 +116,10 @@ export function createRoom() {
     group.add(side);
     return side;
   };
+  // The floor carries the windows' sunlight: the sun cast through each opening, on the planks.
+  const patches = createWindowPatches();
+  pieces.get('slab')!.add(patches.group);
+
   const backWall = buildWall('back');
   const leftWall = buildWall('left');
 
@@ -139,9 +144,10 @@ export function createRoom() {
     /**
      * Per frame: hide the walls the eye is behind; keep the ink's resolution at the canvas's
      * CSS size, so `INK.lineWidth` is the same on screen at any pixel ratio; turn the sky
-     * on by `delta` seconds of game time.
+     * on by `delta` seconds of game time, and lay the windows' sunlight on the floor. Returns the sky's phase, which the
+     * stage's light follows.
      */
-    update(eye: THREE.Vector3, renderer: THREE.WebGLRenderer, delta: number) {
+    update(eye: THREE.Vector3, renderer: THREE.WebGLRenderer, delta: number): number {
       eye.toArray(eyeAt);
       backWall.visible = !wallHidden(eyeAt, STAGE_WALLS.back);
       leftWall.visible = !wallHidden(eyeAt, STAGE_WALLS.left);
@@ -160,6 +166,8 @@ export function createRoom() {
         skyMaterial.color.setRGB(skyRgb[0], skyRgb[1], skyRgb[2], THREE.SRGBColorSpace);
       }
       for (const scenery of sceneries) scenery.update(phase, delta);
+      patches.update(phase);
+      return phase;
     },
   };
 }
