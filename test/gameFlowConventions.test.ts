@@ -258,6 +258,13 @@ describe("the manual's band shrinks the room's view (1.9.7.1.2)", () => {
     const html = read('index.html');
     expect(html).toContain('inset: 0 var(--strip-right, 0px) var(--strip-bottom, 0px) var(--strip-left, 0px);');
     expect(html).toContain('background: var(--backdrop, #1b1d22);');
+    // The inset's ring and its controls are framed as the canvas is, so their px are the canvas's: no window offset to go stale.
+    for (const overlay of [read('src/ui/inset.ts'), read('src/ui/insetControls.ts')]) {
+      expect(overlay).toContain('left: var(--strip-left, 0px);');
+      expect(overlay).toContain('width: calc(100% - var(--strip-left, 0px) - var(--strip-right, 0px));');
+      expect(overlay).toContain('height: calc(100% - var(--strip-bottom, 0px));');
+      expect(overlay).not.toContain('inset: 0;');
+    }
     // The cluster sits just inside the view, past the notch's margin, never in its column (Ben's phone,
     // 2026-10-18: the Dynamic Island covered it there); the lift line, hung under the menu, follows.
     expect(cluster).toContain('env(safe-area-inset-left)');

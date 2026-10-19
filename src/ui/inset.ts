@@ -4,9 +4,10 @@ import type { ScreenPoint } from '../game/dragMath.js';
 import type { InsetFrame } from '../game/insetView.js';
 
 // The detail inset's ink: the manual's ring round the circle (src/scene/inset.ts draws what is
-// inside it) and a tail from the rim to the joint it shows. It only draws, in client px over
-// the canvas; where the circle is and what state it is in are the panel's
-// (src/scene/insetPanel.ts), so it never takes a pointer itself.
+// inside it) and a tail from the rim to the joint it shows. It only draws, in the view's px:
+// framed by the root variables #app reads, so its origin is the canvas's own. Where the circle
+// is and what state it is in are the panel's (src/scene/insetPanel.ts), so it never takes a
+// pointer itself.
 
 const STYLE_ID = 'skruv-inset';
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -26,9 +27,10 @@ function injectStyle() {
   style.textContent = `
     .inset {
       position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
+      top: 0;
+      left: var(--strip-left, 0px);
+      width: calc(100% - var(--strip-left, 0px) - var(--strip-right, 0px));
+      height: calc(100% - var(--strip-bottom, 0px));
       overflow: visible;
       pointer-events: none;
     }

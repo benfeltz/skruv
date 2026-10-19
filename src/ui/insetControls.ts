@@ -47,9 +47,10 @@ function injectStyle() {
   style.textContent = `
     .inset-controls {
       position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
+      top: 0;
+      left: var(--strip-left, 0px);
+      width: calc(100% - var(--strip-left, 0px) - var(--strip-right, 0px));
+      height: calc(100% - var(--strip-bottom, 0px));
       overflow: visible;
       pointer-events: none;
     }
