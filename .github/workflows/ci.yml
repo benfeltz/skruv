@@ -2,6 +2,8 @@ name: CI
 
 on:
   pull_request:
+    # The shell's own workflow gates app/; main has no required checks, so a skipped run blocks nothing.
+    paths-ignore: ['app/**', 'docs/**', '**/*.md']
 
 permissions:
   contents: read

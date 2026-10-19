@@ -14,11 +14,13 @@ Mobile-first, browser-playable 3D flatpack-assembly game. Strict TypeScript, Thr
 | Typecheck | `npm run typecheck` (`tsc --noEmit`) |
 | Lint | `npm run lint` (ESLint: `@eslint/js` + `typescript-eslint` recommended); the pre-commit hook runs `eslint --fix` on staged `.ts` |
 
-CI: every PR runs the typecheck, lint, validator, tests and build (`.github/workflows/ci.yml`). Deploy: every merge to `main` typechecks, lints, validates, tests and publishes to GitHub Pages via `.github/workflows/deploy.yml`. The site is served at the domain root (custom domain skruv.site): `vite.config.ts` sets `base: '/'`; a non-root base 404s every asset.
+CI: every PR runs the typecheck, lint, validator, tests and build (`.github/workflows/ci.yml`). Deploy: every merge to `main` typechecks, lints, validates, tests and publishes `web/dist` to GitHub Pages via `.github/workflows/deploy.yml`. A PR or merge touching only `app/`, `docs/` or Markdown skips both workflows (`paths-ignore`). The site is served at the domain root (custom domain skruv.site): `web/vite.config.ts` sets `base: '/'`; a non-root base 404s every asset.
 
 ## Layout
 
 ```
+web/
+  index.html, public/, vite.config.ts  the teaser's own files; the build reads ../src (`vite build web`)
 items/
   johnny/flatpack.json  an item: parts, assembled poses, booklet pages, packing (Flatpack format 1)
   blank/flatpack.json   the second item: a side table of box legs and double-ended studs
