@@ -151,6 +151,10 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
     object: STAGE.sky, prop: 'phase', min: 0, max: 1, step: 0.01, unit: 'cycle', group: 'stage', scrub: true,
     desc: 'Scrub the sky to a point in its cycle (0 midnight, 0.25 dawn, 0.5 day, 0.75 dusk); it keeps turning from there',
   },
+  'stage.nightFloor': {
+    object: STAGE.light, prop: 'nightFloor', min: 0.1, max: 1, step: 0.05, unit: '', group: 'stage',
+    desc: 'How bright the room stays at night, as a share of midday (1 turns the night dimming off)',
+  },
   'physics.linearDamping': {
     object: PHYSICS, prop: 'linearDamping', min: 0, max: 2, step: 0.05, unit: '1/s', group: 'physics',
     desc: 'Bleeds off sliding so parts come to rest',
