@@ -60,6 +60,10 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
     probe.invalidate();
   };
   window.addEventListener('resize', resized);
+  // The canvas's own box is the signal the renderer resizes on (src/scene/scene.ts): the shell delivers a rotation's
+  // safe-area insets after its resize event, moving the canvas without a window resize.
+  const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resized);
+  observer?.observe(domElement);
   // A turn end over end keeps the canvas's size but moves the notch and the band: not every browser says so with a resize.
   const orientation = typeof screen === 'undefined' ? undefined : screen.orientation;
   orientation?.addEventListener('change', resized);
@@ -142,6 +146,7 @@ export function createInsetPanel({ domElement, camera, container, lines }: Inset
     },
     dispose() {
       window.removeEventListener('resize', resized);
+      observer?.disconnect();
       orientation?.removeEventListener('change', resized);
       domElement.removeEventListener('pointerdown', pressed, { capture: true });
       window.removeEventListener('pointerup', lifted);

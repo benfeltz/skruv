@@ -48,7 +48,26 @@ class FakeElement {
 const resizeListeners = new Set<() => void>();
 const screenListeners = new Set<() => void>();
 const windowListeners = new Map<string, (() => void)[]>();
+// What the panel's ResizeObserver asked to watch, and the callbacks to fire as the canvas's box changes.
+const observers: { callback: () => void; observed: unknown[]; disconnected: boolean }[] = [];
 beforeEach(() => {
+  observers.length = 0;
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      entry = { callback: () => {}, observed: [] as unknown[], disconnected: false };
+      constructor(callback: () => void) {
+        this.entry.callback = callback;
+        observers.push(this.entry);
+      }
+      observe(element: unknown) {
+        this.entry.observed.push(element);
+      }
+      disconnect() {
+        this.entry.disconnected = true;
+      }
+    },
+  );
   resizeListeners.clear();
   windowListeners.clear();
   vi.stubGlobal('window', {
@@ -189,6 +208,27 @@ describe('the inset panel', () => {
     for (const fn of screenListeners) fn();
     panel.update();
     expect(reads()).toBe(2);
+  });
+
+  it("reads layout again when the canvas's box changes without a window resize (the shell's late safe-area inset)", () => {
+    const { panel, reads } = mount();
+    panel.hook.candidates(null, [subject()], nothing);
+    for (let i = 0; i < 5; i++) panel.update();
+    expect(reads()).toBe(1);
+    for (const { callback } of observers) callback();
+    panel.update();
+    expect(reads()).toBe(2);
+    panel.update();
+    expect(reads()).toBe(2);
+  });
+
+  it('stops observing the canvas on dispose', () => {
+    const { panel } = mount();
+    expect(observers).toHaveLength(1);
+    expect(observers[0].observed).toHaveLength(1);
+    expect(observers[0].disconnected).toBe(false);
+    panel.dispose();
+    expect(observers[0].disconnected).toBe(true);
   });
 
   it('goes active, full ink, when the parts engage', () => {
