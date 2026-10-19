@@ -236,8 +236,8 @@ export const STAGE = {
       twinkle: { share: 0.4, period: 4, depth: 0.45, minSwing: 0.4, margin: 0.05 },
     },
   },
-  // The sky beyond the windows turns on game time (src/game/skyCycle.ts), colour only: the stage's light,
-  // the room's colours and the camera do not follow it.
+  // The sky beyond the windows turns on game time (src/game/skyCycle.ts). The stage's light follows the same phase
+  // (`light` below); the room's colours and the camera do not.
   sky: {
     // One full night-dawn-day-dusk cycle, in minutes of game time.
     cycleMinutes: 12,
@@ -251,8 +251,27 @@ export const STAGE = {
       { at: 0.75, color: 0xc2566b },
     ],
   },
+  // The stage's light (src/game/stageLight.ts, src/scene/stageLight.ts): one sun on one arc, following the sky's phase.
+  light: {
+    // How bright the room stays at night, as a share of midday: the sun and the fill never fall below it. A ?tune knob
+    // (stage.nightFloor); 1 turns the night dimming off.
+    nightFloor: 0.3,
+    // The sun's height above the horizon, degrees: `peak` at noon, `minElevation` at the horizon. Never lower, so the
+    // light is never horizontal and shadows stay finite; at night it retraces the day's path, so shadows never flip.
+    peak: 60,
+    minElevation: 25,
+    // The sun's compass bearing, degrees: 0 straight out through the left wall (-x), 90 out through the back wall (-z).
+    // It turns from `rise` at dawn through 45 (over the back-left corner) at noon to `set` at dusk.
+    azimuth: { rise: -30, set: 120 },
+    // How far the light takes the sky's hue as the day fades, 0 (stays white) to 1 (the sky's full hue).
+    tintDepth: 0.6,
+    // The window patch on the floor (src/scene/windowPatches.ts).
+    patch: {
+      // Its opacity under the sun at noon; it scales with the light and the sun's height.
+      opacity: 0.35,
+    },
+  },
 };
-
 export const COLORS = {
   background: 0x1b1d22,
   floor: 0xc9b79c,
@@ -562,9 +581,12 @@ export const CATALOG = {
 };
 
 export const LIGHTS = {
+  // At midday; the stage's light scales both down with the sky (STAGE.light).
   hemisphereIntensity: 1.2,
   sunIntensity: 1.6,
   sunPosition: [-4, 7, 2] satisfies Vec3,
+  // How far out the sun stands along its arc; the shadow camera's extent covers the room from there.
+  sunDistance: 8.3,
   shadowMapSize: 1024,
   shadowExtent: 4.2,
   // Offsets shadow lookups along the normal so millimetre-thin parts don't self-shadow
