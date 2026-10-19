@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INSET } from '../src/constants.js';
 import { bubbleOf } from '../src/game/insetControls.js';
-import { insetFrame, inWindow } from '../src/game/insetView.js';
+import { insetFrame } from '../src/game/insetView.js';
 import { createInsetPanel } from '../src/scene/insetPanel.js';
 import type { InsetSubject } from '../src/game/insetModel.js';
 import type { Part } from '../src/game/partMesh.js';
@@ -163,18 +163,22 @@ describe('the inset panel', () => {
     expect(svg.attributes['data-state']).toBe('offered');
   });
 
-  it('puts the ring, the taps and the controls in window px beside a canvas that starts past the notch', () => {
-    const { panel, svg, frame, reads } = mount({ left: 47, top: 0, width: 701, height: 390 });
+  it('puts the ring, the taps and the controls in view px beside a canvas that starts past the notch', () => {
+    const left = 47;
+    const { panel, svg, frame, reads } = mount({ left, top: 0, width: 701, height: 390 });
     panel.hook.candidates(null, [subject()], nothing);
     panel.update();
-    const { centre, radius } = inWindow(frame(), { left: 47, top: 0 });
+    const { centre, radius } = frame();
+    // The ring is drawn in the canvas's own px, whatever the canvas's offset in the window.
     const ring = svg.children[0].children[0];
     expect(Number(ring.attributes.cx)).toBeCloseTo(centre[0]);
     expect(Number(ring.attributes.cy)).toBeCloseTo(centre[1]);
-    // A press on the picture's right-hand edge is on the circle; the same point in canvas px would not be.
-    expect(panel.hook.covers([centre[0] + radius - 1, centre[1]])).toBe(true);
-    expect(panel.hook.covers([centre[0] + radius + 1, centre[1]])).toBe(false);
     expect(reads()).toBe(1);
+    // A press on the picture's right-hand edge is on the circle, given in window px; the same point in view px would not be.
+    expect(panel.hook.covers([left + centre[0] + radius - 1, centre[1]])).toBe(true);
+    expect(panel.hook.covers([left + centre[0] + radius + 1, centre[1]])).toBe(false);
+    // One fresh read per tap, none per frame.
+    expect(reads()).toBe(3);
   });
 
   it('places the circle again when the screen turns, without a resize', () => {
