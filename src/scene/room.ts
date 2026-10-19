@@ -166,7 +166,7 @@ export function createRoom() {
         skyMaterial.color.setRGB(skyRgb[0], skyRgb[1], skyRgb[2], THREE.SRGBColorSpace);
       }
       for (const scenery of sceneries) scenery.update(phase, delta);
-      patches.update(phase);
+      patches.update(phase, { back: backWall.visible, left: leftWall.visible });
       return phase;
     },
   };

@@ -533,6 +533,16 @@ describe('the window light', () => {
     for (const mesh of patchesOf(room)) expect(mesh.visible).toBe(mesh.name.startsWith('left'));
   });
 
+  it('takes a cut-away wall\'s sunlight with it, and gives it back with the wall', () => {
+    const room = createRoom();
+    scrub(room, 0.5);
+    // Behind the back wall the room hides it; its windows' patches go, the left wall's stay.
+    room.update(at(0, 2, -ROOM.depth), renderer(), 0);
+    for (const mesh of patchesOf(room)) expect(mesh.visible).toBe(mesh.name.startsWith('left'));
+    room.update(at(0, 2, 3), renderer(), 0);
+    expect(patchesOf(room).every((m) => m.visible)).toBe(true);
+  });
+
   it('returns the sky phase', () => {
     const room = createRoom();
     expect(scrub(room, 0.42)).toBeCloseTo(0.42);

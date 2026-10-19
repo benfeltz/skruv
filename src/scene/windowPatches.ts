@@ -5,7 +5,7 @@ import type { SunArc } from '../game/stageLight.js';
 import { skyColourAt } from '../game/skyCycle.js';
 import type { Rgb } from '../game/skyCycle.js';
 import { WALL_NAMES, wallBox, windowOpeningBoxes } from '../game/stageBoxes.js';
-import type { StageBox } from '../game/stageBoxes.js';
+import type { StageBox, WallName } from '../game/stageBoxes.js';
 import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 
 // A clipped quad has at most its four corners plus one per rectangle edge.
@@ -15,12 +15,16 @@ interface Patch {
   mesh: THREE.Mesh;
   box: StageBox<string>;
   outward: Vec3;
+  wall: WallName;
+  /** Whether the sun reaches the floor through this opening at the phase last applied. */
+  lit: boolean;
 }
 
 /**
  * The sun through each window, on the floor: one sheared decal per opening (src/game/stageLight.ts `windowPatch`), an
  * additive quad over the planks, no shadow and no spotlight. Built once; `update(phase)` rewrites each decal's corners,
- * and its opacity and colour from the sun's strength and tint. The group goes onto the room's slab piece.
+ * and its opacity and colour from the sun's strength and tint. A decal shows only while its wall does: a cut-away wall
+ * takes its sunlight with it. The group goes onto the room's slab piece.
  */
 export function createWindowPatches() {
   const group = new THREE.Group();
@@ -54,7 +58,7 @@ export function createWindowPatches() {
       // The decal moves under a fixed bounding sphere; it is never worth culling.
       mesh.frustumCulled = false;
       group.add(mesh);
-      patches.push({ mesh, box, outward });
+      patches.push({ mesh, box, outward, wall: name, lit: false });
     });
   }
 
@@ -67,26 +71,33 @@ export function createWindowPatches() {
 
   return {
     group,
-    update(phase: number) {
+    update(phase: number, wallShown: Record<WallName, boolean>) {
       const floor = STAGE.light.nightFloor;
-      if (phase === appliedPhase && floor === appliedFloor) return;
-      appliedPhase = phase;
-      appliedFloor = floor;
-      sunArc(phase, arc);
-      const level = lightLevel(phase, floor);
-      lightTint(phase, skyColourAt(phase, sky), tint);
-      material.color.setRGB(tint[0], tint[1], tint[2], THREE.SRGBColorSpace);
-      // The floor's irradiance falls with the sun's height: long and faint at dawn and dusk.
-      material.opacity = STAGE.light.patch.opacity * level * arc.toSun[1];
-      for (const { mesh, box, outward } of patches) {
-        const points = arc.up ? windowPatch(box, outward, arc.toSun, footprint) : [];
-        mesh.visible = points.length >= 3;
-        if (!mesh.visible) continue;
-        const position = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
-        points.forEach(([x, z], v) => position.setXYZ(v, x, 0, z));
-        position.needsUpdate = true;
-        mesh.geometry.setDrawRange(0, 3 * (points.length - 2));
+      if (phase !== appliedPhase || floor !== appliedFloor) {
+        appliedPhase = phase;
+        appliedFloor = floor;
+        place(phase, floor);
       }
+      for (const patch of patches) patch.mesh.visible = patch.lit && wallShown[patch.wall];
     },
   };
+
+  function place(phase: number, floor: number) {
+    sunArc(phase, arc);
+    const level = lightLevel(phase, floor);
+    lightTint(phase, skyColourAt(phase, sky), tint);
+    material.color.setRGB(tint[0], tint[1], tint[2], THREE.SRGBColorSpace);
+    // The floor's irradiance falls with the sun's height: long and faint at dawn and dusk.
+    material.opacity = STAGE.light.patch.opacity * level * arc.toSun[1];
+    for (const patch of patches) {
+      const { mesh, box, outward } = patch;
+      const points = arc.up ? windowPatch(box, outward, arc.toSun, footprint) : [];
+      patch.lit = points.length >= 3;
+      if (!patch.lit) continue;
+      const position = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+      points.forEach(([x, z], v) => position.setXYZ(v, x, 0, z));
+      position.needsUpdate = true;
+      mesh.geometry.setDrawRange(0, 3 * (points.length - 2));
+    }
+  }
 }
