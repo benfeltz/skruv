@@ -1,11 +1,11 @@
-/// <reference types="vitest/config" />
 import { existsSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import type { Plugin } from 'vite';
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
-import { DEV_WS } from './src/constants.js';
-import { pickableSet } from './src/game/pickable.js';
+import { DEV_WS } from '../src/constants.js';
+import { pickableSet } from '../src/game/pickable.js';
 
 // The upgrade's Host must name this machine, as Vite requires of its own HMR socket — else
 // a site whose DNS rebinds to 127.0.0.1 sends a Host (and Origin) of its own and passes the
@@ -96,8 +96,8 @@ function devStream(): Plugin {
 // registry in src/game/item.ts carries exactly those (test/catalogModel.test.ts pins it), and
 // reading folders keeps the packs and the game out of the config's watched imports.
 function packIds(root: string) {
-  return readdirSync(new URL(`./${root}/`, import.meta.url), { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && existsSync(new URL(`./${root}/${entry.name}/flatpack.json`, import.meta.url)))
+  return readdirSync(new URL(`../${root}/`, import.meta.url), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(new URL(`../${root}/${entry.name}/flatpack.json`, import.meta.url)))
     .map((entry) => entry.name);
 }
 
@@ -111,10 +111,9 @@ function pickableCheck(): Plugin {
 }
 
 export default defineConfig({
+  // This folder, wherever the config is loaded from (a caller holding only the file lands here too).
+  root: fileURLToPath(new URL('.', import.meta.url)),
   // Served at the domain root (custom domain skruv.site) — a non-root base 404s every asset.
   base: '/',
   plugins: [devStream(), pickableCheck()],
-  test: {
-    include: ['test/**/*.test.ts'],
-  },
 });
