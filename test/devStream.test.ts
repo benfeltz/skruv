@@ -12,7 +12,7 @@ let url: string;
 
 beforeAll(async () => {
   server = await createServer({
-    configFile: new URL('../vite.config.ts', import.meta.url).pathname,
+    configFile: new URL('../web/vite.config.ts', import.meta.url).pathname,
     logLevel: 'silent',
     server: { port: 0, host: '127.0.0.1' },
     optimizeDeps: { noDiscovery: true, include: [] },

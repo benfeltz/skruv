@@ -8,7 +8,7 @@ import { arrowChevron } from '../src/game/catalogLayout.js';
 // sheet is built from — these checks keep the two from drifting, or the handoff would
 // visibly jump. The handoff itself is a manual device check.
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
-const html = read('index.html');
+const html = read('web/index.html');
 const main = read('src/main.ts');
 const booklet = read('src/ui/booklet.ts');
 const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
@@ -76,7 +76,7 @@ describe('pre-splash: the catalog cover (1.6.1, 1.9.1, 1.9.1.5)', () => {
   });
 
   it('has no build-time counter stamp left', () => {
-    expect(read('vite.config.ts')).not.toMatch(/splash|stampCount/i);
+    expect(read('web/vite.config.ts')).not.toMatch(/splash|stampCount/i);
     expect(() => read('src/game/splash.ts')).toThrow();
   });
 

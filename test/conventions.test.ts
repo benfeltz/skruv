@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COLORS, DEV_WS } from '../src/constants.js';
-import viteConfig from '../vite.config.js';
+import viteConfig from '../web/vite.config.js';
 import type { Plugin } from 'vite';
 
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -18,7 +18,7 @@ describe('GitHub Pages deploy', () => {
   it('deploys dist on pushes to main', () => {
     const workflow = read('.github/workflows/deploy.yml');
     expect(workflow).toMatch(/branches:\s*\[main\]/);
-    expect(workflow).toMatch(/path:\s*dist/);
+    expect(workflow).toMatch(/path:\s*web\/dist/);
   });
 });
 
@@ -237,7 +237,7 @@ describe('the deployed bundle carries no dev stream (1.6)', () => {
     outDir = mkdtempSync(join(tmpdir(), 'skruv-dist-'));
     // As CI builds it: vitest's NODE_ENV=test would build with import.meta.env.DEV true.
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'NODE_ENV' && !key.startsWith('VITEST')));
-    execFileSync(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', outDir, '--emptyOutDir', '--logLevel', 'error'], { cwd: root, env });
+    execFileSync(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), 'build', 'web', '--outDir', outDir, '--emptyOutDir', '--logLevel', 'error'], { cwd: root, env });
     files = readdirSync(outDir, { recursive: true, withFileTypes: true })
       .filter((entry) => entry.isFile())
       .map((entry) => {
@@ -347,9 +347,9 @@ describe('PWA install (1.6)', () => {
     background_color: string;
     theme_color: string;
     icons: { src: string; sizes: string }[];
-  } = JSON.parse(read('public/manifest.webmanifest'));
+  } = JSON.parse(read('web/public/manifest.webmanifest'));
   const png = (name: string) => {
-    const bytes = readFileSync(new URL(`../public/${name}`, import.meta.url));
+    const bytes = readFileSync(new URL(`../web/public/${name}`, import.meta.url));
     return { signature: bytes.subarray(1, 4).toString(), width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
   };
 
@@ -365,7 +365,7 @@ describe('PWA install (1.6)', () => {
     const background = `#${COLORS.background.toString(16).padStart(6, '0')}`;
     expect(manifest.background_color).toBe(background);
     expect(manifest.theme_color).toBe(background);
-    expect(read('index.html')).toContain(`<meta name="theme-color" content="${background}" />`);
+    expect(read('web/index.html')).toContain(`<meta name="theme-color" content="${background}" />`);
   });
 
   it('ships icons the size they claim, relative to the manifest', () => {
@@ -380,7 +380,7 @@ describe('PWA install (1.6)', () => {
 
   it('registers no service worker (manifest-only)', () => {
     const sources = (readdirSync(fileURLToPath(new URL('../src', import.meta.url)), { recursive: true }) as string[]).filter((p) => p.endsWith('.ts'));
-    for (const path of [...sources.map((p) => `src/${p}`), 'index.html']) expect(read(path), path).not.toMatch(/serviceWorker/);
+    for (const path of [...sources.map((p) => `src/${p}`), 'web/index.html']) expect(read(path), path).not.toMatch(/serviceWorker/);
   });
 });
 

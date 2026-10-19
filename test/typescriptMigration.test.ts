@@ -23,7 +23,7 @@ describe('the tree is TypeScript', () => {
     const { config } = ts.parseConfigFileTextToJson('tsconfig.json', read('tsconfig.json'));
     expect(Object.keys(config.compilerOptions).sort()).toEqual(['lib', 'moduleResolution', 'noEmit', 'strict', 'target']);
     expect(config.compilerOptions).toMatchObject({ strict: true, moduleResolution: 'bundler', noEmit: true });
-    expect(config.include).toEqual(['src', 'test', 'tools/validate', 'vite.config.ts']);
+    expect(config.include).toEqual(['src', 'test', 'tools/validate', 'web/vite.config.ts', 'vitest.config.ts']);
   });
 });
 
