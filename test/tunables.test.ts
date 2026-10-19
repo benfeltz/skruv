@@ -54,6 +54,7 @@ describe('LIVE_KNOBS', () => {
       'joint.playDamping',
       'stage.skyCycleMinutes',
       'stage.skyPhase',
+      'stage.nightFloor',
       'physics.linearDamping',
       'physics.angularDamping',
       'physics.friction',
@@ -180,5 +181,6 @@ describe('createTunables', () => {
   it('keeps the sky scrub out of the feel profile', () => {
     expect(createTunables().toProfile().knobs).not.toHaveProperty(['stage.skyPhase']);
     expect(createTunables().toProfile().knobs).toHaveProperty(['stage.skyCycleMinutes']);
+    expect(createTunables().toProfile().knobs).toHaveProperty(['stage.nightFloor']);
   });
 });
