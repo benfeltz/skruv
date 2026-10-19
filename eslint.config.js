@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint';
 // The recommended sets only, flat config. A rule the tree genuinely fights is turned off
 // here with a one-line reason — never with an inline disable.
 export default defineConfig(
-  { ignores: ['**/dist/', '**/node_modules/'] },
+  { ignores: ['**/dist/', 'app/build/', 'app/ios/App/App/public/', 'app/android/app/src/main/assets/public/', '**/node_modules/'] },
   js.configs.recommended,
   tseslint.configs.recommended,
   // The game runs in the browser.
