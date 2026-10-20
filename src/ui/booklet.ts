@@ -1,6 +1,6 @@
 import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, MENU, RENDER } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
-import { centreSlot, clampTravel, pitch, restShift, slotCount, slotsInView, snapSteps, tapOn, visibleCount, windowOf } from '../game/carouselModel.js';
+import { centreSlot, clampTravel, flickPages, pitch, restShift, slotCount, slotsInView, snapSteps, tapOn, velocityOf, visibleCount, windowOf } from '../game/carouselModel.js';
 import { peekNext } from '../game/peekGesture.js';
 import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 
@@ -589,12 +589,12 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
 
   // The strip's own gestures. A press on a slot (or a gap) is tracked from its down to its up
   // or cancel: past the tap distance along the band it is a drag — the pages follow the pointer
-  // to the band's ends and snap to the nearest page on release, never a peek or a tap; within it, on a side slot
+  // to the band's ends and snap to the nearest page on release (a fast release carries one or two pages further, by its speed), never a peek or a tap; within it, on a side slot
   // it moves there, on the centre slot a mouse toggles the page and a touch holds it open: the
   // peek state machine (src/game/peekGesture.ts) times that, and its release — or a lost
   // capture — puts the page back. A keyboard's click on a slot (detail 0 — a pointer's was
   // handled here) does what a tap does.
-  let stripPress: { id: number; x: number; y: number; slot: number | null; touch: boolean; travel: number; dragging: boolean } | null = null;
+  let stripPress: { id: number; x: number; y: number; slot: number | null; touch: boolean; travel: number; dragging: boolean; samples: { t: number; at: number }[] } | null = null;
   let peek: PeekState = 'idle';
   let peekTimer: ReturnType<typeof setTimeout> | null = null;
   const peekSend = (event: PeekEvent) => {
@@ -626,6 +626,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     } else if (meaning !== null) flip(meaning - page);
   };
   if (carousel) {
+    const { flick } = BOOKLET_UI.strip;
     thumb.addEventListener('pointerdown', (event) => {
       const slot = (event.target as Element).closest('button')?.dataset.slot;
       if (event.button !== 0) return;
@@ -637,7 +638,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
         return;
       }
       const touch = event.pointerType !== 'mouse';
-      stripPress = { id: event.pointerId, x: event.clientX, y: event.clientY, slot: slot === undefined ? null : Number(slot), touch, travel: 0, dragging: false };
+      stripPress = { id: event.pointerId, x: event.clientX, y: event.clientY, slot: slot === undefined ? null : Number(slot), touch, travel: 0, dragging: false, samples: [{ t: event.timeStamp, at: 0 }] };
       thumb.setPointerCapture(event.pointerId);
       // A hold peeks the page in any slot that has one — while the manual is docked. Open, only
       // the centre slot's hold is armed, as it always was: a side slot's hold is a tap that
@@ -655,6 +656,9 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
       const along = carousel.axis() === 'x' ? dx : dy;
       if (!stripPress.dragging && Math.abs(along) <= GESTURE.tapMaxDistance) return;
       stripPress.dragging = true;
+      const { samples } = stripPress;
+      samples.push({ t: event.timeStamp, at: along });
+      while (samples[0].t < event.timeStamp - flick.sampleMs && samples.length > 1) samples.shift();
       stripPress.travel = clampTravel(along, page, pages.count, carousel.visible(), carousel.pitch());
       carousel.drag(stripPress.travel);
     });
@@ -672,13 +676,15 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     }
     const endStripPress = (event: PointerEvent) => {
       if (!stripPress || event.pointerId !== stripPress.id) return;
-      const { x, y, slot, touch, dragging, travel } = stripPress;
+      const { x, y, slot, touch, dragging, travel, samples } = stripPress;
       const wasPeeking = peek === 'peeking';
       if (wasPeeking || event.type !== 'pointerup') return cancelStripPress();
       releaseStripPress();
       if (dragging) {
-        // To the nearest page, the pages sliding the rest of the way from where they were let go.
-        const steps = snapSteps(travel, carousel.pitch());
+        // To the nearest page and, for a fast release, on past it by its speed (a pause before the
+        // lift is no speed): the pages slide the rest of the way from where they were let go.
+        samples.push({ t: event.timeStamp, at: samples[samples.length - 1].at });
+        const steps = snapSteps(travel, carousel.pitch()) + flickPages(velocityOf(samples, flick.sampleMs), flick);
         if (steps === 0) carousel.slide(travel);
         else flip(steps, travel);
       } else if (Math.hypot(event.clientX - x, event.clientY - y) <= GESTURE.tapMaxDistance && slot !== null) tapSlot(slot, touch);
