@@ -1,0 +1,145 @@
+name: App
+
+# Skruv Capacitor (site.skruv.capacitor): the iteration app, uploaded to TestFlight on every
+# merge to main that changes code. Signing and the upload follow Reticle's release workflow.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two merges in a row each upload; neither is cancelled.
+concurrency:
+  group: app-testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: macos-26
+    environment: testflight
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            tools/validate/package-lock.json
+            app/package-lock.json
+
+      # The gates: the same commands as ci.yml, run inline.
+      - run: npm ci
+      - run: npm ci --prefix tools/validate
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npx tsx tools/validate/index.ts items/johnny
+      - run: npx tsx tools/validate/index.ts items/blank
+      - run: npx tsx tools/validate/index.ts items/overkall
+      - run: npx vitest run
+
+      - name: Import distribution certificate
+        env:
+          P12: ${{ secrets.DISTRIBUTION_CERTIFICATE_P12 }}
+          P12_PASSWORD: ${{ secrets.DISTRIBUTION_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$P12" | base64 --decode > cert.p12
+          security create-keychain -p "" build.keychain
+          security import cert.p12 -k build.keychain -P "$P12_PASSWORD" \
+            -T /usr/bin/codesign
+          security list-keychains -s build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "" build.keychain
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "" build.keychain
+
+      - name: Install provisioning profile
+        env:
+          PROFILE: ${{ secrets.PROVISIONING_PROFILE }}
+        run: |
+          echo "$PROFILE" | base64 --decode > profile.mobileprovision
+          PROFILE_UUID=$(security cms -D -i profile.mobileprovision | plutil -extract UUID raw -)
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp profile.mobileprovision \
+            ~/Library/MobileDevice/Provisioning\ Profiles/${PROFILE_UUID}.mobileprovision
+          echo "PROFILE_UUID=$PROFILE_UUID" >> $GITHUB_ENV
+
+      # Minutes since 2026-01-01 (UTC): the same formula as ios.sh testflight, so every upload
+      # beats the earlier local ones (414799–419742). A run_number would start again at 1.
+      - name: Set build number
+        run: |
+          BUILD_NUMBER=$(( ($(date -u +%s) - 1767225600) / 60 ))
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+          echo "Build number: $BUILD_NUMBER"
+
+      - name: Build the web app and sync the shell
+        working-directory: app
+        run: |
+          npm ci
+          npm run sync
+
+      - name: Archive
+        working-directory: app
+        run: |
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -archivePath build/App.xcarchive \
+            -destination 'generic/platform=iOS' \
+            DEVELOPMENT_TEAM=P48A4S4YXT \
+            PRODUCT_BUNDLE_IDENTIFIER=site.skruv.capacitor \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE="$PROFILE_UUID" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+
+      - name: Export IPA
+        working-directory: app
+        run: |
+          cat > ExportOptions.plist << PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store-connect</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>stripSwiftSymbols</key>
+              <true/>
+              <key>uploadBitcode</key>
+              <false/>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>site.skruv.capacitor</key>
+                  <string>${PROFILE_UUID}</string>
+              </dict>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath build/App.xcarchive \
+            -exportPath build/export \
+            -exportOptionsPlist ExportOptions.plist
+
+      - name: Upload to TestFlight
+        working-directory: app
+        env:
+          API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$API_KEY" > ~/.appstoreconnect/private_keys/AuthKey_${KEY_ID}.p8
+          xcrun altool --upload-app \
+            --type ios \
+            --file build/export/App.ipa \
+            --apiKey "$KEY_ID" \
+            --apiIssuer "$ISSUER_ID"
