@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 // attributes and a dataset, events that bubble from the target up, one focused element, and
 // window key listeners, a viewport width and height, and a root element whose style records custom properties. test/bookletSplash.test.ts carries its own copy of the same shape.
 
-type FakeEvent = { type: string; target: FakeElement; pointerId: number; pointerType: string; button: number; detail: number; clientX: number; clientY: number; timeStamp: number; deltaX?: number; deltaY?: number; deltaMode?: number; preventDefault?: () => void };
+type FakeEvent = { type: string; target: FakeElement; pointerId: number; pointerType: string; button: number; detail: number; clientX: number; clientY: number; timeStamp: number; deltaX?: number; deltaY?: number; deltaMode?: number; ctrlKey?: boolean; preventDefault?: () => void };
 type Listener = (event: object) => void;
 
 /** The root element's style: just the custom properties a test reads back. */

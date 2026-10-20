@@ -1,7 +1,7 @@
 import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, MENU, RENDER } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
 import type { WheelState } from '../game/carouselModel.js';
-import { centreSlot, clampTravel, flickPages, pitch, restShift, slotCount, slotsInView, snapSteps, tapOn, velocityOf, visibleCount, WHEEL_REST, wheelDelta, wheelNext, windowOf } from '../game/carouselModel.js';
+import { centreSlot, clampTravel, flickPages, pitch, restShift, slotCount, slotsInView, settleSteps, tapOn, velocityOf, visibleCount, WHEEL_REST, wheelDelta, wheelNext, windowOf } from '../game/carouselModel.js';
 import { peekNext } from '../game/peekGesture.js';
 import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 
@@ -688,9 +688,12 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
         // To the nearest page and, for a fast release, on past it by its speed (a pause before the
         // lift is no speed): the pages slide the rest of the way from where they were let go.
         samples.push({ t: event.timeStamp, at: samples[samples.length - 1].at });
-        const steps = snapSteps(travel, carousel.pitch()) + flickPages(velocityOf(samples, flick.sampleMs), flick);
-        if (steps === 0) carousel.slide(travel);
-        else flip(steps, travel);
+        const { count } = pages;
+        const steps = settleSteps(travel, page, count, carousel.visible(), carousel.pitch()) + flickPages(velocityOf(samples, flick.sampleMs), flick);
+        // A flick past the first or last page stays on it, and the band still slides home.
+        const by = Math.min(count - 1, Math.max(0, page + steps)) - page;
+        if (by === 0) carousel.slide(travel);
+        else flip(by, travel);
       } else if (Math.hypot(event.clientX - x, event.clientY - y) <= GESTURE.tapMaxDistance && slot !== null) tapSlot(slot, touch);
     };
     thumb.addEventListener('pointerup', endStripPress);
@@ -706,6 +709,8 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     // navigate back. A notch steps one page; a trackpad's run of small deltas steps by threshold.
     let wheel: WheelState = WHEEL_REST;
     const onWheel = (event: WheelEvent) => {
+      // A pinch on a trackpad or Ctrl+scroll is the browser's zoom, not the band's.
+      if (event.ctrlKey) return;
       event.preventDefault();
       const delta = wheelDelta(event, event.deltaMode === DOM_DELTA_LINE ? wheelRule.linePx : 1);
       const next = wheelNext(wheel, delta, event.timeStamp, wheelRule);

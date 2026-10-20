@@ -492,6 +492,36 @@ describe('the band scrolls as a carousel', () => {
     expect(paused.manual.currentPage).toBe(3);
   });
 
+  it('a flick past the first page stays on it, and the band slides home', () => {
+    const { manual, slots, track } = mountStrip();
+    const target = slots()[C(slots())];
+    const sets: string[] = [];
+    let current = '';
+    Object.defineProperty(track.style, 'transform', { get: () => current, set: (value: string) => sets.push((current = value)), configurable: true });
+    down(target);
+    // A little toward later pages, then fast back toward earlier ones.
+    move(target, { x: 100 - 0.4 * PITCH, ms: 10 });
+    move(target, { x: 100 + 0.8 * PITCH, ms: 30 });
+    up(target, { x: 100 + 0.8 * PITCH, ms: 30 });
+    expect(manual.currentPage).toBe(0);
+    expect(track.dataset.dragging).toBeUndefined();
+    expect(track.style.transform).toBe(sets.at(-1));
+    expect(sets.at(-1)).toBe(`translateX(${-PITCH}px)`);
+  });
+
+  it('near the first page a pull that brought pages into view keeps them there on release', () => {
+    // Five pages show on a 500 px band: page 0 rests two slots toward the start.
+    const { manual, slots, track } = mountStrip({ viewport: { width: 500, height: 900 } });
+    const sets: string[] = [];
+    let current = '';
+    Object.defineProperty(track.style, 'transform', { get: () => current, set: (value: string) => sets.push((current = value)), configurable: true });
+    const at = pull(slots()[C(slots())], -2 * PITCH);
+    up(slots()[C(slots())], at);
+    // Pages 2-6 were in view, so page 4 is current and the pages do not move.
+    expect(manual.currentPage).toBe(4);
+    expect(sets.slice(-2)).toEqual(['translateX(0px)', 'translateX(0px)']);
+  });
+
   it('a flick at the end goes to the last page', () => {
     const { manual, slots, track } = mountStrip({ page: COUNT - 2 });
     const target = slots()[C(slots())];
@@ -783,7 +813,7 @@ describe('holding a side page peeks it in place', () => {
 });
 
 describe('the wheel steps the band', () => {
-  const wheel = (target: FakeElement, init: { deltaX?: number; deltaY?: number; deltaMode?: number; ms: number; preventDefault?: () => void }) =>
+  const wheel = (target: FakeElement, init: { deltaX?: number; deltaY?: number; deltaMode?: number; ctrlKey?: boolean; ms: number; preventDefault?: () => void }) =>
     target.fire('wheel', { deltaX: 0, deltaY: 0, timeStamp: 1000 + init.ms, ...init });
   const STEP = BOOKLET_UI.strip.wheel.stepMs;
   // WheelEvent.DOM_DELTA_LINE: the fake DOM has no WheelEvent to read it from.
@@ -829,6 +859,14 @@ describe('the wheel steps the band', () => {
     const { manual, slots } = mountStrip({ page: 3 });
     wheel(slots()[C(slots())], { deltaY: 3, deltaMode: LINES, ms: 0 });
     expect(manual.currentPage).toBe(4);
+  });
+
+  it('leaves a ctrl wheel (a pinch or the browser zoom) alone', () => {
+    const { manual, slots } = mountStrip({ page: 3 });
+    const prevent = vi.fn();
+    wheel(slots()[C(slots())], { deltaY: 100, ms: 0, ctrlKey: true, preventDefault: prevent });
+    expect(manual.currentPage).toBe(3);
+    expect(prevent).not.toHaveBeenCalled();
   });
 
   it('claims the wheel: preventDefault is called whether or not a page moves', () => {

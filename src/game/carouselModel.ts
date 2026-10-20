@@ -58,6 +58,29 @@ export function snapSteps(travel: number, step: number): number {
   return pages === 0 ? 0 : travel < 0 ? pages : -pages;
 }
 
+/**
+ * How many pages a release at `travel` (from the rest of `page`) moves to land where the finger
+ * left the pages: the page whose own rest, taken in the pages' present place, lies nearest the
+ * track as it was let go. Mid-booklet that is the nearest page, as `snapSteps` has it; near an end
+ * the rests differ, so a pull that brought pages into view settles on a page that keeps them
+ * there rather than sliding them back. Half a pitch counts as a page; pages whose rests show the
+ * same view (the last two near the end) are one landing, and the nearer is taken. Positive toward later pages.
+ */
+export function settleSteps(travel: number, page: number, count: number, visible: number, step: number): number {
+  const at = restShift(page, count, visible) * step + travel;
+  let best = 0;
+  let bestGap = Infinity;
+  for (let to = 0; to < count; to++) {
+    const gap = Math.abs(at - (restShift(to, count, visible) - (to - page)) * step);
+    const nearer = Math.abs(to - page) < Math.abs(best);
+    if (gap < bestGap || (gap === bestGap && (gap === 0 ? nearer : !nearer))) {
+      best = to - page;
+      bestGap = gap;
+    }
+  }
+  return best;
+}
+
 /** The slot that holds the current page: the middle of `visible` slots. */
 export const centreSlot = (visible: number): number => Math.floor(visible / 2);
 
