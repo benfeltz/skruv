@@ -1,6 +1,7 @@
 import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, MENU, RENDER } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
-import { centreSlot, clampTravel, flickPages, pitch, restShift, slotCount, slotsInView, snapSteps, tapOn, velocityOf, visibleCount, windowOf } from '../game/carouselModel.js';
+import type { WheelState } from '../game/carouselModel.js';
+import { centreSlot, clampTravel, flickPages, pitch, restShift, slotCount, slotsInView, snapSteps, tapOn, velocityOf, visibleCount, WHEEL_REST, wheelDelta, wheelNext, windowOf } from '../game/carouselModel.js';
 import { peekNext } from '../game/peekGesture.js';
 import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 
@@ -14,7 +15,7 @@ import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 // page grows out of the centre slot. It flips freely, front to back and back again:
 // reference, never a checklist. Open, a page is flipped by a horizontal swipe, the corner
 // arrows or the arrow keys, and put down by a tap on the page, a swipe down, or Escape; the
-// band is moved by the arrow keys or a tap on a side page, opened by a click on the centre
+// band is moved by the arrow keys, a wheel notch (a trackpad's scroll, by a threshold) or a tap on a side page, opened by a click on the centre
 // page (a mouse) or, on a touch, by holding any of its pages: that page peeks in place, out
 // of its own slot, and the release puts it back (the band does not move). The band mounts
 // two root variables, `--strip-bottom` and `--strip-right`, that shrink the room's view
@@ -36,6 +37,8 @@ const bandRight = BOOKLET_UI.strip.page + 2 * BOOKLET_UI.page.gutter;
 // The root variables the mounted band sets (index.html's #app and the manual's open page read them).
 // `bottom`, `left` and `right` are how far the room's view is inset from that edge; `backdrop` is
 // what shows where the view is not (black in landscape, beside the notch).
+// WheelEvent.DOM_DELTA_LINE: a wheel that counts in lines (Firefox), not pixels.
+const DOM_DELTA_LINE = 1;
 const STRIP_VARS = { bottom: '--strip-bottom', left: '--strip-left', right: '--strip-right', backdrop: '--backdrop' } as const;
 // Which edge the band stands on, set on the root as data-strip for the CSS that moves with it.
 type Band = 'bottom' | 'right';
@@ -595,6 +598,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   // capture — puts the page back. A keyboard's click on a slot (detail 0 — a pointer's was
   // handled here) does what a tap does.
   let stripPress: { id: number; x: number; y: number; slot: number | null; touch: boolean; travel: number; dragging: boolean; samples: { t: number; at: number }[] } | null = null;
+  let removeWheel: (() => void) | null = null;
   let peek: PeekState = 'idle';
   let peekTimer: ReturnType<typeof setTimeout> | null = null;
   const peekSend = (event: PeekEvent) => {
@@ -626,7 +630,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     } else if (meaning !== null) flip(meaning - page);
   };
   if (carousel) {
-    const { flick } = BOOKLET_UI.strip;
+    const { flick, wheel: wheelRule } = BOOKLET_UI.strip;
     thumb.addEventListener('pointerdown', (event) => {
       const slot = (event.target as Element).closest('button')?.dataset.slot;
       if (event.button !== 0) return;
@@ -698,6 +702,18 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
       const slot = (event.target as Element).closest('button')?.dataset.slot;
       if (event.detail === 0 && slot !== undefined) tapSlot(Number(slot), false);
     });
+    // The band owns every wheel over it: the page behind must not scroll nor a horizontal swipe
+    // navigate back. A notch steps one page; a trackpad's run of small deltas steps by threshold.
+    let wheel: WheelState = WHEEL_REST;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const delta = wheelDelta(event, event.deltaMode === DOM_DELTA_LINE ? wheelRule.linePx : 1);
+      const next = wheelNext(wheel, delta, event.timeStamp, wheelRule);
+      wheel = next.state;
+      if (next.steps !== 0) flip(next.steps);
+    };
+    thumb.addEventListener('wheel', onWheel, { passive: false });
+    removeWheel = () => thumb.removeEventListener('wheel', onWheel);
   }
 
   function onKey(event: KeyboardEvent) {
@@ -760,6 +776,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     window.removeEventListener('keydown', onKey);
     window.removeEventListener('resize', onResize);
     clearTimeout(peekTimer ?? undefined);
+    removeWheel?.();
     carousel?.dispose();
     sheets.delete(self);
     syncSheets();

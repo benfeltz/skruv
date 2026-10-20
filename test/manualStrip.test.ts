@@ -782,6 +782,84 @@ describe('holding a side page peeks it in place', () => {
   });
 });
 
+describe('the wheel steps the band', () => {
+  const wheel = (target: FakeElement, init: { deltaX?: number; deltaY?: number; deltaMode?: number; ms: number; preventDefault?: () => void }) =>
+    target.fire('wheel', { deltaX: 0, deltaY: 0, timeStamp: 1000 + init.ms, ...init });
+  const STEP = BOOKLET_UI.strip.wheel.stepMs;
+  // WheelEvent.DOM_DELTA_LINE: the fake DOM has no WheelEvent to read it from.
+  const LINES = 1;
+
+  it('a notch down steps to the next page, a notch up to the one before, sliding as a key does', () => {
+    const { manual, slots, track } = mountStrip({ page: 3 });
+    wheel(slots()[C(slots())], { deltaY: 100, ms: 0 });
+    expect(manual.currentPage).toBe(4);
+    expect(track.style.transform).toBe('translateX(0px)');
+    wheel(slots()[C(slots())], { deltaY: -100, ms: 3 * STEP });
+    expect(manual.currentPage).toBe(3);
+  });
+
+  it('in landscape a vertical notch moves the vertical band, and a horizontal swipe does too', () => {
+    const { manual, slots } = mountStrip({ viewport: LANDSCAPE, page: 3 });
+    wheel(slots()[C(slots())], { deltaY: 100, ms: 0 });
+    expect(manual.currentPage).toBe(4);
+    wheel(slots()[C(slots())], { deltaX: 120, ms: 3 * STEP });
+    expect(manual.currentPage).toBe(5);
+  });
+
+  it('in portrait a horizontal swipe steps too', () => {
+    const { manual, slots } = mountStrip({ page: 3 });
+    wheel(slots()[C(slots())], { deltaX: -120, ms: 0 });
+    expect(manual.currentPage).toBe(2);
+  });
+
+  it("a trackpad's small deltas step once past the threshold and then rest", () => {
+    const { manual, slots } = mountStrip({ page: 3 });
+    const target = slots()[C(slots())];
+    for (let i = 0; i < 4; i++) wheel(target, { deltaY: 15, ms: i * 10 });
+    expect(manual.currentPage).toBe(4);
+    // The rest after a step: more of the same fling does nothing.
+    for (let i = 0; i < 6; i++) wheel(target, { deltaY: 15, ms: 40 + i * 10 });
+    expect(manual.currentPage).toBe(4);
+    // A delta after the rest starts gathering again, and a notch steps.
+    wheel(target, { deltaY: 100, ms: 40 + STEP });
+    expect(manual.currentPage).toBe(5);
+  });
+
+  it('a line-mode notch (Firefox) steps', () => {
+    const { manual, slots } = mountStrip({ page: 3 });
+    wheel(slots()[C(slots())], { deltaY: 3, deltaMode: LINES, ms: 0 });
+    expect(manual.currentPage).toBe(4);
+  });
+
+  it('claims the wheel: preventDefault is called whether or not a page moves', () => {
+    const { manual, slots } = mountStrip({ page: 3 });
+    const prevent = vi.fn();
+    wheel(slots()[C(slots())], { deltaY: 100, ms: 0, preventDefault: prevent });
+    expect(manual.currentPage).toBe(4);
+    wheel(slots()[C(slots())], { deltaY: 5, ms: 10, preventDefault: prevent });
+    expect(prevent).toHaveBeenCalledTimes(2);
+  });
+
+  it('at the last page a notch down does nothing, and at the first a notch up does nothing', () => {
+    const last = mountStrip({ page: COUNT - 1 });
+    wheel(last.slots()[C(last.slots())], { deltaY: 100, ms: 0 });
+    expect(last.manual.currentPage).toBe(COUNT - 1);
+    const first = mountStrip();
+    wheel(first.slots()[C(first.slots())], { deltaY: -100, ms: 0 });
+    expect(first.manual.currentPage).toBe(0);
+  });
+
+  it('listens on the band alone, and dispose takes the listener off', () => {
+    const { manual, slots } = mountStrip({ page: 3 });
+    expect(manual.thumb.listeners.get('wheel')).toHaveLength(1);
+    expect(manual.element.listeners.get('wheel')).toBeUndefined();
+    const target = slots()[C(slots())];
+    manual.dispose();
+    wheel(target, { deltaY: 100, ms: 0 });
+    expect(manual.currentPage).toBe(3);
+  });
+});
+
 describe('a second finger on the band cancels its gesture', () => {
   const finger = (target: FakeElement, pointerId: number, x: number) => down(target, { pointerType: 'touch', pointerId, x });
   const lift = (target: FakeElement, pointerId: number, x: number) => up(target, { pointerType: 'touch', pointerId, x });
