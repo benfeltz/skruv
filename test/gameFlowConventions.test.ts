@@ -94,7 +94,7 @@ describe('branding (decision 4)', () => {
     const { identity } = JSON.parse(read('items/johnny/flatpack.json'));
     expect(identity.product).toBe('JOHNNY');
     expect(identity.maker).toBe('SKRUV');
-    for (const path of ['items/johnny/flatpack.json', 'src/constants.ts', 'src/scene/bookletPages.ts', 'src/ui/booklet.ts', 'src/ui/resetButton.ts', 'src/game/bookletModel.ts', 'index.html']) {
+    for (const path of ['items/johnny/flatpack.json', 'src/constants.ts', 'src/scene/bookletPages.ts', 'src/ui/booklet.ts', 'src/ui/resetButton.ts', 'src/game/bookletModel.ts', 'web/index.html']) {
       expect(read(path)).not.toMatch(/IKEA|Billy|BILLY|AA-\d/);
     }
   });
@@ -255,7 +255,7 @@ describe("the manual's band shrinks the room's view (1.9.7.1.2)", () => {
 
   it("names the root variables once, and #app, the cluster and the lift line read exactly those", () => {
     expect(booklet).toContain("const STRIP_VARS = { bottom: '--strip-bottom', left: '--strip-left', right: '--strip-right', backdrop: '--backdrop' } as const;");
-    const html = read('index.html');
+    const html = read('web/index.html');
     expect(html).toContain('inset: 0 var(--strip-right, 0px) var(--strip-bottom, 0px) var(--strip-left, 0px);');
     expect(html).toContain('background: var(--backdrop, #1b1d22);');
     // The cluster sits just inside the view, past the notch's margin, never in its column (Ben's phone,

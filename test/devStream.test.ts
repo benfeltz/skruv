@@ -12,7 +12,7 @@ let url: string;
 
 beforeAll(async () => {
   server = await createServer({
-    configFile: new URL('../vite.config.ts', import.meta.url).pathname,
+    configFile: new URL('../web/vite.config.ts', import.meta.url).pathname,
     logLevel: 'silent',
     server: { port: 0, host: '127.0.0.1' },
     optimizeDeps: { noDiscovery: true, include: [] },
@@ -22,6 +22,16 @@ beforeAll(async () => {
 }, 30_000);
 
 afterAll(() => server?.close());
+
+// web/index.html names ../src/main.ts, which a browser resolves to /src/main.ts against the
+// page: the dev server must answer that as JavaScript, not with the index.html fallback.
+describe('dev server entry', () => {
+  it('serves /src/main.ts as a module', async () => {
+    const { port } = server!.httpServer!.address() as AddressInfo;
+    const response = await fetch(`http://127.0.0.1:${port}/src/main.ts`);
+    expect(response.headers.get('content-type')).toMatch(/javascript/);
+  });
+});
 
 // A refused upgrade resolves with no socket; the tests only read `ws` after 'open'.
 interface Connection {

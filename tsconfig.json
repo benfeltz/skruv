@@ -8,5 +8,5 @@
     "target": "es2022",
     "lib": ["esnext", "dom", "dom.iterable"]
   },
-  "include": ["src", "test", "tools/validate", "vite.config.ts"]
+  "include": ["src", "test", "tools/validate", "web/vite.config.ts", "vitest.config.ts"]
 }
