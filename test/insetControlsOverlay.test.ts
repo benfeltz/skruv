@@ -17,6 +17,8 @@ class FakeElement {
   textContent = '';
   declare id?: string; // set on the style element
   captured: number[] = [];
+  // Where the element stands in the window: the overlay's origin, which is the view's.
+  rect = { left: 0, top: 0 };
 
   constructor(tag: string) {
     this.tag = tag;
@@ -26,6 +28,9 @@ class FakeElement {
   }
   removeAttribute(name: string) {
     delete this.attributes[name];
+  }
+  getBoundingClientRect() {
+    return this.rect;
   }
   hasAttribute(name: string) {
     return name in this.attributes;
@@ -180,6 +185,21 @@ describe('the inset controls overlay', () => {
       expect(turns.every((r) => r > 0)).toBe(true);
       expect(total()).toBeCloseTo(Math.PI / 2, 1);
       expect(turn.captured).toEqual([1]);
+    });
+
+    it('cranks about the bubble when the view starts past the notch, the overlay standing at its left', () => {
+      const { controls, svg, turn, turns, total } = mount();
+      svg.rect = { left: 47, top: 0 };
+      controls.showTurn(BUBBLE, lookTurn());
+      const inWindow = (degrees: number) => {
+        const { clientX, clientY } = onBubble(degrees);
+        return { clientX: clientX + 47, clientY };
+      };
+      turn.fire('pointerdown', inWindow(0));
+      for (let d = 10; d <= 90; d += 10) turn.fire('pointermove', inWindow(d));
+      turn.fire('pointerup', inWindow(90));
+      expect(turns.every((r) => r > 0)).toBe(true);
+      expect(total()).toBeCloseTo(Math.PI / 2, 1);
     });
 
     it('anticlockwise reports negative radians', () => {
