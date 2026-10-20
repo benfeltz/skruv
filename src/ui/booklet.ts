@@ -1,7 +1,7 @@
 import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, MENU, RENDER } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
 import type { WheelState } from '../game/carouselModel.js';
-import { centreSlot, clampTravel, flickPages, pitch, restShift, slotCount, slotsInView, settleSteps, tapOn, velocityOf, visibleCount, WHEEL_REST, wheelDelta, wheelNext, windowOf } from '../game/carouselModel.js';
+import { centreSlot, clampTravel, flickPages, pitch, restShift, slotCount, slotsInView, snapSteps, tapOn, velocityOf, visibleCount, WHEEL_REST, wheelDelta, wheelNext, windowOf } from '../game/carouselModel.js';
 import { peekNext } from '../game/peekGesture.js';
 import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 
@@ -592,7 +592,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
 
   // The strip's own gestures. A press on a slot (or a gap) is tracked from its down to its up
   // or cancel: past the tap distance along the band it is a drag — the pages follow the pointer
-  // to the band's ends and snap to the nearest page on release (a fast release carries one or two pages further, by its speed), never a peek or a tap; within it, on a side slot
+  // to the centre for any page, first and last too, and snap to the nearest page on release (a fast release carries one or two pages further, by its speed), never a peek or a tap; within it, on a side slot
   // it moves there, on the centre slot a mouse toggles the page and a touch holds it open: the
   // peek state machine (src/game/peekGesture.ts) times that, and its release — or a lost
   // capture — puts the page back. A keyboard's click on a slot (detail 0 — a pointer's was
@@ -689,7 +689,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
         // lift is no speed): the pages slide the rest of the way from where they were let go.
         samples.push({ t: event.timeStamp, at: samples[samples.length - 1].at });
         const { count } = pages;
-        const steps = settleSteps(travel, page, count, carousel.visible(), carousel.pitch()) + flickPages(velocityOf(samples, flick.sampleMs), flick);
+        const steps = snapSteps(travel, carousel.pitch()) + flickPages(velocityOf(samples, flick.sampleMs), flick);
         // A flick past the first or last page stays on it, and the band still slides home.
         const by = Math.min(count - 1, Math.max(0, page + steps)) - page;
         if (by === 0) carousel.slide(travel);

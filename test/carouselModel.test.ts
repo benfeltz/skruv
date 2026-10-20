@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, BOOKLET_UI } from '../src/constants.js';
-import { centreSlot, clampTravel, flickPages, pitch, restShift, settleSteps, slotCount, slotsInView, snapSteps, tapOn, trackRange, velocityOf, visibleCount, wheelDelta, wheelNext, WHEEL_REST, windowOf } from '../src/game/carouselModel.js';
+import { centreSlot, clampTravel, flickPages, pitch, restShift, slotCount, slotsInView, snapSteps, tapOn, trackRange, velocityOf, visibleCount, wheelDelta, wheelNext, WHEEL_REST, windowOf } from '../src/game/carouselModel.js';
 
 const { page, gap } = BOOKLET_UI.strip;
 const { gutter } = BOOKLET_UI.page;
@@ -41,17 +41,16 @@ describe('how many pages the band shows', () => {
 });
 
 describe('how far the track may be pulled', () => {
-  it('lets the first page reach the band\'s start and no further', () => {
-    expect(clampTravel(500, 0, 10, 5, step)).toBe(0);
-    expect(clampTravel(30, 0, 10, 5, step)).toBe(0);
-    // The first page is one pitch off centre's start-side limit: it may go one pitch further.
-    expect(clampTravel(500, 3, 10, 5, step)).toBe(step);
+  it('lets the first page reach the centre and no further', () => {
+    // Five visible: page 0 rests two slots toward the start, so the centre is two pitches on.
+    expect(clampTravel(500, 0, 10, 5, step)).toBe(2 * step);
+    expect(clampTravel(30, 0, 10, 5, step)).toBe(30);
+    expect(clampTravel(500, 3, 10, 5, step)).toBe(3 * step);
   });
 
-  it('lets the last page reach the band\'s end and no further', () => {
-    expect(clampTravel(-500, 9, 10, 5, step)).toBe(0);
-    // Page 7 of 10 with five visible: the last page already sits at the band's end.
-    expect(clampTravel(-500, 7, 10, 5, step)).toBe(0);
+  it('lets the last page reach the centre and no further', () => {
+    expect(clampTravel(-500, 9, 10, 5, step)).toBe(-2 * step);
+    expect(clampTravel(-500, 7, 10, 5, step)).toBe(-2 * step);
   });
 
   it('leaves a pull in between as it is', () => {
@@ -59,10 +58,10 @@ describe('how far the track may be pulled', () => {
     expect(clampTravel(25, 4, 10, 5, step)).toBe(25);
   });
 
-  it('goes to the band\'s ends and no further: the first page to the start, the last to the end', () => {
-    expect(clampTravel(-500, 4, 10, 5, step)).toBe(-3 * step);
-    expect(clampTravel(500, 4, 10, 5, step)).toBe(2 * step);
-    expect(clampTravel(500, 1, 10, 5, step)).toBe(0);
+  it('goes to the centre of the first and last page and no further, empty space beyond them allowed', () => {
+    expect(clampTravel(-500, 4, 10, 5, step)).toBe(-5 * step);
+    expect(clampTravel(500, 4, 10, 5, step)).toBe(4 * step);
+    expect(clampTravel(500, 1, 10, 5, step)).toBe(1 * step - restShift(1, 10, 5) * step);
   });
 });
 
@@ -279,29 +278,5 @@ describe('the wheel steps', () => {
     expect(gathered.steps).toBe(0);
     const turned = wheelNext(gathered.state, -30, 10, rule);
     expect(turned).toEqual({ state: { acc: -30, steppedAt: -Infinity }, steps: 0 });
-  });
-});
-
-describe('where a release settles', () => {
-  it('is the nearest page between the ends, as snapSteps has it', () => {
-    for (const travel of [-170, -112, -30, 0, 30, 112, 170, -step / 2, step / 2]) {
-      expect(settleSteps(travel, 5, 12, 5, step)).toBe(snapSteps(travel, step));
-    }
-  });
-
-  it('keeps the pages the pull brought into view near the first page', () => {
-    // Page 0 of 10, five visible, resting two slots toward the start: two pitches on shows pages 2-6, which page 4 holds at rest.
-    expect(settleSteps(-2 * step, 0, 10, 5, step)).toBe(4);
-    // A pull of one pitch shows pages 1-5, centred on page 3.
-    expect(settleSteps(-step, 0, 10, 5, step)).toBe(3);
-  });
-
-  it('keeps them near the last page too', () => {
-    expect(settleSteps(2 * step, 9, 10, 5, step)).toBe(-4);
-  });
-
-  it('stays put when the track is let go at rest, at either end', () => {
-    expect(settleSteps(0, 0, 10, 5, step)).toBe(0);
-    expect(settleSteps(0, 9, 10, 5, step)).toBe(0);
   });
 });

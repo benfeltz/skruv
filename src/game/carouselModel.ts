@@ -42,43 +42,19 @@ export function slotCount(extent: number, strip: StripSizes, gutter: number, cou
 
 /**
  * Where the track may be pulled to, in px along the band, from the current page `page` of
- * `count` with `visible` pages in the band: positive travel pulls toward earlier pages. The
- * first page goes no further than the band's start and the last no further than its end;
- * between them the pull is as it is. Travel is from where the track rests (`restShift`).
+ * `count` with `visible` pages in the band: positive travel pulls toward earlier pages. Any
+ * page may be brought to the centre, the first and the last too, so the band may show empty
+ * space beyond either end. Travel is from where the track rests (`restShift`).
  */
 export function clampTravel(travel: number, page: number, count: number, visible: number, step: number): number {
-  const { min, max } = trackRange(page, count, visible);
   const rest = restShift(page, count, visible) * step;
-  return Math.min(max * step, Math.max(min * step, rest + travel)) - rest;
+  return Math.min(page * step, Math.max(-(count - 1 - page) * step, rest + travel)) - rest;
 }
 
-/** How many pages a release at `travel` moves, to the nearest page (half a pitch counts as a page): positive toward later pages, which a pull toward the start of the band (negative travel) reaches. */
+/** How many pages a release at `travel` (from the track's rest) moves, to the nearest page (half a pitch counts as a page): positive toward later pages, which a pull toward the start of the band (negative travel) reaches. */
 export function snapSteps(travel: number, step: number): number {
   const pages = Math.round(Math.abs(travel) / step);
   return pages === 0 ? 0 : travel < 0 ? pages : -pages;
-}
-
-/**
- * How many pages a release at `travel` (from the rest of `page`) moves to land where the finger
- * left the pages: the page whose own rest, taken in the pages' present place, lies nearest the
- * track as it was let go. Mid-booklet that is the nearest page, as `snapSteps` has it; near an end
- * the rests differ, so a pull that brought pages into view settles on a page that keeps them
- * there rather than sliding them back. Half a pitch counts as a page; pages whose rests show the
- * same view (the last two near the end) are one landing, and the nearer is taken. Positive toward later pages.
- */
-export function settleSteps(travel: number, page: number, count: number, visible: number, step: number): number {
-  const at = restShift(page, count, visible) * step + travel;
-  let best = 0;
-  let bestGap = Infinity;
-  for (let to = 0; to < count; to++) {
-    const gap = Math.abs(at - (restShift(to, count, visible) - (to - page)) * step);
-    const nearer = Math.abs(to - page) < Math.abs(best);
-    if (gap < bestGap || (gap === bestGap && (gap === 0 ? nearer : !nearer))) {
-      best = to - page;
-      bestGap = gap;
-    }
-  }
-  return best;
 }
 
 /** The slot that holds the current page: the middle of `visible` slots. */

@@ -404,31 +404,34 @@ describe('the band scrolls as a carousel', () => {
   it('stops at the ends: pulling past the last page is clamped, and a release there stays', () => {
     const { manual, slots, track } = mountStrip({ page: COUNT - 1 });
     const at = pull(slots()[C(slots(), -2)], -5 * PITCH);
-    // The last page rests a slot toward the end (no empty slot after it), and the pull goes no further.
-    expect(track.style.transform).toBe(`translateX(${PITCH}px)`);
+    // The last page rests a slot toward the end; the pull brings it to the centre and no further.
+    expect(track.style.transform).toBe('translateX(0px)');
     up(slots()[C(slots(), -2)], at);
+    // A release there stays on the last page and the band eases back to its rest.
     expect(manual.currentPage).toBe(COUNT - 1);
+    expect(track.style.transform).toBe(`translateX(${PITCH}px)`);
     const first = mountStrip();
     const back = pull(first.slots()[C(first.slots())], 5 * PITCH);
-    // The first page rests a slot toward the start.
-    expect(first.track.style.transform).toBe(`translateX(${-PITCH}px)`);
+    // The first page rests a slot toward the start; the pull brings it to the centre.
+    expect(first.track.style.transform).toBe('translateX(0px)');
     up(first.slots()[C(first.slots())], back);
     expect(first.manual.currentPage).toBe(0);
   });
 
-  it('a long pull carries the band to its end and no further, never showing empty paper', () => {
+  it('a long pull carries the last page to the centre and no further, and the release chooses it', () => {
     const { manual, slots, track } = mountStrip({ page: 4 });
     const at = pull(slots()[C(slots())], -5 * PITCH);
-    // Four pitches on, page 9 at the band's end (page 8 in the centre): the pull goes no further.
-    expect(track.style.transform).toBe(`translateX(${-4 * PITCH}px)`);
+    // Five pitches on, page 9 in the centre: the pull goes no further.
+    expect(track.style.transform).toBe(`translateX(${-5 * PITCH}px)`);
     up(slots()[C(slots())], at);
-    expect(manual.currentPage).toBe(8);
-    expect(track.style.transform).toBe('translateX(0px)');
-    // ...and back toward the start: not clamped, down to page 3.
+    expect(manual.currentPage).toBe(9);
+    // The last page then rests a slot toward the end.
+    expect(track.style.transform).toBe(`translateX(${PITCH}px)`);
+    // ...and back toward the start: not clamped, down to page 4.
     const back = pull(slots()[C(slots())], 5 * PITCH);
-    expect(track.style.transform).toBe(`translateX(${5 * PITCH}px)`);
+    expect(track.style.transform).toBe(`translateX(${6 * PITCH}px)`);
     up(slots()[C(slots())], back);
-    expect(manual.currentPage).toBe(3);
+    expect(manual.currentPage).toBe(4);
   });
 
   it('draws a slot the first time it comes into view, not before', () => {
@@ -509,7 +512,7 @@ describe('the band scrolls as a carousel', () => {
     expect(sets.at(-1)).toBe(`translateX(${-PITCH}px)`);
   });
 
-  it('near the first page a pull that brought pages into view keeps them there on release', () => {
+  it('near the first page a pull of two pages moves two pages, the band then easing to the new rest', () => {
     // Five pages show on a 500 px band: page 0 rests two slots toward the start.
     const { manual, slots, track } = mountStrip({ viewport: { width: 500, height: 900 } });
     const sets: string[] = [];
@@ -517,9 +520,9 @@ describe('the band scrolls as a carousel', () => {
     Object.defineProperty(track.style, 'transform', { get: () => current, set: (value: string) => sets.push((current = value)), configurable: true });
     const at = pull(slots()[C(slots())], -2 * PITCH);
     up(slots()[C(slots())], at);
-    // Pages 2-6 were in view, so page 4 is current and the pages do not move.
-    expect(manual.currentPage).toBe(4);
-    expect(sets.slice(-2)).toEqual(['translateX(0px)', 'translateX(0px)']);
+    // Ben, round 3: the page the finger carried to the centre is the one chosen (page 2, whose rest is the middle).
+    expect(manual.currentPage).toBe(2);
+    expect(sets.slice(-1)).toEqual(['translateX(0px)']);
   });
 
   it('a flick at the end goes to the last page', () => {
@@ -527,8 +530,8 @@ describe('the band scrolls as a carousel', () => {
     const target = slots()[C(slots())];
     down(target);
     move(target, { x: 100 - 0.4 * PITCH, ms: 40 });
-    // The track cannot go further: the last page already sits at the band's end.
-    expect(track.style.transform).toBe('translateX(0px)');
+    // The track follows the finger: there is room to bring the last page to the centre.
+    expect(track.style.transform).toBe(`translateX(${-0.4 * PITCH}px)`);
     up(target, { x: 100 - 0.4 * PITCH, ms: 40 });
     expect(manual.currentPage).toBe(COUNT - 1);
   });
