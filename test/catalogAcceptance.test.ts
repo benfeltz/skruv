@@ -52,6 +52,9 @@ class FakeElement {
   addEventListener(type: string, fn: Listener) {
     this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]);
   }
+  removeEventListener(type: string, fn: Listener) {
+    this.listeners.set(type, (this.listeners.get(type) ?? []).filter((f) => f !== fn));
+  }
   setPointerCapture() {}
   // The page look measures its thumb; a fake has no layout.
   getBoundingClientRect() {

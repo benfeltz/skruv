@@ -451,8 +451,8 @@ export const BOOKLET_UI = {
   // (its height `page` x pageH / pageW plus two `page.gutter`s: 124 px) and down the right edge
   // in landscape (its width `page` plus two gutters: 96 px). Every page in it is `page` CSS px
   // wide, the centre one current and told by its gold border; the band shows as many as its
-  // long side takes (an odd count) plus the hidden slots at each end a drag of up to `reach` pages
-  // needs, so a drag shows the next page arriving from under the edge and never empty paper
+  // long side takes (an odd count) plus hidden slots, one for every page, drawn when they
+  // come into view, so a drag shows the next page arriving from under the edge and never empty paper
   // (src/game/carouselModel.ts `slotCount`). `gap` is the space between slots, `rule` the ink
   // line (px, the inset ring's weight) on the band's view side, `snapMs` the slide to a page
   // after a drag, a tap or a key. `peekDelayMs` is how long a touch rests on a page before it
@@ -467,8 +467,15 @@ export const BOOKLET_UI = {
     radius: 6,
     shadow: '0 4px 14px #0006',
     rule: 3,
-    reach: 1,
     snapMs: 180,
+    // A fast release carries the pages past the nearest (tuned on a phone): `velocity` is the px/ms
+    // at release for each page it carries, `maxPages` the most it carries, `sampleMs` the window of
+    // recent moves the speed is read over.
+    flick: { velocity: 0.6, maxPages: 2, sampleMs: 100 },
+    // The wheel over the band (tuned on a device): `threshold` is the accumulated delta (px) that
+    // makes one step (a mouse notch is 100-120), `stepMs` the rest between steps so a trackpad's
+    // fling steps once per this, `linePx` the px a line-mode delta (Firefox) counts for.
+    wheel: { threshold: 40, stepMs: 200, linePx: 16 },
   },
 };
 

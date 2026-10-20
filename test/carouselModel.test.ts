@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, BOOKLET_UI } from '../src/constants.js';
-import { centreSlot, clampTravel, pitch, restShift, slotCount, snapSteps, tapOn, visibleCount, windowOf } from '../src/game/carouselModel.js';
+import { centreSlot, clampTravel, flickPages, pitch, slotCount, slotsInView, snapSteps, tapOn, velocityOf, visibleCount, wheelDelta, wheelNext, WHEEL_REST, windowOf } from '../src/game/carouselModel.js';
 
-const { page, gap, reach } = BOOKLET_UI.strip;
+const { page, gap } = BOOKLET_UI.strip;
 const { gutter } = BOOKLET_UI.page;
 const strip = { slot: page, gap };
 // Down the right edge a slot's length along the band is a page's height.
@@ -42,43 +42,43 @@ describe('how many pages the band shows', () => {
 
 describe('how far the track may be pulled', () => {
   it('lets the first page reach the centre and no further', () => {
-    expect(clampTravel(500, 0, 10, step, 9)).toBe(0);
-    expect(clampTravel(30, 0, 10, step, 9)).toBe(0);
-    expect(clampTravel(500, 3, 10, step, 9)).toBe(3 * step);
+    expect(clampTravel(500, 0, 10, step)).toBe(0);
+    expect(clampTravel(30, 0, 10, step)).toBe(0);
+    expect(clampTravel(500, 3, 10, step)).toBe(3 * step);
   });
 
   it('lets the last page reach the centre and no further', () => {
-    expect(clampTravel(-500, 9, 10, step, 9)).toBe(0);
-    expect(clampTravel(-500, 7, 10, step, 9)).toBe(-2 * step);
+    expect(clampTravel(-500, 9, 10, step)).toBe(0);
+    expect(clampTravel(-500, 7, 10, step)).toBe(-2 * step);
   });
 
   it('leaves a pull in between as it is', () => {
-    expect(clampTravel(-112, 4, 10, step, 9)).toBe(-112);
-    expect(clampTravel(25, 4, 10, step, 9)).toBe(25);
+    expect(clampTravel(-112, 4, 10, step)).toBe(-112);
+    expect(clampTravel(25, 4, 10, step)).toBe(25);
   });
 
-  it('goes no further than the pages the slots were built for', () => {
-    expect(reach).toBe(1);
-    expect(clampTravel(-500, 4, 10, step, reach)).toBe(-step);
-    expect(clampTravel(500, 4, 10, step, reach)).toBe(step);
-    // ...and still only to the centre at an end.
-    expect(clampTravel(500, 0, 10, step, reach)).toBe(0);
-    expect(clampTravel(-500, 9, 10, step, reach)).toBe(0);
+  it('goes to the centre of the first and last page and no further, empty space beyond them allowed', () => {
+    expect(clampTravel(-500, 4, 10, step)).toBe(-5 * step);
+    expect(clampTravel(500, 4, 10, step)).toBe(4 * step);
+    expect(clampTravel(500, 1, 10, step)).toBe(step);
   });
 });
 
 describe('how many slots are built', () => {
-  it('fills the band at rest and at the end of a drag, odd, along either axis', () => {
-    // A 390 px phone: 3 shown, 79 px spare each side, and a page's drag more.
-    expect(slotCount(390, strip, gutter, reach)).toBe(7);
-    expect(slotCount(844, tall, gutter, reach)).toBeGreaterThan(visibleCount(844, tall, gutter));
+  it('fills the band with the current page in the centre, a slot for every page, odd, along either axis', () => {
+    // A 390 px phone, 10 pages: a slot for every page round any current one.
+    expect(slotCount(390, strip, gutter, 10)).toBe(19);
+    expect(slotCount(844, tall, gutter, 1)).toBeGreaterThan(visibleCount(844, tall, gutter));
     for (const sizes of [strip, tall]) {
       for (let extent = 200; extent < 2000; extent += 13) {
-        const built = slotCount(extent, sizes, gutter, reach);
-        expect(built % 2).toBe(1);
-        // The centre slot's neighbours reach the band's edge with the track a drag off centre.
-        const half = (built - 1) / 2;
-        expect(half * pitch(sizes) - reach * pitch(sizes) + sizes.slot / 2).toBeGreaterThanOrEqual(extent / 2);
+        for (const count of [1, 2, 10, 40]) {
+          const built = slotCount(extent, sizes, gutter, count);
+          expect(built % 2).toBe(1);
+          expect(built).toBeGreaterThanOrEqual(2 * count - 1);
+          // With the current page in the centre, its neighbours reach the band's edge.
+          const half = (built - 1) / 2;
+          expect(half * pitch(sizes) + sizes.slot / 2).toBeGreaterThanOrEqual(extent / 2);
+        }
       }
     }
   });
@@ -136,35 +136,93 @@ describe('a tap on a slot', () => {
   });
 });
 
-// Ben, 2026-10-18: no padding beside the strip. The track rests off centre near either end so no
-// visible slot is empty; the current page keeps its gold border wherever it then sits.
-describe('where the track rests', () => {
-  /** The pages the visible slots show, the track shifted `restShift` slots. */
-  const shown = (current: number, count: number, visible: number) => {
-    const shiftBy = restShift(current, count, visible);
-    return windowOf(current, count, visible + 2 * Math.abs(shiftBy)).slice(Math.abs(shiftBy) - shiftBy, Math.abs(shiftBy) - shiftBy + visible);
-  };
 
-  it('fills the band from the first page: no empty slot before it', () => {
-    expect(restShift(0, 12, 5)).toBe(-2);
-    expect(restShift(1, 12, 5)).toBe(-1);
-    expect(shown(0, 12, 5)).toEqual([0, 1, 2, 3, 4]);
-    expect(shown(1, 12, 5)).toEqual([0, 1, 2, 3, 4]);
+describe('which slots are in the band', () => {
+  const slot = page;
+  it('holds the centre and two either side at rest on a 390 px band', () => {
+    expect(slotsInView(0, 19, step, slot, 390)).toEqual({ first: 7, last: 11 });
   });
 
-  it('fills it to the last page: no empty slot after it', () => {
-    expect(restShift(11, 12, 5)).toBe(2);
-    expect(shown(11, 12, 5)).toEqual([7, 8, 9, 10, 11]);
+  it('moves with the track', () => {
+    expect(slotsInView(-4 * step, 19, step, slot, 390)).toEqual({ first: 11, last: 15 });
   });
 
-  it('keeps the current page in the middle between the ends', () => {
-    expect(restShift(5, 12, 5)).toBe(0);
-    expect(shown(5, 12, 5)).toEqual([3, 4, 5, 6, 7]);
+  it('never leaves the slots built', () => {
+    expect(slotsInView(-50 * step, 19, step, slot, 390).last).toBe(18);
+    expect(slotsInView(50 * step, 19, step, slot, 390).first).toBe(0);
+  });
+});
+
+describe('how fast a release is', () => {
+  it('is the distance over the time across the window', () => {
+    expect(velocityOf([{ t: 0, at: 0 }, { t: 50, at: 80 }], 100)).toBeCloseTo(1.6);
   });
 
-  it('starts a booklet shorter than the band at the band\'s start', () => {
-    expect(restShift(0, 2, 5)).toBe(-2);
-    expect(shown(0, 2, 5)).toEqual([0, 1, null, null, null]);
-    expect(shown(1, 2, 5)).toEqual([0, 1, null, null, null]);
+  it('leaves out a sample older than the window', () => {
+    expect(velocityOf([{ t: 0, at: 0 }, { t: 500, at: 100 }, { t: 550, at: 180 }], 100)).toBeCloseTo(1.6);
+  });
+
+  it('is 0 with one sample or no time between them', () => {
+    expect(velocityOf([{ t: 0, at: 0 }], 100)).toBe(0);
+    expect(velocityOf([{ t: 5, at: 0 }, { t: 5, at: 50 }], 100)).toBe(0);
+    expect(velocityOf([], 100)).toBe(0);
+  });
+});
+
+describe('how many pages a flick carries', () => {
+  const flick = { velocity: 0.6, maxPages: 2 };
+  it('is none below the threshold', () => {
+    expect(flickPages(0.59, flick)).toBe(0);
+    expect(flickPages(-0.3, flick)).toBe(0);
+  });
+
+  it('is a page at the threshold, toward later pages for a pull toward the band\'s start', () => {
+    expect(flickPages(-0.6, flick)).toBe(1);
+    expect(flickPages(1.2, flick)).toBe(-2);
+  });
+
+  it('never carries more than maxPages', () => {
+    expect(flickPages(-9, flick)).toBe(2);
+  });
+});
+
+describe('the wheel along the band', () => {
+  it('takes the larger axis with its sign, times the scale', () => {
+    expect(wheelDelta({ deltaX: 5, deltaY: -100 }, 1)).toBe(-100);
+    expect(wheelDelta({ deltaX: 120, deltaY: 10 }, 1)).toBe(120);
+    expect(wheelDelta({ deltaX: 0, deltaY: 3 }, 16)).toBe(48);
+  });
+});
+
+describe('the wheel steps', () => {
+  const rule = { threshold: 40, stepMs: 200 };
+
+  it('steps once for a notch and clears what it gathered', () => {
+    expect(wheelNext(WHEEL_REST, 100, 1000, rule)).toEqual({ state: { acc: 0, steppedAt: 1000 }, steps: 1 });
+    expect(wheelNext(WHEEL_REST, -100, 1000, rule).steps).toBe(-1);
+  });
+
+  it('gathers small deltas and steps when they pass the threshold', () => {
+    let state = WHEEL_REST;
+    const stepsAt: number[] = [];
+    [0, 10, 20, 30].forEach((now) => {
+      const next = wheelNext(state, 15, now, rule);
+      state = next.state;
+      stepsAt.push(next.steps);
+    });
+    expect(stepsAt).toEqual([0, 0, 1, 0]);
+  });
+
+  it('rests for stepMs after a step, then steps again', () => {
+    const first = wheelNext(WHEEL_REST, 100, 1000, rule);
+    expect(wheelNext(first.state, 100, 1100, rule).steps).toBe(0);
+    expect(wheelNext(first.state, 100, 1200, rule).steps).toBe(1);
+  });
+
+  it('clears what was gathered when the delta turns', () => {
+    const gathered = wheelNext(WHEEL_REST, 30, 0, rule);
+    expect(gathered.steps).toBe(0);
+    const turned = wheelNext(gathered.state, -30, 10, rule);
+    expect(turned).toEqual({ state: { acc: -30, steppedAt: -Infinity }, steps: 0 });
   });
 });

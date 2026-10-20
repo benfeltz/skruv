@@ -2,8 +2,10 @@
 // headlessly: how many pages the band shows, how far its track may be pulled, how many pages
 // a release moves, which page sits in each slot round the current one, and what a tap on a
 // slot means. There are no arrows and no breakpoint: the band shows what its long side
-// takes. The strip does not wrap — slots past either end of the booklet are empty. Pure: the
-// band's DOM lives in src/ui/booklet.ts and only draws what this says. The caller passes the
+// takes. A drag is bounded by the pages, not by a reach: the band's slots hold every page. The strip does not wrap — slots past either end of the booklet are empty. Pure: the
+// band's DOM lives in src/ui/booklet.ts and only draws what this says. A fast release carries
+// the pages on by its speed (`velocityOf`, `flickPages`) and a wheel steps one page per
+// threshold, with a rest between steps (`wheelNext`). The caller passes the
 // band's constants (BOOKLET_UI.strip, BOOKLET_UI.page.gutter), so a test can pass its own.
 
 /** What the sizes below are made of: a slot's length along the band (a page's width on the bottom, its height down the right edge) and the gap between slots (CSS px). */
@@ -26,28 +28,29 @@ export function visibleCount(extent: number, strip: StripSizes, gutter: number):
 }
 
 /**
- * How many slots to build so a drag of up to `reach` pages never shows empty paper: the visible
- * ones (`visibleCount`) and, at each end, enough more to fill the room the odd count leaves
- * beside them and the band's whole extent with the track `reach` pitches off centre. Odd.
+ * How many slots to build: enough that the band is full with the current page in the centre
+ * (the visible ones and, at each end, the room the odd count leaves beside them; at the first
+ * and last page those slots are empty), and that every page of a `count`-page booklet has a
+ * slot round any current page, so a drag never runs out. Odd.
  */
-export function slotCount(extent: number, strip: StripSizes, gutter: number, reach: number): number {
+export function slotCount(extent: number, strip: StripSizes, gutter: number, count: number): number {
   const step = pitch(strip);
   const shown = visibleCount(extent, strip, gutter);
   const spare = Math.max(0, extent - (shown * step - strip.gap)) / 2;
-  return shown + 2 * Math.ceil(spare / step + reach);
+  return Math.max(shown + 2 * Math.ceil(spare / step), 2 * count - 1);
 }
 
 /**
  * Where the track may be pulled to, in px along the band, from the current page `page` of
- * `count`: positive travel pulls toward earlier pages. No further than `reach` pages (what
- * `slotCount` built slots for), and the first and the last page may go no further than the
- * centre, so the band never shows past either end of the booklet.
+ * `count`: positive travel pulls toward earlier pages. As in any carousel the current page rests
+ * in the centre and any page, the first and the last too, may be brought to it; the band shows
+ * empty space beyond either end.
  */
-export function clampTravel(travel: number, page: number, count: number, step: number, reach: number): number {
-  return Math.min(Math.min(page, reach) * step, Math.max(0 - Math.min(count - 1 - page, reach) * step, travel));
+export function clampTravel(travel: number, page: number, count: number, step: number): number {
+  return Math.min(page * step, Math.max((page - (count - 1)) * step, travel));
 }
 
-/** How many pages a release at `travel` moves, to the nearest page (half a pitch counts as a page): positive toward later pages, which a pull toward the start of the band (negative travel) reaches. */
+/** How many pages a release at `travel` (from the track's rest) moves, to the nearest page (half a pitch counts as a page): positive toward later pages, which a pull toward the start of the band (negative travel) reaches. */
 export function snapSteps(travel: number, step: number): number {
   const pages = Math.round(Math.abs(travel) / step);
   return pages === 0 ? 0 : travel < 0 ? pages : -pages;
@@ -55,21 +58,6 @@ export function snapSteps(travel: number, step: number): number {
 
 /** The slot that holds the current page: the middle of `visible` slots. */
 export const centreSlot = (visible: number): number => Math.floor(visible / 2);
-
-/**
- * How many slots the track rests off centre so the band never shows an empty slot beside its
- * pages (Ben, 2026-10-18: no padding beside the strip): near the first page the pages slide
- * toward the start (negative), near the last toward the end (positive); between, 0, the current
- * page in the middle. A booklet shorter than the band starts at the band's start. The current
- * page keeps its gold border wherever it then sits.
- */
-export function restShift(page: number, count: number, visible: number): number {
-  const side = centreSlot(visible);
-  const before = Math.max(0, side - page);
-  const after = Math.max(0, side - (count - 1 - page));
-  if (count < visible) return -before;
-  return after - before;
-}
 
 /**
  * The page index in each of `visible` slots, with `page` in the centre slot; a slot past
@@ -87,4 +75,55 @@ export function windowOf(page: number, count: number, visible: number): (number 
 export function tapOn(slots: readonly (number | null)[], slot: number): 'centre' | number | null {
   if (slot === centreSlot(slots.length)) return 'centre';
   return slots[slot] ?? null;
+}
+
+/**
+ * The slots of `built` whose span overlaps the band when the track sits `track` px off centre,
+ * `slot` px long at a `step` pitch, in a band `extent` px long: the first and last index.
+ */
+export function slotsInView(track: number, built: number, step: number, slot: number, extent: number): { first: number; last: number } {
+  const centre = centreSlot(built);
+  const reach = (extent + slot) / 2;
+  const first = Math.ceil((-reach - track) / step) + centre;
+  const last = Math.floor((reach - track) / step) + centre;
+  return { first: Math.max(0, first), last: Math.min(built - 1, last) };
+}
+
+/** The speed along the band, px/ms, from the earliest of `samples` within `windowMs` of the last to the last; 0 without two samples in the window or any time between them. */
+export function velocityOf(samples: readonly { t: number; at: number }[], windowMs: number): number {
+  const last = samples[samples.length - 1];
+  const first = samples.find((sample) => last.t - sample.t <= windowMs);
+  if (!last || !first || last.t === first.t) return 0;
+  return (last.at - first.at) / (last.t - first.t);
+}
+
+/** How many pages past the nearest a release at `velocity` px/ms carries: negative (toward earlier pages) for a positive velocity, as `snapSteps` has it; 0 below the threshold. */
+export function flickPages(velocity: number, flick: { velocity: number; maxPages: number }): number {
+  const pages = Math.min(flick.maxPages, Math.floor(Math.abs(velocity) / flick.velocity));
+  return pages === 0 ? 0 : velocity < 0 ? pages : -pages;
+}
+
+/** The wheel's delta along the band: the larger of the two axes (a mouse has only a vertical one), times `scale` for a line-mode wheel. */
+export function wheelDelta({ deltaX, deltaY }: { deltaX: number; deltaY: number }, scale: number): number {
+  return (Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY) * scale;
+}
+
+/** What the wheel has gathered since the last step, and when that step was. */
+export interface WheelState {
+  acc: number;
+  steppedAt: number;
+}
+
+export const WHEEL_REST: WheelState = { acc: 0, steppedAt: -Infinity };
+
+/**
+ * Takes one wheel `delta` at `now` ms: a step (+1 toward later pages for a positive delta) the
+ * moment the gathered delta passes `threshold`, then none until `stepMs` have passed. A delta
+ * the other way clears what was gathered.
+ */
+export function wheelNext(state: WheelState, delta: number, now: number, { threshold, stepMs }: { threshold: number; stepMs: number }): { state: WheelState; steps: -1 | 0 | 1 } {
+  if (now - state.steppedAt < stepMs) return { state: { acc: 0, steppedAt: state.steppedAt }, steps: 0 };
+  const acc = Math.sign(delta) === -Math.sign(state.acc) ? delta : state.acc + delta;
+  if (Math.abs(acc) < threshold) return { state: { acc, steppedAt: state.steppedAt }, steps: 0 };
+  return { state: { acc: 0, steppedAt: now }, steps: acc > 0 ? 1 : -1 };
 }

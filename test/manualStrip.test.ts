@@ -12,6 +12,7 @@ import type { FakeDom } from './support/fakeDom.js';
 let dom: FakeDom;
 const mounted: { dispose(): void }[] = [];
 beforeEach(() => {
+  canvasOf.mockClear();
   vi.useFakeTimers();
   dom = installFakeDom();
 });
@@ -28,17 +29,20 @@ const PITCH = BOOKLET_UI.strip.page + BOOKLET_UI.strip.gap;
 // Down the right edge a slot's length along the band is a page's height.
 const TALL_PITCH = Math.round((BOOKLET_UI.strip.page * BOOKLET.pageSize[1]) / BOOKLET.pageSize[0]) + BOOKLET_UI.strip.gap;
 const PORTRAIT = { width: 390, height: 844 };
-// The slots a band builds: those its long side shows, the hidden ones a drag needs, and those the
-// track's rest shift (no empty slot beside the pages at either end) brings in.
-const built = (extent: number, sizes: { slot: number; gap: number }) =>
-  slotCount(extent, sizes, 12, 1) + 2 * centreSlot(visibleCount(extent, sizes, 12));
+// The slots a band builds: enough for its long side, the track's rest shift, and a slot for every
+// page round any current one.
+const built = (extent: number, sizes: { slot: number; gap: number }) => slotCount(extent, sizes, 12, COUNT);
+// The slot `by` places from the centre one.
+const C = (slots: readonly unknown[], by = 0) => centreSlot(slots.length) + by;
 const LANDSCAPE = { width: 844, height: 390 };
+
+const canvasOf = vi.fn((index: number) => ({ index }) as unknown as CanvasImageSource);
 
 function mountStrip(options: { page?: number; viewport?: { width: number; height: number } } = {}) {
   dom.viewport.width = (options.viewport ?? PORTRAIT).width;
   dom.viewport.height = (options.viewport ?? PORTRAIT).height;
   const manual = createBookletSheet({
-    pages: { count: COUNT, canvas: (index) => ({ index }) as unknown as CanvasImageSource },
+    pages: { count: COUNT, canvas: canvasOf },
     docked: 'strip',
     blocking: false,
     open: false,
@@ -57,23 +61,23 @@ function mountStrip(options: { page?: number; viewport?: { width: number; height
 }
 
 // What each slot shows: a page number, or null for an empty slot.
-const shown = (slots: FakeElement[]) => slots.map((slot) => (slot.dataset.empty === 'true' ? null : (slot.children[0].drawn as { index: number }).index));
+const shown = (slots: FakeElement[]) => slots.map((slot) => (slot.dataset.empty === 'true' ? null : Number(slot.dataset.page)));
 
 const down = (target: FakeElement, init: { pointerType?: string; x?: number; y?: number; pointerId?: number } = {}) =>
   target.fire('pointerdown', { pointerType: init.pointerType ?? 'mouse', clientX: init.x ?? 100, clientY: init.y ?? 100, pointerId: init.pointerId ?? 1, timeStamp: 1000 });
 const up = (target: FakeElement, init: { pointerType?: string; x?: number; y?: number; pointerId?: number; ms?: number } = {}) =>
   target.fire('pointerup', { pointerType: init.pointerType ?? 'mouse', clientX: init.x ?? 100, clientY: init.y ?? 100, pointerId: init.pointerId ?? 1, timeStamp: 1000 + (init.ms ?? 0) });
-const move = (target: FakeElement, init: { pointerType?: string; x?: number; y?: number; pointerId?: number } = {}) =>
-  target.fire('pointermove', { pointerType: init.pointerType ?? 'mouse', clientX: init.x ?? 100, clientY: init.y ?? 100, pointerId: init.pointerId ?? 1 });
+const move = (target: FakeElement, init: { pointerType?: string; x?: number; y?: number; pointerId?: number; ms?: number } = {}) =>
+  target.fire('pointermove', { pointerType: init.pointerType ?? 'mouse', clientX: init.x ?? 100, clientY: init.y ?? 100, pointerId: init.pointerId ?? 1, timeStamp: 1000 + (init.ms ?? 0) });
 const touchDown = (target: FakeElement, x = 100, y = 100) => down(target, { pointerType: 'touch', x, y });
 const touchUp = (target: FakeElement, x = 100, y = 100) => up(target, { pointerType: 'touch', x, y });
 
 describe('what the strip shows', () => {
   it('is three pages and the hidden ones past each end on a phone held upright, the current one in the centre slot, empty past the cover', () => {
     const { slots } = mountStrip({ viewport: PORTRAIT });
-    // Three shown, the hidden ones a drag of a page's reach fills the band with, and one more each end for the rest shift.
-    expect(slots()).toHaveLength(9);
-    expect(shown(slots())).toEqual([null, null, null, null, 0, 1, 2, 3, 4]);
+    // Three shown, and a slot for every page round any current one: 2 x 10 - 1.
+    expect(slots()).toHaveLength(19);
+    expect(shown(slots())).toEqual([null, null, null, null, null, null, null, null, null, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 
   it('follows the width in portrait and the height in landscape, a slot counting its length along the band', () => {
@@ -90,15 +94,16 @@ describe('what the strip shows', () => {
 
   it('puts the current page in the middle, with its neighbours either side, and empty slots past the last', () => {
     const { slots, manual } = mountStrip({ page: 4 });
-    expect(shown(slots())).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(shown(slots())).toEqual([null, null, null, null, null, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, null, null, null, null]);
     expect(manual.currentPage).toBe(4);
     const last = mountStrip({ page: COUNT - 1 });
-    expect(shown(last.slots())).toEqual([COUNT - 5, COUNT - 4, COUNT - 3, COUNT - 2, COUNT - 1, null, null, null, null]);
+    expect(shown(last.slots())).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, null, null, null, null, null, null, null, null, null]);
   });
 
   it('marks the centre slot as the current one, the others not', () => {
     const { slots } = mountStrip();
-    expect(slots().map((slot) => slot.dataset.centre)).toEqual(['false', 'false', 'false', 'false', 'true', 'false', 'false', 'false', 'false']);
+    expect(slots().map((slot) => slot.dataset.centre)).toEqual(slots().map((_, at) => String(at === 9)));
+    expect(slots()).toHaveLength(19);
   });
 
   it("draws the slots into small canvases, not the page's full resolution, and builds no thumbnail canvas", () => {
@@ -134,8 +139,8 @@ describe('what the strip shows', () => {
     dom.viewport.width = 390;
     dom.viewport.height = 844;
     dom.windowListeners.get('resize')!.forEach((fn) => fn({}));
-    expect(slots()).toHaveLength(9);
-    expect(shown(slots())).toEqual([null, 0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(slots()).toHaveLength(19);
+    expect(shown(slots())).toEqual([null, null, null, null, null, null, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, null, null, null]);
     expect(manual.currentPage).toBe(3);
     expect(track.dataset.axis).toBe('x');
   });
@@ -281,18 +286,18 @@ describe('the band, by orientation', () => {
 describe('moving along the strip', () => {
   it('a tap on a side page centres it', () => {
     const { manual, slots } = mountStrip({ page: 4 });
-    touchDown(slots()[6]);
-    touchUp(slots()[6]);
+    touchDown(slots()[C(slots(), 2)]);
+    touchUp(slots()[C(slots(), 2)]);
     expect(manual.currentPage).toBe(6);
-    down(slots()[3]);
-    up(slots()[3]);
+    down(slots()[C(slots(), -1)]);
+    up(slots()[C(slots(), -1)]);
     expect(manual.currentPage).toBe(5);
   });
 
   it('a tap on an empty slot does nothing', () => {
     const { manual, slots } = mountStrip();
-    down(slots()[1]);
-    up(slots()[1]);
+    down(slots()[C(slots(), -3)]);
+    up(slots()[C(slots(), -3)]);
     expect(manual.currentPage).toBe(0);
     expect(manual.expanded).toBe(false);
   });
@@ -345,6 +350,8 @@ describe('moving along the strip', () => {
 });
 
 describe('the band scrolls as a carousel', () => {
+  // A pull is a slow one: the press and the move share a time stamp, so the release carries
+  // nothing past the nearest page. A flick is a `swipe`, with times of its own.
   const pull = (target: FakeElement, along: number, axis: 'x' | 'y' = 'x') => {
     const at = axis === 'x' ? { x: 100 + along, y: 100 } : { x: 100, y: 100 + along };
     down(target);
@@ -354,15 +361,15 @@ describe('the band scrolls as a carousel', () => {
 
   it('follows the pointer while it moves, and snaps to the nearest page on release', () => {
     const { manual, slots, track, changes } = mountStrip({ page: 3 });
-    const at = pull(slots()[4], -0.7 * PITCH);
+    const at = pull(slots()[C(slots())], -0.7 * PITCH);
     expect(track.style.transform).toBe(`translateX(${-0.7 * PITCH}px)`);
     expect(track.dataset.dragging).toBe('true');
-    up(slots()[4], at);
+    up(slots()[C(slots())], at);
     expect(manual.currentPage).toBe(4);
     expect(manual.expanded).toBe(false);
     expect(changes).toEqual([{ page: 4, expanded: false }]);
     // The new page is painted at once; the pages then slide the rest of the way home.
-    expect(shown(slots())).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(shown(slots())).toEqual([null, null, null, null, null, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, null, null, null, null]);
     expect(track.style.transform).toBe('translateX(0px)');
     expect(track.dataset.dragging).toBeUndefined();
   });
@@ -372,16 +379,16 @@ describe('the band scrolls as a carousel', () => {
     const sets: string[] = [];
     let current = '';
     Object.defineProperty(track.style, 'transform', { get: () => current, set: (value: string) => sets.push((current = value)), configurable: true });
-    const at = pull(slots()[4], -0.7 * PITCH);
-    up(slots()[4], at);
+    const at = pull(slots()[C(slots())], -0.7 * PITCH);
+    up(slots()[C(slots())], at);
     // The release: the track is put where the pages were let go (a pull of 56 short of the page's 80, so 24 past), then let go to 0.
     expect(sets.slice(-2)).toEqual([`translateX(${-0.7 * PITCH + PITCH}px)`, 'translateX(0px)']);
   });
 
   it('a short pull snaps back to the same page', () => {
     const { manual, slots, track, changes } = mountStrip({ page: 3 });
-    const at = pull(slots()[4], -0.3 * PITCH);
-    up(slots()[4], at);
+    const at = pull(slots()[C(slots())], -0.3 * PITCH);
+    up(slots()[C(slots())], at);
     expect(manual.currentPage).toBe(3);
     expect(changes).toEqual([]);
     expect(track.style.transform).toBe('translateX(0px)');
@@ -389,42 +396,158 @@ describe('the band scrolls as a carousel', () => {
 
   it('pulls toward earlier pages the other way', () => {
     const { manual, slots } = mountStrip({ page: 3 });
-    const at = pull(slots()[2], 0.6 * PITCH);
-    up(slots()[2], at);
+    const at = pull(slots()[C(slots(), -2)], 0.6 * PITCH);
+    up(slots()[C(slots(), -2)], at);
     expect(manual.currentPage).toBe(2);
   });
 
   it('stops at the ends: pulling past the last page is clamped, and a release there stays', () => {
     const { manual, slots, track } = mountStrip({ page: COUNT - 1 });
-    const at = pull(slots()[2], -5 * PITCH);
-    // The last page rests a slot toward the end (no empty slot after it), and the pull goes no further.
-    expect(track.style.transform).toBe(`translateX(${PITCH}px)`);
-    up(slots()[2], at);
+    const at = pull(slots()[C(slots(), -2)], -5 * PITCH);
+    // The last page rests in the centre like any other (empty space beyond it): the pull goes no further.
+    expect(track.style.transform).toBe('translateX(0px)');
+    up(slots()[C(slots(), -2)], at);
+    // A release there stays on the last page, which stays in the centre.
     expect(manual.currentPage).toBe(COUNT - 1);
+    expect(track.style.transform).toBe('translateX(0px)');
     const first = mountStrip();
-    const back = pull(first.slots()[4], 5 * PITCH);
-    // The first page rests a slot toward the start.
-    expect(first.track.style.transform).toBe(`translateX(${-PITCH}px)`);
-    up(first.slots()[4], back);
+    const back = pull(first.slots()[C(first.slots())], 5 * PITCH);
+    // The first page rests in the centre too.
+    expect(first.track.style.transform).toBe('translateX(0px)');
+    up(first.slots()[C(first.slots())], back);
     expect(first.manual.currentPage).toBe(0);
   });
 
-  it("goes no further than the slots built for it: a long pull stops a page's reach off, so the band never shows empty paper", () => {
+  it('a long pull carries the last page to the centre and no further, and the release chooses it', () => {
     const { manual, slots, track } = mountStrip({ page: 4 });
-    const at = pull(slots()[4], -5 * PITCH);
-    expect(track.style.transform).toBe(`translateX(${-BOOKLET_UI.strip.reach * PITCH}px)`);
-    up(slots()[4], at);
-    expect(manual.currentPage).toBe(5);
-    const back = pull(slots()[4], 5 * PITCH);
-    expect(track.style.transform).toBe(`translateX(${BOOKLET_UI.strip.reach * PITCH}px)`);
-    up(slots()[4], back);
+    const at = pull(slots()[C(slots())], -5 * PITCH);
+    // Five pitches on, page 9 in the centre: the pull goes no further.
+    expect(track.style.transform).toBe(`translateX(${-5 * PITCH}px)`);
+    up(slots()[C(slots())], at);
+    expect(manual.currentPage).toBe(9);
+    // The last page then rests in the centre.
+    expect(track.style.transform).toBe('translateX(0px)');
+    // ...and back toward the start: not clamped, down to page 4.
+    const back = pull(slots()[C(slots())], 5 * PITCH);
+    expect(track.style.transform).toBe(`translateX(${5 * PITCH}px)`);
+    up(slots()[C(slots())], back);
     expect(manual.currentPage).toBe(4);
+  });
+
+  it('draws a slot the first time it comes into view, not before', () => {
+    const { slots, track } = mountStrip();
+    const asked = () => canvasOf.mock.calls.map(([index]) => index).sort();
+    // Only the pages in the band (the first in the centre, the edges of the next ones in) are asked for at mount, not all ten.
+    expect(asked()).toEqual([0, 1, 2]);
+    pull(slots()[C(slots())], -2 * PITCH);
+    expect(track.style.transform).toBe(`translateX(${-2 * PITCH}px)`);
+    // Two pages arrived from under the edge and were drawn as they came; none is drawn twice.
+    expect(asked()).toEqual([0, 1, 2, 3, 4]);
+    move(slots()[C(slots())], { x: 100 - 2 * PITCH });
+    expect(canvasOf).toHaveBeenCalledTimes(5);
+  });
+
+  // The press at 1000, moves at 1000 + ms, the lift `lift` ms in: `along` px along the band in all.
+  const swipe = (target: FakeElement, along: number, ms: number) => {
+    down(target);
+    move(target, { x: 100 + along / 2, ms: ms / 2 });
+    move(target, { x: 100 + along, ms });
+    up(target, { x: 100 + along, ms });
+  };
+
+  it('a fast release carries a page past the nearest', () => {
+    const { manual, slots, track } = mountStrip({ page: 3 });
+    const sets: string[] = [];
+    let current = '';
+    Object.defineProperty(track.style, 'transform', { get: () => current, set: (value: string) => sets.push((current = value)), configurable: true });
+    // 32 px (0.4 of a pitch, which alone is no page) over 40 ms: 0.8 px/ms, past the 0.6 threshold.
+    swipe(slots()[C(slots())], -0.4 * PITCH, 40);
+    expect(manual.currentPage).toBe(4);
+    // The slide starts where the pages were let go, then eases home.
+    expect(sets.slice(-2)).toEqual([`translateX(${-0.4 * PITCH + PITCH}px)`, 'translateX(0px)']);
+  });
+
+  it('a faster one carries two, never more', () => {
+    const first = mountStrip({ page: 3 });
+    swipe(first.slots()[C(first.slots())], -0.4 * PITCH, 20);
+    expect(first.manual.currentPage).toBe(5);
+    const second = mountStrip({ page: 3 });
+    swipe(second.slots()[C(second.slots())], -0.4 * PITCH, 10);
+    expect(second.manual.currentPage).toBe(5);
+  });
+
+  it('a flick the other way carries toward earlier pages', () => {
+    const { manual, slots } = mountStrip({ page: 5 });
+    swipe(slots()[C(slots())], 0.4 * PITCH, 40);
+    expect(manual.currentPage).toBe(4);
+  });
+
+  it('a slow release carries nothing, and a pause before the lift is no speed', () => {
+    const { manual, slots } = mountStrip({ page: 3 });
+    swipe(slots()[C(slots())], -0.4 * PITCH, 1000);
+    expect(manual.currentPage).toBe(3);
+    const paused = mountStrip({ page: 3 });
+    const target = paused.slots()[C(paused.slots())];
+    down(target);
+    move(target, { x: 100 - 0.4 * PITCH, ms: 20 });
+    up(target, { x: 100 - 0.4 * PITCH, ms: 400 });
+    expect(paused.manual.currentPage).toBe(3);
+  });
+
+  it('a flick past the first page stays on it, and the band slides home', () => {
+    const { manual, slots, track } = mountStrip();
+    const target = slots()[C(slots())];
+    const sets: string[] = [];
+    let current = '';
+    Object.defineProperty(track.style, 'transform', { get: () => current, set: (value: string) => sets.push((current = value)), configurable: true });
+    down(target);
+    // A little toward later pages, then fast back toward earlier ones.
+    move(target, { x: 100 - 0.4 * PITCH, ms: 10 });
+    move(target, { x: 100 + 0.8 * PITCH, ms: 30 });
+    up(target, { x: 100 + 0.8 * PITCH, ms: 30 });
+    expect(manual.currentPage).toBe(0);
+    expect(track.dataset.dragging).toBeUndefined();
+    expect(track.style.transform).toBe(sets.at(-1));
+    expect(sets.at(-1)).toBe('translateX(0px)');
+  });
+
+  it('at either end, the page carried to the centre is the page chosen, and it stays centred', () => {
+    // Round 4: the current page always rests in the centre, so a drag counts pages from there.
+    for (const viewport of [PORTRAIT, { width: 500, height: 900 }]) {
+      for (let target = 0; target < COUNT - 1; target++) {
+        const last = mountStrip({ viewport, page: COUNT - 1 });
+        const sets: string[] = [];
+        let current = '';
+        Object.defineProperty(last.track.style, 'transform', { get: () => current, set: (value: string) => sets.push((current = value)), configurable: true });
+        const at = pull(last.slots()[C(last.slots())], (COUNT - 1 - target) * PITCH);
+        up(last.slots()[C(last.slots())], at);
+        expect(last.manual.currentPage).toBe(target);
+        // The pages are let go in the centre and do not move.
+        expect(sets.slice(-2)).toEqual(['translateX(0px)', 'translateX(0px)']);
+      }
+      const first = mountStrip({ viewport });
+      const at = pull(first.slots()[C(first.slots())], -PITCH);
+      up(first.slots()[C(first.slots())], at);
+      expect(first.manual.currentPage).toBe(1);
+      expect(first.track.style.transform).toBe('translateX(0px)');
+    }
+  });
+
+  it('a flick at the end goes to the last page', () => {
+    const { manual, slots, track } = mountStrip({ page: COUNT - 2 });
+    const target = slots()[C(slots())];
+    down(target);
+    move(target, { x: 100 - 0.4 * PITCH, ms: 40 });
+    // The track follows the finger: there is room to bring the last page to the centre.
+    expect(track.style.transform).toBe(`translateX(${-0.4 * PITCH}px)`);
+    up(target, { x: 100 - 0.4 * PITCH, ms: 40 });
+    expect(manual.currentPage).toBe(COUNT - 1);
   });
 
   it('works with a mouse as with a finger', () => {
     const { manual, slots } = mountStrip({ page: 3 });
-    const at = pull(slots()[3], -PITCH);
-    up(slots()[3], at);
+    const at = pull(slots()[C(slots(), -1)], -PITCH);
+    up(slots()[C(slots(), -1)], at);
     expect(manual.currentPage).toBe(4);
   });
 
@@ -461,12 +584,12 @@ describe('the band scrolls as a carousel', () => {
     const sets: string[] = [];
     let current = '';
     Object.defineProperty(track.style, 'transform', { get: () => current, set: (value: string) => sets.push((current = value)), configurable: true });
-    down(slots()[5]);
-    up(slots()[5]);
+    down(slots()[C(slots(), 1)]);
+    up(slots()[C(slots(), 1)]);
     expect(manual.currentPage).toBe(5);
     expect(sets.slice(-2)).toEqual([`translateX(${PITCH}px)`, 'translateX(0px)']);
-    down(slots()[3]);
-    up(slots()[3]);
+    down(slots()[C(slots(), -1)]);
+    up(slots()[C(slots(), -1)]);
     expect(manual.currentPage).toBe(4);
     expect(sets.slice(-2)).toEqual([`translateX(${-PITCH}px)`, 'translateX(0px)']);
   });
@@ -502,14 +625,14 @@ describe('the band scrolls as a carousel', () => {
 
   it('a second finger during a drag slides the pages back and flips nothing', () => {
     const { manual, slots, track, changes } = mountStrip({ page: 3 });
-    down(slots()[4], { pointerType: 'touch', pointerId: 1 });
-    move(slots()[4], { pointerType: 'touch', pointerId: 1, x: 100 - 1.4 * PITCH });
+    down(slots()[C(slots())], { pointerType: 'touch', pointerId: 1 });
+    move(slots()[C(slots())], { pointerType: 'touch', pointerId: 1, x: 100 - 1.4 * PITCH });
     expect(track.dataset.dragging).toBe('true');
-    down(slots()[3], { pointerType: 'touch', pointerId: 2, x: 200 });
+    down(slots()[C(slots(), -1)], { pointerType: 'touch', pointerId: 2, x: 200 });
     expect(track.style.transform).toBe('translateX(0px)');
     expect(track.dataset.dragging).toBeUndefined();
-    up(slots()[4], { pointerType: 'touch', pointerId: 1, x: 100 - 1.4 * PITCH });
-    up(slots()[3], { pointerType: 'touch', pointerId: 2, x: 200 });
+    up(slots()[C(slots())], { pointerType: 'touch', pointerId: 1, x: 100 - 1.4 * PITCH });
+    up(slots()[C(slots(), -1)], { pointerType: 'touch', pointerId: 2, x: 200 });
     expect(manual.currentPage).toBe(3);
     expect(changes).toEqual([]);
   });
@@ -517,8 +640,8 @@ describe('the band scrolls as a carousel', () => {
   it('a cancelled drag slides back and flips nothing; so does a lost capture', () => {
     const { manual, slots, track } = mountStrip({ page: 3 });
     for (const type of ['pointercancel', 'lostpointercapture']) {
-      pull(slots()[4], -1.4 * PITCH);
-      slots()[4].fire(type, { pointerType: 'mouse' });
+      pull(slots()[C(slots())], -1.4 * PITCH);
+      slots()[C(slots())].fire(type, { pointerType: 'mouse' });
       expect(track.style.transform).toBe('translateX(0px)');
       expect(track.dataset.dragging).toBeUndefined();
       expect(manual.currentPage).toBe(3);
@@ -530,8 +653,8 @@ describe('the band scrolls as a carousel', () => {
     down(centre());
     up(centre());
     expect(manual.expanded).toBe(true);
-    const at = pull(slots()[4], -PITCH);
-    up(slots()[4], at);
+    const at = pull(slots()[C(slots())], -PITCH);
+    up(slots()[C(slots())], at);
     expect(manual.currentPage).toBe(3);
     expect(manual.expanded).toBe(true);
   });
@@ -620,10 +743,13 @@ describe('opening it on a touch: hold to peek, release to put it back', () => {
   });
 });
 
+// The 19 slots round page 0 of 10.
+const FIRST_PAGE = [null, null, null, null, null, null, null, null, null, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
 describe('holding a side page peeks it in place', () => {
   const held = () => {
     const strip = mountStrip();
-    return { ...strip, side: strip.slots()[5] };
+    return { ...strip, side: strip.slots()[C(strip.slots(), 1)] };
   };
 
   it('opens that page without moving the band, and the release puts it back', () => {
@@ -633,11 +759,11 @@ describe('holding a side page peeks it in place', () => {
     expect(manual.expanded).toBe(true);
     expect((view.children[0].children[0].drawn as { index: number }).index).toBe(1);
     expect(manual.currentPage).toBe(0);
-    expect(shown(slots())).toEqual([null, null, null, null, 0, 1, 2, 3, 4]);
+    expect(shown(slots())).toEqual(FIRST_PAGE);
     touchUp(side);
     expect(manual.expanded).toBe(false);
     expect(manual.currentPage).toBe(0);
-    expect(shown(slots())).toEqual([null, null, null, null, 0, 1, 2, 3, 4]);
+    expect(shown(slots())).toEqual(FIRST_PAGE);
     expect(changes).toEqual([
       { page: 1, expanded: true },
       { page: 0, expanded: false },
@@ -658,10 +784,10 @@ describe('holding a side page peeks it in place', () => {
 
   it('a hold on an empty slot peeks nothing', () => {
     const { manual, slots } = held();
-    touchDown(slots()[1]);
+    touchDown(slots()[C(slots(), -3)]);
     vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs * 2);
     expect(manual.expanded).toBe(false);
-    touchUp(slots()[1]);
+    touchUp(slots()[C(slots(), -3)]);
     expect(manual.currentPage).toBe(0);
   });
 
@@ -674,9 +800,9 @@ describe('holding a side page peeks it in place', () => {
   });
 
   it('with the manual open, a hold on a side page still flips to it and never closes the page', () => {
-    const { manual, side, changes } = held();
-    down(manual.thumb.children[0].children[0].children[4]);
-    up(manual.thumb.children[0].children[0].children[4]);
+    const { manual, slots, side, changes } = held();
+    down(slots()[C(slots())]);
+    up(slots()[C(slots())]);
     expect(manual.expanded).toBe(true);
     changes.length = 0;
     touchDown(side);
@@ -697,6 +823,92 @@ describe('holding a side page peeks it in place', () => {
   });
 });
 
+describe('the wheel steps the band', () => {
+  const wheel = (target: FakeElement, init: { deltaX?: number; deltaY?: number; deltaMode?: number; ctrlKey?: boolean; ms: number; preventDefault?: () => void }) =>
+    target.fire('wheel', { deltaX: 0, deltaY: 0, timeStamp: 1000 + init.ms, ...init });
+  const STEP = BOOKLET_UI.strip.wheel.stepMs;
+  // WheelEvent.DOM_DELTA_LINE: the fake DOM has no WheelEvent to read it from.
+  const LINES = 1;
+
+  it('a notch down steps to the next page, a notch up to the one before, sliding as a key does', () => {
+    const { manual, slots, track } = mountStrip({ page: 3 });
+    wheel(slots()[C(slots())], { deltaY: 100, ms: 0 });
+    expect(manual.currentPage).toBe(4);
+    expect(track.style.transform).toBe('translateX(0px)');
+    wheel(slots()[C(slots())], { deltaY: -100, ms: 3 * STEP });
+    expect(manual.currentPage).toBe(3);
+  });
+
+  it('in landscape a vertical notch moves the vertical band, and a horizontal swipe does too', () => {
+    const { manual, slots } = mountStrip({ viewport: LANDSCAPE, page: 3 });
+    wheel(slots()[C(slots())], { deltaY: 100, ms: 0 });
+    expect(manual.currentPage).toBe(4);
+    wheel(slots()[C(slots())], { deltaX: 120, ms: 3 * STEP });
+    expect(manual.currentPage).toBe(5);
+  });
+
+  it('in portrait a horizontal swipe steps too', () => {
+    const { manual, slots } = mountStrip({ page: 3 });
+    wheel(slots()[C(slots())], { deltaX: -120, ms: 0 });
+    expect(manual.currentPage).toBe(2);
+  });
+
+  it("a trackpad's small deltas step once past the threshold and then rest", () => {
+    const { manual, slots } = mountStrip({ page: 3 });
+    const target = slots()[C(slots())];
+    for (let i = 0; i < 4; i++) wheel(target, { deltaY: 15, ms: i * 10 });
+    expect(manual.currentPage).toBe(4);
+    // The rest after a step: more of the same fling does nothing.
+    for (let i = 0; i < 6; i++) wheel(target, { deltaY: 15, ms: 40 + i * 10 });
+    expect(manual.currentPage).toBe(4);
+    // A delta after the rest starts gathering again, and a notch steps.
+    wheel(target, { deltaY: 100, ms: 40 + STEP });
+    expect(manual.currentPage).toBe(5);
+  });
+
+  it('a line-mode notch (Firefox) steps', () => {
+    const { manual, slots } = mountStrip({ page: 3 });
+    wheel(slots()[C(slots())], { deltaY: 3, deltaMode: LINES, ms: 0 });
+    expect(manual.currentPage).toBe(4);
+  });
+
+  it('leaves a ctrl wheel (a pinch or the browser zoom) alone', () => {
+    const { manual, slots } = mountStrip({ page: 3 });
+    const prevent = vi.fn();
+    wheel(slots()[C(slots())], { deltaY: 100, ms: 0, ctrlKey: true, preventDefault: prevent });
+    expect(manual.currentPage).toBe(3);
+    expect(prevent).not.toHaveBeenCalled();
+  });
+
+  it('claims the wheel: preventDefault is called whether or not a page moves', () => {
+    const { manual, slots } = mountStrip({ page: 3 });
+    const prevent = vi.fn();
+    wheel(slots()[C(slots())], { deltaY: 100, ms: 0, preventDefault: prevent });
+    expect(manual.currentPage).toBe(4);
+    wheel(slots()[C(slots())], { deltaY: 5, ms: 10, preventDefault: prevent });
+    expect(prevent).toHaveBeenCalledTimes(2);
+  });
+
+  it('at the last page a notch down does nothing, and at the first a notch up does nothing', () => {
+    const last = mountStrip({ page: COUNT - 1 });
+    wheel(last.slots()[C(last.slots())], { deltaY: 100, ms: 0 });
+    expect(last.manual.currentPage).toBe(COUNT - 1);
+    const first = mountStrip();
+    wheel(first.slots()[C(first.slots())], { deltaY: -100, ms: 0 });
+    expect(first.manual.currentPage).toBe(0);
+  });
+
+  it('listens on the band alone, and dispose takes the listener off', () => {
+    const { manual, slots } = mountStrip({ page: 3 });
+    expect(manual.thumb.listeners.get('wheel')).toHaveLength(1);
+    expect(manual.element.listeners.get('wheel')).toBeUndefined();
+    const target = slots()[C(slots())];
+    manual.dispose();
+    wheel(target, { deltaY: 100, ms: 0 });
+    expect(manual.currentPage).toBe(3);
+  });
+});
+
 describe('a second finger on the band cancels its gesture', () => {
   const finger = (target: FakeElement, pointerId: number, x: number) => down(target, { pointerType: 'touch', pointerId, x });
   const lift = (target: FakeElement, pointerId: number, x: number) => up(target, { pointerType: 'touch', pointerId, x });
@@ -704,11 +916,11 @@ describe('a second finger on the band cancels its gesture', () => {
   it('a pinch with both fingers on the band flips nothing and peeks nothing', () => {
     const { manual, slots, centre, changes } = mountStrip({ page: 3 });
     finger(centre(), 1, 100);
-    finger(slots()[4], 2, 200);
+    finger(slots()[C(slots())], 2, 200);
     // The first finger spreads past the swipe distance and lifts.
     centre().fire('pointermove', { pointerType: 'touch', pointerId: 1, clientX: 100 - 2 * BOOKLET_UI.swipeDistance, clientY: 100 });
     lift(centre(), 1, 100 - 2 * BOOKLET_UI.swipeDistance);
-    lift(slots()[4], 2, 200);
+    lift(slots()[C(slots())], 2, 200);
     vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs * 2);
     expect(manual.currentPage).toBe(3);
     expect(manual.expanded).toBe(false);
@@ -720,10 +932,10 @@ describe('a second finger on the band cancels its gesture', () => {
     finger(centre(), 1, 100);
     vi.advanceTimersByTime(BOOKLET_UI.strip.peekDelayMs);
     expect(manual.expanded).toBe(true);
-    finger(slots()[4], 2, 200);
+    finger(slots()[C(slots())], 2, 200);
     expect(manual.expanded).toBe(false);
     lift(centre(), 1, 100);
-    lift(slots()[4], 2, 200);
+    lift(slots()[C(slots())], 2, 200);
     expect(manual.currentPage).toBe(3);
     expect(manual.expanded).toBe(false);
     expect(changes).toEqual([
@@ -735,11 +947,11 @@ describe('a second finger on the band cancels its gesture', () => {
   it('the next single press works', () => {
     const { manual, slots, centre } = mountStrip({ page: 3 });
     finger(centre(), 1, 100);
-    finger(slots()[4], 2, 200);
+    finger(slots()[C(slots())], 2, 200);
     lift(centre(), 1, 100);
-    lift(slots()[4], 2, 200);
-    down(slots()[5], { pointerType: 'touch', pointerId: 3 });
-    up(slots()[5], { pointerType: 'touch', pointerId: 3 });
+    lift(slots()[C(slots())], 2, 200);
+    down(slots()[C(slots(), 1)], { pointerType: 'touch', pointerId: 3 });
+    up(slots()[C(slots(), 1)], { pointerType: 'touch', pointerId: 3 });
     expect(manual.currentPage).toBe(4);
   });
 });
@@ -795,8 +1007,8 @@ describe('opening it with a mouse or a key: click to open, click the page to clo
     const { manual, centre, slots } = mountStrip();
     down(centre());
     up(centre());
-    down(slots()[5]);
-    up(slots()[5]);
+    down(slots()[C(slots(), 1)]);
+    up(slots()[C(slots(), 1)]);
     dom.key('ArrowRight');
     expect(manual.currentPage).toBe(2);
     expect(manual.expanded).toBe(true);
