@@ -469,6 +469,14 @@ export const BOOKLET_UI = {
     rule: 3,
     reach: 1,
     snapMs: 180,
+    // A fast release carries the pages past the nearest (tuned on a phone): `velocity` is the px/ms
+    // at release for each page it carries, `maxPages` the most it carries, `sampleMs` the window of
+    // recent moves the speed is read over.
+    flick: { velocity: 0.6, maxPages: 2, sampleMs: 100 },
+    // The wheel over the band (tuned on a device): `threshold` is the accumulated delta (px) that
+    // makes one step (a mouse notch is 100-120), `stepMs` the rest between steps so a trackpad's
+    // fling steps once per this, `linePx` the px a line-mode delta (Firefox) counts for.
+    wheel: { threshold: 40, stepMs: 200, linePx: 16 },
   },
 };
 

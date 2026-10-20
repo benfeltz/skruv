@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, BOOKLET_UI } from '../src/constants.js';
-import { centreSlot, clampTravel, pitch, restShift, slotCount, snapSteps, tapOn, visibleCount, windowOf } from '../src/game/carouselModel.js';
+import { centreSlot, clampTravel, flickPages, pitch, restShift, slotCount, slotsInView, snapSteps, tapOn, trackRange, velocityOf, visibleCount, wheelDelta, wheelNext, WHEEL_REST, windowOf } from '../src/game/carouselModel.js';
 
 const { page, gap, reach } = BOOKLET_UI.strip;
 const { gutter } = BOOKLET_UI.page;
@@ -166,5 +166,114 @@ describe('where the track rests', () => {
     expect(restShift(0, 2, 5)).toBe(-2);
     expect(shown(0, 2, 5)).toEqual([0, 1, null, null, null]);
     expect(shown(1, 2, 5)).toEqual([0, 1, null, null, null]);
+  });
+});
+
+describe('how far the track may sit off centre', () => {
+  it('is bounded by the first page at the band\'s start and the last at its end', () => {
+    expect(trackRange(4, 10, 5)).toEqual({ min: -3, max: 2 });
+    expect(trackRange(0, 10, 5).max).toBe(-2);
+    expect(trackRange(9, 10, 5).min).toBe(2);
+  });
+
+  it('starts a booklet shorter than the band at the band\'s start', () => {
+    expect(trackRange(1, 2, 5)).toEqual({ min: -1, max: -1 });
+  });
+
+  it('holds the rest shift: 0 clamped into the range, for every page', () => {
+    for (let page = 0; page < 12; page++) {
+      const { min, max } = trackRange(page, 12, 5);
+      expect(restShift(page, 12, 5)).toBe(Math.min(max, Math.max(min, 0)));
+    }
+  });
+});
+
+describe('which slots are in the band', () => {
+  const slot = page;
+  it('holds the centre and two either side at rest on a 390 px band', () => {
+    expect(slotsInView(0, 19, step, slot, 390)).toEqual({ first: 7, last: 11 });
+  });
+
+  it('moves with the track', () => {
+    expect(slotsInView(-4 * step, 19, step, slot, 390)).toEqual({ first: 11, last: 15 });
+  });
+
+  it('never leaves the slots built', () => {
+    expect(slotsInView(-50 * step, 19, step, slot, 390).last).toBe(18);
+    expect(slotsInView(50 * step, 19, step, slot, 390).first).toBe(0);
+  });
+});
+
+describe('how fast a release is', () => {
+  it('is the distance over the time across the window', () => {
+    expect(velocityOf([{ t: 0, at: 0 }, { t: 50, at: 80 }], 100)).toBeCloseTo(1.6);
+  });
+
+  it('leaves out a sample older than the window', () => {
+    expect(velocityOf([{ t: 0, at: 0 }, { t: 500, at: 100 }, { t: 550, at: 180 }], 100)).toBeCloseTo(1.6);
+  });
+
+  it('is 0 with one sample or no time between them', () => {
+    expect(velocityOf([{ t: 0, at: 0 }], 100)).toBe(0);
+    expect(velocityOf([{ t: 5, at: 0 }, { t: 5, at: 50 }], 100)).toBe(0);
+    expect(velocityOf([], 100)).toBe(0);
+  });
+});
+
+describe('how many pages a flick carries', () => {
+  const flick = { velocity: 0.6, maxPages: 2 };
+  it('is none below the threshold', () => {
+    expect(flickPages(0.59, flick)).toBe(0);
+    expect(flickPages(-0.3, flick)).toBe(0);
+  });
+
+  it('is a page at the threshold, toward later pages for a pull toward the band\'s start', () => {
+    expect(flickPages(-0.6, flick)).toBe(1);
+    expect(flickPages(1.2, flick)).toBe(-2);
+  });
+
+  it('never carries more than maxPages', () => {
+    expect(flickPages(-9, flick)).toBe(2);
+  });
+});
+
+describe('the wheel along the band', () => {
+  it('takes the larger axis with its sign, times the scale', () => {
+    expect(wheelDelta({ deltaX: 5, deltaY: -100 }, 1)).toBe(-100);
+    expect(wheelDelta({ deltaX: 120, deltaY: 10 }, 1)).toBe(120);
+    expect(wheelDelta({ deltaX: 0, deltaY: 3 }, 16)).toBe(48);
+  });
+});
+
+describe('the wheel steps', () => {
+  const rule = { threshold: 40, stepMs: 200 };
+
+  it('steps once for a notch and clears what it gathered', () => {
+    expect(wheelNext(WHEEL_REST, 100, 1000, rule)).toEqual({ state: { acc: 0, steppedAt: 1000 }, steps: 1 });
+    expect(wheelNext(WHEEL_REST, -100, 1000, rule).steps).toBe(-1);
+  });
+
+  it('gathers small deltas and steps when they pass the threshold', () => {
+    let state = WHEEL_REST;
+    const stepsAt: number[] = [];
+    [0, 10, 20, 30].forEach((now) => {
+      const next = wheelNext(state, 15, now, rule);
+      state = next.state;
+      stepsAt.push(next.steps);
+    });
+    expect(stepsAt).toEqual([0, 0, 1, 0]);
+  });
+
+  it('rests for stepMs after a step, then steps again', () => {
+    const first = wheelNext(WHEEL_REST, 100, 1000, rule);
+    expect(wheelNext(first.state, 100, 1100, rule).steps).toBe(0);
+    expect(wheelNext(first.state, 100, 1200, rule).steps).toBe(1);
+  });
+
+  it('clears what was gathered when the delta turns', () => {
+    const gathered = wheelNext(WHEEL_REST, 30, 0, rule);
+    expect(gathered.steps).toBe(0);
+    const turned = wheelNext(gathered.state, -30, 10, rule);
+    expect(turned).toEqual({ state: { acc: -30, steppedAt: -Infinity }, steps: 0 });
   });
 });
