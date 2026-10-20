@@ -28,27 +28,26 @@ export function visibleCount(extent: number, strip: StripSizes, gutter: number):
 }
 
 /**
- * How many slots to build: enough that the band is full at rest and with the track shifted as
- * far as `trackRange` lets it (the visible ones and, at each end, the room the odd count leaves
- * beside them and the slots the shift brings in), and that every page of a `count`-page booklet
- * has a slot round any current page, so a drag never runs out. Odd.
+ * How many slots to build: enough that the band is full with the current page in the centre
+ * (the visible ones and, at each end, the room the odd count leaves beside them; at the first
+ * and last page those slots are empty), and that every page of a `count`-page booklet has a
+ * slot round any current page, so a drag never runs out. Odd.
  */
 export function slotCount(extent: number, strip: StripSizes, gutter: number, count: number): number {
   const step = pitch(strip);
   const shown = visibleCount(extent, strip, gutter);
   const spare = Math.max(0, extent - (shown * step - strip.gap)) / 2;
-  return Math.max(shown + 2 * (Math.ceil(spare / step) + centreSlot(shown)), 2 * count - 1);
+  return Math.max(shown + 2 * Math.ceil(spare / step), 2 * count - 1);
 }
 
 /**
  * Where the track may be pulled to, in px along the band, from the current page `page` of
- * `count` with `visible` pages in the band: positive travel pulls toward earlier pages. Any
- * page may be brought to the centre, the first and the last too, so the band may show empty
- * space beyond either end. Travel is from where the track rests (`restShift`).
+ * `count`: positive travel pulls toward earlier pages. As in any carousel the current page rests
+ * in the centre and any page, the first and the last too, may be brought to it; the band shows
+ * empty space beyond either end.
  */
-export function clampTravel(travel: number, page: number, count: number, visible: number, step: number): number {
-  const rest = restShift(page, count, visible) * step;
-  return Math.min(page * step, Math.max(-(count - 1 - page) * step, rest + travel)) - rest;
+export function clampTravel(travel: number, page: number, count: number, step: number): number {
+  return Math.min(page * step, Math.max((page - (count - 1)) * step, travel));
 }
 
 /** How many pages a release at `travel` (from the track's rest) moves, to the nearest page (half a pitch counts as a page): positive toward later pages, which a pull toward the start of the band (negative travel) reaches. */
@@ -59,31 +58,6 @@ export function snapSteps(travel: number, step: number): number {
 
 /** The slot that holds the current page: the middle of `visible` slots. */
 export const centreSlot = (visible: number): number => Math.floor(visible / 2);
-
-/**
- * How far the track may sit off centre, in slots, from `page` of `count` with `visible` slots in
- * the band, so the band never shows empty paper: `max` puts the first page at the band's start,
- * `min` the last at its end. Positive is toward earlier pages, as `clampTravel` has it. A booklet
- * shorter than the band starts at the band's start.
- */
-export function trackRange(page: number, count: number, visible: number): { min: number; max: number } {
-  const side = centreSlot(visible);
-  const max = page - side;
-  const min = side - (count - 1 - page);
-  return min > max ? { min: max, max } : { min, max };
-}
-
-/**
- * How many slots the track rests off centre so the band never shows an empty slot beside its
- * pages (Ben, 2026-10-18: no padding beside the strip): near the first page the pages slide
- * toward the start (negative), near the last toward the end (positive); between, 0, the current
- * page in the middle. A booklet shorter than the band starts at the band's start. The current
- * page keeps its gold border wherever it then sits.
- */
-export function restShift(page: number, count: number, visible: number): number {
-  const { min, max } = trackRange(page, count, visible);
-  return Math.min(max, Math.max(min, 0));
-}
 
 /**
  * The page index in each of `visible` slots, with `page` in the centre slot; a slot past

@@ -404,15 +404,15 @@ describe('the band scrolls as a carousel', () => {
   it('stops at the ends: pulling past the last page is clamped, and a release there stays', () => {
     const { manual, slots, track } = mountStrip({ page: COUNT - 1 });
     const at = pull(slots()[C(slots(), -2)], -5 * PITCH);
-    // The last page rests a slot toward the end; the pull brings it to the centre and no further.
+    // The last page rests in the centre like any other (empty space beyond it): the pull goes no further.
     expect(track.style.transform).toBe('translateX(0px)');
     up(slots()[C(slots(), -2)], at);
-    // A release there stays on the last page and the band eases back to its rest.
+    // A release there stays on the last page, which stays in the centre.
     expect(manual.currentPage).toBe(COUNT - 1);
-    expect(track.style.transform).toBe(`translateX(${PITCH}px)`);
+    expect(track.style.transform).toBe('translateX(0px)');
     const first = mountStrip();
     const back = pull(first.slots()[C(first.slots())], 5 * PITCH);
-    // The first page rests a slot toward the start; the pull brings it to the centre.
+    // The first page rests in the centre too.
     expect(first.track.style.transform).toBe('translateX(0px)');
     up(first.slots()[C(first.slots())], back);
     expect(first.manual.currentPage).toBe(0);
@@ -425,11 +425,11 @@ describe('the band scrolls as a carousel', () => {
     expect(track.style.transform).toBe(`translateX(${-5 * PITCH}px)`);
     up(slots()[C(slots())], at);
     expect(manual.currentPage).toBe(9);
-    // The last page then rests a slot toward the end.
-    expect(track.style.transform).toBe(`translateX(${PITCH}px)`);
+    // The last page then rests in the centre.
+    expect(track.style.transform).toBe('translateX(0px)');
     // ...and back toward the start: not clamped, down to page 4.
     const back = pull(slots()[C(slots())], 5 * PITCH);
-    expect(track.style.transform).toBe(`translateX(${6 * PITCH}px)`);
+    expect(track.style.transform).toBe(`translateX(${5 * PITCH}px)`);
     up(slots()[C(slots())], back);
     expect(manual.currentPage).toBe(4);
   });
@@ -437,15 +437,14 @@ describe('the band scrolls as a carousel', () => {
   it('draws a slot the first time it comes into view, not before', () => {
     const { slots, track } = mountStrip();
     const asked = () => canvasOf.mock.calls.map(([index]) => index).sort();
-    // Only the pages in the band (the first at the band's start, the edges of the next ones in) are asked for at mount, not all ten.
-    expect(asked()).toEqual([0, 1, 2, 3]);
+    // Only the pages in the band (the first in the centre, the edges of the next ones in) are asked for at mount, not all ten.
+    expect(asked()).toEqual([0, 1, 2]);
     pull(slots()[C(slots())], -2 * PITCH);
-    // The rest shift is one slot toward the start: the track is three pitches off centre.
-    expect(track.style.transform).toBe(`translateX(${-3 * PITCH}px)`);
+    expect(track.style.transform).toBe(`translateX(${-2 * PITCH}px)`);
     // Two pages arrived from under the edge and were drawn as they came; none is drawn twice.
-    expect(asked()).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(asked()).toEqual([0, 1, 2, 3, 4]);
     move(slots()[C(slots())], { x: 100 - 2 * PITCH });
-    expect(canvasOf).toHaveBeenCalledTimes(6);
+    expect(canvasOf).toHaveBeenCalledTimes(5);
   });
 
   // The press at 1000, moves at 1000 + ms, the lift `lift` ms in: `along` px along the band in all.
@@ -509,20 +508,29 @@ describe('the band scrolls as a carousel', () => {
     expect(manual.currentPage).toBe(0);
     expect(track.dataset.dragging).toBeUndefined();
     expect(track.style.transform).toBe(sets.at(-1));
-    expect(sets.at(-1)).toBe(`translateX(${-PITCH}px)`);
+    expect(sets.at(-1)).toBe('translateX(0px)');
   });
 
-  it('near the first page a pull of two pages moves two pages, the band then easing to the new rest', () => {
-    // Five pages show on a 500 px band: page 0 rests two slots toward the start.
-    const { manual, slots, track } = mountStrip({ viewport: { width: 500, height: 900 } });
-    const sets: string[] = [];
-    let current = '';
-    Object.defineProperty(track.style, 'transform', { get: () => current, set: (value: string) => sets.push((current = value)), configurable: true });
-    const at = pull(slots()[C(slots())], -2 * PITCH);
-    up(slots()[C(slots())], at);
-    // Ben, round 3: the page the finger carried to the centre is the one chosen (page 2, whose rest is the middle).
-    expect(manual.currentPage).toBe(2);
-    expect(sets.slice(-1)).toEqual(['translateX(0px)']);
+  it('at either end, the page carried to the centre is the page chosen, and it stays centred', () => {
+    // Round 4: the current page always rests in the centre, so a drag counts pages from there.
+    for (const viewport of [PORTRAIT, { width: 500, height: 900 }]) {
+      for (let target = 0; target < COUNT - 1; target++) {
+        const last = mountStrip({ viewport, page: COUNT - 1 });
+        const sets: string[] = [];
+        let current = '';
+        Object.defineProperty(last.track.style, 'transform', { get: () => current, set: (value: string) => sets.push((current = value)), configurable: true });
+        const at = pull(last.slots()[C(last.slots())], (COUNT - 1 - target) * PITCH);
+        up(last.slots()[C(last.slots())], at);
+        expect(last.manual.currentPage).toBe(target);
+        // The pages are let go in the centre and do not move.
+        expect(sets.slice(-2)).toEqual(['translateX(0px)', 'translateX(0px)']);
+      }
+      const first = mountStrip({ viewport });
+      const at = pull(first.slots()[C(first.slots())], -PITCH);
+      up(first.slots()[C(first.slots())], at);
+      expect(first.manual.currentPage).toBe(1);
+      expect(first.track.style.transform).toBe('translateX(0px)');
+    }
   });
 
   it('a flick at the end goes to the last page', () => {

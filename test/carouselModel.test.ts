@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOOKLET, BOOKLET_UI } from '../src/constants.js';
-import { centreSlot, clampTravel, flickPages, pitch, restShift, slotCount, slotsInView, snapSteps, tapOn, trackRange, velocityOf, visibleCount, wheelDelta, wheelNext, WHEEL_REST, windowOf } from '../src/game/carouselModel.js';
+import { centreSlot, clampTravel, flickPages, pitch, slotCount, slotsInView, snapSteps, tapOn, velocityOf, visibleCount, wheelDelta, wheelNext, WHEEL_REST, windowOf } from '../src/game/carouselModel.js';
 
 const { page, gap } = BOOKLET_UI.strip;
 const { gutter } = BOOKLET_UI.page;
@@ -42,31 +42,30 @@ describe('how many pages the band shows', () => {
 
 describe('how far the track may be pulled', () => {
   it('lets the first page reach the centre and no further', () => {
-    // Five visible: page 0 rests two slots toward the start, so the centre is two pitches on.
-    expect(clampTravel(500, 0, 10, 5, step)).toBe(2 * step);
-    expect(clampTravel(30, 0, 10, 5, step)).toBe(30);
-    expect(clampTravel(500, 3, 10, 5, step)).toBe(3 * step);
+    expect(clampTravel(500, 0, 10, step)).toBe(0);
+    expect(clampTravel(30, 0, 10, step)).toBe(0);
+    expect(clampTravel(500, 3, 10, step)).toBe(3 * step);
   });
 
   it('lets the last page reach the centre and no further', () => {
-    expect(clampTravel(-500, 9, 10, 5, step)).toBe(-2 * step);
-    expect(clampTravel(-500, 7, 10, 5, step)).toBe(-2 * step);
+    expect(clampTravel(-500, 9, 10, step)).toBe(0);
+    expect(clampTravel(-500, 7, 10, step)).toBe(-2 * step);
   });
 
   it('leaves a pull in between as it is', () => {
-    expect(clampTravel(-112, 4, 10, 5, step)).toBe(-112);
-    expect(clampTravel(25, 4, 10, 5, step)).toBe(25);
+    expect(clampTravel(-112, 4, 10, step)).toBe(-112);
+    expect(clampTravel(25, 4, 10, step)).toBe(25);
   });
 
   it('goes to the centre of the first and last page and no further, empty space beyond them allowed', () => {
-    expect(clampTravel(-500, 4, 10, 5, step)).toBe(-5 * step);
-    expect(clampTravel(500, 4, 10, 5, step)).toBe(4 * step);
-    expect(clampTravel(500, 1, 10, 5, step)).toBe(1 * step - restShift(1, 10, 5) * step);
+    expect(clampTravel(-500, 4, 10, step)).toBe(-5 * step);
+    expect(clampTravel(500, 4, 10, step)).toBe(4 * step);
+    expect(clampTravel(500, 1, 10, step)).toBe(step);
   });
 });
 
 describe('how many slots are built', () => {
-  it('fills the band at rest and at the end of a drag, a slot for every page, odd, along either axis', () => {
+  it('fills the band with the current page in the centre, a slot for every page, odd, along either axis', () => {
     // A 390 px phone, 10 pages: a slot for every page round any current one.
     expect(slotCount(390, strip, gutter, 10)).toBe(19);
     expect(slotCount(844, tall, gutter, 1)).toBeGreaterThan(visibleCount(844, tall, gutter));
@@ -76,11 +75,9 @@ describe('how many slots are built', () => {
           const built = slotCount(extent, sizes, gutter, count);
           expect(built % 2).toBe(1);
           expect(built).toBeGreaterThanOrEqual(2 * count - 1);
-          // With the track a rest shift off centre, the centre slot's neighbours still reach the band's edge.
-          const shown = visibleCount(extent, sizes, gutter);
+          // With the current page in the centre, its neighbours reach the band's edge.
           const half = (built - 1) / 2;
-          const shifted = centreSlot(shown) * pitch(sizes);
-          expect(half * pitch(sizes) - shifted + sizes.slot / 2).toBeGreaterThanOrEqual(extent / 2);
+          expect(half * pitch(sizes) + sizes.slot / 2).toBeGreaterThanOrEqual(extent / 2);
         }
       }
     }
@@ -139,57 +136,6 @@ describe('a tap on a slot', () => {
   });
 });
 
-// Ben, 2026-10-18: no padding beside the strip. The track rests off centre near either end so no
-// visible slot is empty; the current page keeps its gold border wherever it then sits.
-describe('where the track rests', () => {
-  /** The pages the visible slots show, the track shifted `restShift` slots. */
-  const shown = (current: number, count: number, visible: number) => {
-    const shiftBy = restShift(current, count, visible);
-    return windowOf(current, count, visible + 2 * Math.abs(shiftBy)).slice(Math.abs(shiftBy) - shiftBy, Math.abs(shiftBy) - shiftBy + visible);
-  };
-
-  it('fills the band from the first page: no empty slot before it', () => {
-    expect(restShift(0, 12, 5)).toBe(-2);
-    expect(restShift(1, 12, 5)).toBe(-1);
-    expect(shown(0, 12, 5)).toEqual([0, 1, 2, 3, 4]);
-    expect(shown(1, 12, 5)).toEqual([0, 1, 2, 3, 4]);
-  });
-
-  it('fills it to the last page: no empty slot after it', () => {
-    expect(restShift(11, 12, 5)).toBe(2);
-    expect(shown(11, 12, 5)).toEqual([7, 8, 9, 10, 11]);
-  });
-
-  it('keeps the current page in the middle between the ends', () => {
-    expect(restShift(5, 12, 5)).toBe(0);
-    expect(shown(5, 12, 5)).toEqual([3, 4, 5, 6, 7]);
-  });
-
-  it('starts a booklet shorter than the band at the band\'s start', () => {
-    expect(restShift(0, 2, 5)).toBe(-2);
-    expect(shown(0, 2, 5)).toEqual([0, 1, null, null, null]);
-    expect(shown(1, 2, 5)).toEqual([0, 1, null, null, null]);
-  });
-});
-
-describe('how far the track may sit off centre', () => {
-  it('is bounded by the first page at the band\'s start and the last at its end', () => {
-    expect(trackRange(4, 10, 5)).toEqual({ min: -3, max: 2 });
-    expect(trackRange(0, 10, 5).max).toBe(-2);
-    expect(trackRange(9, 10, 5).min).toBe(2);
-  });
-
-  it('starts a booklet shorter than the band at the band\'s start', () => {
-    expect(trackRange(1, 2, 5)).toEqual({ min: -1, max: -1 });
-  });
-
-  it('holds the rest shift: 0 clamped into the range, for every page', () => {
-    for (let page = 0; page < 12; page++) {
-      const { min, max } = trackRange(page, 12, 5);
-      expect(restShift(page, 12, 5)).toBe(Math.min(max, Math.max(min, 0)));
-    }
-  });
-});
 
 describe('which slots are in the band', () => {
   const slot = page;

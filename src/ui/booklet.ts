@@ -1,7 +1,7 @@
 import { BOOKLET, BOOKLET_UI, CATALOG, CLUSTER, COLORS, GESTURE, MENU, RENDER } from '../constants.js';
 import { pageMarks } from '../game/catalogLayout.js';
 import type { WheelState } from '../game/carouselModel.js';
-import { centreSlot, clampTravel, flickPages, pitch, restShift, slotCount, slotsInView, snapSteps, tapOn, velocityOf, visibleCount, WHEEL_REST, wheelDelta, wheelNext, windowOf } from '../game/carouselModel.js';
+import { centreSlot, clampTravel, flickPages, pitch, slotCount, slotsInView, snapSteps, tapOn, velocityOf, visibleCount, WHEEL_REST, wheelDelta, wheelNext, windowOf } from '../game/carouselModel.js';
 import { peekNext } from '../game/peekGesture.js';
 import type { PeekEvent, PeekState } from '../game/peekGesture.js';
 
@@ -663,7 +663,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
       const { samples } = stripPress;
       samples.push({ t: event.timeStamp, at: along });
       while (samples[0].t < event.timeStamp - flick.sampleMs && samples.length > 1) samples.shift();
-      stripPress.travel = clampTravel(along, page, pages.count, carousel.visible(), carousel.pitch());
+      stripPress.travel = clampTravel(along, page, pages.count, carousel.pitch());
       carousel.drag(stripPress.travel);
     });
     // Lets the press go: a touch's peek is put back. Returns the press, for a drag to settle.
@@ -869,10 +869,6 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
   /** How many slots are built: those, and a slot for every page round any current page, so a drag never runs out. */
   const total = () => slotCount(extent(), sizes(), BOOKLET_UI.page.gutter, count);
   const shift =(px: number) => `translate${axis() === 'x' ? 'X' : 'Y'}(${px}px)`;
-  // Where the track rests (px along the band, restShift's slots), so the band never shows an empty
-  // slot beside its pages; and where it rested before the last paint, which a slide starts from.
-  let rest = 0;
-  let restBefore = 0;
   // The page in each slot as of the last paint, and the function that draws one: what a drag
   // needs to draw the slots that come into view.
   let shown: (number | null)[] = [];
@@ -927,11 +923,9 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
       const built = total();
       if (built !== slots.length) rebuild(built);
       const now = axis();
-      // The track rests where the band shows no empty slot (a turn of the phone leaves no stale
+      // The track rests with the current page in the centre (a turn of the phone leaves no stale
       // offset along the old axis); a drag in hand keeps its own place.
-      restBefore = rest;
-      rest = restShift(page, count, visible()) * pitch(sizes());
-      if (track.dataset.dragging !== 'true') track.style.transform = shift(rest);
+      if (track.dataset.dragging !== 'true') track.style.transform = shift(0);
       const edge = band();
       root.dataset.axis = track.dataset.axis = leaf.dataset.axis = now;
       root.dataset.band = edge;
@@ -956,24 +950,22 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
         slot.button.setAttribute('aria-label', index === null ? '' : label);
         if (centred) slot.button.setAttribute('aria-expanded', String(open));
       });
-      fill(rest);
+      fill(0);
     },
     /** The track follows a drag: `travel` px along the band from where it rests, no transition. */
     drag(travel: number) {
-      restBefore = rest;
       track.dataset.dragging = 'true';
-      track.style.transform = shift(rest + travel);
-      fill(rest + travel);
+      track.style.transform = shift(travel);
+      fill(travel);
     },
-    /** The track slides to rest from `from` px off where it rested before the last paint (the pages stay put on screen as the page changes): set there without a transition, flushed, then let go. */
+    /** The track slides to rest from `from` px off the centre (the pages stay put on screen as the page changes): set there without a transition, flushed, then let go. */
     slide(from: number) {
       track.dataset.dragging = 'true';
-      track.style.transform = shift(restBefore + from);
-      fill(restBefore + from, rest);
+      track.style.transform = shift(from);
+      fill(from, 0);
       track.getBoundingClientRect();
       delete track.dataset.dragging;
-      track.style.transform = shift(rest);
-      restBefore = rest;
+      track.style.transform = shift(0);
     },
     /** The room's view is whole again: the band is gone. */
     dispose() {
