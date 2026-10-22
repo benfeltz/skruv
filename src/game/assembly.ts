@@ -35,6 +35,7 @@ import {
 import type { Fastener, FastenerEvent } from './fasteners.js';
 import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { Pose, Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
+import type { SavedJoint } from './roomSave.js';
 
 /** A part instance's id — the manifest's (`dowel-3`), or a prefixed one (a part set kept apart from the player's). */
 export type PartId = string;
@@ -265,6 +266,48 @@ export function seatHome(assembly: Assembly, pairs: (SeatPair & { ctx?: ApplyCon
   const camsLast = (s: (typeof seated)[number]) => (s.joint.kind === KIND.CAM ? 1 : 0);
   for (const { joint, ctx } of [...seated].sort((a, b) => camsLast(a) - camsLast(b))) assembly.drive(joint.id, ctx);
   return seated.map((s) => assembly.get(s.joint.id)!);
+}
+
+/**
+ * Puts a saved joint list into `assembly` by the events a build sends, never by setting a
+ * fastener: each pair is seated as written, a tap kind pressed by a tap, a turned kind driven
+ * home and then backed off (or turned in) to its saved progress — bolts and the rest before
+ * the cams that catch them, as `seatHome` orders them. A tool joint is skipped: a tool's grip
+ * is the router's, and a tool fastens nothing. After each, the live fastener must equal the
+ * saved one (within 1e-9 of progress, the same `through` and `captured`), else this throws
+ * naming the joint: the machine, not the record, decides what a fastener can be. A throw
+ * leaves the assembly half-restored; the caller discards it. Returns the joints, in saved order.
+ */
+export function restoreJoints(assembly: Assembly, saved: readonly SavedJoint[]): AssemblyJoint[] {
+  const seated = saved
+    .filter((s) => s.kind !== KIND.TOOL)
+    .map((s) => ({
+      saved: s,
+      id: assembly.seat({ partA: s.hardware, connectorA: s.hardwareConnector, partB: s.host, connectorB: s.hostConnector, mover: s.mover }).id,
+    }));
+  const camsLast = (e: (typeof seated)[number]) => (e.saved.kind === KIND.CAM ? 1 : 0);
+  for (const { saved: s, id } of [...seated].sort((a, b) => camsLast(a) - camsLast(b))) {
+    const ctx = { through: s.through, captured: s.captured };
+    const { state, progress } = s.fastener;
+    const span = spanOf(s.kind);
+    if (isTapKind(s.kind)) {
+      if (state === STATE.PRESSED) assembly.apply(id, { type: 'tap' }, ctx);
+    } else if (state === STATE.SEATED) {
+      if (progress > 0) assembly.apply(id, { type: 'crank', radians: progress * span });
+    } else {
+      assembly.drive(id, ctx);
+      if (progress < 1) assembly.apply(id, { type: 'crank', radians: -(1 - progress) * span });
+    }
+    const live = assembly.get(id)!;
+    const fits = live.fastener.state === state && Math.abs(live.fastener.progress - progress) < 1e-9 && live.through === s.through && live.captured === s.captured;
+    if (!fits) {
+      throw new Error(
+        `restore: joint ${s.hardware}→${s.host} landed ${live.fastener.state}/${live.fastener.progress}, saved ${state}/${progress}` +
+          (live.through === s.through && live.captured === s.captured ? '' : ` (through ${live.through}, captured ${live.captured}; saved ${s.through}, ${s.captured})`),
+      );
+    }
+  }
+  return seated.map((e) => assembly.get(e.id)!);
 }
 
 /**
