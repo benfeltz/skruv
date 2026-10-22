@@ -151,6 +151,8 @@ export interface GestureRouter {
   verticalReachOf(part: Part, rotation: Quat): VerticalReach;
   carries(part: Part): boolean;
   update(delta?: number): void;
+  /** One frame of a disabled router, reading nothing of the pack: the hardware riding in a panel goes where the panel went. */
+  keep(): void;
   sync(): void;
   unseatAll(ids: PartId[]): void;
   /** The inset's turn ring: turn the tool `grip` by `radians` (positive tightens) through the one crank path. Whether anything moved. */
@@ -2233,6 +2235,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       if (pulled.length > 0) reconcile();
       return pulled.length > 0;
     },
+    keep: followRiders,
     enable,
     disable,
     dispose() {

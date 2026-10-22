@@ -662,6 +662,10 @@ export const BOX = {
   friction: 1,
 };
 
+// How far a part's drawn pose may differ from its body's before a kept world remembers the
+// difference (src/scene/itemWorld.ts), per matrix element: float noise, not a sunk bolt.
+export const DRAWN_EPSILON = 1e-9;
+
 // Where a new box is set down once the room holds other worlds (src/game/roomLayout.ts): the
 // first free spot along a row across the room, then a second row back. `pitch` (m) is the step
 // between spots along the room's width, `rowDepth` (m) the step back (toward -z) to the next

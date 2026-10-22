@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LAYOUT, PICK, RESET, ROOM } from '../constants.js';
+import { DRAWN_EPSILON, LAYOUT, PICK, RESET, ROOM } from '../constants.js';
 import { createAssembly, restoreJoints } from '../game/assembly.js';
 import { EVENT, recoveryEvent, resetEvent } from '../game/events.js';
 import { CUE, homeCue } from '../game/haptics.js';
@@ -40,6 +40,8 @@ import type { CameraControls } from './cameraControls.js';
 import type { createBookletPages } from './bookletPages.js';
 import type { Pose, Vec3 } from '../../tools/validate/lib/geometry.js';
 
+const IDENTITY_MATRIX = new THREE.Matrix4();
+
 /** The booklet's pages for the current item, as src/scene/bookletPages.ts draws them. */
 export type BookletPages = Pick<ReturnType<typeof createBookletPages>, 'count' | 'pages' | 'canvas' | 'prerender' | 'dispose'>;
 
@@ -78,8 +80,10 @@ export interface ItemWorldDeps {
  * A world is one item's build in the room, and the room may hold several (1.9.9.2). It is
  * built active; `deactivate()` makes it kept — router off, strip put away, gizmo, line, inset
  * and highlight down — and `activate()` gives it all back. A kept world's bodies stay in the
- * physics world and its meshes on screen, but nothing of it runs: the loop calls `update` and
- * `render` on the active world only. The invariant that makes this safe: the door
+ * physics world and its meshes on screen, but nothing of it runs but `keep()`: the loop calls
+ * `update` and `render` on the active world only, and `keep` on the others after the step, which
+ * puts back what the router had drawn on their parts and moves the hardware riding in a bumped
+ * panel — pose maths only, nothing of the pack. The invariant that makes this safe: the door
  * (src/game/item.ts) names the active world's item, and a kept world runs nothing that reads
  * the pack — the slot (src/game/itemSlot.ts) turns the door before it activates, restores or
  * disposes a world. `id` is the item it was built for, `footprint()` where it stands on the floor.
@@ -453,6 +457,28 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   // Active or kept: only the active world has input, a strip and its overlays (see `createItemWorld`).
   let active = true;
 
+  // What the router draws on top of the simulated poses (a bolt sunk and twisted by its turn, hardware
+  // riding in a turned part) is lost to the next physics step, which syncs a mesh to its bare body. A
+  // kept world takes no `update`, so it keeps its drawn look as each part's pose relative to its body,
+  // captured when it goes kept and put back after every step: pure pose maths, nothing of the pack.
+  const drawn = new Map<Part, THREE.Matrix4>();
+  const here = new THREE.Matrix4();
+  const spare = new THREE.Vector3();
+  const unit = new THREE.Vector3(1, 1, 1);
+  const bodyMatrix = ({ body }: Part) => {
+    const t = body.translation();
+    const r = body.rotation();
+    return here.compose(spare.set(t.x, t.y, t.z), new THREE.Quaternion(r.x, r.y, r.z, r.w), unit);
+  };
+  function captureDrawn() {
+    drawn.clear();
+    for (const part of parts) {
+      const meshMatrix = new THREE.Matrix4().compose(part.mesh.position, part.mesh.quaternion, unit);
+      const local = bodyMatrix(part).invert().multiply(meshMatrix);
+      if (local.elements.some((v, i) => Math.abs(v - IDENTITY_MATRIX.elements[i]) > DRAWN_EPSILON)) drawn.set(part, local.clone());
+    }
+  }
+
   // The rest of the booklet draws in idle time, after the room is on screen.
   bookletPages.prerender();
 
@@ -479,6 +505,17 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
       highlight.show([]);
       insetPanel.reset();
       booklet.setShown(false);
+      captureDrawn();
+    },
+    /**
+     * One frame of a kept world, after the active world's `update` has stepped the physics world:
+     * the hardware riding in a panel follows it, and what the router had drawn on the parts (a sunk,
+     * twisted bolt) is put back over the step's bare body poses. Reads nothing of the pack.
+     */
+    keep() {
+      if (active) return;
+      router.keep();
+      for (const [part, local] of drawn) bodyMatrix(part).multiply(local).decompose(part.mesh.position, part.mesh.quaternion, spare);
     },
     /** Makes it active again: input back on, the strip back on its page, that page's parts lit. Idempotent. */
     activate() {
@@ -487,6 +524,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
       router.enable();
       booklet.setShown(true);
       light(booklet.currentPage);
+      drawn.clear();
     },
     /** This item as a save record (src/game/roomSave.ts): plain data, read at call time, nothing live in it. */
     snapshot(): ItemRecord {

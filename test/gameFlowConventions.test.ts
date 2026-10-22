@@ -356,7 +356,9 @@ describe('the room of several worlds (1.9.9.2)', () => {
     expect(main).toMatch(/items\.current\?\.render\(/);
     expect(main).toMatch(/items\.current\?\.repack\(\)/);
     const loop = main.slice(main.indexOf('createLoop('), main.indexOf('}).start()'));
-    expect(loop).not.toMatch(/items\.all\(\)/);
+    // The kept worlds get the pack-free keep pass after the step, and nothing else.
+    expect(loop).toMatch(/for \(const world of items\.all\(\)\) if \(world !== items\.current\) world\.keep\(\);/);
+    expect(loop.match(/items\.all\(\)/g)).toHaveLength(1);
   });
 
   it('the restore takes every record, one world each, in the save order', () => {

@@ -5,6 +5,7 @@ import type { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { createBus } from '../src/game/events.js';
 import { parse, serialize } from '../src/game/roomSave.js';
 import { STATE } from '../src/game/fasteners.js';
+import { FASTENER } from '../src/constants.js';
 import { createHaptics } from '../src/game/haptics.js';
 import { ASSEMBLED, IDENTITY, ITEM_ID, ITEM_IDS, MANIFEST, PART_TYPES, setItem } from '../src/game/item.js';
 import { createItemSlot } from '../src/game/itemSlot.js';
@@ -847,6 +848,7 @@ describe('several worlds in one room (1.9.9.2)', () => {
     canvas.dispatch('pointerup', { ...pointer, clientX: x + by, clientY: y });
   };
   const boxAt = (world: { snapshot(): { box: { position: number[] } } }) => world.snapshot().box.position;
+  const dist = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
   async function twoWorlds() {
     const rig = await engine();
@@ -968,6 +970,49 @@ describe('several worlds in one room (1.9.9.2)', () => {
     close(again.snapshot().box, record.box);
     for (const [id, pose] of Object.entries(record.parts)) close(again.snapshot().parts[id], pose);
     again.dispose();
+  });
+
+  // Review round 1: what the router draws on a part (a bolt sunk and twisted by its turn) is lost to the next
+  // physics step, which syncs a mesh to its bare body; a kept world puts it back, pack-free, in keep().
+  it('a kept world keeps a half-turned bolt\'s drawn sink after the active world steps the physics world', async () => {
+    const rig = await engine();
+    const pairs: { mesh: THREE.Object3D; body: Body }[] = [];
+    const deps: ItemWorldDeps = {
+      ...rig.deps,
+      physics: {
+        ...rig.deps.physics,
+        register(mesh, spec) {
+          const body = rig.deps.physics.register(mesh, spec);
+          pairs.push({ mesh: mesh as THREE.Object3D, body });
+          return body;
+        },
+      },
+    };
+    const johnny = createItemWorld(deps);
+    const assembly = lastAssembly();
+    const joint = assembly.seat({ partA: 'camLockBolt-1', connectorA: 0, partB: 'sidePanel-1', connectorB: 2, mover: 'camLockBolt-1' });
+    assembly.apply(joint.id, { type: 'crank', radians: FASTENER.boltRadians / 2 });
+    run(johnny, 0.2);
+    const at = johnny.snapshot().parts['camLockBolt-1'].position;
+    const bolt = pairs.reduce((best, p) => (dist([p.body.translation().x, p.body.translation().y, p.body.translation().z], at) < dist([best.body.translation().x, best.body.translation().y, best.body.translation().z], at) ? p : best));
+    const apart = () => Math.hypot(bolt.mesh.position.x - bolt.body.translation().x, bolt.mesh.position.y - bolt.body.translation().y, bolt.mesh.position.z - bolt.body.translation().z);
+    // It really is drawn off its body: sunk into its hole by its progress.
+    expect(apart()).toBeGreaterThan(1e-3);
+    // Drawn off its body by this much, which stays whatever the woken bolt does.
+    const drawnApart = apart();
+
+    johnny.deactivate();
+    setItem('blank');
+    const blank = createItemWorld({ ...rig.deps, at: freeSpot([johnny.footprint()], boxFootprintSize(packedBox())) });
+    bolt.body.wakeUp();
+    for (let t = 0; t < 0.3; t += PHYSICS.timestep) {
+      blank.update(PHYSICS.timestep);
+      johnny.keep();
+    }
+    expect(apart()).toBeCloseTo(drawnApart, 6);
+    blank.dispose();
+    setItem('johnny');
+    johnny.dispose();
   });
 
   it('deactivating twice, or mid-hold, is harmless', async () => {

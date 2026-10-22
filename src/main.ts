@@ -241,6 +241,8 @@ createLoop((delta, rawDelta) => {
   cameraControls.update(delta);
   stageLight.update(room.update(camera.position, renderer, delta));
   items.current?.update(delta);
+  // The kept worlds, after the physics step the active one ran: their riders follow, their drawn hardware is put back.
+  for (const world of items.all()) if (world !== items.current) world.keep();
   // Measured on the true delta: the clamped one would floor every slow device at 15 fps.
   const { render, sample } = fps.frame(rawDelta);
   if (sample) events.emit(fpsEvent(Math.round(sample.fps * 10) / 10, sample.skipping));
