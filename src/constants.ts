@@ -1102,6 +1102,11 @@ export const TUNE = {
   fpsMaxGap: 1,
 };
 
+// The room's save (src/game/roomStore.ts): the one key it is written under, and how long after the last
+// change the write waits, so a run of seats and releases is one write. The page going to the
+// background writes at once.
+export const SAVE = { key: 'skruv.room', debounceMs: 500 };
+
 // Android haptics (navigator.vibrate; iOS Safari has none), in ms: a tick when a part
 // seats (a tool engaging too), a double tick when a cam lock locks, a buzz when a bolt goes
 // home, and a ratchet tick every FASTENER.ratchetRadians a fastener turns. 0 turns one off.
