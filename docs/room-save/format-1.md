@@ -1,8 +1,8 @@
 # Room save — format 1
 
-The room's save is one JSON document, written as a single line of text through a small storage seam. It holds everything in the room: a world block, and a list of kinded objects. The format, its types, its serialiser and its parser are pure and live in `src/game/roomSave.ts`; the store seam and the saver are in `src/game/roomStore.ts`.
+The room's save is one JSON document, written as a single line of text through a small storage seam. It holds everything in the room: a world block, and a list of kinded objects. The format, its types, its serialiser and its parser are pure and live in `src/game/roomSave.ts`; the store seam and the saver are in `src/game/roomStore.ts`; the plan for reading it back is in `src/game/roomRestore.ts`.
 
-**Status (1.9.9.5):** the game writes the save; nothing reads it yet. Restoring a save into the room is 1.9.9.1, which this format is written for.
+**Status (1.9.9.1):** the game writes the save and restores it at boot.
 
 ## The document
 
@@ -64,7 +64,7 @@ This is the test fixture (`test/fixtures/roomSave/format-1.json`), copied verbat
 | Field | Meaning |
 |-------|---------|
 | `format` | Always `1`. Anything else is refused (`not a format 1 room save`). |
-| `savedAt` | ISO 8601 time the save was written. Filled by the saver, not the snapshot, so 1.9.9.1 may choose whether the sky's clock runs on from it. |
+| `savedAt` | ISO 8601 time the save was written. Filled by the saver, not the snapshot, and read by nothing: the sky resumes at its saved phase, not advanced by the time away. |
 | `world.sky.phase` | The sky's phase in `[0, 1)`: 0 midnight, 0.5 noon. |
 | `world.camera` | `position` and orbit `target`, metres, as `[x, y, z]`. |
 | `objects` | The room: one record per object, in the order the room holds them. Any length, zero included (an empty room). No "current" item. |
@@ -86,7 +86,7 @@ A pose is `{ "position": [x, y, z], "rotation": [x, y, z, w] }`: metres and a qu
 1. `format` must be `1`.
 2. `world` is required: `sky.phase` a finite number in `[0, 1)`, `camera` two vectors of finite numbers; `savedAt` an ISO string.
 3. `objects` is an array of any length. Every `item` is parsed. An object whose `kind` this build does not know is **kept as-is and reported** (`skipped: ['scenery']`), never thrown on and never dropped, so a save written by a newer build survives a round trip through an older one.
-4. An `item` is checked field by field; a malformed one **throws**, naming the path (`objects[0].parts.sidePanel-1.rotation: expected 4 finite numbers`). A half-read item is worse than none: 1.9.9.1 then starts the room empty and says so.
+4. An `item` is checked field by field; a malformed one **throws**, naming the path (`objects[0].parts.sidePanel-1.rotation: expected 4 finite numbers`). A half-read item is worse than none: the restore then starts the room empty and says so.
 5. The parser checks shape, not the pack. Whether `johnny` exists and its ids resolve is the restorer's business.
 
 ## The extension rule
@@ -95,13 +95,21 @@ A new kind of object (scenery, decor, the room's own parts) is a new `kind` in `
 
 ## Deliberately not saved
 
-- Velocities, the held part, a drag in progress, the hold, the inset, the selection, the catalog's open state: transient. The saver writes only at rest points (a release, a seat or unseat, a fasten or unfasten, a repack, a recovery, a pick) and when the page goes to the background, debounced to one write per 500 ms (`SAVE` in `src/constants.ts`). A save taken mid-fall reloads mid-fall.
+- Velocities, the held part, a drag in progress, the hold, the inset, the selection, the catalog's open state: transient. The saver writes only at rest points (a release, a seat or unseat, a fasten or unfasten, a repack, a recovery, a page turn, a pick) and when the page goes to the background, debounced to one write per 500 ms (`SAVE` in `src/constants.ts`). A save taken mid-fall reloads mid-fall. A hand turn (the inset's turn ring, a stud circled by hand) has no event of its own: its full turn fires a fasten and is saved, its partway progress rides to the next rest point or the background flush, and a half-turn lost to a crash is a half-turn.
 - Settings (snap rotate, the tune profile): not the world. A `settings` block is one addition when wanted.
 
 ## The store seam
 
-`Store` is `read() / write(text) / clear()`. The web fills it with `localStorage` under the key `skruv.room` (`createWebStore`); where `localStorage` throws, an in-memory store stands in. The native shell can fill the same seam with Capacitor Preferences or the Filesystem in a later task; the format does not change for that. A write that fails (quota, private mode) is reported, never fatal. An empty room is saved as no save: the store is cleared.
+`Store` is `read() / write(text) / clear()`. The web fills it with `localStorage` under the key `skruv.room` (`createWebStore`); where `localStorage` throws, an in-memory store stands in. The native shell can fill the same seam with Capacitor Preferences or the Filesystem in a later task; the format does not change for that. A write that fails (quota, private mode) is reported, never fatal. A null snapshot (an empty room) writes nothing: the store keeps whatever it had, so a save the restore refused survives until the next pick writes over it. Nothing clears the store yet; a later "new room" action will call `Store.clear()` itself.
 
-## Split with 1.9.9.1
+## Restoring
 
-This format and the saver (1.9.9.5) write the save. Restoring it (1.9.9.1) builds one world per `item` record, in order, and re-creates each joint's partial progress. If restoring finds a field missing, the format bumps to 2 with a migration in `parse`.
+At boot, before the first frame, `planRestore` (`src/game/roomRestore.ts`) reads the stored text against the packs, and `src/main.ts` acts on the answer.
+
+- **No save** boots the empty room as ever; the console says `room: no save, starting empty`.
+- **Either the whole room restores or none of it.** The text is parsed, then every `item` record is checked against its pack before anything is built: the `id` is an item this build carries, `documentCode` equals the pack's, `parts` holds exactly the manifest's instance ids, and every joint names manifest parts and connector indices that exist, a hardware end whose type fits the host hole, the `kind` of that end, and a state its kind can rest in. A save that fails either step is refused: the room starts empty, the catalog shows a notice (only when a save existed; a first run gets none), the console names the path, and **the stored text is left alone** until the next pick writes a real save over it.
+- **One world per `item` record**, up to the build's capacity (one until 1.9.9.2). The rest are dropped and warned about in the console; the next write holds only what was restored.
+- **Unknown kinds are carried**: the objects `parse` skipped are kept and appended to every later save, so a save from a newer build survives a round trip through this one as well as through the parser.
+- **Every body is set down at its saved pose**, then the joints are replayed through the fastener machine, never set: each pair is seated, a tap kind pressed, a turned kind driven home and backed off or turned in to its saved progress, bolts before the cams that catch them. The live fastener must land on the saved `state` and `progress`; a record the machine cannot reach refuses the save as a whole. The physics bonds and any loose hardware's hold follow from the restored graph.
+- **Tool joints** (a wrench seated on a bolt head) pass the check and are not restored: the router keeps a tool's grip in state the record does not carry, and a tool fastens nothing. The tool rests loose where its pose says. They are still written.
+- The manual returns to its `page` (clamped to the pages the world has), the camera to its `position` and `target`, and the sky to its `phase`. `savedAt` is not used.

@@ -349,6 +349,30 @@ describe('moving along the strip', () => {
   });
 });
 
+describe('goTo turns to a page as a tap would (1.9.9.1)', () => {
+  it('lands on the page with one change', () => {
+    const { manual, changes } = mountStrip();
+    manual.goTo(3);
+    expect(manual.currentPage).toBe(3);
+    expect(changes).toHaveLength(1);
+    expect(changes[0].page).toBe(3);
+  });
+
+  it('clamps past the last page', () => {
+    const { manual } = mountStrip();
+    manual.goTo(99);
+    expect(manual.currentPage).toBe(COUNT - 1);
+    manual.goTo(-4);
+    expect(manual.currentPage).toBe(0);
+  });
+
+  it('fires nothing for the page it is on', () => {
+    const { manual, changes } = mountStrip({ page: 2 });
+    manual.goTo(2);
+    expect(changes).toHaveLength(0);
+  });
+});
+
 describe('the band scrolls as a carousel', () => {
   // A pull is a slow one: the press and the move share a time stamp, so the release carries
   // nothing past the nearest page. A flick is a `swipe`, with times of its own.

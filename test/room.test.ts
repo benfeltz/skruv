@@ -224,6 +224,18 @@ describe('the sky turns', () => {
   const saved = { ...STAGE.sky };
   afterEach(() => { STAGE.sky.phase = saved.phase; STAGE.sky.cycleMinutes = saved.cycleMinutes; });
 
+  it('setPhase puts the sky at a phase, and a later scrub through the knob still jumps (1.9.9.1)', () => {
+    const room = createRoom();
+    room.setPhase(0.25);
+    expect(STAGE.sky.phase).toBe(0.25);
+    const phase = room.update(at(0, 2, 3), renderer(), 0.01);
+    expect(phase).toBeGreaterThan(0.25);
+    expect(phase).toBeLessThan(0.26);
+    expect(STAGE.sky.phase).toBe(phase);
+    STAGE.sky.phase = 0.75;
+    expect(room.update(at(0, 2, 3), renderer(), 0)).toBe(0.75);
+  });
+
   it('shares one material across every back panel', () => {
     const materials = new Set(skyMeshes(createRoom()).map((m) => m.material));
     expect(materials.size).toBe(1);

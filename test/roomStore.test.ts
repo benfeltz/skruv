@@ -119,14 +119,18 @@ describe('the saver', () => {
     expect(writes).toHaveLength(1);
   });
 
-  it('clears the store on a null snapshot', () => {
+  it('leaves the store alone on a null snapshot', () => {
     let current: RoomSave | null = room;
     const { s, store } = saver(() => current);
+    let cleared = 0;
+    store.clear = () => void cleared++;
     s.flush();
-    expect(store.read()).not.toBeNull();
+    const text = store.read();
+    expect(text).not.toBeNull();
     current = null;
     s.flush();
-    expect(store.read()).toBeNull();
+    expect(store.read()).toBe(text);
+    expect(cleared).toBe(0);
   });
 
   it('reports a snapshot that throws, and does not throw', () => {

@@ -55,6 +55,33 @@ describe('createItemSlot', () => {
     expect(items.all()).toEqual([]);
   });
 
+  it('clear() disposes the held world, empties the slot and leaves the door as it is (1.9.9.1)', () => {
+    const { items, log, door, holds } = room();
+    items.pick('blank');
+    log.length = 0;
+    items.clear();
+    expect(log).toEqual(['dispose blank (door: blank)']);
+    expect(items.current).toBeNull();
+    expect(items.all()).toEqual([]);
+    expect(door.selected()).toBe('blank');
+    expect(holds()).toBe(true);
+  });
+
+  it('clear() on an empty slot does nothing', () => {
+    const { items, log, reported } = room();
+    items.clear();
+    expect(log).toEqual([]);
+    expect(reported).toEqual([]);
+  });
+
+  it('clear() reports a dispose that throws, and the slot is cleared all the same', () => {
+    const { items, reported } = room({ failDispose: new Set(['blank']) });
+    items.pick('blank');
+    expect(() => items.clear()).not.toThrow();
+    expect(reported).toHaveLength(1);
+    expect(items.current).toBeNull();
+  });
+
   it('holds no world until the first pick', () => {
     const { items, holds } = room();
     expect(items.current).toBeNull();

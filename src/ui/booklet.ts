@@ -821,6 +821,10 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     setOpen(value: boolean) {
       setOpen(value);
     },
+    /** Turns to page `target` (clamped) as a tap would: the restore's way in, and 1.9.9.3's. */
+    goTo(target: number) {
+      flip(target - page);
+    },
     notify,
     onChange(fn: (state: { page: number; expanded: boolean }) => void) {
       listeners.add(fn);
