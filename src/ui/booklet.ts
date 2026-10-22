@@ -71,6 +71,8 @@ function injectStyle() {
   // sideways, and only the gutter is kept.
   const clusterBottom = CLUSTER.inset + MENU.size + gutter;
   style.textContent = `
+    /* A booklet put away (setShown): the display rules below would otherwise keep it on the page. */
+    .booklet-thumb[hidden], .booklet-strip[hidden], .booklet-leaf[hidden] { display: none; }
     .booklet-thumb {
       position: fixed;
       left: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-left));
@@ -506,8 +508,9 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     else lingering = setTimeout(() => (scrim.hidden = true), linger);
   }
 
-  function setOpen(value: boolean, { byRoomTap = false } = {}) {
-    if (open === value || (!value && !canClose())) return;
+  // `force` puts it down whatever `canClose` says: a booklet put away (setShown) must go.
+  function setOpen(value: boolean, { byRoomTap = false, force = false } = {}) {
+    if (open === value || (!value && !force && !canClose())) return;
     if (value) {
       // The catalog wins: a blocking sheet puts an open non-blocking page down first, without
       // moving focus. Any other sheet open keeps this one docked (one open at a time).
@@ -725,6 +728,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     // The browser's and the page's own: a chord (Alt+Left is back), a key something else has
     // taken, and a control that is not ours — a slider or a field, but also the cluster's
     // buttons and the tune drawer — has its own use of the arrow keys.
+    if (!onPage) return;
     if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const control = (event.target as Element | null)?.closest?.('input, textarea, select, button, a, [role="slider"]');
     if (control && !thumb.contains(control) && !element.contains(control)) return;
@@ -771,6 +775,9 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     settle();
   };
   window.addEventListener('resize', onResize);
+
+  // Whether it is on the page: a kept world's booklet is put away (setShown) and answers no key.
+  let onPage = true;
 
   const self: LiveSheet = { isOpen: () => open, thumb, blocking, strip: stripped, close: () => setOpen(false, { byRoomTap: true }) };
   sheets.add(self);
@@ -820,6 +827,20 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
     /** Opens it, or docks it — as its own controls do, focus and all; `canClose` still holds. */
     setOpen(value: boolean) {
       setOpen(value);
+    },
+    /** Puts it on the page or away: away, it is closed (`canClose` notwithstanding), hidden, out of the live sheets and deaf to keys; back, it is on the page it was on. */
+    setShown(value: boolean) {
+      if (onPage === value) return;
+      onPage = value;
+      if (value) sheets.add(self);
+      else {
+        setOpen(false, { byRoomTap: true, force: true });
+        sheets.delete(self);
+      }
+      if (!value) showScrim(false);
+      thumb.hidden = element.hidden = !value;
+      if (value) render();
+      syncSheets();
     },
     /** Turns to page `target` (clamped) as a tap would: the restore's way in, and 1.9.9.3's. */
     goTo(target: number) {

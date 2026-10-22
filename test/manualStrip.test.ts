@@ -1165,3 +1165,60 @@ describe('the catalog wins', () => {
     expect(dom.focused).toBe(centre());
   });
 });
+
+describe('put away (setShown)', () => {
+  it('closes an open strip, hides it, and answers no key', () => {
+    const { manual, centre, changes } = mountStrip();
+    down(centre());
+    up(centre());
+    expect(manual.expanded).toBe(true);
+    manual.setShown(false);
+    expect(manual.expanded).toBe(false);
+    expect(manual.thumb.hidden).toBe(true);
+    expect(manual.element.hidden).toBe(true);
+    changes.length = 0;
+    dom.key('ArrowRight');
+    expect(manual.currentPage).toBe(0);
+    expect(changes).toEqual([]);
+  });
+
+  it('closes an open strip even when canClose refuses', () => {
+    const manual = createBookletSheet({ pages: { count: COUNT, canvas: canvasOf }, docked: 'strip', blocking: false, open: true, canClose: () => false });
+    mounted.push(manual);
+    manual.setShown(false);
+    expect(manual.expanded).toBe(false);
+  });
+
+  it('comes back on the page it was on and turns on the key again', () => {
+    const { manual } = mountStrip({ page: 3 });
+    manual.setShown(false);
+    manual.setShown(true);
+    expect(manual.thumb.hidden).toBe(false);
+    expect(manual.element.hidden).toBe(false);
+    expect(manual.currentPage).toBe(3);
+    dom.key('ArrowRight');
+    expect(manual.currentPage).toBe(4);
+  });
+
+  it("a put-away sheet does not make another sheet's thumb inert", () => {
+    const { manual, centre } = mountStrip();
+    const catalog = createBookletSheet({ pages: { count: 4, canvas: () => ({}) as CanvasImageSource }, name: 'catalog', corner: 'topLeft', open: false });
+    mounted.push(catalog);
+    down(centre());
+    up(centre());
+    expect((catalog.thumb as unknown as FakeElement).inert).toBe(false);
+    manual.setShown(false);
+    catalog.setOpen(true);
+    expect(catalog.expanded).toBe(true);
+    expect((manual.thumb as unknown as FakeElement).inert).toBe(false);
+  });
+
+  it('is harmless twice', () => {
+    const { manual } = mountStrip();
+    manual.setShown(false);
+    manual.setShown(false);
+    manual.setShown(true);
+    manual.setShown(true);
+    expect(manual.thumb.hidden).toBe(false);
+  });
+});

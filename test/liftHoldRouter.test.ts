@@ -577,3 +577,48 @@ describe('Shift + scroll sets the held part\'s height', () => {
     expect(event.stopImmediatePropagation).not.toHaveBeenCalled();
   });
 });
+
+// 1.9.9.2: a kept world's router is off — its listeners unbound, its gesture let go — and back on when its item is picked again.
+describe('the router on and off (enable / disable)', () => {
+  it('has its canvas listeners bound at creation', () => {
+    const { canvas } = harness();
+    expect(canvas.listeners.size).toBe(6);
+  });
+
+  it('disable() unbinds: a press reaches nothing; enable() rebinds: it drags again', () => {
+    const { router, canvas, dowel, moves, dragDowel } = harness();
+    router.disable();
+    dragDowel();
+    expect(router.dragging).toBeNull();
+    expect(moves).toEqual([]);
+    router.enable();
+    dragDowel();
+    expect(router.dragging?.part).toBe(dowel);
+    expect(canvas.listeners.size).toBe(6);
+  });
+
+  it('disable() lets go of a drag in progress', () => {
+    const { router, dragDowel } = harness();
+    dragDowel();
+    expect(router.dragging).not.toBeNull();
+    router.disable();
+    expect(router.dragging).toBeNull();
+  });
+
+  it('is harmless twice, either way', () => {
+    const { router, canvas } = harness();
+    router.disable();
+    router.disable();
+    expect(canvas.listeners.size).toBe(0);
+    router.enable();
+    router.enable();
+    expect(canvas.listeners.size).toBe(6);
+  });
+
+  it('dispose() after disable() leaves the canvas with no listeners', () => {
+    const { router, canvas } = harness();
+    router.disable();
+    router.dispose();
+    expect(canvas.listeners.size).toBe(0);
+  });
+});

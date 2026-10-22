@@ -137,7 +137,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
 
   // The game opens on the closed flatpack: every part packed flat inside, settling at once
   // and resting until the lid comes off and a hand disturbs it.
-  const flatpack = createFlatpack(owning, ink);
+  const flatpack = createFlatpack(owning, ink, boxPlacement());
   add(flatpack.base.mesh, flatpack.lid.mesh);
 
   // Every part wears the hull; a panel (drawn as its plain box) also its sharp edges, never a faceted round.

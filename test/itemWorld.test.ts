@@ -11,6 +11,8 @@ import { createItemSlot } from '../src/game/itemSlot.js';
 import { createPhysicsWorld } from '../src/physics/world.js';
 import { createCameraControls } from '../src/scene/cameraControls.js';
 import { createInk } from '../src/scene/ink.js';
+import { createFlatpack } from '../src/scene/flatpack.js';
+import { baseRest, lidRest } from '../src/game/boxLayout.js';
 import { createItemWorld } from '../src/scene/itemWorld.js';
 import type { Assembly } from '../src/game/assembly.js';
 import type { Body } from '../src/physics/world.js';
@@ -803,5 +805,19 @@ describe('the world puts itself back from a record (1.9.1 restore, 1.9.9.1)', ()
       setItem('johnny');
     }
     world.dispose();
+  });
+});
+
+describe('the flatpack at a spot (1.9.9.2)', () => {
+  it('stands the box and its lid at the pose it is given', async () => {
+    const { deps } = await engine();
+    const at = { position: [1.6, 0, -0.7] as [number, number, number], rotation: [0, Math.SQRT1_2, 0, Math.SQRT1_2] as [number, number, number, number] };
+    const { base, lid } = createFlatpack(deps.physics, deps.ink, at);
+    const near = (body: Body, pose: { position: number[] }) => {
+      const t = body.translation();
+      [t.x, t.y, t.z].forEach((v, i) => expect(v).toBeCloseTo(pose.position[i], 6));
+    };
+    near(base.body, baseRest(at));
+    near(lid.body, lidRest(at));
   });
 });
