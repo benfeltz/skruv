@@ -3,13 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CAMERA, COLORS, PHYSICS } from '../src/constants.js';
 import type { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { createBus } from '../src/game/events.js';
+import { parse, serialize } from '../src/game/roomSave.js';
+import { STATE } from '../src/game/fasteners.js';
 import { createHaptics } from '../src/game/haptics.js';
-import { ITEM_ID, ITEM_IDS, MANIFEST, PART_TYPES, setItem } from '../src/game/item.js';
+import { IDENTITY, ITEM_ID, ITEM_IDS, MANIFEST, PART_TYPES, setItem } from '../src/game/item.js';
 import { createItemSlot } from '../src/game/itemSlot.js';
 import { createPhysicsWorld } from '../src/physics/world.js';
 import { createCameraControls } from '../src/scene/cameraControls.js';
 import { createInk } from '../src/scene/ink.js';
 import { createItemWorld } from '../src/scene/itemWorld.js';
+import type { Assembly } from '../src/game/assembly.js';
 import type { Body } from '../src/physics/world.js';
 import type { BookletPages, ItemWorldDeps } from '../src/scene/itemWorld.js';
 
@@ -19,6 +22,21 @@ import type { BookletPages, ItemWorldDeps } from '../src/scene/itemWorld.js';
 // Real Three scene, real Rapier, the real router, booklet sheet, line and dial on a minimal
 // fake DOM. Only the booklet's page drawing is a stand-in: it renders through WebGL, and
 // draws nothing the leak could hide in.
+
+// The assembly each world builds, so a test can seat a joint the way the router does.
+const built = vi.hoisted(() => ({ assemblies: [] as unknown[] }));
+vi.mock('../src/game/assembly.js', async (original) => {
+  const real = await original<typeof import('../src/game/assembly.js')>();
+  return {
+    ...real,
+    createAssembly: (...args: Parameters<typeof real.createAssembly>) => {
+      const assembly = real.createAssembly(...args);
+      built.assemblies.push(assembly);
+      return assembly;
+    },
+  };
+});
+const lastAssembly = () => built.assemblies[built.assemblies.length - 1] as Assembly;
 
 type Listener = (event: object) => void;
 
@@ -555,5 +573,86 @@ describe('the detail inset rides the item world (1.10.0.1)', () => {
     world.dispose();
     expect(disposed).toHaveBeenCalledTimes(1);
     vi.restoreAllMocks();
+  });
+});
+
+describe('the world reads itself into a save record (1.9.9.5)', () => {
+  const near = (a: number[], b: number[]) => a.forEach((v, i) => expect(v).toBeCloseTo(b[i], 6));
+
+  /** The deps with every body the world registers remembered, to find a part's body by where it is. */
+  async function recordingEngine() {
+    const { deps: engineDeps } = await engine();
+    const made: Body[] = [];
+    const deps: ItemWorldDeps = {
+      ...engineDeps,
+      physics: {
+        ...engineDeps.physics,
+        register(...args) {
+          const registered = engineDeps.physics.register(...args);
+          made.push(registered);
+          return registered;
+        },
+      },
+    };
+    return { deps, made, physics: engineDeps.physics };
+  }
+
+  it('snapshots the item, a seated and fastened joint, and a moved part', async () => {
+    const { deps, made, physics } = await recordingEngine();
+    const world = createItemWorld(deps);
+    const fresh = world.snapshot();
+    expect(fresh.kind).toBe('item');
+    expect(fresh.id).toBe(ITEM_ID);
+    expect(fresh.documentCode).toBe(IDENTITY.documentCode);
+    // One pose per manifest id; the box and the lid are their own fields.
+    expect(Object.keys(fresh.parts).sort()).toEqual(MANIFEST.map(({ id }) => id).sort());
+    expect(fresh.box.position).toHaveLength(3);
+    expect(fresh.lid.rotation).toHaveLength(4);
+    expect(fresh.joints).toEqual([]);
+    expect(fresh.page).toBe(0);
+
+    // Seat a dowel into a side panel and press it home, as the router does.
+    const assembly = lastAssembly();
+    const joint = assembly.seat({ partA: 'dowel-1', connectorA: 0, partB: 'sidePanel-1', connectorB: 0, mover: 'dowel-1' });
+    assembly.apply(joint.id, { type: 'tap' });
+    // Move a part, step once.
+    const was = fresh.parts['sidePanel-2'];
+    const body = made.find((b) => Math.abs(b.translation().x - was.position[0]) < 1e-6 && Math.abs(b.translation().y - was.position[1]) < 1e-6 && Math.abs(b.translation().z - was.position[2]) < 1e-6)!;
+    physics.place(body, [0.4, 0.9, 0.2], [0, 0, 0, 1]);
+    run(world, PHYSICS.timestep);
+
+    const after = world.snapshot();
+    expect(after.joints).toHaveLength(1);
+    expect(after.joints[0]).toMatchObject({ hardware: 'dowel-1', host: 'sidePanel-1', kind: 'dowel', fastener: { state: STATE.PRESSED, progress: 1 } });
+    expect(after.joints[0].fastener).not.toBe(assembly.get(joint.id)!.fastener);
+    const { x, y, z } = body.translation();
+    near(after.parts['sidePanel-2'].position, [x, y, z]);
+    expect(after.parts['sidePanel-2'].position[0]).toBeCloseTo(0.4, 1);
+    world.dispose();
+  });
+
+  it('two worlds of two packs make one document that round-trips deeply equal', async () => {
+    const { deps } = await recordingEngine();
+    const johnny = createItemWorld(deps);
+    const first = johnny.snapshot();
+    johnny.dispose();
+    setItem('blank');
+    try {
+      const blank = createItemWorld(deps);
+      const second = blank.snapshot();
+      expect(second.id).toBe('blank');
+      const save = {
+        format: 1 as const,
+        savedAt: '2026-10-21T19:12:00.000Z',
+        world: { sky: { phase: 0.25 }, camera: deps.cameraControls.pose() },
+        objects: [first, second],
+      };
+      const { save: back, skipped } = parse(serialize(save));
+      expect(back).toEqual(save);
+      expect(skipped).toEqual([]);
+      blank.dispose();
+    } finally {
+      setItem('johnny');
+    }
   });
 });

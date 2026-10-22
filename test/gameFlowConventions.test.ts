@@ -271,3 +271,24 @@ describe("the manual's band shrinks the room's view (1.9.7.1.2)", () => {
     expect(booklet).not.toContain('booklet-arrow');
   });
 });
+
+describe("the room's save wiring (1.9.9.5)", () => {
+  it('writes through the web store under the SAVE key', () => {
+    expect(main).toMatch(/createWebStore\(localStorage, SAVE\.key\)/);
+  });
+
+  it('snapshots every world the slot holds, never a current one alone', () => {
+    expect(main).toMatch(/items\.all\(\)\.map\(/);
+    expect(main).not.toMatch(/items\.current\?\.snapshot/);
+  });
+
+  it("flushes when the page goes hidden, and subscribes the saver to rest points, not to ANY", () => {
+    expect(main).toMatch(/visibilitychange', \(\) => \{\n\s+if \(document\.visibilityState === 'hidden'\) saver\.flush\(\);/);
+    expect(main).toMatch(/events\.on\(type, saver\.changed\)/);
+    expect(main).not.toMatch(/events\.on\(ANY, saver/);
+  });
+
+  it('saves after a pick', () => {
+    expect(main).toMatch(/onPick: \(id\) => \{[^}]*saver\.changed\(\);/);
+  });
+});

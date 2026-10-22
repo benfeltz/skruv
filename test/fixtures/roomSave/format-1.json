@@ -1,0 +1,48 @@
+{
+  "format": 1,
+  "savedAt": "2026-10-21T19:12:00.000Z",
+  "world": {
+    "sky": { "phase": 0.37 },
+    "camera": { "position": [2, 1.8, 2.4], "target": [0, 0.6, 0] }
+  },
+  "objects": [
+    {
+      "kind": "item",
+      "id": "johnny",
+      "documentCode": "SK-0000451-1",
+      "box": { "position": [0, 0.05, 0], "rotation": [0, 0, 0, 1] },
+      "lid": { "position": [0, 0.2, 0], "rotation": [0, 0, 0, 1] },
+      "parts": {
+        "sidePanel-1": { "position": [0.3, 0.9, 0], "rotation": [0, 0, 0, 1] },
+        "dowel-3": { "position": [0.3, 0.9, 0.1], "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476] }
+      },
+      "joints": [
+        {
+          "hardware": "dowel-3",
+          "hardwareConnector": 0,
+          "host": "sidePanel-1",
+          "hostConnector": 4,
+          "kind": "dowel",
+          "mover": "dowel-3",
+          "fastener": { "state": "pressed", "progress": 1 },
+          "through": null,
+          "captured": null
+        }
+      ],
+      "page": 4
+    },
+    {
+      "kind": "item",
+      "id": "blank",
+      "documentCode": "SK-0000452-1",
+      "box": { "position": [1.5, 0.05, 0], "rotation": [0, 0, 0, 1] },
+      "lid": { "position": [1.5, 0.2, 0], "rotation": [0, 0, 0, 1] },
+      "parts": {
+        "leg-1": { "position": [1.5, 0.3, 0], "rotation": [0, 0, 0, 1] }
+      },
+      "joints": [],
+      "page": 0
+    },
+    { "kind": "scenery", "wall": "back", "state": { "painted": true } }
+  ]
+}

@@ -1,10 +1,12 @@
-import { CATALOG, LAYER, RENDER, TUNE } from './constants.js';
+import { CATALOG, LAYER, RENDER, SAVE, STAGE, TUNE } from './constants.js';
 import { catalogEntries, createCatalog } from './game/catalogModel.js';
 import { pickableSet } from './game/pickable.js';
-import { ANY, createBus, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
+import { ANY, createBus, EVENT, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
 import { createHaptics, cueFor, patternFor } from './game/haptics.js';
 import { ITEM_ID, ITEM_IDS, setItem } from './game/item.js';
 import { createItemSlot } from './game/itemSlot.js';
+import { ROOM_SAVE_FORMAT } from './game/roomSave.js';
+import { createMemoryStore, createRoomSaver, createWebStore } from './game/roomStore.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
 import { createTunables, LIVE_KNOBS } from './game/tunables.js';
 import { createPhysicsWorld } from './physics/world.js';
@@ -118,6 +120,34 @@ const items = createItemSlot({
     }),
 });
 
+// The room's save (src/game/roomSave.ts): written after every rest point — a release, a seat or unseat, a
+// fasten or unfasten, a repack, a recovery, a pick — and at once when the page goes to the background.
+// Nothing reads it yet: 1.9.9.1 restores from it. localStorage can throw (a sandboxed frame): the
+// save then lives in memory for the session.
+const saver = createRoomSaver({
+  store: (() => {
+    try {
+      return createWebStore(localStorage, SAVE.key);
+    } catch (error) {
+      console.warn('room save: no localStorage, keeping it in memory', error);
+      return createMemoryStore();
+    }
+  })(),
+  now: () => new Date().toISOString(),
+  schedule: (fn, ms) => {
+    const id = setTimeout(fn, ms);
+    return () => clearTimeout(id);
+  },
+  snapshot: () => {
+    const objects = items.all().map((world) => world.snapshot());
+    return objects.length ? { format: ROOM_SAVE_FORMAT, savedAt: '', world: { sky: { phase: STAGE.sky.phase }, camera: cameraControls.pose() }, objects } : null;
+  },
+});
+for (const type of [EVENT.RELEASE, EVENT.SEAT, EVENT.UNSEAT, EVENT.FASTEN, EVENT.UNFASTEN, EVENT.RESET, EVENT.RECOVERY]) events.on(type, saver.changed);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') saver.flush();
+});
+
 // The catalog is the splash: the game boots with it open on its cover, and it outlives
 // item worlds, so it is the room's — mounted before any manual. BUILD IT goes straight into
 // the room: the item is built, the catalog put down into the upper-left corner and the new
@@ -133,6 +163,7 @@ const catalog = createCatalogSheet({
     catalog.setOpen(false);
     // Focus goes to the item's manual — its strip's centre page — not back to the catalog thumb.
     world.booklet.focus();
+    saver.changed();
   },
 });
 document.body.append(catalog.scrim, catalog.thumb, catalog.element);

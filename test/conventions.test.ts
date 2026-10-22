@@ -46,6 +46,8 @@ describe('pure-logic modules', () => {
     'src/game/tunables.ts',
     'src/game/toolTargets.ts',
     'src/game/toolAim.ts',
+    'src/game/roomSave.ts',
+    'src/game/roomStore.ts',
     'src/scene/fpsGuard.ts',
   ];
 
@@ -74,6 +76,8 @@ describe('pure-logic modules', () => {
     'src/game/tunables.ts',
     'src/game/toolTargets.ts',
     'src/game/toolAim.ts',
+    'src/game/roomSave.ts',
+    'src/game/roomStore.ts',
     'src/scene/fpsGuard.ts',
   ])(
     '%s touches no DOM globals',

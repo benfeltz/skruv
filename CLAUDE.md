@@ -36,7 +36,7 @@ src/
   constants.ts   every tunable (sizes, colors, camera limits, DPR cap, timing)
   scene/         Three.js renderer, room, render loop, camera controls
   physics/       Rapier world + bodies (PR 2)
-  game/          rules, state, assembly logic; item.ts is the only door to items/
+  game/          rules, state, assembly logic; item.ts is the only door to items/; roomSave.ts is the save format
   ui/            DOM/CSS overlays
 test/            Vitest specs, *.test.ts
 ```
@@ -46,6 +46,7 @@ test/            Vitest specs, *.test.ts
 - **Pure logic never imports Three, Rapier, or the DOM.** Math, clamps, state machines and rules live in their own modules so Vitest covers them headlessly. If a function you want to test needs Three, split it.
 - **Item data lives in its pack, never in code.** JOHNNY's parts, poses, pages and packing are `items/johnny/flatpack.json`; `src/game/item.ts` is the only module that imports it. Joints are derived from the assembled poses, never written down; the file lists connectors in index order, and engine code keys them by index.
 - **One pack implementation.** Loading, name resolution, joint derivation and the geometry checks live in `tools/validate/lib/` — pure, zero dependencies, browser-safe, imported by both the game and the validator CLI. Never a second loader; only the CLI adds ajv. The Flatpack types are declared there, beside the code that owns them; the pack-format types (`pack.ts`, `joints.ts`) reach the game only through `src/game/item.ts`, while the vocabulary and pose maths the game imports directly bring their own types. A pack edit must pass `npx tsx tools/validate/index.ts items/<item>`.
+- **The room's save is one JSON document, format-versioned** (`src/game/roomSave.ts`, `docs/room-save/format-1.md`); a new kind of object is a new `kind` in `objects`, never a format bump.
 - **Tunables live in `src/constants.ts`.** No magic numbers in modules — name the value there and import it.
 - **Setup and per-frame work are separate modules.** Build objects once; the loop only updates.
 - **Strict TypeScript, no escape hatches.** `tsconfig.json` is `strict` + bundler resolution + `noEmit`; no `any`, no `@ts-ignore`, no inline `eslint-disable` (a rule the tree fights is turned off in `eslint.config.js` with a reason). Relative imports keep their `.js` specifiers (`'../constants.js'`) — TS resolves them to the `.ts` sources.

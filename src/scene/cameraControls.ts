@@ -136,6 +136,10 @@ export function createCameraControls(camera: PerspectiveCamera, domElement: HTML
       controls.target.set(...target);
       controls.update();
     },
+    /** Where the camera is looking from and at: the inverse of `frame`. */
+    pose(): { position: Vec3; target: Vec3 } {
+      return { position: free.toArray(), target: controls.target.toArray() };
+    },
     dispose() {
       domElement.removeEventListener('pointerdown', unswapShift, { capture: true });
       controls.removeEventListener('start', pickPivot);

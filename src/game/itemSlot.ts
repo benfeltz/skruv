@@ -1,6 +1,6 @@
 // The one item in the room (1.9.1): picking an item swaps the room to it, in-scene. Pure:
 // what a world is, and the door it is built through, are the caller's (src/main.ts passes
-// createItemWorld, and src/game/item.ts's ITEM_ID and setItem). One at a time for now;
+// createItemWorld, and src/game/item.ts's ITEM_ID and setItem). One at a time for now (`all()` is the list that grows);
 // keeping an assembled item in the room later skips the dispose, nothing more.
 //
 // The invariant, which every step below keeps:
@@ -58,6 +58,10 @@ export function createItemSlot<World extends { dispose(): void }>({
   return {
     get current() {
       return current;
+    },
+    /** Every world in the room, in order: the one `current` holds, or none. The room's saver reads this; it is the list that grows when worlds are kept. */
+    all(): World[] {
+      return current ? [current] : [];
     },
     pick(id: string) {
       if (current && door.selected() === id) return current;
