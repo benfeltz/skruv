@@ -18,7 +18,7 @@ import { packedBox } from '../src/game/boxLayout.js';
 import { createItemWorld } from '../src/scene/itemWorld.js';
 import type { Assembly } from '../src/game/assembly.js';
 import type { Body } from '../src/physics/world.js';
-import type { BookletPages, ItemWorldDeps } from '../src/scene/itemWorld.js';
+import type { BookletPages, ItemWorld, ItemWorldDeps } from '../src/scene/itemWorld.js';
 
 // The swap's honesty gate (1.9.1): an item world built and disposed leaves the room as it
 // found it — scene children, physics bodies, colliders and joints, DOM nodes and every
@@ -458,11 +458,16 @@ describe('the swap: picking from the catalog (1.9.1)', () => {
     expect(census()).toEqual(baseline);
   });
 
-  // BLANK's world (1.9.2): nine parts in a box, and the swap both ways leaving the room as JOHNNY alone left it.
-  it('swaps JOHNNY → BLANK → JOHNNY, each world built and the room back at baseline at the end', async () => {
+  // BLANK's world (1.9.2): nine parts in a box. Picked after JOHNNY, both stand in the room (1.9.9.2);
+  // clear() takes both back out, each with the door naming it, and the room is at baseline.
+  it('keeps JOHNNY when BLANK is picked, re-activates it on a second pick, and clear() leaves the room at baseline', async () => {
     const { deps, census } = await engine();
     const baseline = census();
-    const items = createItemSlot({ door: { knows: (id) => ITEM_IDS.includes(id), selected: () => ITEM_ID, select: setItem }, report: (error) => { throw error; }, build: () => createItemWorld(deps) });
+    const items: ReturnType<typeof createItemSlot<ItemWorld>> = createItemSlot({
+      door: { knows: (id) => ITEM_IDS.includes(id), selected: () => ITEM_ID, select: setItem },
+      report: (error) => { throw error; },
+      build: () => createItemWorld({ ...deps, at: freeSpot(items.all().map((w) => w.footprint()), boxFootprintSize(packedBox())) }),
+    });
     try {
       const johnny = items.pick('johnny');
       run(johnny, 0.2);
@@ -470,15 +475,15 @@ describe('the swap: picking from the catalog (1.9.1)', () => {
       const blank = items.pick('blank');
       expect(ITEM_ID).toBe('blank');
       expect(blank).not.toBe(johnny);
-      const blankBuilt = census();
-      // Its own parts in the box are bodies.
-      expect(blankBuilt.physics.registered).toBeGreaterThan(MANIFEST.length);
-      expect(blankBuilt.physics.registered).toBeLessThan(johnnyBuilt);
+      const both = census();
+      // Its own parts in the box are bodies, and JOHNNY's are still there.
+      expect(both.physics.registered).toBeGreaterThan(johnnyBuilt);
       run(blank, 0.5);
-      const again = items.pick('johnny');
+      expect(items.pick('johnny')).toBe(johnny);
       expect(ITEM_ID).toBe('johnny');
-      expect(census().physics.registered).toBe(johnnyBuilt);
-      again.dispose();
+      expect(census().physics.registered).toBe(both.physics.registered);
+      expect(items.all()).toEqual([blank, johnny]);
+      items.clear();
       expect(census()).toEqual(baseline);
     } finally {
       setItem('johnny');
