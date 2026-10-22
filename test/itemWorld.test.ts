@@ -1063,6 +1063,50 @@ describe('several worlds in one room (1.9.9.2)', () => {
     johnny.dispose();
   });
 
+  // Phone bug (round 5): a world restored and put away before a frame had its meshes still packed, and kept them so.
+  it('a restored world kept before any frame has its meshes at their bodies and its parts at the saved poses', async () => {
+    const rig = await engine();
+    const first = createItemWorld(rig.deps);
+    // A saved state away from the packed default: a panel moved out of the box.
+    const saved = first.snapshot();
+    saved.parts['sidePanel-1'] = { position: [-1.2, 0.5, 1.4], rotation: [0, 0, 0, 1] };
+    first.dispose();
+
+    const pairs: { mesh: THREE.Object3D; body: Body }[] = [];
+    const recording: ItemWorldDeps = {
+      ...rig.deps,
+      physics: {
+        ...rig.deps.physics,
+        register(mesh, spec) {
+          const body = rig.deps.physics.register(mesh, spec);
+          pairs.push({ mesh: mesh as THREE.Object3D, body });
+          return body;
+        },
+      },
+    };
+    const johnny = createItemWorld(recording);
+    johnny.restore(saved);
+    johnny.deactivate();
+    setItem('blank');
+    const blank = createItemWorld({ ...rig.deps, at: freeSpot([johnny.footprint()], boxFootprintSize(packedBox())) });
+    blank.update(PHYSICS.timestep);
+    johnny.keep();
+
+    // Every mesh of the kept world sits at its body, not at the packed pose it was built at.
+    expect(pairs.length).toBeGreaterThan(MANIFEST.length);
+    for (const { mesh, body } of pairs) {
+      const { x, y, z } = body.translation();
+      expect(mesh.position.distanceTo(new THREE.Vector3(x, y, z))).toBeLessThan(1e-6);
+    }
+    // And the parts are still where the save put them.
+    const after = johnny.snapshot();
+    expect(after.parts['sidePanel-1'].position[0]).toBeCloseTo(-1.2, 3);
+    expect(after.parts['sidePanel-1'].position[2]).toBeCloseTo(1.4, 3);
+    blank.dispose();
+    setItem('johnny');
+    johnny.dispose();
+  });
+
   it('deactivating twice, or mid-hold, is harmless', async () => {
     const rig = await engine();
     const world = createItemWorld(rig.deps);

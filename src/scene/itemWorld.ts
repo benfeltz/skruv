@@ -570,6 +570,14 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
       }
       restoreJoints(assembly, record.joints);
       router.sync();
+      // The meshes follow their bodies only inside a physics step; a world put away before its first frame
+      // would otherwise capture the gap between the packed meshes and the restored bodies as drawn hardware.
+      for (const { body, mesh } of parts) {
+        const { x, y, z } = body.translation();
+        const r = body.rotation();
+        mesh.position.set(x, y, z);
+        mesh.quaternion.set(r.x, r.y, r.z, r.w);
+      }
       booklet.goTo(record.page);
       lastBox = boxPose();
     },
