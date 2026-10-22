@@ -158,8 +158,8 @@ describe('AC1: cold boot opens the catalog on its cover, the room empty (1.9.1)'
   it('main builds no item world at boot: the only build is inside the slot, run by a pick', () => {
     const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
     expect(main.match(/createItemWorld\(/g)).toHaveLength(1);
-    expect(main).toMatch(/build: \(\) =>\s*createItemWorld\(/);
-    expect(main).not.toMatch(/items\.pick\((?!id\))/);
+    expect(main).toMatch(/build: \(\) => \{[^}]*const world = createItemWorld\(/);
+    expect(main).not.toMatch(/items\.pick\((?!id\)|record\.id\))/);
   });
 });
 
