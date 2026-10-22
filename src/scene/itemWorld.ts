@@ -498,6 +498,9 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
     deactivate() {
       if (!active) return;
       active = false;
+      // Drawn once more first, with the door still on this world's item: a world restored and put away
+      // before any frame has meshes at their bare body poses, and the draw is what `captureDrawn` keeps.
+      router.update(0);
       dropHold();
       router.disable();
       select(null);

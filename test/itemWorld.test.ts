@@ -1015,6 +1015,54 @@ describe('several worlds in one room (1.9.9.2)', () => {
     johnny.dispose();
   });
 
+  // Review round 2: a world restored and put away before any frame has never drawn; deactivate draws once before it captures.
+  it('a world restored and kept before any frame still shows its half-turned bolt as drawn', async () => {
+    const rig = await engine();
+    const pairs: { mesh: THREE.Object3D; body: Body }[] = [];
+    const recording: ItemWorldDeps = {
+      ...rig.deps,
+      physics: {
+        ...rig.deps.physics,
+        register(mesh, spec) {
+          const body = rig.deps.physics.register(mesh, spec);
+          pairs.push({ mesh: mesh as THREE.Object3D, body });
+          return body;
+        },
+      },
+    };
+    const apartOf = (id: string, world: { snapshot(): { parts: Record<string, { position: number[] }> } }) => {
+      const at = world.snapshot().parts[id].position;
+      const near = pairs.reduce((best, p) => (dist([p.body.translation().x, p.body.translation().y, p.body.translation().z], at) < dist([best.body.translation().x, best.body.translation().y, best.body.translation().z], at) ? p : best));
+      return Math.hypot(near.mesh.position.x - near.body.translation().x, near.mesh.position.y - near.body.translation().y, near.mesh.position.z - near.body.translation().z);
+    };
+    // A saved room: JOHNNY with a bolt half turned in its panel.
+    const first = createItemWorld(recording);
+    const assembly = lastAssembly();
+    const joint = assembly.seat({ partA: 'camLockBolt-1', connectorA: 0, partB: 'sidePanel-1', connectorB: 2, mover: 'camLockBolt-1' });
+    assembly.apply(joint.id, { type: 'crank', radians: FASTENER.boltRadians / 2 });
+    run(first, 0.2);
+    const activeApart = apartOf('camLockBolt-1', first);
+    expect(activeApart).toBeGreaterThan(1e-3);
+    const record = first.snapshot();
+    first.dispose();
+    pairs.length = 0;
+
+    // The boot: restored, then put away by the next pick, with no frame between.
+    const johnny = createItemWorld(recording);
+    johnny.restore(record);
+    johnny.deactivate();
+    setItem('blank');
+    const blank = createItemWorld({ ...rig.deps, at: freeSpot([johnny.footprint()], boxFootprintSize(packedBox())) });
+    for (let t = 0; t < 0.2; t += PHYSICS.timestep) {
+      blank.update(PHYSICS.timestep);
+      johnny.keep();
+    }
+    expect(apartOf('camLockBolt-1', johnny)).toBeCloseTo(activeApart, 6);
+    blank.dispose();
+    setItem('johnny');
+    johnny.dispose();
+  });
+
   it('deactivating twice, or mid-hold, is harmless', async () => {
     const rig = await engine();
     const world = createItemWorld(rig.deps);
