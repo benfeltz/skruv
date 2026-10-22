@@ -120,6 +120,11 @@ describe('the fixture', () => {
     expect(second.id).toBe('blank');
   });
 
+  it('is the example in docs/room-save/format-1.md, verbatim', () => {
+    const doc = readFileSync('docs/room-save/format-1.md', 'utf8');
+    expect(doc).toContain(text.trimEnd());
+  });
+
   it('round-trips through serialize', () => {
     const { save } = parse(text);
     expect(parse(serialize(save)).save).toEqual(save);
