@@ -3,9 +3,11 @@ import { catalogEntries, createCatalog } from './game/catalogModel.js';
 import { pickableSet } from './game/pickable.js';
 import { ANY, createBus, EVENT, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
 import { createHaptics, cueFor, patternFor } from './game/haptics.js';
-import { ITEM_ID, ITEM_IDS, setItem } from './game/item.js';
+import { ITEM_ID, ITEM_IDS, itemById, setItem } from './game/item.js';
 import { createItemSlot } from './game/itemSlot.js';
+import { planRestore } from './game/roomRestore.js';
 import { ROOM_SAVE_FORMAT } from './game/roomSave.js';
+import type { UnknownObject } from './game/roomSave.js';
 import { createMemoryStore, createRoomSaver, createWebStore } from './game/roomStore.js';
 import { createSessionBuffer } from './game/sessionBuffer.js';
 import { createTunables, LIVE_KNOBS } from './game/tunables.js';
@@ -14,6 +16,7 @@ import { createCameraControls } from './scene/cameraControls.js';
 import { clampPixelRatio } from './scene/clamp.js';
 import { createFpsGuard } from './scene/fpsGuard.js';
 import { createItemWorld } from './scene/itemWorld.js';
+import type { ItemWorld } from './scene/itemWorld.js';
 import { createLoop } from './scene/loop.js';
 import { createRoom } from './scene/room.js';
 import { createScene } from './scene/scene.js';
@@ -121,25 +124,28 @@ const items = createItemSlot({
 });
 
 // The room's save (src/game/roomSave.ts): written after every rest point — a release, a seat or unseat, a
-// fasten or unfasten, a repack, a recovery, a pick — and at once when the page goes to the background.
-// Nothing reads it yet: 1.9.9.1 restores from it. localStorage can throw (a sandboxed frame): the
-// save then lives in memory for the session.
+// fasten or unfasten, a repack, a recovery, a page turn, a pick — and at once when the page goes to
+// the background. The restore below reads it back once at boot. localStorage can throw (a sandboxed
+// frame): the save then lives in memory for the session.
+const store = (() => {
+  try {
+    return createWebStore(localStorage, SAVE.key);
+  } catch (error) {
+    console.warn('room save: no localStorage, keeping it in memory', error);
+    return createMemoryStore();
+  }
+})();
+// Objects of a kind this build does not know, handed back by the restore: every save carries them on.
+let carried: UnknownObject[] = [];
 const saver = createRoomSaver({
-  store: (() => {
-    try {
-      return createWebStore(localStorage, SAVE.key);
-    } catch (error) {
-      console.warn('room save: no localStorage, keeping it in memory', error);
-      return createMemoryStore();
-    }
-  })(),
+  store,
   now: () => new Date().toISOString(),
   schedule: (fn, ms) => {
     const id = setTimeout(fn, ms);
     return () => clearTimeout(id);
   },
   snapshot: () => {
-    const objects = items.all().map((world) => world.snapshot());
+    const objects = [...items.all().map((world) => world.snapshot()), ...carried];
     return objects.length ? { format: ROOM_SAVE_FORMAT, savedAt: '', world: { sky: { phase: STAGE.sky.phase }, camera: cameraControls.pose() }, objects } : null;
   },
 });
@@ -147,6 +153,9 @@ for (const type of [EVENT.RELEASE, EVENT.SEAT, EVENT.UNSEAT, EVENT.FASTEN, EVENT
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') saver.flush();
 });
+// A page turn is a rest point like any other; the debounce absorbs the peeks. A world's turns are
+// subscribed when main gets the world, after a pick and after a restore (its dispose drops them).
+const adopt = (world: ItemWorld) => world.booklet.onChange(() => saver.changed());
 
 // The catalog is the splash: the game boots with it open on its cover, and it outlives
 // item worlds, so it is the room's — mounted before any manual. BUILD IT goes straight into
@@ -160,6 +169,7 @@ const catalog = createCatalogSheet({
   canClose: () => items.current !== null,
   onPick: (id) => {
     const world = items.pick(id);
+    adopt(world);
     catalog.setOpen(false);
     // Focus goes to the item's manual — its strip's centre page — not back to the catalog thumb.
     world.booklet.focus();
@@ -168,6 +178,36 @@ const catalog = createCatalogSheet({
 });
 document.body.append(catalog.scrim, catalog.thumb, catalog.element);
 catalogPages.prerender();
+
+// The restore (src/game/roomRestore.ts): the saved room put back before the first frame, or the empty
+// room as ever. A save this build cannot restore is refused whole, before anything is built; the room
+// starts empty, the catalog says so, and the stored text stays until the next pick writes over it.
+const restored = planRestore(store.read(), { item: (id) => (ITEM_IDS.includes(id) ? itemById(id) : null), capacity: 1 });
+if (restored.kind === 'none') console.info('room: no save, starting empty');
+else if (restored.kind === 'refused') {
+  console.warn('room: save not restored, starting empty', restored.error);
+  catalog.notify(CATALOG.words.restoreFailed);
+} else {
+  try {
+    const { plan } = restored;
+    carried = plan.others;
+    if (plan.dropped.length) console.warn(`room: ${plan.dropped.length} item(s) beyond this build's one world dropped: ${plan.dropped.map((r) => r.id).join(', ')}`);
+    for (const record of plan.items) {
+      const { id } = record;
+      const world = items.pick(id);
+      world.restore(record);
+      adopt(world);
+    }
+    cameraControls.frame(plan.world.camera);
+    room.setPhase(plan.world.sky.phase);
+    catalog.setOpen(false);
+  } catch (error) {
+    items.clear();
+    carried = [];
+    console.warn('room: save not restored, starting empty', error);
+    catalog.notify(CATALOG.words.restoreFailed);
+  }
+}
 // The real sheet now covers index.html's stand-in; it goes in the frame that first paints it.
 requestAnimationFrame(() => document.getElementById('pre-splash')?.remove());
 

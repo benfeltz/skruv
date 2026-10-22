@@ -292,3 +292,41 @@ describe("the room's save wiring (1.9.9.5)", () => {
     expect(main).toMatch(/onPick: \(id\) => \{[^}]*saver\.changed\(\);/);
   });
 });
+
+describe('the room restores at boot (1.9.9.1)', () => {
+  it('restores before the loop starts', () => {
+    expect(main.indexOf('planRestore(')).toBeGreaterThan(-1);
+    expect(main.indexOf('planRestore(')).toBeLessThan(main.indexOf('createLoop('));
+  });
+
+  it('says so on the catalog with the CATALOG word, and in the console, never silently', () => {
+    expect(main.match(/catalog\.notify\(CATALOG\.words\.restoreFailed\)/g)).toHaveLength(2);
+    expect(main.match(/console\.info\('room: no save/g)).toHaveLength(1);
+    expect(main.match(/console\.warn\('room: save not restored, starting empty'/g)).toHaveLength(2);
+  });
+
+  it('a failed restore empties the slot and drops the carried objects', () => {
+    expect(main).toMatch(/items\.clear\(\);\n\s+carried = \[\];/);
+  });
+
+  it('the snapshot carries unknown objects', () => {
+    expect(main).toMatch(/\[\.\.\.items\.all\(\)\.map\(\(world\) => world\.snapshot\(\)\), \.\.\.carried\]/);
+    expect(main).not.toMatch(/items\.current\?\.snapshot/);
+  });
+
+  it("a world's page turns are rest points, in both the pick and the restore", () => {
+    expect(main).toMatch(/const adopt = \(world: ItemWorld\) => world\.booklet\.onChange\(\(\) => saver\.changed\(\)\);/);
+    expect(main).toMatch(/onPick: \(id\) => \{[^}]*adopt\(world\);/);
+    expect(main).toMatch(/world\.restore\(record\);\n\s+adopt\(world\);/);
+  });
+
+  it('sets the sky through the room, never through the constant', () => {
+    expect(main).toMatch(/room\.setPhase\(/);
+    expect(main).not.toMatch(/STAGE\.sky\.phase =/);
+  });
+
+  it('the store is one object, read by the restore and written by the saver', () => {
+    expect(main).toMatch(/planRestore\(store\.read\(\)/);
+    expect(main).toMatch(/createRoomSaver\(\{\n\s+store,/);
+  });
+});
