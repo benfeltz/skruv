@@ -3,6 +3,7 @@ import { catalogEntries, createCatalog } from './game/catalogModel.js';
 import { pickableSet } from './game/pickable.js';
 import { ANY, createBus, EVENT, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
 import { createHaptics, cueFor, patternFor } from './game/haptics.js';
+import { boxPlacement } from './game/boxLayout.js';
 import { ITEM_ID, ITEM_IDS, itemById, setItem } from './game/item.js';
 import { createItemSlot } from './game/itemSlot.js';
 import { planRestore } from './game/roomRestore.js';
@@ -118,6 +119,7 @@ const items = createItemSlot({
       haptics,
       isFree: () => !snapRotate.pressed,
       ink: room.ink,
+      at: boxPlacement(),
       // Its controls page shows the device in hand: a coarse pointer is a touch screen.
       pages: () => createBookletPages(renderer, { scheme: matchMedia('(pointer: coarse)').matches ? 'touch' : 'desktop' }),
     }),

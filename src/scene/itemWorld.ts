@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PICK, RESET, ROOM } from '../constants.js';
+import { LAYOUT, PICK, RESET, ROOM } from '../constants.js';
 import { createAssembly, restoreJoints } from '../game/assembly.js';
 import { EVENT, recoveryEvent, resetEvent } from '../game/events.js';
 import { CUE, homeCue } from '../game/haptics.js';
@@ -8,7 +8,9 @@ import { preferredRelatives } from '../game/panelFit.js';
 import { createPartMesh } from '../game/partMesh.js';
 import { hasEscaped } from '../game/dragMath.js';
 import { fractionOf, heightAt, selectsDuringHold } from '../game/liftLine.js';
-import { baseRest, boxPlacement, boxPoseOf, createPackedWorldLayout, lidRest, respawnSpots } from '../game/boxLayout.js';
+import { baseRest, boxPoseOf, createPackedWorldLayout, lidRest, respawnSpots } from '../game/boxLayout.js';
+import { footprintOf } from '../game/roomLayout.js';
+import type { Footprint } from '../game/roomLayout.js';
 import { isSmallPart } from '../game/pickMath.js';
 import { createPivotPick } from './pivotPick.js';
 import { createGhost } from './ghost.js';
@@ -56,6 +58,8 @@ export interface ItemWorldDeps {
   ink: Ink;
   /** Draws the current item's booklet pages. */
   pages: () => BookletPages;
+  /** Where the box is set down — the room's free spot (src/game/roomLayout.ts); its parts are packed in it. */
+  at: Pose;
 }
 
 /**
@@ -68,9 +72,17 @@ export interface ItemWorldDeps {
  * `repack`, the camera's pivot `pickDistance`, the room's saver `snapshot` (this item as a
  * save record: src/game/roomSave.ts). `dispose()` takes it all back out — meshes off
  * the scene, bodies out of the physics world, DOM nodes off the page, every listener it
- * bound unbound — so the room is as it was before it came; an item swap is `dispose()` then
- * another `createItemWorld`. A build that throws takes back what it had built before
- * rethrowing.
+ * bound unbound — so the room is as it was before it came. A build that throws takes back what
+ * it had built before rethrowing.
+ *
+ * A world is one item's build in the room, and the room may hold several (1.9.9.2). It is
+ * built active; `deactivate()` makes it kept — router off, strip put away, gizmo, line, inset
+ * and highlight down — and `activate()` gives it all back. A kept world's bodies stay in the
+ * physics world and its meshes on screen, but nothing of it runs: the loop calls `update` and
+ * `render` on the active world only. The invariant that makes this safe: the door
+ * (src/game/item.ts) names the active world's item, and a kept world runs nothing that reads
+ * the pack — the slot (src/game/itemSlot.ts) turns the door before it activates, restores or
+ * disposes a world. `id` is the item it was built for, `footprint()` where it stands on the floor.
  */
 export function createItemWorld(deps: ItemWorldDeps) {
   // Everything the world puts in the scene, the physics world, the page or the bus, each
@@ -110,7 +122,7 @@ export function createItemWorld(deps: ItemWorldDeps) {
 export type ItemWorld = ReturnType<typeof createItemWorld>;
 
 // The build: every acquisition pushes its own release onto `undo` as it happens.
-function buildItemWorld({ scene, camera, domElement, physics, cameraControls, events, haptics, isFree, ink, pages }: ItemWorldDeps, undo: (() => void)[]) {
+function buildItemWorld({ scene, camera, domElement, physics, cameraControls, events, haptics, isFree, ink, pages, at }: ItemWorldDeps, undo: (() => void)[]) {
   // Which item this world is, fixed at build: the door may turn to another while it stands (1.9.9.2), and the snapshot reports the world's own.
   const id = ITEM_ID;
   const documentCode = IDENTITY.documentCode;
@@ -137,7 +149,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
 
   // The game opens on the closed flatpack: every part packed flat inside, settling at once
   // and resting until the lid comes off and a hand disturbs it.
-  const flatpack = createFlatpack(owning, ink, boxPlacement());
+  const flatpack = createFlatpack(owning, ink, at);
   add(flatpack.base.mesh, flatpack.lid.mesh);
 
   // Every part wears the hull; a panel (drawn as its plain box) also its sharp edges, never a faceted round.
@@ -156,7 +168,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   // One record per physical part — what gestures pick, drag and snap. The box and its lid
   // are ones too.
   const parts = [flatpack.base, flatpack.lid];
-  for (const { id, type, position, rotation } of createPackedWorldLayout()) {
+  for (const { id, type, position, rotation } of createPackedWorldLayout(at)) {
     const part = PART_TYPES[type];
     const mesh = createPartMesh(part);
     outline(mesh, type);
@@ -416,7 +428,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   // back to where it last sat in the room — floor it held a moment ago, not the boot spot
   // the player may have built on since.
   let sweepIn = RESET.sweepInterval;
-  let lastBox = boxPlacement();
+  let lastBox = at;
   function sweep(delta: number) {
     sweepIn -= delta;
     if (sweepIn > 0) return;
@@ -438,13 +450,44 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
     loose.forEach(({ body }, i) => physics.place(body, spots[i].position, spots[i].rotation));
   }
 
+  // Active or kept: only the active world has input, a strip and its overlays (see `createItemWorld`).
+  let active = true;
+
   // The rest of the booklet draws in idle time, after the room is on screen.
   bookletPages.prerender();
 
   return {
+    id,
     booklet,
     pickDistance,
     repack,
+    /** Where the world stands on the floor: its box, lid and every player part, padded. */
+    footprint(): Footprint {
+      return footprintOf([flatpack.base, flatpack.lid, ...playerParts].map(({ body }) => {
+        const { x, y, z } = body.translation();
+        return [x, y, z] satisfies Vec3;
+      }), LAYOUT.pad);
+    },
+    /** Makes it kept: lets go of any hold and gesture, and puts every overlay and the strip away. Idempotent. */
+    deactivate() {
+      if (!active) return;
+      active = false;
+      dropHold();
+      router.disable();
+      select(null);
+      liftLine.hide();
+      highlight.show([]);
+      insetPanel.reset();
+      booklet.setShown(false);
+    },
+    /** Makes it active again: input back on, the strip back on its page, that page's parts lit. Idempotent. */
+    activate() {
+      if (active) return;
+      active = true;
+      router.enable();
+      booklet.setShown(true);
+      light(booklet.currentPage);
+    },
     /** This item as a save record (src/game/roomSave.ts): plain data, read at call time, nothing live in it. */
     snapshot(): ItemRecord {
       return {

@@ -12,7 +12,9 @@ import { createPhysicsWorld } from '../src/physics/world.js';
 import { createCameraControls } from '../src/scene/cameraControls.js';
 import { createInk } from '../src/scene/ink.js';
 import { createFlatpack } from '../src/scene/flatpack.js';
-import { baseRest, lidRest } from '../src/game/boxLayout.js';
+import { baseRest, boxPlacement, lidRest } from '../src/game/boxLayout.js';
+import { boxFootprintSize, freeSpot } from '../src/game/roomLayout.js';
+import { packedBox } from '../src/game/boxLayout.js';
 import { createItemWorld } from '../src/scene/itemWorld.js';
 import type { Assembly } from '../src/game/assembly.js';
 import type { Body } from '../src/physics/world.js';
@@ -174,6 +176,7 @@ async function engine() {
     isFree: () => true,
     ink: createInk(),
     pages,
+    at: boxPlacement(),
   };
   // Everything a world could leave behind, counted.
   const census = () => ({
@@ -819,5 +822,158 @@ describe('the flatpack at a spot (1.9.9.2)', () => {
     };
     near(base.body, baseRest(at));
     near(lid.body, lidRest(at));
+  });
+});
+
+describe('several worlds in one room (1.9.9.2)', () => {
+  const overlaps = (a: number[], b: number[]) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+  const strips = () => body.children.filter((node) => node.className === 'booklet-strip');
+  // A pointer press, drag and release on the room's canvas at the screen point of `point`.
+  const dragFrom = (canvas: { dispatch(type: string, event: object): void }, scene: THREE.Scene, camera: THREE.Camera, point: THREE.Vector3, frame: () => void, by = 60) => {
+    scene.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
+    camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+    const v = point.clone().project(camera);
+    const [x, y] = [((v.x + 1) / 2) * 800, ((1 - v.y) / 2) * 800];
+    const pointer = { pointerId: 1, pointerType: 'mouse', button: 0, buttons: 1, preventDefault() {}, stopImmediatePropagation() {}, timeStamp: 0 };
+    canvas.dispatch('pointerdown', { ...pointer, clientX: x, clientY: y });
+    for (let i = 1; i <= 5; i++) canvas.dispatch('pointermove', { ...pointer, clientX: x + (i * by) / 5, clientY: y });
+      frame();
+    canvas.dispatch('pointerup', { ...pointer, clientX: x + by, clientY: y });
+  };
+  const boxAt = (world: { snapshot(): { box: { position: number[] } } }) => world.snapshot().box.position;
+
+  async function twoWorlds() {
+    const rig = await engine();
+    const johnny = createItemWorld(rig.deps);
+    johnny.deactivate();
+    setItem('blank');
+    const at = freeSpot([johnny.footprint()], boxFootprintSize(packedBox()));
+    const blank = createItemWorld({ ...rig.deps, at });
+    return { ...rig, johnny, blank, at };
+  }
+  afterEach(() => setItem('johnny'));
+
+  it('stands two worlds in one room, each with its own parts, apart from each other', async () => {
+    const { johnny, blank, at, census } = await twoWorlds();
+    const baseline = census();
+    expect(at.position).not.toEqual(boxPlacement().position);
+    expect(overlaps(johnny.footprint(), blank.footprint())).toBe(false);
+    expect(johnny.snapshot().id).toBe('johnny');
+    expect(blank.snapshot().id).toBe('blank');
+    expect(Object.keys(johnny.snapshot().parts)).not.toEqual(Object.keys(blank.snapshot().parts));
+    expect(baseline.physics.registered).toBeGreaterThan(MANIFEST.length);
+    // Exactly one router's listeners on the canvas (Blank's), one strip on the page.
+    expect(strips().filter((node) => !node.hidden)).toHaveLength(1);
+    // Back to nothing, each torn down with the door naming it.
+    blank.dispose();
+    setItem('johnny');
+    johnny.dispose();
+  });
+
+  it('returns to the room\'s baseline once both are disposed', async () => {
+    const rig = await engine();
+    const baseline = rig.census();
+    const johnny = createItemWorld(rig.deps);
+    johnny.deactivate();
+    setItem('blank');
+    const blank = createItemWorld({ ...rig.deps, at: freeSpot([johnny.footprint()], boxFootprintSize(packedBox())) });
+    run(blank, 0.3);
+    blank.dispose();
+    setItem('johnny');
+    johnny.dispose();
+    expect(rig.census()).toEqual(baseline);
+  });
+
+  it('keeps a kept world inert: its router is off, its strip put away, its overlays down', async () => {
+    const rig = await engine();
+    const base = rig.census();
+    const johnny = createItemWorld(rig.deps);
+    const active = rig.census();
+    johnny.deactivate();
+    // The router's six canvas listeners are off; the world's inset's remain (it is idle).
+    expect(rig.census().canvasListeners).toBe(active.canvasListeners - 6);
+    expect(strips().every((node) => node.hidden)).toBe(true);
+    johnny.dispose();
+    expect(rig.census()).toEqual(base);
+  });
+
+  it('moves nothing of a kept world on a press over it, and drags again once active', async () => {
+    const rig = await engine();
+    const camera = rig.deps.camera as THREE.PerspectiveCamera;
+    camera.lookAt(0, 0.3, 0.6);
+    camera.updateMatrixWorld(true);
+    const johnny = createItemWorld(rig.deps);
+    const top = new THREE.Vector3(...(johnny.snapshot().lid.position as [number, number, number]));
+    johnny.deactivate();
+    run(johnny, 0.3);
+    const lidAt = () => johnny.snapshot().lid.position;
+    const before = [...lidAt()];
+    const moved = () => Math.hypot(...lidAt().map((v, i) => v - before[i]));
+    dragFrom(rig.canvas, rig.deps.scene, camera, top, () => run(johnny, 0.05));
+    run(johnny, 0.3);
+    expect(moved()).toBeLessThan(1e-3);
+    johnny.activate();
+    dragFrom(rig.canvas, rig.deps.scene, camera, top, () => run(johnny, 0.05));
+    run(johnny, 0.3);
+    expect(moved()).toBeGreaterThan(0.02);
+    johnny.dispose();
+  });
+
+  it('brings the strip back on the page it was on, with that page\'s parts lit', async () => {
+    const rig = await engine();
+    const stepPages = {
+      count: 3,
+      pages: [{ kind: 'cover' }, { kind: 'step', types: Object.keys(PART_TYPES) }, { kind: 'back' }] as unknown as BookletPages['pages'],
+      canvas: () => ({}) as HTMLCanvasElement,
+      prerender() {},
+      dispose() {},
+    };
+    const world = createItemWorld({ ...rig.deps, pages: () => stepPages });
+    const lit = () => {
+      let count = 0;
+      rig.deps.scene.traverse((object) => {
+        const material = (object as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+        if (material?.emissive?.getHex() === COLORS.highlight) count++;
+      });
+      return count;
+    };
+    windowTarget.dispatch('keydown', { key: 'ArrowRight' });
+    expect(lit()).toBeGreaterThan(0);
+    world.deactivate();
+    expect(lit()).toBe(0);
+    expect(strips().every((node) => node.hidden)).toBe(true);
+    world.activate();
+    expect(world.booklet.currentPage).toBe(1);
+    expect(lit()).toBeGreaterThan(0);
+    expect(strips().some((node) => !node.hidden)).toBe(true);
+    world.dispose();
+  });
+
+  it('puts its bodies at the record\'s poses whatever spot it was built at', async () => {
+    const rig = await engine();
+    const johnny = createItemWorld(rig.deps);
+    const record = johnny.snapshot();
+    johnny.dispose();
+    const shifted = { position: [1.6, 0, -0.7] as [number, number, number], rotation: boxPlacement().rotation };
+    const again = createItemWorld({ ...rig.deps, at: shifted });
+    expect(boxAt(again)[0]).not.toBeCloseTo(record.box.position[0], 2);
+    again.restore(record);
+    const close = (a: { position: number[] }, b: { position: number[] }) => a.position.forEach((v, i) => expect(v).toBeCloseTo(b.position[i], 5));
+    close(again.snapshot().box, record.box);
+    for (const [id, pose] of Object.entries(record.parts)) close(again.snapshot().parts[id], pose);
+    again.dispose();
+  });
+
+  it('deactivating twice, or mid-hold, is harmless', async () => {
+    const rig = await engine();
+    const world = createItemWorld(rig.deps);
+    expect(() => {
+      world.deactivate();
+      world.deactivate();
+      world.activate();
+      world.activate();
+    }).not.toThrow();
+    world.dispose();
   });
 });
