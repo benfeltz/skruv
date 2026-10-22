@@ -10,7 +10,8 @@
 //                of the bus: main decides which events are rest points.
 //
 // A save that cannot be written (quota, private mode) goes to `onError`; the game never dies
-// for it. An empty room is saved as no save: the store is cleared.
+// for it. A null snapshot (an empty room) writes nothing: the store keeps whatever it had, so a
+// save the restore refused survives until the next pick writes over it.
 
 import { SAVE } from '../constants.js';
 import { serialize } from './roomSave.js';
@@ -87,7 +88,6 @@ export function createRoomSaver({ store, snapshot, now, schedule, onError = toCo
     try {
       const save = snapshot();
       if (save) store.write(serialize({ ...save, savedAt: now() }));
-      else store.clear();
     } catch (error) {
       onError(error);
     }

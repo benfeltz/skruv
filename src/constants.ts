@@ -581,6 +581,8 @@ export const CATALOG = {
     soldOut: 'SOLD OUT',
     // On the sheet when the tag's item could not be built (src/ui/catalogSheet.ts).
     buildFailed: "That one couldn't be built. Try again, or pick another.",
+    // On the sheet when a saved room existed and could not be put back (src/main.ts).
+    restoreFailed: "Your room couldn't be put back, so it starts empty.",
     // The corner arrows' accessible names (the buttons laid over the printed chevrons).
     prev: 'Previous page',
     next: 'Next page',

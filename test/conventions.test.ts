@@ -47,6 +47,7 @@ describe('pure-logic modules', () => {
     'src/game/toolTargets.ts',
     'src/game/toolAim.ts',
     'src/game/roomSave.ts',
+    'src/game/roomRestore.ts',
     'src/game/roomStore.ts',
     'src/scene/fpsGuard.ts',
   ];
@@ -77,6 +78,7 @@ describe('pure-logic modules', () => {
     'src/game/toolTargets.ts',
     'src/game/toolAim.ts',
     'src/game/roomSave.ts',
+    'src/game/roomRestore.ts',
     'src/game/roomStore.ts',
     'src/scene/fpsGuard.ts',
   ])(
