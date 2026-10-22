@@ -1,4 +1,5 @@
 import { carryPose } from '../game/assembly.js';
+import { poseOf } from '../physics/world.js';
 import type { Assembly, PartId } from '../game/assembly.js';
 import type { Part } from '../game/partMesh.js';
 import type { Body, PhysicsWorld } from '../physics/world.js';
@@ -19,12 +20,6 @@ export function createCompoundPhysics(physics: PhysicsWorld, parts: Part[], asse
   const partById = new Map<PartId, Part>(parts.map((part) => [part.id, part]));
   // The body that grabbed each compound held → where it was, and its other members with theirs.
   const carried = new Map<Body, { start: Pose; members: { body: Body; start: Pose }[] }>();
-
-  function poseOf(body: Body): Pose {
-    const { x, y, z } = body.translation();
-    const r = body.rotation();
-    return { position: [x, y, z], rotation: [r.x, r.y, r.z, r.w] };
-  }
 
   function grab(body: Body) {
     physics.grab(body);

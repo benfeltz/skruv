@@ -125,6 +125,16 @@ describe('the camera pivots about what is in the middle of the screen (1.8.3.2)'
     expect(camera.getWorldDirection(new THREE.Vector3()).angleTo(before)).toBeLessThan(1e-9);
   });
 
+  it('pose() returns what frame set, and the start pose before any gesture (1.9.9.5)', () => {
+    const { controls } = setUp(1.5);
+    controls.pose().target.forEach((v, i) => expect(v).toBeCloseTo(CAMERA.startTarget[i], 9));
+    controls.pose().position.forEach((v, i) => expect(v).toBeCloseTo(CAMERA.startPosition[i], 9));
+    controls.frame({ position: [1, 2, 3], target: [0, 0.5, 0] });
+    const { position, target } = controls.pose();
+    position.forEach((v, i) => expect(v).toBeCloseTo([1, 2, 3][i], 9));
+    target.forEach((v, i) => expect(v).toBeCloseTo([0, 0.5, 0][i], 9));
+  });
+
   it('re-picks on a wheel too, before it zooms', () => {
     const { canvas, picks } = setUp(1.5);
     canvas.dispatch('wheel', { ...pointer, clientX: 400, clientY: 400, deltaY: -100, deltaMode: 0 });

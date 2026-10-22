@@ -3,7 +3,7 @@ import { PICK, RESET, ROOM } from '../constants.js';
 import { createAssembly } from '../game/assembly.js';
 import { EVENT, recoveryEvent, resetEvent } from '../game/events.js';
 import { CUE, homeCue } from '../game/haptics.js';
-import { ASSEMBLED, PART_TYPES } from '../game/item.js';
+import { ASSEMBLED, IDENTITY, ITEM_ID, PART_TYPES } from '../game/item.js';
 import { preferredRelatives } from '../game/panelFit.js';
 import { createPartMesh } from '../game/partMesh.js';
 import { hasEscaped } from '../game/dragMath.js';
@@ -28,9 +28,11 @@ import { createLiftLine } from '../ui/liftLine.js';
 import { createTurnRing } from '../ui/turnRing.js';
 import { createInsetPanel } from './insetPanel.js';
 import type { Bus } from '../game/events.js';
+import type { ItemRecord } from '../game/roomSave.js';
 import type { Haptics } from '../game/haptics.js';
 import type { PartId } from '../game/assembly.js';
 import type { Part } from '../game/partMesh.js';
+import { poseOf } from '../physics/world.js';
 import type { PhysicsWorld } from '../physics/world.js';
 import type { CameraControls } from './cameraControls.js';
 import type { createBookletPages } from './bookletPages.js';
@@ -61,9 +63,10 @@ export interface ItemWorldDeps {
  * now: its flatpack and packed parts, the assembly graph and
  * the compound seam, the gizmo, the gesture router, the elevation line and Shift hold, the
  * booklet and its highlight, the detail inset, repack and the recovery sweep. Returns `{ update(delta),
- * render(renderer, scene), repack(), pickDistance, booklet, dispose() }`: the loop calls `update`
+ * render(renderer, scene), repack(), snapshot(), pickDistance, booklet, dispose() }`: the loop calls `update`
  * and, after the main render, `render` (the inset's one extra pass), the reset button
- * `repack`, the camera's pivot `pickDistance`. `dispose()` takes it all back out — meshes off
+ * `repack`, the camera's pivot `pickDistance`, the room's saver `snapshot` (this item as a
+ * save record: src/game/roomSave.ts). `dispose()` takes it all back out — meshes off
  * the scene, bodies out of the physics world, DOM nodes off the page, every listener it
  * bound unbound — so the room is as it was before it came; an item swap is `dispose()` then
  * another `createItemWorld`. A build that throws takes back what it had built before
@@ -439,6 +442,29 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
     booklet,
     pickDistance,
     repack,
+    /** This item as a save record (src/game/roomSave.ts): plain data, read at call time, nothing live in it. */
+    snapshot(): ItemRecord {
+      return {
+        kind: 'item',
+        id: ITEM_ID,
+        documentCode: IDENTITY.documentCode,
+        box: poseOf(flatpack.base.body),
+        lid: poseOf(flatpack.lid.body),
+        parts: Object.fromEntries(playerParts.map((part) => [part.id, poseOf(part.body)])),
+        joints: assembly.all().map((j) => ({
+          hardware: j.hardware,
+          hardwareConnector: j.hardwareConnector,
+          host: j.host,
+          hostConnector: j.hostConnector,
+          kind: j.kind,
+          mover: j.mover,
+          fastener: { state: j.fastener.state, progress: j.fastener.progress },
+          through: j.through,
+          captured: j.captured,
+        })),
+        page: booklet.currentPage,
+      };
+    },
     /** The inset's extra pass, after the main render: nothing while the inset is not showing. */
     render: (renderer: THREE.WebGLRenderer, scene: THREE.Scene) => insetPanel.render(renderer, scene),
     /** One frame of the item: the hold eases and the line draws before the physics step; the sweep, router and overlays follow it. */

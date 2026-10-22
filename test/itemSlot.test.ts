@@ -42,6 +42,19 @@ function room({ failBuild = new Set<string>(), failDispose = new Set<string>(), 
 }
 
 describe('createItemSlot', () => {
+  it('lists the worlds in the room: none, then the one, then none after a failed pick (1.9.9.5)', () => {
+    const fail = new Set<string>();
+    const { items } = room({ failBuild: fail });
+    expect(items.all()).toEqual([]);
+    const world = items.pick('johnny');
+    expect(items.all()).toEqual([world]);
+    expect(items.pick('johnny')).toBe(world);
+    expect(items.all()).toEqual([world]);
+    fail.add('blank');
+    expect(() => items.pick('blank')).toThrow(BuildFailed);
+    expect(items.all()).toEqual([]);
+  });
+
   it('holds no world until the first pick', () => {
     const { items, holds } = room();
     expect(items.current).toBeNull();

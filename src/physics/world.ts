@@ -2,12 +2,19 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { FASTENER, PHYSICS } from '../constants.js';
 import { colliderBoxes, sizeAndCentre } from '../game/stageBoxes.js';
 import { createAccumulator } from './stepping.js';
-import type { Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
+import type { Pose, Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
 import type { BondMode, JointFrame } from '../game/assembly.js';
 
 // Rapier's types, for the modules that hold bodies and joints — they import them from here,
 // never from Rapier.
 export type Body = RAPIER.RigidBody;
+
+/** Where a body is: its translation and rotation as plain tuples. */
+export function poseOf(body: Body): Pose {
+  const { x, y, z } = body.translation();
+  const r = body.rotation();
+  return { position: [x, y, z], rotation: [r.x, r.y, r.z, r.w] };
+}
 export type PhysicsJoint = RAPIER.ImpulseJoint;
 
 /** What a body's pose is copied onto each step: a Three object, as far as this module cares. */
