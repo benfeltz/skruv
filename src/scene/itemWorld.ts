@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PICK, RESET, ROOM } from '../constants.js';
-import { createAssembly } from '../game/assembly.js';
+import { createAssembly, restoreJoints } from '../game/assembly.js';
 import { EVENT, recoveryEvent, resetEvent } from '../game/events.js';
 import { CUE, homeCue } from '../game/haptics.js';
 import { ASSEMBLED, IDENTITY, ITEM_ID, PART_TYPES } from '../game/item.js';
@@ -111,6 +111,9 @@ export type ItemWorld = ReturnType<typeof createItemWorld>;
 
 // The build: every acquisition pushes its own release onto `undo` as it happens.
 function buildItemWorld({ scene, camera, domElement, physics, cameraControls, events, haptics, isFree, ink, pages }: ItemWorldDeps, undo: (() => void)[]) {
+  // Which item this world is, fixed at build: the door may turn to another while it stands (1.9.9.2), and the snapshot reports the world's own.
+  const id = ITEM_ID;
+  const documentCode = IDENTITY.documentCode;
   const release = releaser(new Set<THREE.Material>([ink.lines, ink.hull]));
   const add = (...added: THREE.Object3D[]) => {
     scene.add(...added);
@@ -446,8 +449,8 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
     snapshot(): ItemRecord {
       return {
         kind: 'item',
-        id: ITEM_ID,
-        documentCode: IDENTITY.documentCode,
+        id,
+        documentCode,
         box: poseOf(flatpack.base.body),
         lid: poseOf(flatpack.lid.body),
         parts: Object.fromEntries(playerParts.map((part) => [part.id, poseOf(part.body)])),
@@ -464,6 +467,27 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
         })),
         page: booklet.currentPage,
       };
+    },
+    /**
+     * Puts this world back as `record` (src/game/roomRestore.ts has checked it against the pack)
+     * left it: every body set down at its pose, the joints replayed through the fastener machine,
+     * the physics bonds and held hardware brought in line, the manual on its page. Once, on a
+     * fresh world before its first frame. A restore is not a rest point: it emits no event, the
+     * saver has nothing new to write. Throws if the machine cannot land a joint; the caller
+     * disposes the world.
+     */
+    restore(record: ItemRecord) {
+      hold.end();
+      physics.place(flatpack.base.body, record.box.position, record.box.rotation);
+      physics.place(flatpack.lid.body, record.lid.position, record.lid.rotation);
+      for (const { id: partId, body } of playerParts) {
+        const { position, rotation } = record.parts[partId];
+        physics.place(body, position, rotation);
+      }
+      restoreJoints(assembly, record.joints);
+      router.sync();
+      booklet.goTo(record.page);
+      lastBox = boxPose();
     },
     /** The inset's extra pass, after the main render: nothing while the inset is not showing. */
     render: (renderer: THREE.WebGLRenderer, scene: THREE.Scene) => insetPanel.render(renderer, scene),

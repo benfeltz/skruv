@@ -63,6 +63,16 @@ export function createItemSlot<World extends { dispose(): void }>({
     all(): World[] {
       return current ? [current] : [];
     },
+    /** Empties the room: the world is disposed (a teardown that throws goes to `report`). The door stays as it is, which holds the invariant with no world. */
+    clear() {
+      const old = current;
+      current = null;
+      try {
+        old?.dispose();
+      } catch (error) {
+        report(error);
+      }
+    },
     pick(id: string) {
       if (current && door.selected() === id) return current;
       if (!door.knows(id)) throw new Error(`pick: no item "${id}"`);

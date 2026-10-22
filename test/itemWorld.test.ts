@@ -6,7 +6,7 @@ import { createBus } from '../src/game/events.js';
 import { parse, serialize } from '../src/game/roomSave.js';
 import { STATE } from '../src/game/fasteners.js';
 import { createHaptics } from '../src/game/haptics.js';
-import { IDENTITY, ITEM_ID, ITEM_IDS, MANIFEST, PART_TYPES, setItem } from '../src/game/item.js';
+import { ASSEMBLED, IDENTITY, ITEM_ID, ITEM_IDS, MANIFEST, PART_TYPES, setItem } from '../src/game/item.js';
 import { createItemSlot } from '../src/game/itemSlot.js';
 import { createPhysicsWorld } from '../src/physics/world.js';
 import { createCameraControls } from '../src/scene/cameraControls.js';
@@ -654,5 +654,154 @@ describe('the world reads itself into a save record (1.9.9.5)', () => {
     } finally {
       setItem('johnny');
     }
+  });
+});
+
+describe('the world puts itself back from a record (1.9.1 restore, 1.9.9.1)', () => {
+  beforeEach(() => void vi.stubGlobal('getComputedStyle', () => ({ paddingTop: '0px', paddingRight: '0px', paddingBottom: '0px' })));
+  afterEach(() => void vi.unstubAllGlobals());
+
+  // Rapier renormalises a rotation it is given, so a pose comes back within float noise of the one placed.
+  const closeTo = (a: unknown, b: unknown): void => {
+    if (typeof a === 'number' && typeof b === 'number') return void expect(a).toBeCloseTo(b, 6);
+    if (Array.isArray(a) && Array.isArray(b)) {
+      expect(a).toHaveLength(b.length);
+      return a.forEach((v, i) => closeTo(v, b[i]));
+    }
+    if (a && b && typeof a === 'object' && typeof b === 'object') {
+      expect(Object.keys(a).sort()).toEqual(Object.keys(b).sort());
+      return Object.keys(a).forEach((k) => closeTo((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+    }
+    expect(a).toEqual(b);
+  };
+  const dist = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+  async function recordingEngine() {
+    const { deps: engineDeps } = await engine();
+    const made: Body[] = [];
+    const deps: ItemWorldDeps = {
+      ...engineDeps,
+      physics: {
+        ...engineDeps.physics,
+        register(...args) {
+          const registered = engineDeps.physics.register(...args);
+          made.push(registered);
+          return registered;
+        },
+      },
+    };
+    // The newest body sitting at `position`: a fresh world's parts are found by where the snapshot says they are.
+    const bodyAt = (position: number[]) => [...made].reverse().find((b) => dist([b.translation().x, b.translation().y, b.translation().z], position) < 1e-6)!;
+    return { deps, physics: engineDeps.physics, bodyAt };
+  }
+
+  /** The pack's first dowel joint, and the assembled poses of its two parts. */
+  const dowelJoint = () => {
+    const joint = ASSEMBLED.joints.find((j) => j.kind === 'dowel')!;
+    const pose = (id: string) => ASSEMBLED.parts.find((p) => p.id === id)!;
+    return { joint, hardware: pose(joint.hardware), host: pose(joint.host) };
+  };
+
+  it('restores a built, pressed, turned-to-page-two world to the very snapshot it was taken from', async () => {
+    const { deps, physics, bodyAt } = await recordingEngine();
+    const first = createItemWorld(deps);
+    const fresh = first.snapshot();
+    const { joint, hardware, host } = dowelJoint();
+    const hardwareBody = bodyAt(fresh.parts[joint.hardware].position);
+    const hostBody = bodyAt(fresh.parts[joint.host].position);
+    physics.place(hardwareBody, hardware.position, hardware.rotation);
+    physics.place(hostBody, host.position, host.rotation);
+    const seated = lastAssembly().seat({ partA: joint.hardware, connectorA: joint.hardwareConnector, partB: joint.host, connectorB: joint.hostConnector, mover: joint.mover });
+    lastAssembly().apply(seated.id, { type: 'tap' });
+    first.booklet.goTo(2);
+    run(first, PHYSICS.timestep);
+    const saved = first.snapshot();
+    expect(saved.page).toBe(2);
+    first.dispose();
+
+    const second = createItemWorld(deps);
+    second.restore(saved);
+    closeTo(second.snapshot(), saved);
+    expect(second.booklet.currentPage).toBe(2);
+    // The bond holds: the dowel stays where the panel keeps it as the pair settles.
+    const hold = bodyAt(saved.parts[joint.hardware].position);
+    const panel = bodyAt(saved.parts[joint.host].position);
+    const offset = () => dist([hold.translation().x, hold.translation().y, hold.translation().z], [panel.translation().x, panel.translation().y, panel.translation().z]);
+    const before = offset();
+    for (let i = 0; i < 30; i++) run(second, PHYSICS.timestep);
+    expect(Math.abs(offset() - before)).toBeLessThan(0.002);
+    second.dispose();
+  });
+
+  it('holds a seated, unfastened dowel at its seat instead of letting it fall', async () => {
+    const { deps, physics, bodyAt } = await recordingEngine();
+    const first = createItemWorld(deps);
+    const record = first.snapshot();
+    first.dispose();
+    const { joint, hardware, host } = dowelJoint();
+    record.parts[joint.hardware] = { position: hardware.position, rotation: hardware.rotation };
+    record.parts[joint.host] = { position: host.position, rotation: host.rotation };
+    record.joints = [
+      {
+        hardware: joint.hardware,
+        hardwareConnector: joint.hardwareConnector,
+        host: joint.host,
+        hostConnector: joint.hostConnector,
+        kind: 'dowel',
+        mover: joint.mover,
+        fastener: { state: STATE.SEATED, progress: 0 },
+        through: null,
+        captured: null,
+      },
+    ];
+    const world = createItemWorld(deps);
+    world.restore(record);
+    void physics;
+    const body = bodyAt(record.parts[joint.hardware].position);
+    for (let i = 0; i < 5; i++) run(world, PHYSICS.timestep);
+    const settled = body.translation();
+    for (let i = 0; i < 60; i++) run(world, PHYSICS.timestep);
+    expect(dist([body.translation().x, body.translation().y, body.translation().z], [settled.x, settled.y, settled.z])).toBeLessThan(1e-6);
+    expect(dist([settled.x, settled.y, settled.z], record.parts[joint.hardware].position)).toBeLessThan(0.03);
+    world.dispose();
+  });
+
+  it('refuses a joint the machine cannot land, and the half-restored world can be disposed', async () => {
+    const { deps } = await recordingEngine();
+    const first = createItemWorld(deps);
+    const record = first.snapshot();
+    first.dispose();
+    const { joint } = dowelJoint();
+    record.joints = [
+      {
+        hardware: joint.hardware,
+        hardwareConnector: joint.hardwareConnector,
+        host: joint.host,
+        hostConnector: joint.hostConnector,
+        kind: 'dowel',
+        mover: joint.mover,
+        fastener: { state: STATE.SCREWED, progress: 1 },
+        through: null,
+        captured: null,
+      },
+    ];
+    const world = createItemWorld(deps);
+    expect(() => world.restore(record)).toThrow(/restore: joint/);
+    expect(() => world.dispose()).not.toThrow();
+  });
+
+  it('reports the item it was built for, not the one the door names now (question 1)', async () => {
+    const { deps } = await recordingEngine();
+    const world = createItemWorld(deps);
+    const johnny = IDENTITY.documentCode;
+    setItem('blank');
+    try {
+      const record = world.snapshot();
+      expect(record.id).toBe('johnny');
+      expect(record.documentCode).toBe(johnny);
+    } finally {
+      setItem('johnny');
+    }
+    world.dispose();
   });
 });

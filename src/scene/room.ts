@@ -141,6 +141,10 @@ export function createRoom() {
     ink,
     leftWall,
     backWall,
+    /** Sets the sky at `next` ([0, 1)), the scrub's own way: the next `update` paints from there. */
+    setPhase(next: number) {
+      phase = scrubbed = STAGE.sky.phase = next;
+    },
     /**
      * Per frame: hide the walls the eye is behind; keep the ink's resolution at the canvas's
      * CSS size, so `INK.lineWidth` is the same on screen at any pixel ratio; turn the sky
