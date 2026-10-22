@@ -182,7 +182,7 @@ catalogPages.prerender();
 // The restore (src/game/roomRestore.ts): the saved room put back before the first frame, or the empty
 // room as ever. A save this build cannot restore is refused whole, before anything is built; the room
 // starts empty, the catalog says so, and the stored text stays until the next pick writes over it.
-const restored = planRestore(store.read(), { item: (id) => (ITEM_IDS.includes(id) ? itemById(id) : null), capacity: 1 });
+const restored = planRestore(store.read(), { item: (id) => (ITEM_IDS.includes(id) ? itemById(id) : null) });
 if (restored.kind === 'none') console.info('room: no save, starting empty');
 else if (restored.kind === 'refused') {
   console.warn('room: save not restored, starting empty', restored.error);

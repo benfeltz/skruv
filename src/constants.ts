@@ -662,6 +662,19 @@ export const BOX = {
   friction: 1,
 };
 
+// Where a new box is set down once the room holds other worlds (src/game/roomLayout.ts): the
+// first free spot along a row across the room, then a second row back. `pitch` (m) is the step
+// between spots along the room's width, `rowDepth` (m) the step back (toward -z) to the next
+// row, `pad` (m) the clear space kept around every footprint, `margin` (m) how close to a wall
+// a box may stand. Sized from the largest box (Johnny's, 2.1 m long) so one row takes it and a
+// smaller box beside it.
+export const LAYOUT = {
+  pitch: 0.8,
+  rowDepth: 1.3,
+  pad: 0.1,
+  margin: 0.1,
+};
+
 // The control cluster (src/ui/controlCluster.ts): the row in the upper right — the menu
 // button in the corner (first added, at the right), the ?tune gear to its left — the one
 // owner of that corner. Its inset from the screen corner and the gap between its controls

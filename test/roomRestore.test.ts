@@ -104,52 +104,61 @@ describe('planRestore', () => {
   const two = () => room([recordOf('johnny', [pressedDowel()]), recordOf('blank'), { kind: 'scenery', wall: 'back' }]);
 
   it('is none for no save', () => {
-    expect(planRestore(null, { item: lookup, capacity: 1 })).toEqual({ kind: 'none' });
+    expect(planRestore(null, { item: lookup })).toEqual({ kind: 'none' });
   });
 
   it('returns a room for a record that fits', () => {
-    const result = planRestore(serialize(room([recordOf('johnny', [pressedDowel()])])), { item: lookup, capacity: 1 });
+    const result = planRestore(serialize(room([recordOf('johnny', [pressedDowel()])])), { item: lookup });
     expect(result.kind).toBe('room');
     if (result.kind === 'room') expect(result.plan.items.map((r) => r.id)).toEqual(['johnny']);
   });
 
   it('refuses with the parser\'s error', () => {
-    const result = planRestore('{"format":1}', { item: lookup, capacity: 1 });
+    const result = planRestore('{"format":1}', { item: lookup });
     expect(result.kind).toBe('refused');
     if (result.kind === 'refused') expect(result.error.message).toContain('savedAt');
   });
 
   it('refuses text that is not JSON', () => {
-    expect(planRestore('nope', { item: lookup, capacity: 1 }).kind).toBe('refused');
+    expect(planRestore('nope', { item: lookup }).kind).toBe('refused');
   });
 
   it('refuses an item this build does not carry', () => {
     const r = recordOf('johnny');
     r.id = 'ghost';
-    const result = planRestore(serialize(room([r])), { item: lookup, capacity: 1 });
+    const result = planRestore(serialize(room([r])), { item: lookup });
     expect(result.kind === 'refused' && result.error.message).toContain('objects[0].id');
   });
 
-  it('keeps the first `capacity` items, drops the rest, carries unknown kinds', () => {
-    const result = planRestore(serialize(two()), { item: lookup, capacity: 1 });
+  it('restores every record, in order, and carries unknown kinds', () => {
+    const result = planRestore(serialize(two()), { item: lookup });
     if (result.kind !== 'room') throw new Error('expected a room');
-    expect(result.plan.items.map((r) => r.id)).toEqual(['johnny']);
-    expect(result.plan.dropped.map((r) => r.id)).toEqual(['blank']);
+    expect(result.plan.items.map((r) => r.id)).toEqual(['johnny', 'blank']);
+    expect(result.plan.dropped).toEqual([]);
     expect(result.plan.others).toEqual([{ kind: 'scenery', wall: 'back' }]);
     expect(result.plan.world).toEqual(two().world);
   });
 
-  it('restores both with capacity 2', () => {
-    const result = planRestore(serialize(two()), { item: lookup, capacity: 2 });
+  it('keeps one record per id: a later duplicate is dropped', () => {
+    const result = planRestore(serialize(room([recordOf('johnny'), recordOf('johnny')])), { item: lookup });
+    if (result.kind !== 'room') throw new Error('expected a room');
+    expect(result.plan.items.map((r) => r.id)).toEqual(['johnny']);
+    expect(result.plan.dropped.map((r) => r.id)).toEqual(['johnny']);
+  });
+
+  it('keeps the first of an id and the order of the rest', () => {
+    const first = recordOf('johnny', [pressedDowel()]);
+    const result = planRestore(serialize(room([first, recordOf('blank'), recordOf('johnny')])), { item: lookup });
     if (result.kind !== 'room') throw new Error('expected a room');
     expect(result.plan.items.map((r) => r.id)).toEqual(['johnny', 'blank']);
-    expect(result.plan.dropped).toEqual([]);
+    expect(result.plan.items[0].joints).toHaveLength(1);
+    expect(result.plan.dropped.map((r) => r.id)).toEqual(['johnny']);
   });
 
   it('refuses the whole save when a dropped record does not fit', () => {
     const bad = recordOf('blank');
     bad.documentCode = 'SK-0';
-    const result = planRestore(serialize(room([recordOf('johnny'), bad])), { item: lookup, capacity: 1 });
+    const result = planRestore(serialize(room([recordOf('johnny'), bad])), { item: lookup });
     expect(result.kind === 'refused' && result.error.message).toContain('objects[1].documentCode');
   });
 });
