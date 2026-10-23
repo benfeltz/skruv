@@ -294,8 +294,6 @@ if (new URLSearchParams(location.search).has(TUNE.queryFlag)) {
   const { createTunePanel } = await import('./ui/tunePanel.js');
   const panel = createTunePanel({ tunables, exportSession: session.toExportJson });
   cluster.add(panel.tab);
-  // The gear stands in the cluster's row: the catalog's thumb moves past it (src/ui/booklet.ts).
-  document.documentElement.dataset.tune = 'true';
   document.body.append(panel.element);
   // The gear widens the cluster: the fan moves over.
   fan.refresh();

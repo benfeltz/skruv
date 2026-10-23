@@ -263,8 +263,9 @@ describe("the manual's band shrinks the room's view (1.9.7.1.2)", () => {
     expect(cluster).toContain('env(safe-area-inset-left)');
     expect(cluster).not.toContain('--rail-x');
     expect(read('src/ui/liftLine.ts')).not.toContain('--rail-x');
-    // The cluster is always upper left, so the drop always opens rightward, into the room.
-    expect(read('src/ui/menuButton.ts')).not.toContain('data-strip');
+    // The cluster is always upper left: the drop opens down from it upright, and to its right in landscape,
+    // where the lift line hangs under the menu (Ben, 2026-10-23).
+    expect(read('src/ui/menuButton.ts')).toContain("html[data-strip='right'] .menu-drop {\n      top: 0;\n      left: calc(100% + ");
   });
 
   it('has no arrow buttons on the strip: it is dragged, tapped and keyed', () => {

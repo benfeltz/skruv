@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CATALOG_THUMB_HEIGHT, MENU } from '../src/constants.js';
+import { MENU } from '../src/constants.js';
 import { createMenuButton } from '../src/ui/menuButton.js';
 import { FakeElement, installFakeDom } from './support/fakeDom.js';
 import type { FakeDom } from './support/fakeDom.js';
@@ -114,11 +114,22 @@ describe('the menu button', () => {
   });
 });
 
-describe('the drop and the catalog\'s thumb', () => {
-  it('opens below the thumb that stands beside the menu, never over it', () => {
+describe('the drop as one card (Ben, 2026-10-23)', () => {
+  const css = () => dom.head.children.map((node) => node.textContent).join('');
+
+  it('hangs from the button on its left edge: down upright, to the right in landscape', () => {
     mount();
-    const css = dom.head.children.map((node) => node.textContent).join('');
-    expect(CATALOG_THUMB_HEIGHT).toBeGreaterThan(MENU.size);
-    expect(css).toContain(`.menu-drop {\n      position: absolute;\n      /* Below the catalog's thumb, which stands beside the menu: the drop never covers it. */\n      top: ${CATALOG_THUMB_HEIGHT + MENU.drop.gap}px;`);
+    expect(css()).toContain(`.menu-drop {\n      position: absolute;\n      top: calc(100% + ${MENU.drop.gap}px);\n      left: 0;\n      width: ${MENU.drop.width}px;`);
+    expect(css()).toContain(`html[data-strip='right'] .menu-drop {\n      top: 0;\n      left: calc(100% + ${MENU.drop.gap}px);`);
+  });
+
+  it('lays each control as a full-width row with a divider between, no pill of its own', () => {
+    mount();
+    expect(css()).toContain('.menu-drop .reset-button, .menu-drop .toggle-button {');
+    expect(css()).toContain('width: 100%;');
+    expect(css()).toContain('border-radius: 0;');
+    expect(css()).toContain('.menu-drop > * + * {\n      border-top: 1px solid');
+    // Snap rotate reads as a switch, gold when on.
+    expect(css()).toContain(".menu-drop .toggle-button[aria-pressed='true']::after {");
   });
 });

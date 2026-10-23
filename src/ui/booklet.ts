@@ -56,6 +56,9 @@ function viewVars(band: Band) {
   if (band === 'bottom') return { bottom: `calc(${bandBottom}px + ${env('bottom')})`, left: '0px', right: '0px', backdrop: null };
   return { bottom: '0px', left: env('left'), right: `calc(${bandRight}px + ${env('right')})`, backdrop: '#000' };
 }
+// In landscape the catalog's docked thumb sits at the top of the screen, in the room just beside the
+// band: this far (px) from the band's edge, past the right safe-area margin.
+const thumbBeside = bandRight + BOOKLET_UI.page.gutter;
 
 function injectStyle() {
   if (document.getElementById(STYLE_ID)) return;
@@ -89,18 +92,14 @@ function injectStyle() {
       /* Over the manual's band, which a landscape thumb sits on. */
       z-index: 1;
     }
-    /* The catalog's thumb ('topLeft' is the corner it used to have) sits beside the control cluster, in
-       the cluster's row, from the first load on (Ben, 2026-10-22): the menu and the lift line keep the
-       left, the manual fan (src/ui/manualFan.ts) takes the side of the manual's strip. */
+    /* The catalog's thumb ('topLeft' is the corner it used to have) sits in the upper right, from the
+       first load on: the menu and the lift line under it have the left, for the left thumb (Ben,
+       2026-10-18). */
     .booklet-thumb[data-corner='topLeft'] {
-      top: calc(${CLUSTER.inset}px + env(safe-area-inset-top));
+      top: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-top));
       bottom: auto;
-      right: auto;
-      left: calc(${CLUSTER.inset + MENU.size + CLUSTER.gap}px + env(safe-area-inset-left));
-    }
-    /* A ?tune URL's gear stands beside the menu in portrait (under it in landscape): the thumb goes past it. */
-    html[data-tune='true']:not([data-strip='right']) .booklet-thumb[data-corner='topLeft'] {
-      left: calc(${CLUSTER.inset + 2 * (MENU.size + CLUSTER.gap)}px + env(safe-area-inset-left));
+      left: auto;
+      right: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-right));
     }
     /* A mouse resting on the docked thumbnail grows it from its corner to a readable page,
        about a quarter of the screen, raised over its neighbours — still under the scrim (2) and the page (3).
@@ -265,6 +264,12 @@ function injectStyle() {
       align-items: center;
       justify-content: center;
       overflow: hidden;
+    }
+    /* The catalog's thumb, put down from the open catalog, sits at the top of the screen in landscape,
+       in the room beside the band with a gutter between (never on it or in its column). */
+    html[data-strip='right'] .booklet-thumb[data-corner='topLeft'] {
+      left: auto;
+      right: calc(${thumbBeside}px + env(safe-area-inset-right));
     }
     /* The pages in a row (a column in landscape), centred in the band and moved as one by an
        inline transform: a drag follows the pointer (data-dragging, no transition) and a snap

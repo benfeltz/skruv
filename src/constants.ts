@@ -689,16 +689,14 @@ export const CLUSTER = {
 };
 
 // The menu button (src/ui/menuButton.ts): a hamburger holding Repack and Snap rotate. Its
-// square size and glyph size, and the drop under it: the gap below the button, the padding
-// inside the drop and its corner radius (CSS pixels).
+// square size and glyph size, and the drop hung from it — one card of full-width rows (Ben,
+// 2026-10-23): the gap to the button, the card's width and corner radius, a row's height and
+// side padding, and the Snap rotate switch's track (CSS pixels).
 export const MENU = {
   size: 44,
   glyph: 22,
-  drop: { gap: 8, pad: 8, radius: 18 },
+  drop: { gap: 8, width: 168, radius: 14, row: 48, pad: 16, track: { width: 34, height: 20 } },
 };
-// The catalog's docked thumb, level with the menu and beside it (src/ui/booklet.ts), is this tall (CSS
-// pixels); the menu's drop opens below it, never over it (src/ui/menuButton.ts).
-export const CATALOG_THUMB_HEIGHT = Math.round((BOOKLET_UI.thumbWidth * BOOKLET.pageSize[1]) / BOOKLET.pageSize[0]);
 
 // Repack and recovery (src/ui/resetButton.ts, src/main.ts).
 export const RESET = {
