@@ -1,73 +1,45 @@
 import { describe, expect, it } from 'vitest';
 import { FAN } from '../src/constants.js';
-import { coverDepth, fanLabel, fanLayout, fanOrder, fanWidth, overflows } from '../src/game/manualFan.js';
+import { fanLabel, rowLength, spineEdges } from '../src/game/manualFan.js';
 
-describe('the covers\' order', () => {
-  it('keeps the covers where they were, drops the gone and adds the new at the end', () => {
-    expect(fanOrder(['a', 'b', 'c'], ['a', 'c', 'd'])).toEqual(['a', 'c', 'd']);
+// 1.9.9.3, option B: the pocket's model, headless — the spine's edges, the row's length, the name.
+
+describe("the spine's edges", () => {
+  const room = 26;
+
+  it('is empty with no world, and centres a lone edge', () => {
+    expect(spineEdges(0, room, FAN)).toEqual([]);
+    expect(spineEdges(1, room, FAN)).toEqual([(room - FAN.edge) / 2]);
   });
-  it('is not re-arranged when another world goes active (the room\'s order changes, the fan\'s does not)', () => {
-    expect(fanOrder(['johnny', 'blank'], ['blank', 'johnny'])).toEqual(['johnny', 'blank']);
+
+  it('steps the edges edgeStep apart while they fit, centred, in the room\'s order', () => {
+    const [a, b] = spineEdges(2, room, FAN);
+    expect(b - a).toBe(FAN.edgeStep);
+    expect(a + (b + FAN.edge - a) / 2).toBeCloseTo(room / 2);
   });
-  it('starts from the room\'s order', () => {
-    expect(fanOrder([], ['a', 'b'])).toEqual(['a', 'b']);
-    expect(fanOrder(['a'], [])).toEqual([]);
+
+  it('closes them up when the spine is too narrow, never past its sides', () => {
+    for (const count of [3, 5, 12]) {
+      const edges = spineEdges(count, room, FAN);
+      expect(edges).toHaveLength(count);
+      expect(edges[0]).toBeGreaterThanOrEqual(FAN.edgePad - 1e-9);
+      expect(edges.at(-1)! + FAN.edge).toBeLessThanOrEqual(room - FAN.edgePad + 1e-9);
+      for (let i = 1; i < count; i++) expect(edges[i]).toBeGreaterThan(edges[i - 1]);
+    }
   });
 });
 
-describe('what lies on top', () => {
-  it('puts the active cover over every other, the rest as they lie', () => {
-    expect([0, 1, 2].map((i) => coverDepth(i, 3, 1))).toEqual([0, 3, 2]);
-    expect(coverDepth(0, 1, 0)).toBe(1);
+describe('the row', () => {
+  it('is a pitch per cover, no gap past the ends', () => {
+    expect(rowLength(0, FAN)).toBe(0);
+    expect(rowLength(1, FAN)).toBe(FAN.cover);
+    expect(rowLength(3, FAN)).toBe(3 * FAN.cover + 2 * FAN.gap);
+    // Pitch 64 (Ben's spec, 2026-10-23).
+    expect(FAN.cover + FAN.gap).toBe(64);
   });
-});
 
-describe('where the covers sit', () => {
-  it('lays a lone folded cover flat at 0', () => {
-    expect(fanLayout(1, false, FAN)).toEqual([{ x: 0, angle: 0 }]);
-  });
-  it('folds covers a step apart, leaning alternately from the first', () => {
-    const [a, b, c] = fanLayout(3, false, FAN);
-    expect([a.x, b.x, c.x]).toEqual([0, FAN.step, 2 * FAN.step]);
-    expect([a.angle, b.angle, c.angle]).toEqual([-FAN.tilt, FAN.tilt, -FAN.tilt]);
-  });
-  it('spreads covers a pitch apart, upright', () => {
-    const [a, b, c] = fanLayout(3, true, FAN);
-    const pitch = FAN.cover + FAN.gap;
-    expect([a.x, b.x, c.x]).toEqual([0, pitch, 2 * pitch]);
-    expect([a.angle, b.angle, c.angle]).toEqual([0, 0, 0]);
-  });
-  it('has nothing to place with no covers', () => {
-    expect(fanLayout(0, true, FAN)).toEqual([]);
-  });
-});
-
-describe('widths', () => {
-  it('is 0 with no covers', () => {
-    expect(fanWidth(0, true, FAN)).toBe(0);
-    expect(fanWidth(0, false, FAN)).toBe(0);
-  });
-  it('is one cover wide for a lone cover, either way', () => {
-    expect(fanWidth(1, true, FAN)).toBe(FAN.cover);
-    expect(fanWidth(1, false, FAN)).toBe(FAN.cover);
-  });
-  it('folded adds a step per cover, spread a pitch', () => {
-    expect(fanWidth(3, false, FAN)).toBe(FAN.cover + 2 * FAN.step);
-    expect(fanWidth(3, true, FAN)).toBe(3 * FAN.cover + 2 * FAN.gap);
-  });
-});
-
-describe('overflow', () => {
-  it('is true only when the spread row is wider than the box', () => {
-    const width = fanWidth(4, true, FAN);
-    expect(overflows(4, width, FAN)).toBe(false);
-    expect(overflows(4, width - 1, FAN)).toBe(true);
-  });
-});
-
-describe('the label', () => {
-  it('counts the manuals, singular and plural', () => {
-    expect(fanLabel(1)).toBe('Switch item: 1 manual');
-    expect(fanLabel(2)).toBe('Switch item: 2 manuals');
+  it('names the pocket by its count', () => {
+    expect(fanLabel(1)).toBe('1 manual in the room');
+    expect(fanLabel(3)).toBe('3 manuals in the room');
   });
 });

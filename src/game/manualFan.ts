@@ -1,53 +1,30 @@
 import type { FAN } from '../constants.js';
 
-// The manual fan's model (1.9.9.3): every world's manual in a stable order, the active one on top,
-// and where each cover sits, folded and spread. Pure: src/ui/manualFan.ts applies the numbers.
+// The manuals' pocket (1.9.9.3, option B): the band's far end holds every world's manual. At rest it
+// shows only the covers' edges, a spine; tapped, the covers come out as a row. Pure: src/ui/manualFan.ts
+// applies the numbers.
 
 type Fan = typeof FAN;
 
-/** Where one cover sits in the row: its offset along the row (CSS px) and its lean (degrees). */
-export interface CoverPlace {
-  x: number;
-  angle: number;
-}
-
 /**
- * The covers' order in the row: those already in it keep their places, the ones the room no longer
- * holds drop out, a new one joins at the end. A pick never re-arranges the others; only which cover
- * is on top changes (`coverDepth`).
+ * Where each cover's edge lies across the spine (CSS px from its start), in the room's order, the open
+ * manual's last and on top. They step `edgeStep` apart, closer when the spine (`room` px across) is too
+ * narrow for that, and the run is centred in it.
  */
-export function fanOrder(previous: readonly string[], ids: readonly string[]): string[] {
-  return [...previous.filter((id) => ids.includes(id)), ...ids.filter((id) => !previous.includes(id))];
+export function spineEdges(count: number, room: number, fan: Fan): number[] {
+  if (count <= 0) return [];
+  const free = room - 2 * fan.edgePad - fan.edge;
+  const step = count === 1 ? 0 : Math.max(0, Math.min(fan.edgeStep, free / (count - 1)));
+  const start = (room - fan.edge - step * (count - 1)) / 2;
+  return Array.from({ length: count }, (_, i) => start + i * step);
 }
 
-/** A cover's stacking depth: the active one on top of the rest, the others as they lie, later over earlier. */
-export function coverDepth(index: number, count: number, activeIndex: number): number {
-  return index === activeIndex ? count : index;
+/** The spread row's length: every cover a pitch apart. */
+export function rowLength(count: number, fan: Fan): number {
+  return count <= 0 ? 0 : count * fan.cover + (count - 1) * fan.gap;
 }
 
-/**
- * Each cover's place. Folded, the covers step along by `step` and lean `tilt` alternately from the
- * first, so the stack reads as a fan, a lone cover lying flat; spread, they lie a pitch apart, upright.
- */
-export function fanLayout(count: number, spread: boolean, fan: Fan): CoverPlace[] {
-  return Array.from({ length: count }, (_, i) => {
-    if (spread) return { x: i * (fan.cover + fan.gap), angle: 0 };
-    return { x: i * fan.step, angle: count === 1 ? 0 : (i % 2 === 0 ? -fan.tilt : fan.tilt) };
-  });
-}
-
-/** The row's width, folded or spread. */
-export function fanWidth(count: number, spread: boolean, fan: Fan): number {
-  if (count <= 0) return 0;
-  return spread ? count * fan.cover + (count - 1) * fan.gap : fan.cover + (count - 1) * fan.step;
-}
-
-/** True when the spread row is wider than the box it lies in, so it scrolls sideways. */
-export function overflows(count: number, boxWidth: number, fan: Fan): boolean {
-  return fanWidth(count, true, fan) > boxWidth;
-}
-
-/** The fan's accessible name. */
+/** The pocket's accessible name. */
 export function fanLabel(count: number): string {
-  return `Switch item: ${count} ${count === 1 ? 'manual' : 'manuals'}`;
+  return `${count} ${count === 1 ? 'manual' : 'manuals'} in the room`;
 }

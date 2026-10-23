@@ -307,7 +307,7 @@ describe('a pick whose build fails (review rounds 3–6)', () => {
   });
 });
 
-describe('AC6: the manuals are the switcher (1.9.9.3)', () => {
+describe('AC6: the manuals are the switcher, in the pocket at the band\'s end (1.9.9.3, option B)', () => {
   /** JOHNNY then BLANK built from the catalog, as a player does. */
   function twoBuilt() {
     const rig = boot({ flag: '' });
@@ -316,34 +316,36 @@ describe('AC6: the manuals are the switcher (1.9.9.3)', () => {
     rig.catalog.thumb.fire('click');
     rig.turnTo(2);
     rig.buildIt.fire('click');
-    const covers = () => (rig.fan.element as unknown as FakeElement).children[0].children;
-    // A tap, as the fan reads one: down and up on a cover.
+    const [spine, row] = (rig.fan.element as unknown as FakeElement).children;
+    const covers = () => row.children;
+    // A tap, as the row reads one: down and up on a cover.
     const tap = (target: FakeElement) => {
       target.fire('pointerdown', { clientX: 5, clientY: 5 });
       target.fire('pointerup', { clientX: 5, clientY: 5, timeStamp: 40 });
     };
-    return { ...rig, covers, tap };
+    return { ...rig, spine, covers, tap };
   }
 
-  it('shows every manual, the active BLANK\'s on top, and the catalog thumb stays its own', () => {
-    const { covers, catalog, fan } = twoBuilt();
+  it("holds every manual, the active BLANK's last and on top, and the catalog thumb stays its own", () => {
+    const { covers, spine, catalog, fan } = twoBuilt();
     expect(fan.element.hidden).toBe(false);
     expect(covers().map((c) => c.dataset.id)).toEqual(['johnny', 'blank']);
     expect(covers().map((c) => c.attributes['aria-current'])).toEqual([undefined, 'true']);
+    expect(spine.children.map((edge) => edge.dataset.open)).toEqual(['false', 'true']);
     expect(catalog.thumb.dataset.corner).toBe('topLeft');
   });
 
-  it('shows the one manual with one world in the room', () => {
+  it('shows the spine from the first world on', () => {
     const rig = boot({ flag: '' });
     rig.turnTo(1);
     rig.buildIt.fire('click');
     expect(rig.fan.element.hidden).toBe(false);
-    expect((rig.fan.element as unknown as FakeElement).children[0].children.map((c) => c.dataset.id)).toEqual(['johnny']);
+    expect((rig.fan.element as unknown as FakeElement).children[0].children).toHaveLength(1);
   });
 
-  it('a tap on the stack then on JOHNNY\'s cover makes JOHNNY active and on top, builds nothing, and leaves the covers where they were', () => {
-    const { covers, tap, door, items, manuals, fan } = twoBuilt();
-    tap(covers()[0]);
+  it("a tap on the pocket then on JOHNNY's cover makes JOHNNY active, builds nothing, and folds with JOHNNY's edge on top", () => {
+    const { spine, covers, tap, door, items, manuals, fan } = twoBuilt();
+    spine.fire('click');
     expect(fan.expanded).toBe(true);
     tap(covers()[0]);
     expect(door()).toBe('johnny');
@@ -353,21 +355,22 @@ describe('AC6: the manuals are the switcher (1.9.9.3)', () => {
     expect(items.all()).toHaveLength(2);
     expect(manuals).toHaveLength(2);
     expect(fan.expanded).toBe(false);
-    expect(covers().map((c) => c.dataset.id)).toEqual(['johnny', 'blank']);
-    expect(covers().map((c) => c.attributes['aria-current'])).toEqual(['true', undefined]);
+    // The slot's order: the open one last, nearest the pocket.
+    expect(covers().map((c) => c.dataset.id)).toEqual(['blank', 'johnny']);
+    expect(covers().map((c) => c.attributes['aria-current'])).toEqual([undefined, 'true']);
   });
 
-  it('a tap on the open manual\'s own cover picks nothing and folds', () => {
-    const { covers, tap, door, fan } = twoBuilt();
-    tap(covers()[0]);
+  it("a tap on the open manual's own cover picks nothing and folds", () => {
+    const { spine, covers, tap, door, fan } = twoBuilt();
+    spine.fire('click');
     tap(covers()[1]);
     expect(door()).toBe('blank');
     expect(fan.expanded).toBe(false);
   });
 
-  it('opening the catalog folds a spread fan', () => {
-    const { covers, tap, fan, catalog } = twoBuilt();
-    tap(covers()[0]);
+  it('opening the catalog folds a spread row', () => {
+    const { spine, fan, catalog } = twoBuilt();
+    spine.fire('click');
     expect(fan.expanded).toBe(true);
     catalog.thumb.fire('click');
     expect(fan.expanded).toBe(false);

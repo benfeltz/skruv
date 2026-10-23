@@ -184,12 +184,12 @@ const catalog = createCatalogSheet({
 document.body.append(catalog.scrim, catalog.thumb, catalog.element);
 catalogPages.prerender();
 
-// The manuals are the switcher (1.9.9.3): the kept worlds' manuals as a fan across the top, the
-// active one's staying the strip along the bottom. A tap on a fan cover is a pick like the
-// catalog's; the fan never touches a kept world, it draws the cover the world handed out.
+// The manuals are the switcher (1.9.9.3, option B): every world's manual in the pocket at the band's
+// end, spread out of it as a row of covers on a tap. A tap on a cover is a pick like the catalog's;
+// the pocket never touches a kept world, it draws the cover the world handed out.
 const fan = createManualFan({ worlds: () => items.all(), nameOf: (id) => itemById(id).identity.product, onPick: (id) => pickItem(id) });
 document.body.append(fan.element);
-// An opening catalog never leaves the fan spread under its scrim.
+// An opening catalog never leaves the row spread under its scrim.
 catalog.onChange(({ expanded }) => {
   if (expanded) fan.fold();
 });
@@ -250,7 +250,7 @@ menu.add(repack.element, { onClose: repack.cancel });
 menu.add(snapRotate.element);
 cluster.add(menu.element);
 document.body.append(cluster.element);
-// The fan lies beside the cluster, which is on screen now to be measured.
+// The row reaches to the cluster, which is on screen now to be measured.
 fan.refresh();
 
 // Under sustained load the room renders every other frame; everything else runs every frame.
@@ -295,6 +295,6 @@ if (new URLSearchParams(location.search).has(TUNE.queryFlag)) {
   const panel = createTunePanel({ tunables, exportSession: session.toExportJson });
   cluster.add(panel.tab);
   document.body.append(panel.element);
-  // The gear widens the cluster: the fan moves over.
+  // The gear widens the cluster: the row's reach shrinks.
   fan.refresh();
 }

@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BOOKLET, CLUSTER, FAN, GESTURE } from '../src/constants.js';
-import { fanWidth } from '../src/game/manualFan.js';
+import { BOOKLET, BOOKLET_UI, CLUSTER, FAN, GESTURE } from '../src/constants.js';
+import { rowLength, spineEdges } from '../src/game/manualFan.js';
 import { createManualFan } from '../src/ui/manualFan.js';
 import type { FanWorld } from '../src/ui/manualFan.js';
 import { FakeElement, installFakeDom } from './support/fakeDom.js';
 import type { FakeDom } from './support/fakeDom.js';
 
-// 1.9.9.3: the manual fan on the fake DOM — hidden, folded, spread, a pick, the folds. How its swipe
-// and look feel on a phone is the manual plan.
+// 1.9.9.3, option B (Ben, 2026-10-23): the manuals' pocket on the fake DOM — the spine, the spread
+// row, a pick, the folds. How its swipe and look feel on a phone is the manual plan.
 
 let dom: FakeDom;
 const mounted: { dispose(): void }[] = [];
@@ -25,6 +25,7 @@ const source = (id: string) => {
   return sources.get(id)!;
 };
 const world = (id: string): FanWorld => ({ id, cover: () => source(id) as unknown as CanvasImageSource });
+const coverHeight = Math.round((FAN.cover * BOOKLET.pageSize[1]) / BOOKLET.pageSize[0]);
 
 function mount(ids: string[]) {
   let room = ids;
@@ -34,11 +35,14 @@ function mount(ids: string[]) {
   const element = fan.element as unknown as FakeElement;
   dom.body.append(element);
   fan.refresh();
-  const buttons = () => element.children[0].children;
+  const [spine, row] = element.children;
   return {
     fan,
     element,
-    buttons,
+    spine,
+    row,
+    covers: () => row.children,
+    edges: () => spine.children,
     picks,
     setRoom(next: string[]) {
       room = next;
@@ -52,144 +56,161 @@ const tap = (target: FakeElement, init: { dx?: number; dt?: number } = {}) => {
   target.fire('pointerup', { clientX: 100 + (init.dx ?? 0), clientY: 20, timeStamp: init.dt ?? 50 });
 };
 
-describe('what the fan shows', () => {
-  it('is hidden with no world, and shows one cover for one', () => {
+describe('the spine, at rest', () => {
+  it('is absent only in an empty room, and shows from the first world on', () => {
     expect(mount([]).element.hidden).toBe(true);
     const lone = mount(['johnny']);
     expect(lone.element.hidden).toBe(false);
-    expect(lone.buttons().map((b) => b.dataset.id)).toEqual(['johnny']);
-    expect(lone.buttons()[0].style.transform).toBe('translateX(0px) rotate(0deg)');
+    expect(lone.edges()).toHaveLength(1);
+    expect(lone.fan.expanded).toBe(false);
+    expect(lone.element.dataset.expanded).toBe('false');
   });
 
-  it('shows one labelled cover per world, the active one marked, the group counting them all', () => {
-    const { element, buttons } = mount(['johnny', 'blank', 'overkall']);
-    expect(buttons().map((b) => b.dataset.id)).toEqual(['johnny', 'blank', 'overkall']);
-    expect(buttons().map((b) => b.attributes['aria-label'])).toEqual(['Switch to JOHNNY', 'Switch to BLANK', 'OVERKALL, open']);
-    expect(buttons().map((b) => b.attributes['aria-current'])).toEqual([undefined, undefined, 'true']);
-    expect(element.attributes['aria-label']).toBe('Switch item: 3 manuals');
+  it("shows one edge per world, in the room's order, the open manual's last, on top and gold", () => {
+    const { edges, spine } = mount(['johnny', 'blank', 'overkall']);
+    expect(edges().map((e) => e.dataset.open)).toEqual(['false', 'false', 'true']);
+    // Offset across the spine (left, upright).
+    expect(edges().map((e) => e.style.left)).toEqual(spineEdges(3, BOOKLET_UI.strip.pocket, FAN).map((at) => `${at}px`));
+    expect(spine.attributes['aria-label']).toBe('3 manuals in the room');
+    expect(spine.attributes['aria-expanded']).toBe('false');
   });
 
-  it('draws each cover from that world\'s own cover', () => {
-    const { buttons } = mount(['johnny', 'blank', 'overkall']);
-    expect(buttons().map((b) => (b.children[0] as FakeElement).drawn)).toEqual([source('johnny'), source('blank'), source('overkall')]);
+  it('lays the edges down the spine (top) when the band stands on the right', () => {
+    dom.rootStyle.dataset.strip = 'right';
+    const { edges } = mount(['a', 'b']);
+    expect(edges().map((e) => e.style.top)).toEqual(spineEdges(2, BOOKLET_UI.strip.pocket, FAN).map((at) => `${at}px`));
+    expect(edges().map((e) => e.style.left)).toEqual(['', '']);
   });
 
-  it('folds covers into a tilted stack with the active one on top, one tab stop', () => {
-    const { buttons } = mount(['a', 'b', 'c']);
-    expect(buttons().map((b) => b.style.transform)).toEqual([
-      `translateX(0px) rotate(${-FAN.tilt}deg)`,
-      `translateX(${FAN.step}px) rotate(${FAN.tilt}deg)`,
-      `translateX(${2 * FAN.step}px) rotate(${-FAN.tilt}deg)`,
-    ]);
-    expect(buttons().map((b) => b.style.zIndex)).toEqual(['0', '1', '3']);
-    expect(buttons().map((b) => b.tabIndex)).toEqual([-1, -1, 0]);
+  it('keeps the band one shape: the pocket\'s CSS is the band\'s end, upright and in landscape', () => {
+    mount(['a']);
+    const css = dom.head.children.map((node) => node.textContent).join('');
+    expect(css).toContain(`width: calc(${BOOKLET_UI.strip.pocket}px + env(safe-area-inset-right));`);
+    expect(css).toContain(`height: calc(${BOOKLET_UI.strip.pocket}px + env(safe-area-inset-bottom));`);
+    // No timers, no auto-hide: two states only.
+    expect(css).not.toContain('animation');
+  });
+});
+
+describe('the row, spread', () => {
+  it("shows one labelled cover per world in the room's order, drawn from each world's own cover, the open one marked and nearest the pocket", () => {
+    const { covers, spine } = mount(['johnny', 'blank', 'overkall']);
+    spine.fire('click');
+    expect(covers().map((b) => b.dataset.id)).toEqual(['johnny', 'blank', 'overkall']);
+    expect(covers().map((b) => b.attributes['aria-label'])).toEqual(['Switch to JOHNNY', 'Switch to BLANK', 'OVERKALL, open']);
+    expect(covers().map((b) => b.attributes['aria-current'])).toEqual([undefined, undefined, 'true']);
+    expect(covers().map((b) => (b.children[0] as FakeElement).drawn)).toEqual([source('johnny'), source('blank'), source('overkall')]);
   });
 
-  it('does not re-arrange the covers when another world goes active: only the one on top changes', () => {
-    const { buttons, setRoom } = mount(['johnny', 'blank']);
-    expect(buttons().map((b) => b.style.zIndex)).toEqual(['0', '2']);
-    // The slot puts the picked world last.
+  it('a tap on the spine spreads it, picks nothing, and focuses the open manual\'s cover; a second folds', () => {
+    const { fan, element, spine, covers, picks } = mount(['a', 'b', 'c']);
+    spine.fire('click');
+    expect(fan.expanded).toBe(true);
+    expect(spine.attributes['aria-expanded']).toBe('true');
+    expect(element.dataset.expanded).toBe('true');
+    expect(picks).toEqual([]);
+    expect(dom.focused).toBe(covers()[2]);
+    spine.fire('click');
+    expect(fan.expanded).toBe(false);
+  });
+
+  it('follows the slot: the picked world goes last, nearest the pocket, its edge on top', () => {
+    const { covers, edges, setRoom } = mount(['johnny', 'blank']);
     setRoom(['blank', 'johnny']);
-    expect(buttons().map((b) => b.dataset.id)).toEqual(['johnny', 'blank']);
-    expect(buttons().map((b) => b.style.zIndex)).toEqual(['2', '1']);
-    expect(buttons().map((b) => b.attributes['aria-current'])).toEqual(['true', undefined]);
+    expect(covers().map((b) => b.dataset.id)).toEqual(['blank', 'johnny']);
+    expect(covers().map((b) => b.attributes['aria-current'])).toEqual([undefined, 'true']);
+    expect(edges().map((e) => e.dataset.open)).toEqual(['false', 'true']);
   });
 
-  it('adds a new world\'s cover at the end, and drops a cleared one', () => {
-    const { buttons, setRoom, element } = mount(['a', 'b']);
+  it("adds a new world's cover and edge, and drops a cleared one", () => {
+    const { covers, edges, setRoom, element } = mount(['a', 'b']);
     setRoom(['a', 'b', 'c']);
-    expect(buttons().map((b) => b.dataset.id)).toEqual(['a', 'b', 'c']);
+    expect(covers().map((b) => b.dataset.id)).toEqual(['a', 'b', 'c']);
+    expect(edges()).toHaveLength(3);
     setRoom([]);
-    expect(buttons()).toHaveLength(0);
+    expect(covers()).toHaveLength(0);
+    expect(edges()).toHaveLength(0);
     expect(element.hidden).toBe(true);
   });
 });
 
-describe('spreading and picking', () => {
-  it('spreads on a tap on the folded stack, picks nothing, and focuses the open manual\'s cover', () => {
-    const { fan, element, buttons, picks } = mount(['a', 'b', 'c']);
-    tap(buttons()[1]);
-    expect(fan.expanded).toBe(true);
-    expect(element.attributes['aria-expanded']).toBe('true');
-    expect(element.dataset.expanded).toBe('true');
-    expect(picks).toEqual([]);
-    expect(dom.focused).toBe(buttons()[2]);
-    const pitch = FAN.cover + FAN.gap;
-    expect(buttons().map((b) => b.style.transform)).toEqual(['translateX(0px) rotate(0deg)', `translateX(${pitch}px) rotate(0deg)`, `translateX(${2 * pitch}px) rotate(0deg)`]);
-  });
-
+describe('picking', () => {
   it('picks the tapped cover once and folds', () => {
-    const { fan, element, buttons, picks } = mount(['a', 'b', 'c']);
-    tap(buttons()[0]);
-    tap(buttons()[1]);
+    const { fan, spine, covers, picks } = mount(['a', 'b', 'c']);
+    spine.fire('click');
+    tap(covers()[1]);
     expect(picks).toEqual(['b']);
     expect(fan.expanded).toBe(false);
-    expect(element.attributes['aria-expanded']).toBe('false');
+    expect(spine.attributes['aria-expanded']).toBe('false');
   });
 
-  it('a tap on the open manual\'s own cover only folds', () => {
-    const { fan, buttons, picks } = mount(['a', 'b', 'c']);
-    tap(buttons()[0]);
-    tap(buttons()[2]);
+  it("a tap on the open manual's own cover only folds", () => {
+    const { fan, spine, covers, picks } = mount(['a', 'b', 'c']);
+    spine.fire('click');
+    tap(covers()[2]);
     expect(picks).toEqual([]);
     expect(fan.expanded).toBe(false);
   });
 
-  it('picks nothing after a swipe, and stays spread', () => {
-    const { fan, buttons, picks } = mount(['a', 'b', 'c']);
-    tap(buttons()[0]);
-    tap(buttons()[1], { dx: GESTURE.tapMaxDistance + 1 });
+  it('picks nothing after a swipe or a long press, and stays spread', () => {
+    const { fan, spine, covers, picks } = mount(['a', 'b', 'c']);
+    spine.fire('click');
+    tap(covers()[1], { dx: GESTURE.tapMaxDistance + 1 });
+    tap(covers()[1], { dt: GESTURE.tapMaxMs + 1 });
     expect(picks).toEqual([]);
     expect(fan.expanded).toBe(true);
-  });
-
-  it('does not spread on a swipe or a long press', () => {
-    const { fan, buttons } = mount(['a', 'b']);
-    tap(buttons()[0], { dx: GESTURE.tapMaxDistance + 1 });
-    tap(buttons()[0], { dt: GESTURE.tapMaxMs + 1 });
-    expect(fan.expanded).toBe(false);
   });
 
   it('drops a press the browser cancelled for a scroll', () => {
-    const { fan, buttons } = mount(['a', 'b']);
-    buttons()[0].fire('pointerdown', { clientX: 100, clientY: 20 });
-    buttons()[0].fire('pointercancel');
-    buttons()[0].fire('pointerup', { clientX: 100, clientY: 20, timeStamp: 10 });
-    expect(fan.expanded).toBe(false);
+    const { spine, covers, picks } = mount(['a', 'b']);
+    spine.fire('click');
+    covers()[0].fire('pointerdown', { clientX: 100, clientY: 20 });
+    covers()[0].fire('pointercancel');
+    covers()[0].fire('pointerup', { clientX: 100, clientY: 20, timeStamp: 10 });
+    expect(picks).toEqual([]);
   });
 
-  it('spreads and picks from the keyboard (a click with no pointer)', () => {
-    const { fan, buttons, picks } = mount(['a', 'b', 'c']);
-    buttons()[2].fire('click', { detail: 0 });
-    expect(fan.expanded).toBe(true);
-    buttons()[1].fire('click', { detail: 0 });
+  it('picks nothing while folded', () => {
+    const { covers, picks } = mount(['a', 'b']);
+    tap(covers()[0]);
+    expect(picks).toEqual([]);
+  });
+
+  it('picks from the keyboard (a click with no pointer), and not twice for a pointer', () => {
+    const { spine, covers, picks } = mount(['a', 'b', 'c']);
+    spine.fire('click');
+    covers()[1].fire('click', { detail: 0 });
     expect(picks).toEqual(['b']);
+    spine.fire('click');
     // A pointer's own click follows its pointerup and is not a second tap.
-    buttons()[0].fire('click', { detail: 1 });
+    covers()[0].fire('click', { detail: 1 });
     expect(picks).toEqual(['b']);
   });
 });
 
 describe('folding', () => {
-  it('folds on Escape while spread', () => {
-    const { fan, buttons } = mount(['a', 'b']);
-    tap(buttons()[0]);
+  it('folds on Escape while spread, focus back on the spine', () => {
+    const { fan, spine, covers } = mount(['a', 'b']);
+    spine.fire('click');
+    covers()[1].focus();
+    vi.stubGlobal('document', { ...document, activeElement: covers()[1] });
     dom.key('Escape');
     expect(fan.expanded).toBe(false);
+    expect(dom.focused).toBe(spine);
   });
 
   it('folds on a pointer down outside, not inside', () => {
-    const { fan, buttons } = mount(['a', 'b', 'c']);
-    tap(buttons()[0]);
-    buttons()[1].fire('pointerdown');
+    const { fan, spine, covers } = mount(['a', 'b', 'c']);
+    spine.fire('click');
+    covers()[1].fire('pointerdown');
     expect(fan.expanded).toBe(true);
     dom.body.fire('pointerdown');
     expect(fan.expanded).toBe(false);
   });
 
   it('fold() puts it away, and does nothing folded', () => {
-    const { fan, buttons } = mount(['a', 'b']);
-    tap(buttons()[0]);
+    const { fan, spine } = mount(['a', 'b']);
+    spine.fire('click');
     fan.fold();
     expect(fan.expanded).toBe(false);
     fan.fold();
@@ -197,69 +218,67 @@ describe('folding', () => {
   });
 });
 
-describe('where it lies', () => {
-  // Portrait 390 wide: the menu upper left, the band along the bottom.
-  function measure() {
+describe('where the row lies', () => {
+  function cluster(rect: FakeElement['rect']) {
+    const element = new FakeElement('div', dom as never);
+    element.className = 'control-cluster';
+    element.rect = rect;
+    dom.body.append(element);
+    return element;
+  }
+
+  it('upright: right above the pocket, against the right edge, as long as its covers', () => {
     dom.viewport.width = 390;
     dom.viewport.height = 760;
-    const cluster = new FakeElement('div', dom as never);
-    cluster.className = 'control-cluster';
-    cluster.rect = { left: CLUSTER.inset, top: CLUSTER.inset, width: 44, height: 44 };
-    const strip = new FakeElement('div', dom as never);
-    strip.className = 'booklet-strip';
-    strip.rect = { left: 0, top: 636, width: 390, height: 124 };
-    dom.body.append(cluster, strip);
-    return { cluster, strip };
-  }
-  const edge = 390 - CLUSTER.inset;
-
-  it('lies right above the band against the right edge, as wide as the stack folded', () => {
-    const { strip } = measure();
-    const { element } = mount(['a', 'b', 'c']);
-    const width = fanWidth(3, false, FAN);
-    expect(element.style.width).toBe(`${width}px`);
-    expect(element.style.left).toBe(`${edge - width}px`);
-    expect(Number(element.style.top.replace('px', '')) + Math.round((FAN.cover * BOOKLET.pageSize[1]) / BOOKLET.pageSize[0])).toBe(strip.rect.top - FAN.inset);
+    cluster({ left: CLUSTER.inset, top: CLUSTER.inset, width: 44, height: 44 });
+    const { spine, row } = mount(['a', 'b', 'c']);
+    spine.rect = { left: 390 - 26, top: 760 - 142, width: 26, height: 142 };
+    spine.fire('click');
+    const width = rowLength(3, FAN);
+    expect(row.style.width).toBe(`${width}px`);
+    expect(row.style.left).toBe(`${390 - CLUSTER.inset - width}px`);
+    expect(Number(row.style.top.replace('px', '')) + coverHeight).toBe(spine.rect.top - FAN.inset);
   });
 
-  it('spreads leftward, held between the cluster and the edge when the row is wider, and re-measures on resize', () => {
-    const { cluster } = measure();
-    const { element, buttons } = mount(['a', 'b', 'c', 'd', 'e', 'f']);
-    tap(buttons()[0]);
-    const start = cluster.rect.left + cluster.rect.width + FAN.inset;
-    const room = edge - start;
-    expect(fanWidth(6, true, FAN)).toBeGreaterThan(room);
-    expect(element.style.width).toBe(`${room}px`);
-    expect(element.style.left).toBe(`${start}px`);
-    cluster.rect = { ...cluster.rect, width: 44 + 52 };
+  it('is held between the cluster and the edge when the row is longer, and re-measures on resize', () => {
+    dom.viewport.width = 390;
+    dom.viewport.height = 760;
+    const menu = cluster({ left: CLUSTER.inset, top: CLUSTER.inset, width: 44, height: 44 });
+    const { spine, row } = mount(['a', 'b', 'c', 'd', 'e', 'f']);
+    spine.rect = { left: 390 - 26, top: 760 - 142, width: 26, height: 142 };
+    spine.fire('click');
+    const start = CLUSTER.inset + 44 + FAN.inset;
+    const room = 390 - CLUSTER.inset - start;
+    expect(rowLength(6, FAN)).toBeGreaterThan(room);
+    expect(row.style.width).toBe(`${room}px`);
+    expect(row.style.left).toBe(`${start}px`);
+    menu.rect = { ...menu.rect, width: 44 + 52 };
     dom.windowListeners.get('resize')?.forEach((fn) => fn({}));
-    expect(element.style.width).toBe(`${room - 52}px`);
+    expect(row.style.width).toBe(`${room - 52}px`);
   });
 
-  it('lies against a band down the right edge, and follows it on a turn end over end with no resize', () => {
+  it('in landscape runs leftward from the band at the foot, and follows it on a turn end over end with no resize', () => {
     dom.viewport.width = 932;
     dom.viewport.height = 376;
-    const cluster = new FakeElement('div', dom as never);
-    cluster.className = 'control-cluster';
-    cluster.rect = { left: 59 + CLUSTER.inset, top: CLUSTER.inset, width: 44, height: 100 };
-    const strip = new FakeElement('div', dom as never);
-    strip.className = 'booklet-strip';
-    strip.rect = { left: 932 - 59 - 124, top: 0, width: 124, height: 376 };
-    dom.body.append(cluster, strip);
-    const { element } = mount(['a', 'b']);
-    const width = fanWidth(2, false, FAN);
-    expect(element.style.left).toBe(`${strip.rect.left - FAN.inset - width}px`);
+    dom.rootStyle.dataset.strip = 'right';
+    cluster({ left: 59 + CLUSTER.inset, top: CLUSTER.inset, width: 44, height: 100 });
+    const { spine, row } = mount(['a', 'b']);
+    spine.rect = { left: 932 - 59 - 114, top: 376 - 26, width: 114, height: 26 };
+    spine.fire('click');
+    const width = rowLength(2, FAN);
+    expect(row.style.left).toBe(`${spine.rect.left - FAN.inset - width}px`);
+    expect(Number(row.style.top.replace('px', '')) + coverHeight).toBe(376 - CLUSTER.inset);
     // The notch moves to the other side: the band follows it through CSS, the window's size unchanged.
-    strip.rect = { ...strip.rect, left: 932 - 124 };
+    spine.rect = { ...spine.rect, left: 932 - 114 };
     dom.rotate();
-    expect(element.style.left).toBe(`${strip.rect.left - FAN.inset - width}px`);
+    expect(row.style.left).toBe(`${spine.rect.left - FAN.inset - width}px`);
   });
 });
 
 describe('dispose', () => {
   it('removes the element and the window and document listeners', () => {
-    const { fan, element, buttons } = mount(['a', 'b']);
-    tap(buttons()[0]);
+    const { fan, element, spine } = mount(['a', 'b']);
+    spine.fire('click');
     fan.dispose();
     expect(element.parent).toBeNull();
     for (const type of ['keydown', 'resize']) expect(dom.windowListeners.get(type)).toEqual([]);

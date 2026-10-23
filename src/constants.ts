@@ -1129,12 +1129,14 @@ export const TUNE = {
   fpsMaxGap: 1,
 };
 
-// The manual fan (src/ui/manualFan.ts, src/game/manualFan.ts): every world's manual as a fanned stack
-// docked against the manual's strip — above it upright, beside it in landscape — (CSS px; tilt in
-// degrees). `cover` is a cover's width (its height follows BOOKLET.pageSize), `step` the offset between
-// folded covers, `gap` the space between spread ones, `tilt` the folded covers' lean, alternating,
-// `inset` the space kept to the strip and the cluster, `motionMs` the fold and spread.
-export const FAN = { cover: 56, step: 14, gap: 8, tilt: 5, inset: 12, motionMs: 160 };
+// The manuals' pocket (src/ui/manualFan.ts, src/game/manualFan.ts; Ben, 2026-10-23): every world's
+// manual in the band's far end (BOOKLET_UI.strip.pocket), a spine of cover edges at rest, a row of
+// covers spread out of it on a tap (CSS px). `cover` is a cover's width (its height follows
+// BOOKLET.pageSize), `gap` the space between spread covers, `inset` the space kept between the row and
+// the band and the cluster, `edge` a cover's edge in the spine, `edgeStep` the offset between edges
+// and `edgePad` the least room kept at the spine's sides, `rise` how far the row travels into the band
+// as it folds, `motionMs` the fold and spread.
+export const FAN = { cover: 56, gap: 8, inset: 12, edge: 12, edgeStep: 4, edgePad: 4, rise: 24, motionMs: 200 };
 
 // The room's save (src/game/roomStore.ts): the one key it is written under, and how long after the last
 // change the write waits, so a run of seats and releases is one write. The page going to the
