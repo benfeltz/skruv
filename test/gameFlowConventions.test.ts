@@ -127,7 +127,7 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
     expect(booklet).toMatch(/open: startsOpen = true/);
     expect(booklet).toMatch(/let page = 0;\s*let open = startsOpen;/);
     expect(main).toMatch(/createCatalogSheet\(\{\s*pages: catalogPages,\s*open: true,/);
-    expect(world).toMatch(/createBookletSheet\(\{ pages: bookletPages, open: false, docked: 'strip', blocking: false \}\)/);
+    expect(world).toMatch(/createBookletSheet\(\{ pages: bookletPages, title: IDENTITY\.product, open: false, docked: 'strip', blocking: false \}\)/);
     // After BUILD IT, focus lands on the manual's strip, never the catalog thumb behind it.
     expect(main).toMatch(/catalog\.setOpen\(false\);\s*\/\/[^\n]*\n\s*world\.booklet\.focus\(\);/);
   });
@@ -263,8 +263,9 @@ describe("the manual's band shrinks the room's view (1.9.7.1.2)", () => {
     expect(cluster).toContain('env(safe-area-inset-left)');
     expect(cluster).not.toContain('--rail-x');
     expect(read('src/ui/liftLine.ts')).not.toContain('--rail-x');
-    // The cluster is always upper left, so the drop always opens rightward, into the room.
-    expect(read('src/ui/menuButton.ts')).not.toContain('data-strip');
+    // The cluster is always upper left: the drop opens down from it upright, and to its right in landscape,
+    // where the lift line hangs under the menu (Ben, 2026-10-23).
+    expect(read('src/ui/menuButton.ts')).toContain("html[data-strip='right'] .menu-drop {\n      top: 0;\n      left: calc(100% + ");
   });
 
   it('has no arrow buttons on the strip: it is dragged, tapped and keyed', () => {
@@ -289,7 +290,7 @@ describe("the room's save wiring (1.9.9.5)", () => {
   });
 
   it('saves after a pick', () => {
-    expect(main).toMatch(/onPick: \(id\) => \{[^}]*saver\.changed\(\);/);
+    expect(main).toMatch(/function pickItem\(id: string\) \{[^}]*saver\.changed\(\);/);
   });
 });
 
@@ -340,7 +341,8 @@ describe('the room of several worlds (1.9.9.2)', () => {
 
   it('a world is adopted where it is built, once: not in onPick, not in the restore loop', () => {
     expect(build).toMatch(/adopt\(world\);/);
-    const onPick = main.slice(main.indexOf('onPick: (id) => {'), main.indexOf('document.body.append(catalog.scrim'));
+    const onPick = main.slice(main.indexOf('function pickItem('), main.indexOf('// The restore (src/game/roomRestore.ts)'));
+    expect(onPick).toMatch(/items\.pick\(id\)/);
     expect(onPick).not.toMatch(/adopt\(/);
     const restore = main.slice(main.indexOf('for (const record of plan.items)'), main.indexOf('cameraControls.frame(plan.world.camera)'));
     expect(restore).not.toMatch(/adopt\(/);
@@ -365,5 +367,27 @@ describe('the room of several worlds (1.9.9.2)', () => {
     expect(main).not.toMatch(/capacity/);
     expect(read('src/game/roomRestore.ts')).not.toMatch(/capacity/);
     expect(main).toMatch(/for \(const record of plan\.items\) items\.pick\(record\.id\)\.restore\(record\);/);
+  });
+});
+
+describe('the manuals are the switcher (1.9.9.3)', () => {
+  it('the catalog and the fan share one pick path, the slot\'s, with the focus and the save', () => {
+    expect(main.match(/items\.pick\(id\)/g)).toHaveLength(1);
+    expect(main).toMatch(/function pickItem\(id: string\) \{\s*const world = items\.pick\(id\);\s*catalog\.setOpen\(false\);\s*\/\/[^\n]*\n\s*world\.booklet\.focus\(\);\s*saver\.changed\(\);\s*fan\.refresh\(\);/);
+    expect(main.match(/onPick: \(id\) => pickItem\(id\)/g)).toHaveLength(2);
+  });
+
+  it('the fan is mounted, refreshed after the restore and the clear, and folded when the catalog opens', () => {
+    expect(main).toMatch(/createManualFan\(\{ worlds: \(\) => items\.all\(\)/);
+    expect(main).toMatch(/document\.body\.append\(fan\.element\)/);
+    expect(main).toMatch(/catalog\.setOpen\(false\);\n\s+fan\.refresh\(\);/);
+    expect(main).toMatch(/items\.clear\(\);\n\s+carried = \[\];\n\s+fan\.refresh\(\);/);
+    expect(main).toMatch(/catalog\.onChange\(\(\{ expanded \}\) => \{\s*if \(expanded\) fan\.fold\(\);/);
+  });
+
+  it('the fan never touches a world beyond its cover and the slot\'s pick', () => {
+    const fan = read('src/ui/manualFan.ts');
+    expect(fan).not.toMatch(/\.(activate|deactivate|setShown|dispose)\(\)|from '\.\.\/scene/);
+    expect(fan).not.toMatch(/\.pick\(/);
   });
 });

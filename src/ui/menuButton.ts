@@ -2,8 +2,8 @@ import { COLORS, MENU } from '../constants.js';
 
 // The src/ui pattern: a module builds its own element with plain DOM calls, owns the
 // <style> it needs (injected once), takes colours from COLORS, and returns a small API.
-// The menu button: a hamburger that opens a drop under it holding the controls added to it
-// (Repack and Snap rotate, in the game). The caller decides where to mount it (the control
+// The menu button: a hamburger that opens a card hung from it holding the controls added to it
+// as rows (Repack and Snap rotate, in the game). The caller decides where to mount it (the control
 // cluster); the drop is placed against the button's own wrapper.
 
 const STYLE_ID = 'skruv-menu-button';
@@ -38,22 +38,63 @@ function injectStyle() {
       outline: 2px solid ${css(COLORS.uiAccent)};
       outline-offset: 3px;
     }
-    /* Stacks within the control cluster, which sits above the manual's pages. */
+    /* One card hung from the button, its left edge on the button's: downward upright; to the right in
+       landscape, where the lift line hangs under the menu, so it never covers it (Ben, 2026-10-23).
+       Stacks within the control cluster, which sits above the manual's pages. */
     .menu-drop {
       position: absolute;
       top: calc(100% + ${MENU.drop.gap}px);
       left: 0;
+      width: ${MENU.drop.width}px;
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      gap: ${MENU.drop.gap}px;
-      padding: ${MENU.drop.pad}px;
+      overflow: hidden;
+      border: 2px solid ${css(COLORS.uiText)}33;
       border-radius: ${MENU.drop.radius}px;
-      background: ${css(COLORS.uiSurface)}e6;
+      background: ${css(COLORS.uiSurface)}f0;
     }
-    /* The cluster is always on the screen's left (src/ui/controlCluster.ts): the drop opens rightward, into the room. */
+    html[data-strip='right'] .menu-drop {
+      top: 0;
+      left: calc(100% + ${MENU.drop.gap}px);
+    }
     .menu-drop[hidden] {
       display: none;
+    }
+    /* Each control a full-width row of the card, a divider between: no pill of its own. */
+    .menu-drop .reset-button, .menu-drop .toggle-button {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      min-height: ${MENU.drop.row}px;
+      padding: 0 ${MENU.drop.pad}px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: ${css(COLORS.uiText)};
+      text-align: left;
+    }
+    .menu-drop > * + * {
+      border-top: 1px solid ${css(COLORS.uiText)}24;
+    }
+    /* Repack's hold fills the row from its left edge. */
+    .menu-drop .reset-button { position: relative; }
+    .menu-drop .reset-fill { position: absolute; left: 0; top: 0; bottom: 0; margin: 0; }
+    /* Snap rotate is a switch: a track at the row's end, gold when on. */
+    .menu-drop .toggle-button::after {
+      content: '';
+      flex: none;
+      width: ${MENU.drop.track.width}px;
+      height: ${MENU.drop.track.height}px;
+      border-radius: ${MENU.drop.track.height / 2}px;
+      background: radial-gradient(circle at ${MENU.drop.track.height / 2}px 50%, ${css(COLORS.uiText)} 0 ${MENU.drop.track.height / 2 - 2}px, transparent ${MENU.drop.track.height / 2 - 1}px), ${css(COLORS.uiText)}40;
+    }
+    .menu-drop .toggle-button[aria-pressed='true'] {
+      color: ${css(COLORS.uiText)};
+    }
+    .menu-drop .toggle-button[aria-pressed='true']::after {
+      background: radial-gradient(circle at ${MENU.drop.track.width - MENU.drop.track.height / 2}px 50%, ${css(COLORS.uiText)} 0 ${MENU.drop.track.height / 2 - 2}px, transparent ${MENU.drop.track.height / 2 - 1}px), ${css(COLORS.uiAccent)};
     }
   `;
   document.head.append(style);

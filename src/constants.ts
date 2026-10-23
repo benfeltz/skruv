@@ -448,8 +448,8 @@ export const BOOKLET_UI = {
   page: { shadow: '0 12px 40px #0008', gutter: 12, growMs: 220, radius: 6 },
   // The manual's docked strip (src/ui/booklet.ts `docked: 'strip'`, laid out by
   // src/game/carouselModel.ts): a band edge to edge along the bottom of the screen in portrait
-  // (its height `page` x pageH / pageW plus two `page.gutter`s: 124 px) and down the right edge
-  // in landscape (its width `page` plus two gutters: 96 px). Every page in it is `page` CSS px
+  // (its height `page` x pageH / pageW plus two `page.gutter`s and the name row: 142 px) and down the
+  // right edge in landscape (its width `page` plus two gutters and the name row: 114 px). Every page in it is `page` CSS px
   // wide, the centre one current and told by its gold border; the band shows as many as its
   // long side takes (an odd count) plus hidden slots, one for every page, drawn when they
   // come into view, so a drag shows the next page arriving from under the edge and never empty paper
@@ -459,7 +459,14 @@ export const BOOKLET_UI = {
   // pops open (a touch that moves past the tap distance first is a drag, never a peek).
   // `openGap` is the space between the band and the open page above it in portrait.
   // A slot's corner `radius` (px) and `shadow`.
+  // `name` is the open manual's name (Ben, 2026-10-23): a row of its own along the band's view side,
+  // `row` px deep (above the pages upright, beside them down the right edge), in `size` px bold type
+  // spaced `tracking` em; the band is that much thicker (142 px upright, 114 px down the right).
+  // `pocket` is the band's far end (px along it) kept for the manuals' pocket (src/ui/manualFan.ts):
+  // the right end upright, the foot down the right edge; the pages never run under it.
   strip: {
+    name: { row: 18, size: 12, tracking: 0.04 },
+    pocket: 26,
     page: 72,
     gap: 8,
     openGap: 12,
@@ -689,12 +696,13 @@ export const CLUSTER = {
 };
 
 // The menu button (src/ui/menuButton.ts): a hamburger holding Repack and Snap rotate. Its
-// square size and glyph size, and the drop under it: the gap below the button, the padding
-// inside the drop and its corner radius (CSS pixels).
+// square size and glyph size, and the drop hung from it — one card of full-width rows (Ben,
+// 2026-10-23): the gap to the button, the card's width and corner radius, a row's height and
+// side padding, and the Snap rotate switch's track (CSS pixels).
 export const MENU = {
   size: 44,
   glyph: 22,
-  drop: { gap: 8, pad: 8, radius: 18 },
+  drop: { gap: 8, width: 168, radius: 14, row: 48, pad: 16, track: { width: 34, height: 20 } },
 };
 
 // Repack and recovery (src/ui/resetButton.ts, src/main.ts).
@@ -1120,6 +1128,15 @@ export const TUNE = {
   // in progress is dropped rather than read as a frame rate near zero.
   fpsMaxGap: 1,
 };
+
+// The manuals' pocket (src/ui/manualFan.ts, src/game/manualFan.ts; Ben, 2026-10-23): every world's
+// manual in the band's far end (BOOKLET_UI.strip.pocket), a spine of cover edges at rest, a row of
+// covers spread out of it on a tap (CSS px). `cover` is a cover's width (its height follows
+// BOOKLET.pageSize), `gap` the space between spread covers, `inset` the space kept between the row and
+// the band and the cluster, `edge` a cover's edge in the spine, `edgeStep` the offset between edges
+// and `edgePad` the least room kept at the spine's sides, `rise` how far the row travels into the band
+// as it folds, `motionMs` the fold and spread.
+export const FAN = { cover: 56, gap: 8, inset: 12, edge: 12, edgeStep: 4, edgePad: 4, rise: 24, motionMs: 200 };
 
 // The room's save (src/game/roomStore.ts): the one key it is written under, and how long after the last
 // change the write waits, so a run of seats and releases is one write. The page going to the

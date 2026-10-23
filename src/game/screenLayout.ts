@@ -50,3 +50,36 @@ export function liftLineBox({ viewport, cluster, strip, hitWidth, knobRadius, ga
   const bottom = floor - gap - knobRadius;
   return bottom > top ? { left, top, right, bottom } : null;
 }
+
+/** What the manuals' row is placed from. */
+export interface FanBoxInput {
+  /** The viewport's size. */
+  viewport: { width: number; height: number };
+  /** The control cluster (the menu, and the ?tune gear when shown): the row stays a gap clear of its right edge, so of the lift line under the menu. */
+  cluster: Rect;
+  /** The pocket at the band's end, or null when it is not on screen (the row then lies at the screen's lower right). */
+  pocket: Rect | null;
+  /** Which edge the band stands on: the bottom upright, the right in landscape. */
+  band: 'bottom' | 'right';
+  /** The row's height. */
+  height: number;
+  /** The space kept between the row and the band, and the cluster. */
+  gap: number;
+  /** The space kept to the viewport's edges. */
+  margin: number;
+}
+
+/**
+ * The manuals' row, spread out of the pocket (1.9.9.3, option B): upright (the band along the bottom)
+ * it stands right above the band, a gap clear, its end over the pocket against the right edge; in
+ * landscape (the band down the right edge) it runs leftward into the room from the band's left edge,
+ * a gap clear, level with the pocket at the screen's foot. It reaches left to a gap past the cluster's
+ * right edge, clear of the lift line. Never narrower than nothing, so a crowded screen leaves an empty
+ * box rather than an inverted one.
+ */
+export function fanBox({ viewport, cluster, pocket, band, height, gap, margin }: FanBoxInput): Rect {
+  const left = cluster.right + gap;
+  const edge = pocket !== null && band === 'right' ? pocket.left - gap : viewport.width - margin;
+  const foot = pocket !== null && band === 'bottom' ? pocket.top - gap : viewport.height - margin;
+  return { left, top: foot - height, right: Math.max(left, edge), bottom: foot };
+}
