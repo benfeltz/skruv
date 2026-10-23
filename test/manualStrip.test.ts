@@ -256,15 +256,15 @@ describe('the band, by orientation', () => {
     expect(strip.rule).toBe(INSET.ring.width);
   });
 
-  it("puts the catalog's thumb at the top of the screen in the room beside the band, a gutter clear of it, and leaves the band's lane the whole height", () => {
+  it("puts the catalog's thumb in the control cluster's row, past the menu, and leaves the band's lane the whole height", () => {
     mountStrip();
     const css = rules();
-    const beside = bandRight + page.gutter;
-    expect(css).toContain(`html[data-strip='right'] .booklet-thumb[data-corner='topLeft'] {\n      left: auto;\n      right: calc(${beside}px + env(safe-area-inset-right));`);
+    // Ben, 2026-10-22: beside the menu from the first load on (the fan takes the strip's side), in both orientations.
+    expect(css).toContain(`.booklet-thumb[data-corner='topLeft'] {\n      top: calc(${CLUSTER.inset}px + env(safe-area-inset-top));\n      bottom: auto;\n      right: auto;\n      left: calc(${CLUSTER.inset + MENU.size + CLUSTER.gap}px + env(safe-area-inset-left));`);
+    // Past the ?tune gear where it stands beside the menu.
+    expect(css).toContain(`html[data-tune='true']:not([data-strip='right']) .booklet-thumb[data-corner='topLeft'] {\n      left: calc(${CLUSTER.inset + 2 * (MENU.size + CLUSTER.gap)}px + env(safe-area-inset-left));`);
+    expect(css).not.toContain("html[data-strip='right'] .booklet-thumb");
     expect(css).not.toContain("html[data-strip='left']");
-    // Ben, 2026-10-18: the upper right from the first load on (the menu and the lift line have the left,
-    // for the left thumb), so nothing swaps sides when a model is picked.
-    expect(css).toContain(`.booklet-thumb[data-corner='topLeft'] {\n      top: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-top));\n      bottom: auto;\n      left: auto;\n      right: calc(${BOOKLET_UI.cornerInset}px + env(safe-area-inset-right));`);
     expect(css).not.toContain("html[data-strip='bottom']");
     expect(css).not.toContain('margin-top');
     // Over the band (z-index 0), under the scrim.
