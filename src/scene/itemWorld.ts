@@ -223,6 +223,9 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   // The page on view's parts glow — the centre page, open or not, or a side page while it is held peeked — the player's own set only,
   // never the box and its lid. A page with no parts (cover, inventory, controls) lights none.
   const playerParts = parts.filter((part) => part !== flatpack.base && part !== flatpack.lid);
+  // Every body's half-size, read off the pack while the door names this world's item: a kept
+  // world's footprint is asked for after the door has turned.
+  const halfOf = new Map(parts.map(({ type, body }) => [body, PART_TYPES[type].size.map((d) => d / 2) as Vec3]));
   const highlight = createHighlight(playerParts);
   const light = (page: number) => {
     const shown = bookletPages.pages[page];
@@ -487,12 +490,16 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
     booklet,
     pickDistance,
     repack,
-    /** Where the world stands on the floor: its box, lid and every player part, padded. */
+    /** Where the world stands on the floor: its box, lid and every player part, each its whole turned box, padded. */
     footprint(): Footprint {
-      return footprintOf([flatpack.base, flatpack.lid, ...playerParts].map(({ body }) => {
-        const { x, y, z } = body.translation();
-        return [x, y, z] satisfies Vec3;
-      }), LAYOUT.pad);
+      return footprintOf(
+        parts.map(({ body }) => {
+          const { x, y, z } = body.translation();
+          const { x: qx, y: qy, z: qz, w } = body.rotation();
+          return { position: [x, y, z], rotation: [qx, qy, qz, w], half: halfOf.get(body)! };
+        }),
+        LAYOUT.pad,
+      );
     },
     /** Makes it kept: lets go of any hold and gesture, and puts every overlay and the strip away. Idempotent. */
     deactivate() {

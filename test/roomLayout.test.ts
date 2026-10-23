@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { BOX, CAMERA, LAYOUT, ROOM } from '../src/constants.js';
-import { boxPlacement, packedBox } from '../src/game/boxLayout.js';
+import { baseRest, boxPlacement, createPackedWorldLayout, lidRest, packedBox } from '../src/game/boxLayout.js';
+import { ITEM_IDS, PART_TYPES, setItem } from '../src/game/item.js';
+import type { Pose, Vec3 } from '../tools/validate/lib/geometry.js';
 import { boxFootprintSize, footprintOf, framedAt, freeSpot, nearest, spots } from '../src/game/roomLayout.js';
 import type { Footprint } from '../src/game/roomLayout.js';
 
@@ -10,10 +12,53 @@ const SMALL: [number, number] = [0.6, 0.5];
 const at = (x: number, z: number) => ({ position: [x, 0, z] as [number, number, number], rotation: boxPlacement().rotation });
 const around = (x: number, z: number, size = SMALL): Footprint => [x - size[0] / 2 - LAYOUT.pad, z - size[1] / 2 - LAYOUT.pad, x + size[0] / 2 + LAYOUT.pad, z + size[1] / 2 + LAYOUT.pad];
 
+const IDENTITY: [number, number, number, number] = [0, 0, 0, 1];
+const point = (x: number, y: number, z: number) => ({ position: [x, y, z] as Vec3, rotation: IDENTITY, half: [0, 0, 0] as Vec3 });
+
 describe('footprintOf', () => {
-  it('is the bounds of the positions grown by the pad', () => {
-    expect(footprintOf([[0, 1, 0], [2, 0, -1], [1, 5, 3]], 0.5)).toEqual([-0.5, -1.5, 2.5, 3.5]);
+  it('is the bounds of the bodies grown by the pad', () => {
+    expect(footprintOf([point(0, 1, 0), point(2, 0, -1), point(1, 5, 3)], 0.5)).toEqual([-0.5, -1.5, 2.5, 3.5]);
   });
+
+  it("covers each body's whole box, turned, not just its centre", () => {
+    // A 2 × 0.4 board, its length turned onto z by a quarter turn about y.
+    const board = { position: [1, 0, 0] as Vec3, rotation: [0, Math.SQRT1_2, 0, Math.SQRT1_2] as [number, number, number, number], half: [1, 0.1, 0.2] as Vec3 };
+    const [minX, minZ, maxX, maxZ] = footprintOf([board], 0.1);
+    expect([minX, minZ, maxX, maxZ].map((v) => Number(v.toFixed(9)))).toEqual([0.7, -1.1, 1.3, 1.1]);
+  });
+});
+
+describe('a box picked after another', () => {
+  // A world just unboxed, as the room measures it: its box, lid and every packed part.
+  const boxedAt = (pose: Pose): Footprint => {
+    const bodies = [
+      { ...baseRest(pose), type: 'boxBase' },
+      { ...lidRest(pose), type: 'boxLid' },
+      ...createPackedWorldLayout(pose),
+    ];
+    return footprintOf(bodies.map(({ type, position, rotation }) => ({ position, rotation, half: PART_TYPES[type].size.map((d) => d / 2) as Vec3 })), LAYOUT.pad);
+  };
+  const boxOnly = (pose: Pose): Footprint => {
+    const [sx, sz] = boxFootprintSize(packedBox());
+    return [pose.position[0] - sx / 2, pose.position[2] - sz / 2, pose.position[0] + sx / 2, pose.position[2] + sz / 2];
+  };
+  const apart = (a: Footprint, b: Footprint) => a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1];
+  afterAll(() => setItem('johnny'));
+
+  for (const first of ITEM_IDS) {
+    for (const second of ITEM_IDS.filter((id) => id !== first)) {
+      it(`never lands in the first's box: ${first}, then ${second}`, () => {
+        setItem(first);
+        const kept = boxedAt(boxPlacement());
+        const firstBox = boxOnly(boxPlacement());
+        setItem(second);
+        const at = freeSpot([kept], boxFootprintSize(packedBox()));
+        expect(apart(firstBox, boxOnly(at)), `${second} at ${at.position}`).toBe(true);
+        // A free spot was found, not the least crowded taken one.
+        expect(apart(kept, boxedAt(at))).toBe(true);
+      });
+    }
+  }
 });
 
 describe('boxFootprintSize', () => {
