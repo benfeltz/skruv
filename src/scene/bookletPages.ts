@@ -5,6 +5,7 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import { BOOKLET, COLORS } from '../constants.js';
 import { createBooklet, gamePagesFor } from '../game/bookletModel.js';
 import { explodeStep, floatOut, insetsFor } from '../game/explode.js';
+import { fanLayout } from '../game/looseFan.js';
 import type { Inset } from '../game/explode.js';
 import { createPageCache, FAINT, font, INK, newPage, PAPER } from './pagePaper.js';
 import { rowsFor } from '../game/controlsPage.js';
@@ -51,9 +52,6 @@ const UPRIGHT = new THREE.Quaternion();
 // page's floor and its legs stand up from it.
 const UPSIDE_DOWN = new THREE.Quaternion(1, 0, 0, 0);
 const ORIENTATION = { lying: LYING, faceDown: FACE_DOWN, upright: UPRIGHT, upsideDown: UPSIDE_DOWN };
-// A loose panel is drawn lying on its largest face: the quarter turn that brings its
-// thinnest axis (x, y or z) up.
-const LAY_FLAT: THREE.Quaternion[] = [LYING, UPRIGHT, new THREE.Quaternion(-QUARTER_TURN, 0, 0, QUARTER_TURN)];
 
 // Render targets come back linear; the page canvas wants sRGB bytes.
 const TO_SRGB = Uint8ClampedArray.from({ length: 256 }, (_, i) => {
@@ -347,22 +345,18 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     const p = new THREE.Vector3();
     const q = new THREE.Quaternion();
     const s = new THREE.Vector3();
-    let offset = 0;
-    for (const id of panels) {
+    // Each panel flat, long side across, side by side down the page (src/game/looseFan.ts).
+    const fan = fanLayout(panels.map((id) => item.partTypes[partById.get(id)!.type].size), BOOKLET.fanGap);
+    panels.forEach((id, index) => {
       const panel = partById.get(id)!;
-      const size = item.partTypes[panel.type].size;
-      const flat = LAY_FLAT[size.indexOf(Math.min(...size))];
+      const { rotation: flat, offset } = fan[index];
       inverse.compose(p.set(...panel.position), q.set(...panel.rotation), s.set(1, 1, 1)).invert();
       // The assembled frame to this panel's place in the fan.
-      toFlat.makeRotationFromQuaternion(flat).multiply(inverse);
+      toFlat.makeRotationFromQuaternion(q.set(...flat)).multiply(inverse);
       const joints = page.joints.map((i) => layout.joints[i]).filter((j) => j.host === id);
-      // Flat extent across the fan: this panel starts half of it past the last one's edge.
-      const depth = Math.min(...size.filter((d) => d !== Math.min(...size)));
-      offset += depth / 2;
       // Kept for the tails, after the scratch matrices have moved on to the next panel.
       const flatten = toFlat.clone();
-      const z = offset;
-      const place = (v: Vec3): Vec3 => new THREE.Vector3(...v).applyMatrix4(flatten).add(new THREE.Vector3(0, 0, z)).toArray();
+      const place = (v: Vec3): Vec3 => new THREE.Vector3(...v).applyMatrix4(flatten).add(new THREE.Vector3(0, 0, offset)).toArray();
       placers.set(id, place);
       items.push({ ...panel, ...flatPose(panel.position, panel.rotation), weight: 'bold' });
       for (const joint of joints) {
@@ -371,7 +365,6 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
         items.push({ ...hardware, ...flatPose(add(hardware.position, sub(to, from)), hardware.rotation), weight: 'bold' });
         if (joint.mover === joint.hardware) lines.push([place(from), place(to)]);
       }
-      offset += depth / 2 + BOOKLET.fanGap;
 
       // `position` and `rotation` (assembled frame) carried into this panel's flat frame.
       function flatPose(position: Vec3, rotation: Quat) {
@@ -379,7 +372,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
         pose.copy(toFlat).multiply(local).decompose(p, q, s);
         return { position: [p.x, p.y, p.z + offset] as Vec3, rotation: q.toArray() as Quat };
       }
-    }
+    });
     return { items, lines, anchorOf: ({ joint, anchor }: Inset) => placers.get(layout.joints[joint].host)!(anchor) };
   }
 
