@@ -45,7 +45,7 @@ export class FakeElement {
   /** The rect a test can set, as `getBoundingClientRect` returns it. */
   rect = { left: 0, top: 0, width: 0, height: 0 };
   getBoundingClientRect() {
-    return this.rect;
+    return { ...this.rect, right: this.rect.left + this.rect.width, bottom: this.rect.top + this.rect.height };
   }
   declare id?: string;
 
@@ -103,6 +103,9 @@ export class FakeElement {
       up(node.parent);
     };
     up(this);
+    // An attached element's events reach the document last.
+    const root = (node: FakeElement): FakeElement => (node.parent ? root(node.parent) : node);
+    if (root(this).tag === 'body') for (const fn of this.dom.documentListeners.get(type) ?? []) fn(event);
   }
 }
 
@@ -111,6 +114,8 @@ export interface FakeDom {
   body: FakeElement;
   focused: FakeElement | null;
   windowListeners: Map<string, Listener[]>;
+  /** `document`'s own listeners; an event fired on an element under the body reaches them last. */
+  documentListeners: Map<string, Listener[]>;
   /** The viewport's size, as `window.innerWidth` and `innerHeight`: a test sets it, then fires `resize`. */
   viewport: { width: number; height: number };
   /** `document.documentElement`'s style and dataset, where the strip sets its root variables and `data-strip`. */
@@ -130,11 +135,13 @@ export interface FakeDom {
 /** Stubs `document` and `window` with a fresh fake; the caller unstubs. */
 export function installFakeDom(): FakeDom {
   const windowListeners = new Map<string, Listener[]>();
+  const documentListeners = new Map<string, Listener[]>();
   const dom: FakeDom = {
     head: undefined as unknown as FakeElement,
     body: undefined as unknown as FakeElement,
     focused: null,
     windowListeners,
+    documentListeners,
     viewport: { width: 1280, height: 800 },
     rootStyle: new FakeStyle(),
     safe: { left: 0, right: 0 },
@@ -154,6 +161,22 @@ export function installFakeDom(): FakeDom {
     documentElement: dom.rootStyle.asRoot(),
     createElement: (tag: string) => new FakeElement(tag, dom),
     getElementById: (id: string) => dom.head.children.find((node) => node.id === id) ?? null,
+    addEventListener: (type: string, fn: Listener) => documentListeners.set(type, [...(documentListeners.get(type) ?? []), fn]),
+    removeEventListener: (type: string, fn: Listener) => documentListeners.set(type, (documentListeners.get(type) ?? []).filter((f) => f !== fn)),
+    // Just `.class` and `.class[data-key='value']`, the first element under the body that matches.
+    querySelector: (selector: string) => {
+      const [, cls, key, value] = /^\.([\w-]+)(?:\[data-([\w-]+)='([^']*)'\])?$/.exec(selector) ?? [];
+      if (!cls) return null;
+      const find = (node: FakeElement): FakeElement | null => {
+        if (node.className.split(' ').includes(cls) && (!key || node.dataset[key] === value)) return node;
+        for (const child of node.children) {
+          const found = find(child);
+          if (found) return found;
+        }
+        return null;
+      };
+      return find(dom.body);
+    },
   });
   vi.stubGlobal('window', {
     get innerWidth() {
