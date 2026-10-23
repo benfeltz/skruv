@@ -50,3 +50,29 @@ export function liftLineBox({ viewport, cluster, strip, hitWidth, knobRadius, ga
   const bottom = floor - gap - knobRadius;
   return bottom > top ? { left, top, right, bottom } : null;
 }
+
+/** What the manual fan's box is placed from. */
+export interface FanBoxInput {
+  /** The viewport's size. */
+  viewport: { width: number; height: number };
+  /** The control cluster (the menu, and the ?tune gear when shown): the fan lies to its right. */
+  cluster: Rect;
+  /** The catalog's thumb, or null when there is none: the fan ends short of it. */
+  thumb: Rect | null;
+  /** The fan's height. */
+  height: number;
+  /** The space kept between the fan and its neighbours. */
+  gap: number;
+}
+
+/**
+ * The manual fan's row (1.9.9.3): across the top between the control cluster's right edge and the
+ * catalog thumb's left edge, a gap off each, its top level with the cluster. With no thumb it runs to
+ * the viewport's edge less the gap. Never narrower than nothing, so a crowded top leaves an empty box
+ * rather than an inverted one.
+ */
+export function fanBox({ viewport, cluster, thumb, height, gap }: FanBoxInput): Rect {
+  const left = cluster.right + gap;
+  const right = Math.max(left, (thumb ? thumb.left : viewport.width) - gap);
+  return { left, top: cluster.top, right, bottom: cluster.top + height };
+}

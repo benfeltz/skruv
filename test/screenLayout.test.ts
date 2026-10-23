@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CLUSTER, LIFT_LINE, MENU } from '../src/constants.js';
-import { liftLineBox, overlaps } from '../src/game/screenLayout.js';
+import { fanBox, liftLineBox, overlaps } from '../src/game/screenLayout.js';
 import type { Rect } from '../src/game/screenLayout.js';
 
 // The screen's controls never lie over one another (Ben, 2026-10-18): the lift line placed from the
@@ -82,5 +82,39 @@ describe('overlaps', () => {
   it('counts shared area, not touching edges', () => {
     expect(overlaps(rect(0, 0, 10, 10), rect(5, 5, 10, 10))).toBe(true);
     expect(overlaps(rect(0, 0, 10, 10), rect(10, 0, 10, 10))).toBe(false);
+  });
+});
+
+describe('the manual fan', () => {
+  const height = 80;
+  const cases = [
+    ['portrait', screen(390, 760)],
+    ['landscape, a safe-area margin each side (Safari)', screen(932, 376, 59)],
+    ['landscape, no margins reported', screen(814, 374)],
+  ] as const;
+
+  for (const [name, { viewport, cluster, catalog }] of cases) {
+    it(`${name}: lies between the menu and the catalog's thumb, level with the menu, overlapping neither`, () => {
+      const box = fanBox({ viewport, cluster, thumb: catalog, height, gap });
+      expect(box.left).toBe(cluster.right + gap);
+      expect(box.right).toBe(catalog.left - gap);
+      expect(box.top).toBe(cluster.top);
+      expect(box.bottom - box.top).toBe(height);
+      expect(box.right).toBeGreaterThan(box.left);
+      expect(overlaps(box, cluster)).toBe(false);
+      expect(overlaps(box, catalog)).toBe(false);
+    });
+  }
+
+  it('runs to the viewport\'s edge less the gap with no thumb measured', () => {
+    const { viewport, cluster } = screen(390, 760);
+    expect(fanBox({ viewport, cluster, thumb: null, height, gap }).right).toBe(viewport.width - gap);
+  });
+
+  it('is empty, not inverted, when the thumb crowds the cluster', () => {
+    const { viewport, cluster } = screen(390, 760);
+    const thumb = rect(cluster.right, 0, 40, 40);
+    const box = fanBox({ viewport, cluster, thumb, height, gap });
+    expect(box.right).toBe(box.left);
   });
 });
