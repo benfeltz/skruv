@@ -259,8 +259,26 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
     apply();
   }
 
+  // A press outside the spread row folds it and does nothing else (Ben's spec, 2026-10-23): caught on the
+  // document's capture, before the room's canvas or the strip hear it, so nothing is grabbed, orbited or
+  // flipped, and the click it ends in is swallowed too (a tap on the catalog thumb or the menu included).
   function outside(event: PointerEvent) {
-    if (!element.contains(event.target as Node | null)) fold();
+    if (element.contains(event.target as Node | null)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    fold();
+    document.addEventListener('click', swallow, true);
+    // A press that never ends in a click (a drag) leaves no swallow armed for a later tap.
+    document.addEventListener('pointerdown', disarm, true);
+  }
+  function swallow(event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    disarm();
+  }
+  function disarm() {
+    document.removeEventListener('click', swallow, true);
+    document.removeEventListener('pointerdown', disarm, true);
   }
 
   function choose(id: string) {
@@ -349,6 +367,7 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
       window.removeEventListener('resize', onResize);
       orientation?.removeEventListener('change', onTurn);
       document.removeEventListener('pointerdown', outside, true);
+      disarm();
       element.remove();
     },
   };

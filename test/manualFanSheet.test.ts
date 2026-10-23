@@ -208,6 +208,47 @@ describe('folding', () => {
     expect(fan.expanded).toBe(false);
   });
 
+  // Ben's spec (2026-10-23): "Tap the gold cover, the room, or Escape: the row folds, nothing else."
+  // The fake DOM has no capture phase, so this pins what the document's capture listener does to the
+  // press and to the click after it; in a browser that runs before the canvas and the strip hear either.
+  it('consumes the outside press that folds it, and swallows the click it ends in, once', () => {
+    const { fan, spine } = mount(['a', 'b']);
+    spine.fire('click');
+    const press = { prevented: 0, stopped: 0 };
+    const outside = (type: string, count = press) => dom.documentListeners.get(type)?.forEach((fn) => fn({ target: dom.body, preventDefault: () => count.prevented++, stopPropagation: () => count.stopped++ }));
+    outside('pointerdown');
+    expect(fan.expanded).toBe(false);
+    expect(press).toEqual({ prevented: 1, stopped: 1 });
+    const click = { prevented: 0, stopped: 0 };
+    outside('click', click);
+    expect(click).toEqual({ prevented: 1, stopped: 1 });
+    // The next tap on the room is the room's again.
+    const later = { prevented: 0, stopped: 0 };
+    outside('pointerdown', later);
+    outside('click', later);
+    expect(later).toEqual({ prevented: 0, stopped: 0 });
+  });
+
+  it('disarms the swallow when the folding press never ends in a click (a drag)', () => {
+    const { spine } = mount(['a', 'b']);
+    spine.fire('click');
+    const fire = (type: string, count: { n: number }) => dom.documentListeners.get(type)?.forEach((fn) => fn({ target: dom.body, preventDefault: () => count.n++, stopPropagation: () => undefined }));
+    fire('pointerdown', { n: 0 });
+    const next = { n: 0 };
+    fire('pointerdown', next);
+    fire('click', next);
+    expect(next.n).toBe(0);
+  });
+
+  it('lets a press on the row or the spine through: they are its own', () => {
+    const { fan, spine, covers } = mount(['a', 'b']);
+    spine.fire('click');
+    const count = { n: 0 };
+    dom.documentListeners.get('pointerdown')?.forEach((fn) => fn({ target: covers()[0], preventDefault: () => count.n++, stopPropagation: () => count.n++ }));
+    expect(count.n).toBe(0);
+    expect(fan.expanded).toBe(true);
+  });
+
   it('fold() puts it away, and does nothing folded', () => {
     const { fan, spine } = mount(['a', 'b']);
     spine.fire('click');

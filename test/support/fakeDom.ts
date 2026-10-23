@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 // attributes and a dataset, events that bubble from the target up, one focused element, and
 // window key listeners, a viewport width and height, and a root element whose style records custom properties. test/bookletSplash.test.ts carries its own copy of the same shape.
 
-type FakeEvent = { type: string; target: FakeElement; pointerId: number; pointerType: string; button: number; detail: number; clientX: number; clientY: number; timeStamp: number; deltaX?: number; deltaY?: number; deltaMode?: number; ctrlKey?: boolean; preventDefault?: () => void };
+type FakeEvent = { type: string; target: FakeElement; pointerId: number; pointerType: string; button: number; detail: number; clientX: number; clientY: number; timeStamp: number; deltaX?: number; deltaY?: number; deltaMode?: number; ctrlKey?: boolean; preventDefault?: () => void; stopPropagation?: () => void };
 type Listener = (event: object) => void;
 
 /** The root element's style: just the custom properties a test reads back. */
@@ -96,7 +96,7 @@ export class FakeElement {
     return up(this);
   }
   fire(type: string, init: Partial<FakeEvent> = {}) {
-    const event: FakeEvent = { type, target: this, pointerId: 1, pointerType: 'mouse', button: 0, detail: 0, clientX: 0, clientY: 0, timeStamp: 0, preventDefault: () => undefined, ...init };
+    const event: FakeEvent = { type, target: this, pointerId: 1, pointerType: 'mouse', button: 0, detail: 0, clientX: 0, clientY: 0, timeStamp: 0, preventDefault: () => undefined, stopPropagation: () => undefined, ...init };
     const up = (node: FakeElement | null) => {
       if (node === null) return;
       for (const fn of node.listeners.get(type) ?? []) fn(event);
