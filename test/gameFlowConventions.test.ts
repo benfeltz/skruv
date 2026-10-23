@@ -127,7 +127,7 @@ describe('boot with the catalog up (1.9.1); tap off to put a booklet down (1.6.1
     expect(booklet).toMatch(/open: startsOpen = true/);
     expect(booklet).toMatch(/let page = 0;\s*let open = startsOpen;/);
     expect(main).toMatch(/createCatalogSheet\(\{\s*pages: catalogPages,\s*open: true,/);
-    expect(world).toMatch(/createBookletSheet\(\{ pages: bookletPages, open: false, docked: 'strip', blocking: false \}\)/);
+    expect(world).toMatch(/createBookletSheet\(\{ pages: bookletPages, title: IDENTITY\.product, open: false, docked: 'strip', blocking: false \}\)/);
     // After BUILD IT, focus lands on the manual's strip, never the catalog thumb behind it.
     expect(main).toMatch(/catalog\.setOpen\(false\);\s*\/\/[^\n]*\n\s*world\.booklet\.focus\(\);/);
   });

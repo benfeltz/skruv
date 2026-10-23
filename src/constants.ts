@@ -448,8 +448,8 @@ export const BOOKLET_UI = {
   page: { shadow: '0 12px 40px #0008', gutter: 12, growMs: 220, radius: 6 },
   // The manual's docked strip (src/ui/booklet.ts `docked: 'strip'`, laid out by
   // src/game/carouselModel.ts): a band edge to edge along the bottom of the screen in portrait
-  // (its height `page` x pageH / pageW plus two `page.gutter`s: 124 px) and down the right edge
-  // in landscape (its width `page` plus two gutters: 96 px). Every page in it is `page` CSS px
+  // (its height `page` x pageH / pageW plus two `page.gutter`s and the name row: 142 px) and down the
+  // right edge in landscape (its width `page` plus two gutters and the name row: 114 px). Every page in it is `page` CSS px
   // wide, the centre one current and told by its gold border; the band shows as many as its
   // long side takes (an odd count) plus hidden slots, one for every page, drawn when they
   // come into view, so a drag shows the next page arriving from under the edge and never empty paper
@@ -459,7 +459,14 @@ export const BOOKLET_UI = {
   // pops open (a touch that moves past the tap distance first is a drag, never a peek).
   // `openGap` is the space between the band and the open page above it in portrait.
   // A slot's corner `radius` (px) and `shadow`.
+  // `name` is the open manual's name (Ben, 2026-10-23): a row of its own along the band's view side,
+  // `row` px deep (above the pages upright, beside them down the right edge), in `size` px bold type
+  // spaced `tracking` em; the band is that much thicker (142 px upright, 114 px down the right).
+  // `pocket` is the band's far end (px along it) kept for the manuals' pocket (src/ui/manualFan.ts):
+  // the right end upright, the foot down the right edge; the pages never run under it.
   strip: {
+    name: { row: 18, size: 12, tracking: 0.04 },
+    pocket: 26,
     page: 72,
     gap: 8,
     openGap: 12,

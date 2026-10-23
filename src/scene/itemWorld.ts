@@ -216,7 +216,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   // parts stay live around them (1.9.1.2).
   const bookletPages = pages();
   undo.push(() => bookletPages.dispose());
-  const booklet = createBookletSheet({ pages: bookletPages, open: false, docked: 'strip', blocking: false });
+  const booklet = createBookletSheet({ pages: bookletPages, title: IDENTITY.product, open: false, docked: 'strip', blocking: false });
   document.body.append(booklet.thumb, booklet.element);
   undo.push(() => booklet.dispose());
 
