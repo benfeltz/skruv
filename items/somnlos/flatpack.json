@@ -824,7 +824,148 @@
         "kind": "cover"
       },
       {
+        "kind": "warning",
+        "subject": "twoPeople"
+      },
+      {
+        "kind": "doDont",
+        "subject": "protectFloor"
+      },
+      {
         "kind": "inventory"
+      },
+      {
+        "kind": "step",
+        "number": 1,
+        "pose": "parts",
+        "parts": ["sideRail-1", "sideRail-2"],
+        "fasten": [
+          ["glide-1/pinTip-1", "sideRail-1/shelfPinHole-1"],
+          ["glide-2/pinTip-1", "sideRail-1/shelfPinHole-2"],
+          ["glide-3/pinTip-1", "sideRail-1/shelfPinHole-3"],
+          ["glide-4/pinTip-1", "sideRail-2/shelfPinHole-1"],
+          ["glide-5/pinTip-1", "sideRail-2/shelfPinHole-2"],
+          ["glide-6/pinTip-1", "sideRail-2/shelfPinHole-3"]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 2,
+        "pose": "parts",
+        "fasten": [
+          ["camLockBolt-1/boltThread-1", "sideRail-1/camBoltHole-1"],
+          ["camLockBolt-2/boltThread-1", "sideRail-1/camBoltHole-2"],
+          ["camLockBolt-3/boltThread-1", "sideRail-1/camBoltHole-3"],
+          ["camLockBolt-4/boltThread-1", "sideRail-1/camBoltHole-4"],
+          ["camLockBolt-5/boltThread-1", "sideRail-2/camBoltHole-1"],
+          ["camLockBolt-6/boltThread-1", "sideRail-2/camBoltHole-2"],
+          ["camLockBolt-7/boltThread-1", "sideRail-2/camBoltHole-3"],
+          ["camLockBolt-8/boltThread-1", "sideRail-2/camBoltHole-4"]
+        ],
+        "tool": "allenWrench"
+      },
+      {
+        "kind": "step",
+        "number": 3,
+        "pose": "parts",
+        "fasten": [
+          ["dowel-1/dowelEnd-1", "sideRail-1/dowelHole-1"],
+          ["dowel-2/dowelEnd-1", "sideRail-1/dowelHole-2"],
+          ["dowel-3/dowelEnd-1", "sideRail-1/dowelHole-3"],
+          ["dowel-4/dowelEnd-1", "sideRail-1/dowelHole-4"],
+          ["dowel-5/dowelEnd-1", "sideRail-2/dowelHole-1"],
+          ["dowel-6/dowelEnd-1", "sideRail-2/dowelHole-2"],
+          ["dowel-7/dowelEnd-1", "sideRail-2/dowelHole-3"],
+          ["dowel-8/dowelEnd-1", "sideRail-2/dowelHole-4"]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 4,
+        "pose": "upright",
+        "parts": ["footboard-1", "headboard-1"],
+        "fasten": [
+          ["dowel-1/dowelEnd-2", "headboard-1/dowelHole-1"],
+          ["dowel-2/dowelEnd-2", "headboard-1/dowelHole-2"],
+          ["dowel-3/dowelEnd-2", "footboard-1/dowelHole-1"],
+          ["dowel-4/dowelEnd-2", "footboard-1/dowelHole-2"],
+          ["dowel-5/dowelEnd-2", "footboard-1/dowelHole-3"],
+          ["dowel-6/dowelEnd-2", "footboard-1/dowelHole-4"],
+          ["dowel-7/dowelEnd-2", "headboard-1/dowelHole-3"],
+          ["dowel-8/dowelEnd-2", "headboard-1/dowelHole-4"]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 5,
+        "pose": "upright",
+        "fasten": [
+          ["camLock-1/camLockBody-1", "footboard-1/camLockRecess-1"],
+          ["camLock-2/camLockBody-1", "footboard-1/camLockRecess-2"],
+          ["camLock-3/camLockBody-1", "footboard-1/camLockRecess-3"],
+          ["camLock-4/camLockBody-1", "footboard-1/camLockRecess-4"],
+          ["camLock-5/camLockBody-1", "headboard-1/camLockRecess-1"],
+          ["camLock-6/camLockBody-1", "headboard-1/camLockRecess-2"],
+          ["camLock-7/camLockBody-1", "headboard-1/camLockRecess-3"],
+          ["camLock-8/camLockBody-1", "headboard-1/camLockRecess-4"]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 6,
+        "pose": "upright",
+        "turn": [
+          ["camLock-1/camLockBody-1", "footboard-1/camLockRecess-1"],
+          ["camLock-2/camLockBody-1", "footboard-1/camLockRecess-2"],
+          ["camLock-3/camLockBody-1", "footboard-1/camLockRecess-3"],
+          ["camLock-4/camLockBody-1", "footboard-1/camLockRecess-4"],
+          ["camLock-5/camLockBody-1", "headboard-1/camLockRecess-1"],
+          ["camLock-6/camLockBody-1", "headboard-1/camLockRecess-2"],
+          ["camLock-7/camLockBody-1", "headboard-1/camLockRecess-3"],
+          ["camLock-8/camLockBody-1", "headboard-1/camLockRecess-4"]
+        ],
+        "tool": "screwdriver"
+      },
+      {
+        "kind": "step",
+        "number": 7,
+        "pose": "upright",
+        "fasten": [
+          ["dowel-9/dowelEnd-1", "headboard-1/dowelHole-5"],
+          ["dowel-10/dowelEnd-1", "headboard-1/dowelHole-6"],
+          ["dowel-11/dowelEnd-1", "footboard-1/dowelHole-5"],
+          ["dowel-12/dowelEnd-1", "footboard-1/dowelHole-6"]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 8,
+        "pose": "upright",
+        "parts": ["beam-1", "leg-1", "leg-2"],
+        "fasten": [
+          ["screw-1/screwThread-1", "leg-1/screwHole-1"],
+          ["screw-2/screwThread-1", "leg-1/screwHole-2"],
+          ["screw-3/screwThread-1", "leg-2/screwHole-1"],
+          ["screw-4/screwThread-1", "leg-2/screwHole-2"]
+        ],
+        "tool": "screwdriver"
+      },
+      {
+        "kind": "step",
+        "number": 9,
+        "pose": "upright",
+        "fasten": [
+          ["dowel-9/dowelEnd-2", "beam-1/dowelHole-1"],
+          ["dowel-10/dowelEnd-2", "beam-1/dowelHole-2"],
+          ["dowel-11/dowelEnd-2", "beam-1/dowelHole-3"],
+          ["dowel-12/dowelEnd-2", "beam-1/dowelHole-4"]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 10,
+        "pose": "upright",
+        "parts": ["slat-1", "slat-2", "slat-3", "slat-4", "slat-5", "slat-6", "slat-7", "slat-8", "slat-9", "slat-10", "slat-11", "slat-12", "slat-13", "slat-14", "slat-15"]
       },
       {
         "kind": "back"
