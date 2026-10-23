@@ -178,11 +178,13 @@ describe('the band, by orientation', () => {
     dom.safe.right = safe.right;
     dom.windowListeners.get('resize')!.forEach((fn) => fn({}));
   };
-  const bandRight = strip.page + 2 * page.gutter;
+  // The band's thickness: a page and a gutter either side, and the open manual's name row (Ben, 2026-10-23).
+  const bandRight = strip.page + 2 * page.gutter + strip.name.row;
+  const bandBottom = pageHeight + 2 * page.gutter + strip.name.row;
 
   it("sets the root variables for the room's view: the bottom upright, and clears them on dispose", () => {
     const { manual } = mountStrip({ viewport: PORTRAIT });
-    expect(dom.rootStyle.props).toEqual({ '--strip-bottom': `calc(${pageHeight + 2 * page.gutter}px + env(safe-area-inset-bottom))`, '--strip-left': '0px', '--strip-right': '0px' });
+    expect(dom.rootStyle.props).toEqual({ '--strip-bottom': `calc(${bandBottom}px + env(safe-area-inset-bottom))`, '--strip-left': '0px', '--strip-right': '0px' });
     expect(dom.rootStyle.dataset.strip).toBe('bottom');
     manual.dispose();
     expect(dom.rootStyle.props).toEqual({});
@@ -235,12 +237,15 @@ describe('the band, by orientation', () => {
     expect(portrait).toContain('left: 0;');
     expect(portrait).toContain('right: 0;');
     expect(portrait).toContain('bottom: 0;');
-    expect(portrait).toContain(`height: calc(${pageHeight + 2 * page.gutter}px + env(safe-area-inset-bottom));`);
+    expect(portrait).toContain(`height: calc(${bandBottom}px + env(safe-area-inset-bottom));`);
+    expect([bandBottom, bandRight]).toEqual([142, 114]);
     expect(right).toContain('top: 0;');
     expect(right).toContain('bottom: 0;');
     expect(right).toContain('right: env(safe-area-inset-right);');
     expect(right).toContain(`width: ${bandRight}px;`);
-    expect(right).toContain('padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;');
+    expect(right).toContain(`padding: env(safe-area-inset-top) 0 calc(${strip.pocket}px + env(safe-area-inset-bottom)) ${strip.name.row}px;`);
+    // The name row above the pages upright, the pocket's end kept clear on the right.
+    expect(portrait).toContain(`padding: ${strip.name.row}px calc(${strip.pocket}px + env(safe-area-inset-right)) env(safe-area-inset-bottom) 0;`);
     expect(css).not.toContain("data-band='left'");
   });
 
@@ -1220,5 +1225,44 @@ describe('put away (setShown)', () => {
     manual.setShown(true);
     manual.setShown(true);
     expect(manual.thumb.hidden).toBe(false);
+  });
+});
+
+describe("the band's name row and the pocket's end (Ben, 2026-10-23)", () => {
+  const sheet = (title?: string) => {
+    const manual = createBookletSheet({ pages: { count: COUNT, canvas: canvasOf }, docked: 'strip', blocking: false, open: false, ...(title === undefined ? {} : { title }) }) as unknown as FakeSheet<null>;
+    mounted.push(manual);
+    dom.body.append(manual.thumb, manual.element);
+    return manual;
+  };
+
+  it("prints the open manual's name on the band, out of the pointer's way, and names the group by it", () => {
+    const manual = sheet('JOHNNY');
+    const [name, lane] = manual.thumb.children;
+    expect(name.className).toBe('booklet-name');
+    expect(name.textContent).toBe('JOHNNY');
+    expect(name.attributes['aria-hidden']).toBe('true');
+    expect(lane.className).toBe('booklet-lane');
+    expect(manual.thumb.attributes['aria-label']).toBe('JOHNNY, instructions pages');
+    const css = dom.head.children.map((node) => node.textContent).join('');
+    expect(css).toContain(`font: 800 ${BOOKLET_UI.strip.name.size}px/1`);
+    expect(css).toContain('pointer-events: none;');
+    // Up the band's view side down the right edge, reading from the foot, above the pocket.
+    expect(css).toContain("writing-mode: vertical-rl;\n      transform: rotate(180deg);");
+  });
+
+  it('prints no name without a title', () => {
+    const manual = sheet();
+    expect(manual.thumb.children[0].className).toBe('booklet-lane');
+    expect(manual.thumb.attributes['aria-label']).toBe('Instructions pages');
+  });
+
+  it("counts the pages the band shows on its long side less the pocket's end", () => {
+    dom.viewport.width = PORTRAIT.width;
+    dom.viewport.height = PORTRAIT.height;
+    const manual = sheet();
+    const [lane] = manual.thumb.children;
+    const [track] = lane.children;
+    expect(track.children.length).toBe(built(PORTRAIT.width - BOOKLET_UI.strip.pocket, { slot: BOOKLET_UI.strip.page, gap: BOOKLET_UI.strip.gap }));
   });
 });

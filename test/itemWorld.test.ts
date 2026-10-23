@@ -1118,6 +1118,24 @@ describe('several worlds in one room (1.9.9.2)', () => {
     }).not.toThrow();
     world.dispose();
   });
+  it('hands out its cover, its pages\' canvas 0, and asking a kept world turns the door to nothing (1.9.9.3)', async () => {
+    const rig = await engine();
+    const asked: number[] = [];
+    const covers = [{ cover: 'johnny' }, { cover: 'blank' }].map((c) => c as unknown as HTMLCanvasElement);
+    const withCover = (cover: HTMLCanvasElement) => (): BookletPages => ({ ...pages(), canvas: (index: number) => (asked.push(index), cover) });
+    const johnny = createItemWorld({ ...rig.deps, pages: withCover(covers[0]) });
+    johnny.deactivate();
+    setItem('blank');
+    const blank = createItemWorld({ ...rig.deps, pages: withCover(covers[1]), at: freeSpot([johnny.footprint()], boxFootprintSize(packedBox())) });
+    asked.length = 0;
+    expect(blank.cover()).toBe(covers[1]);
+    expect(johnny.cover()).toBe(covers[0]);
+    expect(asked).toEqual([0, 0]);
+    expect(ITEM_ID).toBe('blank');
+    blank.dispose();
+    setItem('johnny');
+    johnny.dispose();
+  });
 });
 
 // 1.9.0.4: SÖMNLÖS, the largest box so far, in real worlds on the real physics. Its packing

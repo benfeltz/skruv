@@ -27,6 +27,7 @@ import { createBookletPages } from './scene/bookletPages.js';
 import { createCatalogPages } from './scene/catalogPages.js';
 import { createCatalogSheet } from './ui/catalogSheet.js';
 import { createControlCluster } from './ui/controlCluster.js';
+import { createManualFan } from './ui/manualFan.js';
 import { createMenuButton } from './ui/menuButton.js';
 import { createResetButton } from './ui/resetButton.js';
 import { createToggleButton } from './ui/toggleButton.js';
@@ -178,16 +179,30 @@ const catalog = createCatalogSheet({
   pages: catalogPages,
   open: true,
   canClose: () => items.current !== null,
-  onPick: (id) => {
-    const world = items.pick(id);
-    catalog.setOpen(false);
-    // Focus goes to the item's manual — its strip's centre page — not back to the catalog thumb.
-    world.booklet.focus();
-    saver.changed();
-  },
+  onPick: (id) => pickItem(id),
 });
 document.body.append(catalog.scrim, catalog.thumb, catalog.element);
 catalogPages.prerender();
+
+// The manuals are the switcher (1.9.9.3, option B): every world's manual in the pocket at the band's
+// end, spread out of it as a row of covers on a tap. A tap on a cover is a pick like the catalog's;
+// the pocket never touches a kept world, it draws the cover the world handed out.
+const fan = createManualFan({ worlds: () => items.all(), nameOf: (id) => itemById(id).identity.product, onPick: (id) => pickItem(id) });
+document.body.append(fan.element);
+// An opening catalog never leaves the row spread under its scrim.
+catalog.onChange(({ expanded }) => {
+  if (expanded) fan.fold();
+});
+
+// One pick for the catalog and the fan: the slot's, then the catalog put down.
+function pickItem(id: string) {
+  const world = items.pick(id);
+  catalog.setOpen(false);
+  // Focus goes to the item's manual — its strip's centre page — not back to the catalog thumb.
+  world.booklet.focus();
+  saver.changed();
+  fan.refresh();
+}
 
 // The restore (src/game/roomRestore.ts): the saved room put back before the first frame, or the empty
 // room as ever. A save this build cannot restore is refused whole, before anything is built; the room
@@ -207,9 +222,11 @@ else if (restored.kind === 'refused') {
     cameraControls.frame(plan.world.camera);
     room.setPhase(plan.world.sky.phase);
     catalog.setOpen(false);
+    fan.refresh();
   } catch (error) {
     items.clear();
     carried = [];
+    fan.refresh();
     console.warn('room: save not restored, starting empty', error);
     catalog.notify(CATALOG.words.restoreFailed);
   }
@@ -233,6 +250,8 @@ menu.add(repack.element, { onClose: repack.cancel });
 menu.add(snapRotate.element);
 cluster.add(menu.element);
 document.body.append(cluster.element);
+// The row reaches to the cluster, which is on screen now to be measured.
+fan.refresh();
 
 // Under sustained load the room renders every other frame; everything else runs every frame.
 const fps = createFpsGuard();
@@ -276,4 +295,6 @@ if (new URLSearchParams(location.search).has(TUNE.queryFlag)) {
   const panel = createTunePanel({ tunables, exportSession: session.toExportJson });
   cluster.add(panel.tab);
   document.body.append(panel.element);
+  // The gear widens the cluster: the row's reach shrinks.
+  fan.refresh();
 }

@@ -30,10 +30,13 @@ const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 const [pageW, pageH] = BOOKLET.pageSize;
 
 // The band's thickness, all from the page ratio: a page's height and a gutter either side along
-// the short axis (CSS px, before the safe-area inset).
+// the short axis, and the open manual's name row (CSS px, before the safe-area inset).
 const stripPageH = Math.round((BOOKLET_UI.strip.page * pageH) / pageW);
-const bandBottom = stripPageH + 2 * BOOKLET_UI.page.gutter;
-const bandRight = BOOKLET_UI.strip.page + 2 * BOOKLET_UI.page.gutter;
+const nameRow = BOOKLET_UI.strip.name.row;
+const bandBottom = stripPageH + 2 * BOOKLET_UI.page.gutter + nameRow;
+const bandRight = BOOKLET_UI.strip.page + 2 * BOOKLET_UI.page.gutter + nameRow;
+/** The band's thickness (CSS px, before the safe-area inset): its height upright, its width down the right edge. The manuals' pocket (src/ui/manualFan.ts) is cut to it. */
+export const BAND = { bottom: bandBottom, right: bandRight } as const;
 // The root variables the mounted band sets (index.html's #app and the manual's open page read them).
 // `bottom`, `left` and `right` are how far the room's view is inset from that edge; `backdrop` is
 // what shows where the view is not (black in landscape, beside the notch).
@@ -237,23 +240,46 @@ function injectStyle() {
       user-select: none;
       -webkit-user-select: none;
     }
+    /* The name row above the pages, and the pocket's end kept clear on the right. */
     .booklet-strip[data-band='bottom'] {
       left: 0;
       right: 0;
       bottom: 0;
       height: calc(${bandBottom}px + env(safe-area-inset-bottom));
-      padding-bottom: env(safe-area-inset-bottom);
+      padding: ${nameRow}px calc(${strip.pocket}px + env(safe-area-inset-right)) env(safe-area-inset-bottom) 0;
       box-shadow: inset 0 ${strip.rule}px 0 ${css(COLORS.bookletInk)};
     }
     /* Down the right edge (landscape), whichever side the notch is on: inside the right safe-area
-       margin (drawn black, the notch's when it is on the right), the whole height. */
+       margin (drawn black, the notch's when it is on the right), the whole height; the name row on its
+       view side, the pocket's end kept clear at its foot. */
     .booklet-strip[data-band='right'] {
       top: 0;
       bottom: 0;
       right: env(safe-area-inset-right);
       width: ${bandRight}px;
-      padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
+      padding: env(safe-area-inset-top) 0 calc(${strip.pocket}px + env(safe-area-inset-bottom)) ${nameRow}px;
       box-shadow: inset ${strip.rule}px 0 0 ${css(COLORS.bookletInk)};
+    }
+    /* The open manual's name (Ben, 2026-10-23): above the pages upright, up the band's view side down
+       the right edge, reading from its foot. Ink on the paper; it takes no pointer. */
+    .booklet-name {
+      position: absolute;
+      margin: 0;
+      color: ${css(COLORS.bookletInk)};
+      font: 800 ${strip.name.size}px/1 system-ui, -apple-system, sans-serif;
+      letter-spacing: ${strip.name.tracking}em;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .booklet-strip[data-band='bottom'] .booklet-name {
+      left: ${BOOKLET_UI.page.gutter}px;
+      top: ${(nameRow - strip.name.size) / 2 + strip.rule}px;
+    }
+    .booklet-strip[data-band='right'] .booklet-name {
+      left: ${(nameRow - strip.name.size) / 2 + strip.rule}px;
+      bottom: calc(${strip.pocket + BOOKLET_UI.page.gutter}px + env(safe-area-inset-bottom));
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
     }
     /* Where the pages run, and are cut. */
     .booklet-lane {
@@ -358,6 +384,8 @@ export interface BookletSheetOptions<Blocking extends boolean = boolean> {
   docked?: 'thumb' | 'strip';
   /** Whether it takes the room's taps while open (default): a scrim over the room, and a tap on it puts the booklet down. False: no scrim, so the room keeps every gesture around the page. */
   blocking?: Blocking;
+  /** A strip's name row: the open manual's name, printed on the band (none by default). */
+  title?: string;
   /** Which screen corner its docked thumb sits in: 'bottomLeft' (default) or 'topLeft'. */
   corner?: 'bottomLeft' | 'topLeft';
   /** Whether it may be put down now. While false, every way of closing it does nothing. */
@@ -377,7 +405,7 @@ export interface BookletSheetOptions<Blocking extends boolean = boolean> {
  * Starts open on page 0, the cover, unless told otherwise — or another sheet is open: one
  * sheet is open at a time. State is the module's own and read-only outside it.
  */
-export function createBookletSheet<Blocking extends boolean = true>({ pages, name = 'instructions', open: startsOpen = true, canClose = () => true, action, thumbShows = 'page', corner = 'bottomLeft', docked = 'thumb', blocking = true as Blocking }: BookletSheetOptions<Blocking>) {
+export function createBookletSheet<Blocking extends boolean = true>({ pages, name = 'instructions', title, open: startsOpen = true, canClose = () => true, action, thumbShows = 'page', corner = 'bottomLeft', docked = 'thumb', blocking = true as Blocking }: BookletSheetOptions<Blocking>) {
   injectStyle();
   const stripped = docked === 'strip';
   const listeners = new Set<(state: { page: number; expanded: boolean }) => void>();
@@ -417,7 +445,7 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
   element.className = 'booklet-leaf';
   element.dataset.docked = docked;
   element.setAttribute('aria-label', capitalised(name));
-  const carousel = stripped ? createStrip(name, pages.count, thumb, element) : null;
+  const carousel = stripped ? createStrip(name, pages.count, thumb, element, title) : null;
   const anchor = () => (carousel && peekedAt !== null ? carousel.slot(peekedAt) : carousel?.centre()) ?? thumb;
 
   const close = document.createElement('button');
@@ -862,15 +890,22 @@ export function createBookletSheet<Blocking extends boolean = true>({ pages, nam
  * comes into view and has changed, and says the orientation to the band, the open page `leaf` and the root variables (the
  * one place any of them is written); `dispose()` gives the room's view back.
  */
-function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLElement) {
+function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLElement, title?: string) {
   const { strip } = BOOKLET_UI;
+  if (title !== undefined) {
+    const label = document.createElement('p');
+    label.className = 'booklet-name';
+    label.textContent = title;
+    label.setAttribute('aria-hidden', 'true');
+    root.append(label);
+  }
   const lane = document.createElement('div');
   lane.className = 'booklet-lane';
   const track = document.createElement('div');
   track.className = 'booklet-track';
   lane.append(track);
   root.setAttribute('role', 'group');
-  root.setAttribute('aria-label', `${capitalised(name)} pages`);
+  root.setAttribute('aria-label', title === undefined ? `${capitalised(name)} pages` : `${title}, ${name} pages`);
   root.append(lane);
   const rootElement = document.documentElement;
 
@@ -885,8 +920,8 @@ function createStrip(name: string, count: number, root: HTMLElement, leaf: HTMLE
   const axis = (): Axis => (window.innerHeight >= window.innerWidth ? 'x' : 'y');
   // A slot's length along the band: a page's width on the bottom, its height down the right edge.
   const sizes = () => ({ slot: axis() === 'x' ? strip.page : stripPageH, gap: strip.gap });
-  // Down an edge the pages run below the catalog's thumb, which sits at the top of the band.
-  const extent = () => (axis() === 'x' ? window.innerWidth : window.innerHeight);
+  // The band's long side, less the pocket's end, which the pages never run under.
+  const extent = () => (axis() === 'x' ? window.innerWidth : window.innerHeight) - strip.pocket;
   /** Which edge the band stands on: the bottom upright, the right in landscape. */
   const band = (): Band => (axis() === 'x' ? 'bottom' : 'right');
   /** How many pages the band's long side has room for. */

@@ -6,6 +6,7 @@ import { createItemSlot } from '../src/game/itemSlot.js';
 import { pickableSet } from '../src/game/pickable.js';
 import { createBookletSheet } from '../src/ui/booklet.js';
 import { createCatalogSheet } from '../src/ui/catalogSheet.js';
+import { createManualFan } from '../src/ui/manualFan.js';
 import { entry } from './catalogFixtures.js';
 import type { CatalogEntry } from '../src/game/catalogModel.js';
 
@@ -32,11 +33,15 @@ class FakeElement {
   textContent = '';
   className = '';
   type = '';
+  tabIndex = 0;
   constructor(tag: string) {
     this.tag = tag;
   }
   setAttribute(name: string, value: string) {
     this.attributes[name] = value;
+  }
+  removeAttribute(name: string) {
+    delete this.attributes[name];
   }
   append(...nodes: FakeElement[]) {
     for (const node of nodes) {
@@ -82,7 +87,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   const head = new FakeElement('head');
   body = new FakeElement('body');
-  vi.stubGlobal('document', { head, body, documentElement: { style: { setProperty() {}, removeProperty() {} }, dataset: {} }, createElement: (tag: string) => new FakeElement(tag), getElementById: () => null });
+  vi.stubGlobal('document', { head, body, addEventListener() {}, removeEventListener() {}, documentElement: { style: { setProperty() {}, removeProperty() {} }, dataset: {} }, createElement: (tag: string) => new FakeElement(tag), getElementById: () => null });
   vi.stubGlobal('window', { innerWidth: 390, innerHeight: 844, addEventListener() {}, removeEventListener() {} });
 });
 const live: { dispose(): void }[] = [];
@@ -122,21 +127,30 @@ function boot({ flag, failBuild = new Set<string>() }: { flag: string; failBuild
       manuals.push(manual);
       live.push(manual);
       const id = named;
-      return { id, manual, activate: () => manual.setShown(true), deactivate: () => manual.setShown(false), dispose: () => manual.dispose() };
+      return { id, manual, cover: () => ({ cover: id }) as unknown as CanvasImageSource, activate: () => manual.setShown(true), deactivate: () => manual.setShown(false), dispose: () => manual.dispose() };
     },
   });
-  const catalog = createCatalogSheet({
+  const catalog: ReturnType<typeof createCatalogSheet> = createCatalogSheet({
     pages: { count: pages.length, pages, canvas: () => ({}) as CanvasImageSource },
     open: true,
     canClose: () => items.current !== null,
-    onPick: (id) => {
-      items.pick(id);
-      catalog.setOpen(false);
-    },
+    onPick: (id) => pickItem(id),
   });
   const sheet = catalog as unknown as Sheet;
   body.append(sheet.scrim, sheet.thumb, sheet.element);
   live.push(sheet);
+  // The manual fan as main wires it: one pick for the catalog and the fan, the fan refreshed after it.
+  const fan = createManualFan({ worlds: () => items.all(), nameOf: (id) => id.toUpperCase(), onPick: (id) => pickItem(id) });
+  body.append(fan.element as unknown as FakeElement);
+  live.push(fan);
+  function pickItem(id: string) {
+    items.pick(id);
+    catalog.setOpen(false);
+    fan.refresh();
+  }
+  catalog.onChange(({ expanded }) => {
+    if (expanded) fan.fold();
+  });
   const [, view] = sheet.element.children;
   // The page's frame: the canvas, BUILD IT, then the ‹ and › laid over the printed corners.
   const [, buildIt, prev, next] = view.children[0].children;
@@ -145,7 +159,7 @@ function boot({ flag, failBuild = new Set<string>() }: { flag: string; failBuild
     while (sheet.currentPage < page) next.fire('click');
     while (sheet.currentPage > page) prev.fire('click');
   };
-  return { pages, items, catalog: sheet, buildIt, notice, turnTo, manuals, door: () => named };
+  return { pages, items, catalog: sheet, buildIt, notice, turnTo, manuals, fan, door: () => named };
 }
 
 describe('AC1: cold boot opens the catalog on its cover, the room empty (1.9.1)', () => {
@@ -291,5 +305,75 @@ describe('a pick whose build fails (review rounds 3–6)', () => {
     buildIt.fire('click');
     expect(items.current).not.toBeNull();
     expect(catalog.expanded).toBe(false);
+  });
+});
+
+describe('AC6: the manuals are the switcher, in the pocket at the band\'s end (1.9.9.3, option B)', () => {
+  /** JOHNNY then BLANK built from the catalog, as a player does. */
+  function twoBuilt() {
+    const rig = boot({ flag: '' });
+    rig.turnTo(1);
+    rig.buildIt.fire('click');
+    rig.catalog.thumb.fire('click');
+    rig.turnTo(2);
+    rig.buildIt.fire('click');
+    const [spine, row] = (rig.fan.element as unknown as FakeElement).children;
+    const covers = () => row.children;
+    // A tap, as the row reads one: down and up on a cover.
+    const tap = (target: FakeElement) => {
+      target.fire('pointerdown', { clientX: 5, clientY: 5 });
+      target.fire('pointerup', { clientX: 5, clientY: 5, timeStamp: 40 });
+    };
+    return { ...rig, spine, covers, tap };
+  }
+
+  it("holds every manual, the active BLANK's last and on top, and the catalog thumb stays its own", () => {
+    const { covers, spine, catalog, fan } = twoBuilt();
+    expect(fan.element.hidden).toBe(false);
+    expect(covers().map((c) => c.dataset.id)).toEqual(['johnny', 'blank']);
+    expect(covers().map((c) => c.attributes['aria-current'])).toEqual([undefined, 'true']);
+    expect(spine.children.map((edge) => edge.dataset.open)).toEqual(['false', 'true']);
+    expect(catalog.thumb.dataset.corner).toBe('topLeft');
+  });
+
+  it('shows the spine from the first world on', () => {
+    const rig = boot({ flag: '' });
+    rig.turnTo(1);
+    rig.buildIt.fire('click');
+    expect(rig.fan.element.hidden).toBe(false);
+    expect((rig.fan.element as unknown as FakeElement).children[0].children).toHaveLength(1);
+  });
+
+  it("a tap on the pocket then on JOHNNY's cover makes JOHNNY active, builds nothing, and folds with JOHNNY's edge on top", () => {
+    const { spine, covers, tap, door, items, manuals, fan } = twoBuilt();
+    spine.fire('click');
+    expect(fan.expanded).toBe(true);
+    tap(covers()[0]);
+    expect(door()).toBe('johnny');
+    expect(items.current?.id).toBe('johnny');
+    expect(manuals[0].thumb.hidden).toBe(false);
+    expect(manuals[1].thumb.hidden).toBe(true);
+    expect(items.all()).toHaveLength(2);
+    expect(manuals).toHaveLength(2);
+    expect(fan.expanded).toBe(false);
+    // The slot's order: the open one last, nearest the pocket.
+    expect(covers().map((c) => c.dataset.id)).toEqual(['blank', 'johnny']);
+    expect(covers().map((c) => c.attributes['aria-current'])).toEqual([undefined, 'true']);
+  });
+
+  it("a tap on the open manual's own cover picks nothing and folds", () => {
+    const { spine, covers, tap, door, fan } = twoBuilt();
+    spine.fire('click');
+    tap(covers()[1]);
+    expect(door()).toBe('blank');
+    expect(fan.expanded).toBe(false);
+  });
+
+  it('opening the catalog folds a spread row', () => {
+    const { spine, fan, catalog } = twoBuilt();
+    spine.fire('click');
+    expect(fan.expanded).toBe(true);
+    catalog.thumb.fire('click');
+    expect(fan.expanded).toBe(false);
   });
 });
