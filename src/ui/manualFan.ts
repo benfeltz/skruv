@@ -2,8 +2,8 @@ import { BOOKLET, CLUSTER, COLORS, FAN, GESTURE, RENDER } from '../constants.js'
 import { coverDepth, fanLabel, fanLayout, fanOrder, fanWidth } from '../game/manualFan.js';
 import { fanBox, type Rect } from '../game/screenLayout.js';
 
-// The manual fan (1.9.9.3): every world's manual as a stack of covers across the top, on the side of
-// the manual's strip, past the catalog's thumb; the active world's cover on top, the others where they
+// The manual fan (1.9.9.3): every world's manual as a stack of covers docked against the manual's strip
+// — right above it upright, beside it in landscape; the active world's cover on top, the others where they
 // were. A tap on the stack spreads it; a tap on another cover is the caller's pick. It draws the covers the worlds hand out and asks for nothing else of them — a kept world is never touched.
 
 const STYLE_ID = 'skruv-manual-fan';
@@ -16,13 +16,13 @@ function injectStyle() {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = `
-    /* Level with the control cluster, on the strip's side; placed from the measured cluster, thumb and strip (refresh). */
+    /* Docked against the manual's strip; placed from the measured cluster and strip (refresh). */
     .manual-fan {
       position: fixed;
       /* Under a blocking sheet's scrim (2) and an open page (3), as the catalog's thumb. */
       z-index: 1;
       right: calc(${CLUSTER.inset}px + env(safe-area-inset-right));
-      top: calc(${CLUSTER.inset}px + env(safe-area-inset-top));
+      bottom: calc(${CLUSTER.inset}px + env(safe-area-inset-bottom));
       height: ${coverHeight}px;
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
@@ -112,15 +112,13 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
     return right > left && bottom > top ? { left, top, right, bottom } : null;
   }
 
-  // From the catalog's thumb to the manual's side (src/game/screenLayout.ts), its stack against that side;
-  // else where the CSS puts it.
+  // Against the manual's strip (src/game/screenLayout.ts), its stack against the strip's end; else where the CSS puts it.
   function place() {
     const cluster = measured('.control-cluster');
     if (!cluster) return;
     const box = fanBox({
       viewport: { width: window.innerWidth, height: window.innerHeight },
       cluster,
-      thumb: measured(".booklet-thumb[data-corner='topLeft']"),
       strip: measured('.booklet-strip'),
       height: coverHeight,
       gap: FAN.inset,
@@ -130,6 +128,7 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
     element.style.left = `${box.right - width}px`;
     element.style.right = 'auto';
     element.style.top = `${box.top}px`;
+    element.style.bottom = 'auto';
     element.style.width = `${width}px`;
   }
 

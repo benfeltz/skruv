@@ -55,30 +55,29 @@ export function liftLineBox({ viewport, cluster, strip, hitWidth, knobRadius, ga
 export interface FanBoxInput {
   /** The viewport's size. */
   viewport: { width: number; height: number };
-  /** The control cluster (the menu, and the ?tune gear when shown); the fan is level with it. */
+  /** The control cluster (the menu, and the ?tune gear when shown): the fan stays a gap clear of its right edge, so of the lift line under the menu. */
   cluster: Rect;
-  /** The catalog's thumb, beside the cluster, or null when there is none: the fan starts past it (else past the cluster). */
-  thumb: Rect | null;
-  /** The manual's band, or null when there is none: when it reaches the top row (landscape, down the right edge) the fan ends short of it. */
+  /** The manual's band, or null when there is none (the fan then docks to the screen's lower right). */
   strip: Rect | null;
   /** The fan's height. */
   height: number;
-  /** The space kept between the fan and its neighbours. */
+  /** The space kept between the fan and the band, and the cluster. */
   gap: number;
-  /** The space kept to the viewport's edge when no band stands there. */
+  /** The space kept to the viewport's edges. */
   margin: number;
 }
 
 /**
- * The manual fan's row (1.9.9.3): across the top from the catalog thumb's right edge to the manual's
- * side — the viewport's right edge upright, the band's left edge in landscape, where the band runs the
- * screen's height — a gap off each, its top level with the cluster. Never narrower than nothing, so a
- * crowded top leaves an empty box rather than an inverted one.
+ * The manual fan's row (1.9.9.3): docked against the manual's band so the two read as one. Upright
+ * (the band along the bottom) it lies right above the band, a gap clear, against the right edge; in
+ * landscape (the band down the right edge) it lies against the band's left edge, a gap clear, at the
+ * screen's foot. It reaches left to a gap past the cluster's right edge, clear of the lift line. Never
+ * narrower than nothing, so a crowded screen leaves an empty box rather than an inverted one.
  */
-export function fanBox({ viewport, cluster, thumb, strip, height, gap, margin }: FanBoxInput): Rect {
-  const left = (thumb ?? cluster).right + gap;
-  const top = cluster.top;
-  const bandInRow = strip !== null && strip.right > left && strip.top < top + height && strip.bottom > top;
-  const right = Math.max(left, bandInRow ? strip.left - gap : viewport.width - margin);
-  return { left, top, right, bottom: top + height };
+export function fanBox({ viewport, cluster, strip, height, gap, margin }: FanBoxInput): Rect {
+  const left = cluster.right + gap;
+  const standing = strip !== null && strip.bottom - strip.top > strip.right - strip.left;
+  const edge = standing ? strip.left - gap : viewport.width - margin;
+  const foot = strip !== null && !standing ? strip.top - gap : viewport.height - margin;
+  return { left, top: foot - height, right: Math.max(left, edge), bottom: foot };
 }

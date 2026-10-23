@@ -95,32 +95,42 @@ describe('the manual fan', () => {
   ] as const;
 
   for (const [name, { viewport, cluster, catalog, strip }] of cases) {
-    it(`${name}: lies past the catalog's thumb on the manual's side, level with the menu, overlapping neither it nor the band`, () => {
-      const box = fanBox({ viewport, cluster, thumb: catalog, strip, height, gap, margin });
-      expect(box.left).toBe(catalog.right + gap);
-      expect(box.top).toBe(cluster.top);
+    it(`${name}: docked against the band, overlapping none of the menu, the catalog's thumb, the band or the lift line`, () => {
+      const box = fanBox({ viewport, cluster, strip, height, gap, margin });
       expect(box.bottom - box.top).toBe(height);
       expect(box.right).toBeGreaterThan(box.left);
       for (const other of [cluster, catalog, strip]) expect(overlaps(box, other)).toBe(false);
+      const line = liftLineBox({ viewport, cluster, strip, hitWidth, knobRadius, gap });
+      if (line) expect(overlaps(box, withKnob(line))).toBe(false);
       expect(box.right).toBeLessThanOrEqual(viewport.width - margin);
+      expect(box.bottom).toBeLessThanOrEqual(viewport.height - margin);
     });
   }
 
-  it('upright it runs to the right edge less the margin; in landscape it stops a gap short of the band', () => {
-    const portrait = screen(390, 760);
-    expect(fanBox({ ...portrait, thumb: portrait.catalog, height, gap, margin }).right).toBe(390 - margin);
-    const land = screen(932, 376, 59);
-    expect(fanBox({ ...land, thumb: land.catalog, height, gap, margin }).right).toBe(land.strip.left - gap);
-  });
-
-  it('starts past the cluster with no thumb measured', () => {
+  it('upright: right above the band, a gap clear, against the right edge', () => {
     const { viewport, cluster, strip } = screen(390, 760);
-    expect(fanBox({ viewport, cluster, thumb: null, strip, height, gap, margin }).left).toBe(cluster.right + gap);
+    const box = fanBox({ viewport, cluster, strip, height, gap, margin });
+    expect(box.bottom).toBe(strip.top - gap);
+    expect(box.right).toBe(viewport.width - margin);
+    expect(box.left).toBe(cluster.right + gap);
   });
 
-  it('is empty, not inverted, when the band crowds the thumb', () => {
-    const { viewport, cluster, catalog } = screen(390, 760);
-    const box = fanBox({ viewport, cluster, thumb: catalog, strip: rect(catalog.right + 1, 0, 100, 760), height, gap, margin });
+  it('in landscape: against the band\'s left edge, a gap clear, at the screen\'s foot', () => {
+    const { viewport, cluster, strip } = screen(932, 376, 59);
+    const box = fanBox({ viewport, cluster, strip, height, gap, margin });
+    expect(box.right).toBe(strip.left - gap);
+    expect(box.bottom).toBe(viewport.height - margin);
+  });
+
+  it('docks to the screen\'s lower right with no band measured', () => {
+    const { viewport, cluster } = screen(390, 760);
+    const box = fanBox({ viewport, cluster, strip: null, height, gap, margin });
+    expect([box.right, box.bottom]).toEqual([viewport.width - margin, viewport.height - margin]);
+  });
+
+  it('is empty, not inverted, when the band crowds the cluster', () => {
+    const { viewport, cluster } = screen(932, 376, 59);
+    const box = fanBox({ viewport, cluster, strip: rect(cluster.right, 0, 100, 376), height, gap, margin });
     expect(box.right).toBe(box.left);
   });
 });

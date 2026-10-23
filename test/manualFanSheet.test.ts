@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CLUSTER, FAN, GESTURE } from '../src/constants.js';
+import { BOOKLET, CLUSTER, FAN, GESTURE } from '../src/constants.js';
 import { fanWidth } from '../src/game/manualFan.js';
 import { createManualFan } from '../src/ui/manualFan.js';
 import type { FanWorld } from '../src/ui/manualFan.js';
@@ -198,49 +198,45 @@ describe('folding', () => {
 });
 
 describe('where it lies', () => {
-  // Portrait 390 wide: the menu upper left, the catalog's thumb beside it, the band along the bottom.
-  function measure(width = 72) {
+  // Portrait 390 wide: the menu upper left, the band along the bottom.
+  function measure() {
     dom.viewport.width = 390;
     dom.viewport.height = 760;
     const cluster = new FakeElement('div', dom as never);
     cluster.className = 'control-cluster';
     cluster.rect = { left: CLUSTER.inset, top: CLUSTER.inset, width: 44, height: 44 };
-    const thumb = new FakeElement('button', dom as never);
-    thumb.className = 'booklet-thumb';
-    thumb.dataset.corner = 'topLeft';
-    thumb.rect = { left: CLUSTER.inset + 44 + CLUSTER.gap, top: 16, width, height: 100 };
     const strip = new FakeElement('div', dom as never);
     strip.className = 'booklet-strip';
     strip.rect = { left: 0, top: 636, width: 390, height: 124 };
-    dom.body.append(cluster, thumb, strip);
-    return { cluster, thumb, strip };
+    dom.body.append(cluster, strip);
+    return { cluster, strip };
   }
   const edge = 390 - CLUSTER.inset;
 
-  it('lies against the manual\'s side (the right edge upright), as wide as the stack folded', () => {
-    measure();
+  it('lies right above the band against the right edge, as wide as the stack folded', () => {
+    const { strip } = measure();
     const { element } = mount(['a', 'b', 'c']);
     const width = fanWidth(3, false, FAN);
     expect(element.style.width).toBe(`${width}px`);
     expect(element.style.left).toBe(`${edge - width}px`);
-    expect(element.style.top).toBe(`${CLUSTER.inset}px`);
+    expect(Number(element.style.top.replace('px', '')) + Math.round((FAN.cover * BOOKLET.pageSize[1]) / BOOKLET.pageSize[0])).toBe(strip.rect.top - FAN.inset);
   });
 
-  it('spreads leftward, held between the catalog\'s thumb and the edge when the row is wider, and re-measures on resize', () => {
-    const { thumb } = measure();
+  it('spreads leftward, held between the cluster and the edge when the row is wider, and re-measures on resize', () => {
+    const { cluster } = measure();
     const { element, buttons } = mount(['a', 'b', 'c', 'd', 'e', 'f']);
     tap(buttons()[0]);
-    const start = thumb.rect.left + thumb.rect.width + FAN.inset;
+    const start = cluster.rect.left + cluster.rect.width + FAN.inset;
     const room = edge - start;
     expect(fanWidth(6, true, FAN)).toBeGreaterThan(room);
     expect(element.style.width).toBe(`${room}px`);
     expect(element.style.left).toBe(`${start}px`);
-    thumb.rect = { ...thumb.rect, left: thumb.rect.left + 40 };
+    cluster.rect = { ...cluster.rect, width: 44 + 52 };
     dom.windowListeners.get('resize')?.forEach((fn) => fn({}));
-    expect(element.style.width).toBe(`${room - 40}px`);
+    expect(element.style.width).toBe(`${room - 52}px`);
   });
 
-  it('stops short of a band that runs down the right edge, and follows it on a turn end over end with no resize', () => {
+  it('lies against a band down the right edge, and follows it on a turn end over end with no resize', () => {
     dom.viewport.width = 932;
     dom.viewport.height = 376;
     const cluster = new FakeElement('div', dom as never);
