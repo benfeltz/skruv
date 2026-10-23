@@ -10,7 +10,7 @@ Mobile-first, browser-playable 3D flatpack-assembly game. Strict TypeScript, Thr
 | Production build | `npm run build` |
 | Full test suite | `npx vitest run` (same as `npm test`) |
 | Single test file | `npx vitest run <path>` — e.g. `npx vitest run test/clamp.test.ts` |
-| Validate an item | `npx tsx tools/validate/index.ts items/johnny` (and `items/blank`, `items/overkall`; once: `npm ci --prefix tools/validate`) |
+| Validate an item | `npx tsx tools/validate/index.ts items/johnny` (and `items/blank`, `items/overkall`, `items/somnlos`; once: `npm ci --prefix tools/validate`) |
 | Typecheck | `npm run typecheck` (`tsc --noEmit`) |
 | Lint | `npm run lint` (ESLint: `@eslint/js` + `typescript-eslint` recommended); the pre-commit hook runs `eslint --fix` on staged `.ts` |
 | Shell, local phone loop | `cd app && npm ci && scripts/ios.sh build` (then `install`, `launch`, or `all` / `sim`; the script's header lists them) |
@@ -28,6 +28,7 @@ items/
   johnny/flatpack.json  an item: parts, assembled poses, booklet pages, packing (Flatpack format 1)
   blank/flatpack.json   the second item: a side table of box legs and double-ended studs
   overkall/flatpack.json  the third item: a nightstand whose drawer is a dowelled, screwed box
+  somnlos/flatpack.json  the fourth item: a bed frame, built flat on its panels
 tools/
   validate/      Flatpack schema + validator CLI (adds ajv); lib/ is the one pack implementation and owns the Flatpack types
   agent-bridge/  MCP bridge to a dev session
