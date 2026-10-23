@@ -696,6 +696,9 @@ export const MENU = {
   glyph: 22,
   drop: { gap: 8, pad: 8, radius: 18 },
 };
+// The catalog's docked thumb, level with the menu and beside it (src/ui/booklet.ts), is this tall (CSS
+// pixels); the menu's drop opens below it, never over it (src/ui/menuButton.ts).
+export const CATALOG_THUMB_HEIGHT = Math.round((BOOKLET_UI.thumbWidth * BOOKLET.pageSize[1]) / BOOKLET.pageSize[0]);
 
 // Repack and recovery (src/ui/resetButton.ts, src/main.ts).
 export const RESET = {
@@ -1121,11 +1124,11 @@ export const TUNE = {
   fpsMaxGap: 1,
 };
 
-// The manual fan (src/ui/manualFan.ts, src/game/manualFan.ts): the kept worlds' manuals as a fanned
-// stack across the top, between the menu and the catalog's thumb (CSS px; tilt in degrees). `cover` is
-// a cover's width (its height follows BOOKLET.pageSize), `step` the offset between folded covers,
-// `gap` the space between spread ones, `tilt` the folded covers' lean, alternating, `inset` the
-// space kept to the menu and the thumb, `motionMs` the fold and spread.
+// The manual fan (src/ui/manualFan.ts, src/game/manualFan.ts): every world's manual as a fanned stack
+// docked against the manual's strip — above it upright, beside it in landscape — (CSS px; tilt in
+// degrees). `cover` is a cover's width (its height follows BOOKLET.pageSize), `step` the offset between
+// folded covers, `gap` the space between spread ones, `tilt` the folded covers' lean, alternating,
+// `inset` the space kept to the strip and the cluster, `motionMs` the fold and spread.
 export const FAN = { cover: 56, step: 14, gap: 8, tilt: 5, inset: 12, motionMs: 160 };
 
 // The room's save (src/game/roomStore.ts): the one key it is written under, and how long after the last

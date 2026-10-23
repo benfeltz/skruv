@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CATALOG_THUMB_HEIGHT, MENU } from '../src/constants.js';
 import { createMenuButton } from '../src/ui/menuButton.js';
 import { FakeElement, installFakeDom } from './support/fakeDom.js';
 import type { FakeDom } from './support/fakeDom.js';
@@ -110,5 +111,14 @@ describe('the menu button', () => {
     expect(dom.windowListeners.get('pointerdown')).toEqual([]);
     expect(dom.windowListeners.get('keydown')).toEqual([]);
     expect(parent.children).toEqual([]);
+  });
+});
+
+describe('the drop and the catalog\'s thumb', () => {
+  it('opens below the thumb that stands beside the menu, never over it', () => {
+    mount();
+    const css = dom.head.children.map((node) => node.textContent).join('');
+    expect(CATALOG_THUMB_HEIGHT).toBeGreaterThan(MENU.size);
+    expect(css).toContain(`.menu-drop {\n      position: absolute;\n      /* Below the catalog's thumb, which stands beside the menu: the drop never covers it. */\n      top: ${CATALOG_THUMB_HEIGHT + MENU.drop.gap}px;`);
   });
 });

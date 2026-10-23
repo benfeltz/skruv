@@ -1,4 +1,4 @@
-import { COLORS, MENU } from '../constants.js';
+import { CATALOG_THUMB_HEIGHT, COLORS, MENU } from '../constants.js';
 
 // The src/ui pattern: a module builds its own element with plain DOM calls, owns the
 // <style> it needs (injected once), takes colours from COLORS, and returns a small API.
@@ -41,7 +41,8 @@ function injectStyle() {
     /* Stacks within the control cluster, which sits above the manual's pages. */
     .menu-drop {
       position: absolute;
-      top: calc(100% + ${MENU.drop.gap}px);
+      /* Below the catalog's thumb, which stands beside the menu: the drop never covers it. */
+      top: ${Math.max(MENU.size, CATALOG_THUMB_HEIGHT) + MENU.drop.gap}px;
       left: 0;
       display: flex;
       flex-direction: column;
