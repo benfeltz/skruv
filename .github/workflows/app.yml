@@ -42,6 +42,7 @@ jobs:
       - run: npx tsx tools/validate/index.ts items/johnny
       - run: npx tsx tools/validate/index.ts items/blank
       - run: npx tsx tools/validate/index.ts items/overkall
+      - run: npx tsx tools/validate/index.ts items/somnlos
       - run: npx vitest run
 
       - name: Import distribution certificate

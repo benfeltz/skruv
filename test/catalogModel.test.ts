@@ -22,10 +22,11 @@ describe('catalogEntries', () => {
     expect(catalogEntries()[0]).toMatchObject({ id: 'johnny', name: 'JOHNNY' });
   });
 
-  it('carries BLANK second and ÖVERKÄLL third, JOHNNY staying first — the order the catalog pages and the pre-splash count follow', () => {
-    expect([...ITEM_IDS]).toEqual(['johnny', 'blank', 'overkall']);
+  it('carries BLANK second, ÖVERKÄLL third and SÖMNLÖS fourth, JOHNNY staying first — the order the catalog pages and the pre-splash count follow', () => {
+    expect([...ITEM_IDS]).toEqual(['johnny', 'blank', 'overkall', 'somnlos']);
     expect(catalogEntries()[1]).toMatchObject({ id: 'blank', name: 'BLANK', partCount: 10 });
     expect(catalogEntries()[2]).toMatchObject({ id: 'overkall', name: 'ÖVERKÄLL', partCount: 69 });
+    expect(catalogEntries()[3]).toMatchObject({ id: 'somnlos', name: 'SÖMNLÖS', partCount: 67 });
   });
 });
 

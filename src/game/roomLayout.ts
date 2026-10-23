@@ -6,6 +6,7 @@
 import { LAYOUT, ROOM } from '../constants.js';
 import { boxPlacement } from './boxLayout.js';
 import type { PackedBox } from './boxLayout.js';
+import { rotatedHalfExtents } from './dragMath.js';
 import type { Pose, Vec3 } from '../../tools/validate/lib/geometry.js';
 
 /** A rectangle on the floor: `[minX, minZ, maxX, maxZ]`. */
@@ -17,11 +18,26 @@ export interface View {
   target: Vec3;
 }
 
-/** The `[minX, minZ, maxX, maxZ]` of `positions`, grown by `pad` on every side. */
-export function footprintOf(positions: Vec3[], pad: number): Footprint {
-  const xs = positions.map(([x]) => x);
-  const zs = positions.map(([, , z]) => z);
-  return [Math.min(...xs) - pad, Math.min(...zs) - pad, Math.max(...xs) + pad, Math.max(...zs) + pad];
+/** A box-shaped body on the floor: where it is, how it is turned, and its half-size. */
+export interface Placed extends Pose {
+  half: Vec3;
+}
+
+/**
+ * The `[minX, minZ, maxX, maxZ]` covering every one of `bodies` — each its whole turned box,
+ * not just its centre, so a wide flatpack's footprint is the box's own — grown by `pad` on every side.
+ */
+export function footprintOf(bodies: Placed[], pad: number): Footprint {
+  const reach = bodies.map(({ position: [x, , z], rotation, half }) => {
+    const [hx, , hz] = rotatedHalfExtents(half, rotation);
+    return [x - hx, z - hz, x + hx, z + hz];
+  });
+  return [
+    Math.min(...reach.map((r) => r[0])) - pad,
+    Math.min(...reach.map((r) => r[1])) - pad,
+    Math.max(...reach.map((r) => r[2])) + pad,
+    Math.max(...reach.map((r) => r[3])) + pad,
+  ];
 }
 
 /** The `[x, z]` extent of a box on the floor at its placed yaw: its outside, turned. */

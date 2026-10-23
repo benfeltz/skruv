@@ -98,11 +98,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// The epic's three items, as entries; the registry carries only JOHNNY so far.
+// The epic's four items, as entries: the counts are the fixture's own, not the registry's.
 const entries: CatalogEntry[] = [
   entry('johnny', 'JOHNNY', 61),
   entry('blank', 'BLANK', 9),
   entry('overkall', 'ÖVERKÄLL', 40),
+  entry('somnlos', 'SÖMNLÖS', 67),
 ];
 const ids = entries.map(({ id }) => id);
 
@@ -255,10 +256,10 @@ describe('AC3: selecting the catalog returns to picking; tap-outside before any 
 });
 
 describe('AC5: the pickable hook makes the rest SOLD OUT, inert (VITE_PICKABLE)', () => {
-  it('VITE_PICKABLE=blank: only BLANK has BUILD IT; JOHNNY and ÖVERKÄLL are sold out and pick nothing', () => {
+  it('VITE_PICKABLE=blank: only BLANK has BUILD IT; JOHNNY, ÖVERKÄLL and SÖMNLÖS are sold out and pick nothing', () => {
     const { pages, catalog, buildIt, turnTo, items } = boot({ flag: 'blank' });
-    expect(pages.map((page) => page.kind === 'item' && page.pickable)).toEqual([false, false, true, false]);
-    for (const page of [1, 3]) {
+    expect(pages.map((page) => page.kind === 'item' && page.pickable)).toEqual([false, false, true, false, false]);
+    for (const page of [1, 3, 4]) {
       turnTo(page);
       expect(buildIt.hidden, `page ${page}`).toBe(true);
       // A tap where the tag would be lands on the page: no pick, and still nothing to put it down into.

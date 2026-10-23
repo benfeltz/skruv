@@ -677,11 +677,12 @@ export const DRAWN_EPSILON = 1e-9;
 // first free spot along a row across the room, then a second row back. `pitch` (m) is the step
 // between spots along the room's width, `rowDepth` (m) the step back (toward -z) to the next
 // row, `pad` (m) the clear space kept around every footprint, `margin` (m) how close to a wall
-// a box may stand. Sized from the largest box (Johnny's, 2.1 m long) so one row takes it and a
-// smaller box beside it.
+// a box may stand. Sized from the largest box (SÖMNLÖS's, 2.14 × 1.66 m on the floor): a row
+// back clears it and JOHNNY's (0.86 m deep) with both pads between, and a row still takes it
+// and a smaller box beside it.
 export const LAYOUT = {
   pitch: 0.8,
-  rowDepth: 1.3,
+  rowDepth: 1.5,
   pad: 0.1,
   margin: 0.1,
 };

@@ -22,7 +22,7 @@ describe('AC1: ÖVERKÄLL validates and ships in the catalog as the third item, 
   });
 
   it('is the registry\'s third entry, after BLANK, JOHNNY first, and pickable under an empty flag', () => {
-    expect([...ITEM_IDS]).toEqual(['johnny', 'blank', 'overkall']);
+    expect(ITEM_IDS.slice(0, 3)).toEqual(['johnny', 'blank', 'overkall']);
     expect(itemById('overkall').identity.product).toBe('ÖVERKÄLL');
     expect(pickableSet('', ITEM_IDS).has('overkall')).toBe(true);
   });

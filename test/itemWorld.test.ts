@@ -1137,3 +1137,57 @@ describe('several worlds in one room (1.9.9.2)', () => {
     johnny.dispose();
   });
 });
+
+// 1.9.0.4: SÖMNLÖS, the largest box so far, in real worlds on the real physics. Its packing
+// and the room layout are checked headlessly too (somnlosPack, roomLayout); these run them.
+describe('SÖMNLÖS in the room', () => {
+  afterEach(() => setItem('johnny'));
+  const apart = (a: number[], b: number[]) => a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1];
+  // A box's own outside on the floor, standing where its world's snapshot says, unpadded.
+  const boxFloor = (position: number[]) => {
+    const [sx, sz] = boxFootprintSize(packedBox());
+    return [position[0] - sx / 2, position[2] - sz / 2, position[0] + sx / 2, position[2] + sz / 2];
+  };
+
+  it('keeps all 67 pieces in the closed box as it settles', async () => {
+    const rig = await engine();
+    setItem('somnlos');
+    const world = createItemWorld(rig.deps);
+    run(world, 1);
+    const { box, parts } = world.snapshot();
+    const [minX, minZ, maxX, maxZ] = boxFloor(box.position);
+    const top = packedBox().floor + packedBox().inner[1];
+    expect(Object.keys(parts)).toHaveLength(67);
+    for (const [id, { position: [x, y, z] }] of Object.entries(parts)) {
+      expect(x > minX && x < maxX && z > minZ && z < maxZ, `${id} at ${x}, ${z}`).toBe(true);
+      expect(y > 0 && y < top, `${id} at height ${y}`).toBe(true);
+    }
+    world.dispose();
+  });
+
+  for (const other of ITEM_IDS.filter((id) => id !== 'somnlos')) {
+    it(`sets ${other}'s box down clear of SÖMNLÖS's whole box, either picked first`, async () => {
+      const rig = await engine();
+      for (const [first, second] of [['somnlos', other], [other, 'somnlos']]) {
+        setItem(first);
+        const kept = createItemWorld(rig.deps);
+        const keptBox = boxFloor(kept.snapshot().box.position);
+        // The footprint covers the whole box, not just the centres of what is in it.
+        const footprint = kept.footprint();
+        expect(footprint[0] <= keptBox[0] && footprint[1] <= keptBox[1] && footprint[2] >= keptBox[2] && footprint[3] >= keptBox[3], first).toBe(true);
+        kept.deactivate();
+        setItem(second);
+        const at = freeSpot([footprint], boxFootprintSize(packedBox()));
+        const next = createItemWorld({ ...rig.deps, at });
+        // Where it was set down, before the physics could shove an overlap apart.
+        expect(next.snapshot().box.position[0]).toBeCloseTo(at.position[0], 6);
+        expect(apart(keptBox, boxFloor(at.position)), `${first}, then ${second}`).toBe(true);
+        // On a free spot, pads and all — not the least crowded of taken ones.
+        expect(apart(footprint, next.footprint()), `${first}, then ${second}: padded`).toBe(true);
+        next.dispose();
+        setItem(first);
+        kept.dispose();
+      }
+    });
+  }
+});
