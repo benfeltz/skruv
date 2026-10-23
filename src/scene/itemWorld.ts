@@ -487,6 +487,8 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
     booklet,
     pickDistance,
     repack,
+    /** Its manual's cover as the strip drew it, for the manual fan (1.9.9.3): the page canvas already drawn, nothing read live. */
+    cover: () => bookletPages.canvas(0),
     /** Where the world stands on the floor: its box, lid and every player part, padded. */
     footprint(): Footprint {
       return footprintOf([flatpack.base, flatpack.lid, ...playerParts].map(({ body }) => {
