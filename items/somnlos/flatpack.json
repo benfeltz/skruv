@@ -822,6 +822,12 @@
     "pages": [
       {
         "kind": "cover"
+      },
+      {
+        "kind": "inventory"
+      },
+      {
+        "kind": "back"
       }
     ]
   },

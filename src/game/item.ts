@@ -20,6 +20,7 @@ export type { Joint } from '../../tools/validate/lib/joints.js';
 import johnny from '../../items/johnny/flatpack.json';
 import blank from '../../items/blank/flatpack.json';
 import overkall from '../../items/overkall/flatpack.json';
+import somnlos from '../../items/somnlos/flatpack.json';
 
 /** A part type as the game holds it: the pack's, or the box base — which has no part number or mass of its own. */
 export type GamePartType = Omit<PartType, 'partNumber' | 'mass'> & Partial<Pick<PartType, 'partNumber' | 'mass'>>;
@@ -93,6 +94,7 @@ const ITEMS: ReadonlyMap<string, Item> = new Map([
   ['johnny', itemOf(johnny as unknown as FlatpackFile)],
   ['blank', itemOf(blank as unknown as FlatpackFile)],
   ['overkall', itemOf(overkall as unknown as FlatpackFile)],
+  ['somnlos', itemOf(somnlos as unknown as FlatpackFile)],
 ]);
 
 /** Every item the game carries, in registry order — what the catalog lists. */
