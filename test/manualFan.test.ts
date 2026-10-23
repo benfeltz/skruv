@@ -1,16 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { FAN } from '../src/constants.js';
-import { fanCovers, fanLabel, fanLayout, fanWidth, overflows } from '../src/game/manualFan.js';
+import { coverDepth, fanLabel, fanLayout, fanOrder, fanWidth, overflows } from '../src/game/manualFan.js';
 
-describe('which manuals the fan holds', () => {
-  it('leaves out the active one and keeps room order', () => {
-    expect(fanCovers(['a', 'b', 'c'], 'b')).toEqual(['a', 'c']);
+describe('the covers\' order', () => {
+  it('keeps the covers where they were, drops the gone and adds the new at the end', () => {
+    expect(fanOrder(['a', 'b', 'c'], ['a', 'c', 'd'])).toEqual(['a', 'c', 'd']);
   });
-  it('holds every id when none is active', () => {
-    expect(fanCovers(['a', 'b'], null)).toEqual(['a', 'b']);
+  it('is not re-arranged when another world goes active (the room\'s order changes, the fan\'s does not)', () => {
+    expect(fanOrder(['johnny', 'blank'], ['blank', 'johnny'])).toEqual(['johnny', 'blank']);
   });
-  it('is empty with one world', () => {
-    expect(fanCovers(['a'], 'a')).toEqual([]);
+  it('starts from the room\'s order', () => {
+    expect(fanOrder([], ['a', 'b'])).toEqual(['a', 'b']);
+    expect(fanOrder(['a'], [])).toEqual([]);
+  });
+});
+
+describe('what lies on top', () => {
+  it('puts the active cover over every other, the rest as they lie', () => {
+    expect([0, 1, 2].map((i) => coverDepth(i, 3, 1))).toEqual([0, 3, 2]);
+    expect(coverDepth(0, 1, 0)).toBe(1);
   });
 });
 

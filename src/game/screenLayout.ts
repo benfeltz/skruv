@@ -55,24 +55,30 @@ export function liftLineBox({ viewport, cluster, strip, hitWidth, knobRadius, ga
 export interface FanBoxInput {
   /** The viewport's size. */
   viewport: { width: number; height: number };
-  /** The control cluster (the menu, and the ?tune gear when shown): the fan lies to its right. */
+  /** The control cluster (the menu, and the ?tune gear when shown); the fan is level with it. */
   cluster: Rect;
-  /** The catalog's thumb, or null when there is none: the fan ends short of it. */
+  /** The catalog's thumb, beside the cluster, or null when there is none: the fan starts past it (else past the cluster). */
   thumb: Rect | null;
+  /** The manual's band, or null when there is none: when it reaches the top row (landscape, down the right edge) the fan ends short of it. */
+  strip: Rect | null;
   /** The fan's height. */
   height: number;
   /** The space kept between the fan and its neighbours. */
   gap: number;
+  /** The space kept to the viewport's edge when no band stands there. */
+  margin: number;
 }
 
 /**
- * The manual fan's row (1.9.9.3): across the top between the control cluster's right edge and the
- * catalog thumb's left edge, a gap off each, its top level with the cluster. With no thumb it runs to
- * the viewport's edge less the gap. Never narrower than nothing, so a crowded top leaves an empty box
- * rather than an inverted one.
+ * The manual fan's row (1.9.9.3): across the top from the catalog thumb's right edge to the manual's
+ * side — the viewport's right edge upright, the band's left edge in landscape, where the band runs the
+ * screen's height — a gap off each, its top level with the cluster. Never narrower than nothing, so a
+ * crowded top leaves an empty box rather than an inverted one.
  */
-export function fanBox({ viewport, cluster, thumb, height, gap }: FanBoxInput): Rect {
-  const left = cluster.right + gap;
-  const right = Math.max(left, (thumb ? thumb.left : viewport.width) - gap);
-  return { left, top: cluster.top, right, bottom: cluster.top + height };
+export function fanBox({ viewport, cluster, thumb, strip, height, gap, margin }: FanBoxInput): Rect {
+  const left = (thumb ?? cluster).right + gap;
+  const top = cluster.top;
+  const bandInRow = strip !== null && strip.right > left && strip.top < top + height && strip.bottom > top;
+  const right = Math.max(left, bandInRow ? strip.left - gap : viewport.width - margin);
+  return { left, top, right, bottom: top + height };
 }

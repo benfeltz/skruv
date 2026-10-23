@@ -18,15 +18,15 @@ const thumb = { width: 72, height: 100 };
 function screen(width: number, height: number, inset = 0) {
   const menu = MENU.size;
   if (height >= width) {
-    // Portrait: the menu upper left (the lift line under it, for the left thumb), the catalog upper right.
+    // Portrait: the menu upper left (the lift line under it, for the left thumb), the catalog beside it.
     const cluster = rect(CLUSTER.inset, CLUSTER.inset, menu, menu);
-    return { viewport: { width, height }, cluster, strip: rect(0, height - band, width, band), catalog: rect(width - CLUSTER.inset - thumb.width, CLUSTER.inset, thumb.width, thumb.height) };
+    return { viewport: { width, height }, cluster, strip: rect(0, height - band, width, band), catalog: rect(cluster.right + gap, CLUSTER.inset, thumb.width, thumb.height) };
   }
   // Landscape (Ben, 2026-10-18): the band always down the right, inside the right margin; the cluster
-  // (menu over gear) always on the left, just inside the left margin; the catalog beside the band.
+  // (menu over gear) always on the left, just inside the left margin; the catalog beside the cluster.
   const cluster = rect(inset + CLUSTER.inset, CLUSTER.inset, menu, 2 * menu + CLUSTER.gap);
   const strip = rect(width - inset - band, 0, band, height);
-  const catalog = rect(width - inset - band - gap - thumb.width, CLUSTER.inset, thumb.width, thumb.height);
+  const catalog = rect(cluster.right + gap, CLUSTER.inset, thumb.width, thumb.height);
   return { viewport: { width, height }, cluster, strip, catalog };
 }
 
@@ -87,34 +87,40 @@ describe('overlaps', () => {
 
 describe('the manual fan', () => {
   const height = 80;
+  const margin = CLUSTER.inset;
   const cases = [
     ['portrait', screen(390, 760)],
     ['landscape, a safe-area margin each side (Safari)', screen(932, 376, 59)],
     ['landscape, no margins reported', screen(814, 374)],
   ] as const;
 
-  for (const [name, { viewport, cluster, catalog }] of cases) {
-    it(`${name}: lies between the menu and the catalog's thumb, level with the menu, overlapping neither`, () => {
-      const box = fanBox({ viewport, cluster, thumb: catalog, height, gap });
-      expect(box.left).toBe(cluster.right + gap);
-      expect(box.right).toBe(catalog.left - gap);
+  for (const [name, { viewport, cluster, catalog, strip }] of cases) {
+    it(`${name}: lies past the catalog's thumb on the manual's side, level with the menu, overlapping neither it nor the band`, () => {
+      const box = fanBox({ viewport, cluster, thumb: catalog, strip, height, gap, margin });
+      expect(box.left).toBe(catalog.right + gap);
       expect(box.top).toBe(cluster.top);
       expect(box.bottom - box.top).toBe(height);
       expect(box.right).toBeGreaterThan(box.left);
-      expect(overlaps(box, cluster)).toBe(false);
-      expect(overlaps(box, catalog)).toBe(false);
+      for (const other of [cluster, catalog, strip]) expect(overlaps(box, other)).toBe(false);
+      expect(box.right).toBeLessThanOrEqual(viewport.width - margin);
     });
   }
 
-  it('runs to the viewport\'s edge less the gap with no thumb measured', () => {
-    const { viewport, cluster } = screen(390, 760);
-    expect(fanBox({ viewport, cluster, thumb: null, height, gap }).right).toBe(viewport.width - gap);
+  it('upright it runs to the right edge less the margin; in landscape it stops a gap short of the band', () => {
+    const portrait = screen(390, 760);
+    expect(fanBox({ ...portrait, thumb: portrait.catalog, height, gap, margin }).right).toBe(390 - margin);
+    const land = screen(932, 376, 59);
+    expect(fanBox({ ...land, thumb: land.catalog, height, gap, margin }).right).toBe(land.strip.left - gap);
   });
 
-  it('is empty, not inverted, when the thumb crowds the cluster', () => {
-    const { viewport, cluster } = screen(390, 760);
-    const thumb = rect(cluster.right, 0, 40, 40);
-    const box = fanBox({ viewport, cluster, thumb, height, gap });
+  it('starts past the cluster with no thumb measured', () => {
+    const { viewport, cluster, strip } = screen(390, 760);
+    expect(fanBox({ viewport, cluster, thumb: null, strip, height, gap, margin }).left).toBe(cluster.right + gap);
+  });
+
+  it('is empty, not inverted, when the band crowds the thumb', () => {
+    const { viewport, cluster, catalog } = screen(390, 760);
+    const box = fanBox({ viewport, cluster, thumb: catalog, strip: rect(catalog.right + 1, 0, 100, 760), height, gap, margin });
     expect(box.right).toBe(box.left);
   });
 });

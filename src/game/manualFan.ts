@@ -1,7 +1,7 @@
 import type { FAN } from '../constants.js';
 
-// The manual fan's model (1.9.9.3): which manuals the fan holds and where each cover sits, folded
-// and spread. Pure: src/ui/manualFan.ts applies the numbers.
+// The manual fan's model (1.9.9.3): every world's manual in a stable order, the active one on top,
+// and where each cover sits, folded and spread. Pure: src/ui/manualFan.ts applies the numbers.
 
 type Fan = typeof FAN;
 
@@ -11,9 +11,18 @@ export interface CoverPlace {
   angle: number;
 }
 
-/** The manuals the fan holds: every world's but the active one's, in room order (one copy of each manual). */
-export function fanCovers(ids: readonly string[], active: string | null): string[] {
-  return ids.filter((id) => id !== active);
+/**
+ * The covers' order in the row: those already in it keep their places, the ones the room no longer
+ * holds drop out, a new one joins at the end. A pick never re-arranges the others; only which cover
+ * is on top changes (`coverDepth`).
+ */
+export function fanOrder(previous: readonly string[], ids: readonly string[]): string[] {
+  return [...previous.filter((id) => ids.includes(id)), ...ids.filter((id) => !previous.includes(id))];
+}
+
+/** A cover's stacking depth: the active one on top of the rest, the others as they lie, later over earlier. */
+export function coverDepth(index: number, count: number, activeIndex: number): number {
+  return index === activeIndex ? count : index;
 }
 
 /**

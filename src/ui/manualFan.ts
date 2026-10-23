@@ -1,10 +1,10 @@
-import { BOOKLET, CLUSTER, COLORS, FAN, GESTURE, MENU, RENDER } from '../constants.js';
-import { fanCovers, fanLabel, fanLayout, fanWidth } from '../game/manualFan.js';
+import { BOOKLET, CLUSTER, COLORS, FAN, GESTURE, RENDER } from '../constants.js';
+import { coverDepth, fanLabel, fanLayout, fanOrder, fanWidth } from '../game/manualFan.js';
 import { fanBox, type Rect } from '../game/screenLayout.js';
 
-// The manual fan (1.9.9.3): the kept worlds' manuals as a stack of covers across the top, between the
-// menu and the catalog's thumb. A tap on the stack spreads it; a tap on a cover is the caller's pick.
-// It draws the covers the worlds hand out and asks for nothing else of them — a kept world is never touched.
+// The manual fan (1.9.9.3): every world's manual as a stack of covers across the top, on the side of
+// the manual's strip, past the catalog's thumb; the active world's cover on top, the others where they
+// were. A tap on the stack spreads it; a tap on another cover is the caller's pick. It draws the covers the worlds hand out and asks for nothing else of them — a kept world is never touched.
 
 const STYLE_ID = 'skruv-manual-fan';
 const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
@@ -16,12 +16,12 @@ function injectStyle() {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = `
-    /* Level with the control cluster, to its right; placed from the measured cluster and thumb (refresh). */
+    /* Level with the control cluster, on the strip's side; placed from the measured cluster, thumb and strip (refresh). */
     .manual-fan {
       position: fixed;
       /* Under a blocking sheet's scrim (2) and an open page (3), as the catalog's thumb. */
       z-index: 1;
-      left: calc(${CLUSTER.inset + MENU.size + FAN.inset}px + env(safe-area-inset-left));
+      right: calc(${CLUSTER.inset}px + env(safe-area-inset-right));
       top: calc(${CLUSTER.inset}px + env(safe-area-inset-top));
       height: ${coverHeight}px;
       touch-action: manipulation;
@@ -80,10 +80,10 @@ export interface FanWorld {
 }
 
 /**
- * The fan, hidden until the room holds a kept world. `worlds()` is the room's worlds in order, the
- * active one last: the fan holds every one but that. A tap on the folded stack spreads it; a tap on
- * a spread cover calls `onPick(id)` and folds, a pointer that travels past the tap distance (the row
- * scrolling) picks nothing. A tap outside, Escape and `fold()` put it away. `refresh()` follows the room.
+ * The fan, hidden until the room holds a world. `worlds()` is the room's worlds, the active one last;
+ * the fan holds every one, in the order they first came, the active one's cover on top. A tap on the
+ * folded stack spreads it; a tap on a spread cover calls `onPick(id)` and folds (on the active one's,
+ * it only folds), a pointer that travels past the tap distance (the row scrolling) picks nothing. A tap outside, Escape and `fold()` put it away. `refresh()` follows the room.
  */
 export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly FanWorld[]; nameOf(id: string): string; onPick(id: string): void }) {
   injectStyle();
@@ -100,6 +100,7 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
   const ratio = Math.min(window.devicePixelRatio || 1, RENDER.maxPixelRatio);
   const covers = new Map<string, { button: HTMLButtonElement; canvas: HTMLCanvasElement; source: CanvasImageSource | null }>();
   let ids: string[] = [];
+  let activeId: string | null = null;
   let expanded = false;
 
   // A control on screen, measured: null when it is not mounted (or there is no layout to ask).
@@ -111,7 +112,8 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
     return right > left && bottom > top ? { left, top, right, bottom } : null;
   }
 
-  // Between the control cluster and the catalog's thumb (src/game/screenLayout.ts); else where the CSS puts it.
+  // From the catalog's thumb to the manual's side (src/game/screenLayout.ts), its stack against that side;
+  // else where the CSS puts it.
   function place() {
     const cluster = measured('.control-cluster');
     if (!cluster) return;
@@ -119,12 +121,16 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
       viewport: { width: window.innerWidth, height: window.innerHeight },
       cluster,
       thumb: measured(".booklet-thumb[data-corner='topLeft']"),
+      strip: measured('.booklet-strip'),
       height: coverHeight,
       gap: FAN.inset,
+      margin: CLUSTER.inset,
     });
-    element.style.left = `${box.left}px`;
+    const width = Math.min(fanWidth(ids.length, expanded, FAN), box.right - box.left);
+    element.style.left = `${box.right - width}px`;
+    element.style.right = 'auto';
     element.style.top = `${box.top}px`;
-    element.style.width = `${Math.min(fanWidth(ids.length, expanded, FAN), box.right - box.left)}px`;
+    element.style.width = `${width}px`;
   }
 
   // Each cover to its place in the row, folded or spread (src/game/manualFan.ts).
@@ -134,8 +140,9 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
     fanLayout(ids.length, expanded, FAN).forEach(({ x, angle }, i) => {
       const { button } = covers.get(ids[i])!;
       button.style.transform = `translateX(${x}px) rotate(${angle}deg)`;
-      // One tab stop while folded: the stack; each cover once spread.
-      button.tabIndex = expanded || i === 0 ? 0 : -1;
+      button.style.zIndex = String(coverDepth(i, ids.length, ids.indexOf(activeId ?? '')));
+      // One tab stop while folded: the stack, by its top cover; each cover once spread.
+      button.tabIndex = expanded || ids[i] === activeId ? 0 : -1;
     });
     place();
   }
@@ -159,7 +166,9 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
       entry.canvas.getContext('2d')!.drawImage(source, 0, 0, entry.canvas.width, entry.canvas.height);
       entry.source = source;
     }
-    entry.button.setAttribute('aria-label', `Switch to ${nameOf(id)}`);
+    entry.button.setAttribute('aria-label', id === activeId ? `${nameOf(id)}, open` : `Switch to ${nameOf(id)}`);
+    if (id === activeId) entry.button.setAttribute('aria-current', 'true');
+    else entry.button.removeAttribute('aria-current');
     return entry.button;
   }
 
@@ -168,7 +177,8 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
     expanded = true;
     document.addEventListener('pointerdown', outside, true);
     apply();
-    covers.get(ids[0])?.button.focus();
+    // Focus (and the scroll to it) on the open manual's cover, the one on top.
+    covers.get(activeId ?? ids[0])?.button.focus();
   }
 
   function fold() {
@@ -184,7 +194,8 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
 
   function choose(id: string) {
     if (!expanded) return spread();
-    onPick(id);
+    // The open manual's own cover is no switch.
+    if (id !== activeId) onPick(id);
     fold();
   }
 
@@ -228,11 +239,12 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
 
   return {
     element,
-    /** Follows the room: one cover per kept world (the last world is the active one), hidden with none. */
+    /** Follows the room: one cover per world, the last world being the active one, hidden with none. */
     refresh() {
       const all = worlds();
       const byId = new Map(all.map((world) => [world.id, world]));
-      ids = fanCovers(all.map((world) => world.id), all.at(-1)?.id ?? null);
+      ids = fanOrder(ids, all.map((world) => world.id));
+      activeId = all.at(-1)?.id ?? null;
       for (const [id, { button }] of covers) {
         if (ids.includes(id)) continue;
         button.remove();

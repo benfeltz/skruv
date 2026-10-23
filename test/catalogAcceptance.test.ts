@@ -40,6 +40,9 @@ class FakeElement {
   setAttribute(name: string, value: string) {
     this.attributes[name] = value;
   }
+  removeAttribute(name: string) {
+    delete this.attributes[name];
+  }
   append(...nodes: FakeElement[]) {
     for (const node of nodes) {
       node.parent = this;
@@ -322,21 +325,23 @@ describe('AC6: the manuals are the switcher (1.9.9.3)', () => {
     return { ...rig, covers, tap };
   }
 
-  it('one cover appears, the kept JOHNNY\'s, and the catalog thumb stays its own', () => {
+  it('shows every manual, the active BLANK\'s on top, and the catalog thumb stays its own', () => {
     const { covers, catalog, fan } = twoBuilt();
     expect(fan.element.hidden).toBe(false);
-    expect(covers().map((c) => c.dataset.id)).toEqual(['johnny']);
+    expect(covers().map((c) => c.dataset.id)).toEqual(['johnny', 'blank']);
+    expect(covers().map((c) => c.attributes['aria-current'])).toEqual([undefined, 'true']);
     expect(catalog.thumb.dataset.corner).toBe('topLeft');
   });
 
-  it('is absent while one world is in the room', () => {
+  it('shows the one manual with one world in the room', () => {
     const rig = boot({ flag: '' });
     rig.turnTo(1);
     rig.buildIt.fire('click');
-    expect(rig.fan.element.hidden).toBe(true);
+    expect(rig.fan.element.hidden).toBe(false);
+    expect((rig.fan.element as unknown as FakeElement).children[0].children.map((c) => c.dataset.id)).toEqual(['johnny']);
   });
 
-  it('a tap on the stack then on JOHNNY\'s cover makes JOHNNY active, builds nothing, and leaves BLANK\'s cover in the fan', () => {
+  it('a tap on the stack then on JOHNNY\'s cover makes JOHNNY active and on top, builds nothing, and leaves the covers where they were', () => {
     const { covers, tap, door, items, manuals, fan } = twoBuilt();
     tap(covers()[0]);
     expect(fan.expanded).toBe(true);
@@ -348,7 +353,16 @@ describe('AC6: the manuals are the switcher (1.9.9.3)', () => {
     expect(items.all()).toHaveLength(2);
     expect(manuals).toHaveLength(2);
     expect(fan.expanded).toBe(false);
-    expect(covers().map((c) => c.dataset.id)).toEqual(['blank']);
+    expect(covers().map((c) => c.dataset.id)).toEqual(['johnny', 'blank']);
+    expect(covers().map((c) => c.attributes['aria-current'])).toEqual(['true', undefined]);
+  });
+
+  it('a tap on the open manual\'s own cover picks nothing and folds', () => {
+    const { covers, tap, door, fan } = twoBuilt();
+    tap(covers()[0]);
+    tap(covers()[1]);
+    expect(door()).toBe('blank');
+    expect(fan.expanded).toBe(false);
   });
 
   it('opening the catalog folds a spread fan', () => {
