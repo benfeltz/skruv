@@ -5,16 +5,21 @@ import type { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { createBus } from '../src/game/events.js';
 import { parse, serialize } from '../src/game/roomSave.js';
 import { STATE } from '../src/game/fasteners.js';
+import { FASTENER } from '../src/constants.js';
 import { createHaptics } from '../src/game/haptics.js';
 import { ASSEMBLED, IDENTITY, ITEM_ID, ITEM_IDS, MANIFEST, PART_TYPES, setItem } from '../src/game/item.js';
 import { createItemSlot } from '../src/game/itemSlot.js';
 import { createPhysicsWorld } from '../src/physics/world.js';
 import { createCameraControls } from '../src/scene/cameraControls.js';
 import { createInk } from '../src/scene/ink.js';
+import { createFlatpack } from '../src/scene/flatpack.js';
+import { baseRest, boxPlacement, lidRest } from '../src/game/boxLayout.js';
+import { boxFootprintSize, freeSpot } from '../src/game/roomLayout.js';
+import { packedBox } from '../src/game/boxLayout.js';
 import { createItemWorld } from '../src/scene/itemWorld.js';
 import type { Assembly } from '../src/game/assembly.js';
 import type { Body } from '../src/physics/world.js';
-import type { BookletPages, ItemWorldDeps } from '../src/scene/itemWorld.js';
+import type { BookletPages, ItemWorld, ItemWorldDeps } from '../src/scene/itemWorld.js';
 
 // The swap's honesty gate (1.9.1): an item world built and disposed leaves the room as it
 // found it — scene children, physics bodies, colliders and joints, DOM nodes and every
@@ -172,6 +177,7 @@ async function engine() {
     isFree: () => true,
     ink: createInk(),
     pages,
+    at: boxPlacement(),
   };
   // Everything a world could leave behind, counted.
   const census = () => ({
@@ -453,11 +459,16 @@ describe('the swap: picking from the catalog (1.9.1)', () => {
     expect(census()).toEqual(baseline);
   });
 
-  // BLANK's world (1.9.2): nine parts in a box, and the swap both ways leaving the room as JOHNNY alone left it.
-  it('swaps JOHNNY → BLANK → JOHNNY, each world built and the room back at baseline at the end', async () => {
+  // BLANK's world (1.9.2): nine parts in a box. Picked after JOHNNY, both stand in the room (1.9.9.2);
+  // clear() takes both back out, each with the door naming it, and the room is at baseline.
+  it('keeps JOHNNY when BLANK is picked, re-activates it on a second pick, and clear() leaves the room at baseline', async () => {
     const { deps, census } = await engine();
     const baseline = census();
-    const items = createItemSlot({ door: { knows: (id) => ITEM_IDS.includes(id), selected: () => ITEM_ID, select: setItem }, report: (error) => { throw error; }, build: () => createItemWorld(deps) });
+    const items: ReturnType<typeof createItemSlot<ItemWorld>> = createItemSlot({
+      door: { knows: (id) => ITEM_IDS.includes(id), selected: () => ITEM_ID, select: setItem },
+      report: (error) => { throw error; },
+      build: () => createItemWorld({ ...deps, at: freeSpot(items.all().map((w) => w.footprint()), boxFootprintSize(packedBox())) }),
+    });
     try {
       const johnny = items.pick('johnny');
       run(johnny, 0.2);
@@ -465,15 +476,15 @@ describe('the swap: picking from the catalog (1.9.1)', () => {
       const blank = items.pick('blank');
       expect(ITEM_ID).toBe('blank');
       expect(blank).not.toBe(johnny);
-      const blankBuilt = census();
-      // Its own parts in the box are bodies.
-      expect(blankBuilt.physics.registered).toBeGreaterThan(MANIFEST.length);
-      expect(blankBuilt.physics.registered).toBeLessThan(johnnyBuilt);
+      const both = census();
+      // Its own parts in the box are bodies, and JOHNNY's are still there.
+      expect(both.physics.registered).toBeGreaterThan(johnnyBuilt);
       run(blank, 0.5);
-      const again = items.pick('johnny');
+      expect(items.pick('johnny')).toBe(johnny);
       expect(ITEM_ID).toBe('johnny');
-      expect(census().physics.registered).toBe(johnnyBuilt);
-      again.dispose();
+      expect(census().physics.registered).toBe(both.physics.registered);
+      expect(items.all()).toEqual([blank, johnny]);
+      items.clear();
       expect(census()).toEqual(baseline);
     } finally {
       setItem('johnny');
@@ -802,6 +813,309 @@ describe('the world puts itself back from a record (1.9.1 restore, 1.9.9.1)', ()
     } finally {
       setItem('johnny');
     }
+    world.dispose();
+  });
+});
+
+describe('the flatpack at a spot (1.9.9.2)', () => {
+  it('stands the box and its lid at the pose it is given', async () => {
+    const { deps } = await engine();
+    const at = { position: [1.6, 0, -0.7] as [number, number, number], rotation: [0, Math.SQRT1_2, 0, Math.SQRT1_2] as [number, number, number, number] };
+    const { base, lid } = createFlatpack(deps.physics, deps.ink, at);
+    const near = (body: Body, pose: { position: number[] }) => {
+      const t = body.translation();
+      [t.x, t.y, t.z].forEach((v, i) => expect(v).toBeCloseTo(pose.position[i], 6));
+    };
+    near(base.body, baseRest(at));
+    near(lid.body, lidRest(at));
+  });
+});
+
+describe('several worlds in one room (1.9.9.2)', () => {
+  const overlaps = (a: number[], b: number[]) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+  const strips = () => body.children.filter((node) => node.className === 'booklet-strip');
+  // A pointer press, drag and release on the room's canvas at the screen point of `point`.
+  const dragFrom = (canvas: { dispatch(type: string, event: object): void }, scene: THREE.Scene, camera: THREE.Camera, point: THREE.Vector3, frame: () => void, by = 60) => {
+    scene.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
+    camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+    const v = point.clone().project(camera);
+    const [x, y] = [((v.x + 1) / 2) * 800, ((1 - v.y) / 2) * 800];
+    const pointer = { pointerId: 1, pointerType: 'mouse', button: 0, buttons: 1, preventDefault() {}, stopImmediatePropagation() {}, timeStamp: 0 };
+    canvas.dispatch('pointerdown', { ...pointer, clientX: x, clientY: y });
+    for (let i = 1; i <= 5; i++) canvas.dispatch('pointermove', { ...pointer, clientX: x + (i * by) / 5, clientY: y });
+      frame();
+    canvas.dispatch('pointerup', { ...pointer, clientX: x + by, clientY: y });
+  };
+  const boxAt = (world: { snapshot(): { box: { position: number[] } } }) => world.snapshot().box.position;
+  const dist = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+  async function twoWorlds() {
+    const rig = await engine();
+    const johnny = createItemWorld(rig.deps);
+    johnny.deactivate();
+    setItem('blank');
+    const at = freeSpot([johnny.footprint()], boxFootprintSize(packedBox()));
+    const blank = createItemWorld({ ...rig.deps, at });
+    return { ...rig, johnny, blank, at };
+  }
+  afterEach(() => setItem('johnny'));
+
+  it('stands two worlds in one room, each with its own parts, apart from each other', async () => {
+    const { johnny, blank, at, census } = await twoWorlds();
+    const baseline = census();
+    expect(at.position).not.toEqual(boxPlacement().position);
+    expect(overlaps(johnny.footprint(), blank.footprint())).toBe(false);
+    expect(johnny.snapshot().id).toBe('johnny');
+    expect(blank.snapshot().id).toBe('blank');
+    expect(Object.keys(johnny.snapshot().parts)).not.toEqual(Object.keys(blank.snapshot().parts));
+    expect(baseline.physics.registered).toBeGreaterThan(MANIFEST.length);
+    // Exactly one router's listeners on the canvas (Blank's), one strip on the page.
+    expect(strips().filter((node) => !node.hidden)).toHaveLength(1);
+    // Back to nothing, each torn down with the door naming it.
+    blank.dispose();
+    setItem('johnny');
+    johnny.dispose();
+  });
+
+  it('returns to the room\'s baseline once both are disposed', async () => {
+    const rig = await engine();
+    const baseline = rig.census();
+    const johnny = createItemWorld(rig.deps);
+    johnny.deactivate();
+    setItem('blank');
+    const blank = createItemWorld({ ...rig.deps, at: freeSpot([johnny.footprint()], boxFootprintSize(packedBox())) });
+    run(blank, 0.3);
+    blank.dispose();
+    setItem('johnny');
+    johnny.dispose();
+    expect(rig.census()).toEqual(baseline);
+  });
+
+  it('keeps a kept world inert: its router is off, its strip put away, its overlays down', async () => {
+    const rig = await engine();
+    const base = rig.census();
+    const johnny = createItemWorld(rig.deps);
+    const active = rig.census();
+    johnny.deactivate();
+    // The router's six canvas listeners are off; the world's inset's remain (it is idle).
+    expect(rig.census().canvasListeners).toBe(active.canvasListeners - 6);
+    expect(strips().every((node) => node.hidden)).toBe(true);
+    johnny.dispose();
+    expect(rig.census()).toEqual(base);
+  });
+
+  it('moves nothing of a kept world on a press over it, and drags again once active', async () => {
+    const rig = await engine();
+    const camera = rig.deps.camera as THREE.PerspectiveCamera;
+    camera.lookAt(0, 0.3, 0.6);
+    camera.updateMatrixWorld(true);
+    const johnny = createItemWorld(rig.deps);
+    const top = new THREE.Vector3(...(johnny.snapshot().lid.position as [number, number, number]));
+    johnny.deactivate();
+    run(johnny, 0.3);
+    const lidAt = () => johnny.snapshot().lid.position;
+    const before = [...lidAt()];
+    const moved = () => Math.hypot(...lidAt().map((v, i) => v - before[i]));
+    dragFrom(rig.canvas, rig.deps.scene, camera, top, () => run(johnny, 0.05));
+    run(johnny, 0.3);
+    expect(moved()).toBeLessThan(1e-3);
+    johnny.activate();
+    dragFrom(rig.canvas, rig.deps.scene, camera, top, () => run(johnny, 0.05));
+    run(johnny, 0.3);
+    expect(moved()).toBeGreaterThan(0.02);
+    johnny.dispose();
+  });
+
+  it('brings the strip back on the page it was on, with that page\'s parts lit', async () => {
+    const rig = await engine();
+    const stepPages = {
+      count: 3,
+      pages: [{ kind: 'cover' }, { kind: 'step', types: Object.keys(PART_TYPES) }, { kind: 'back' }] as unknown as BookletPages['pages'],
+      canvas: () => ({}) as HTMLCanvasElement,
+      prerender() {},
+      dispose() {},
+    };
+    const world = createItemWorld({ ...rig.deps, pages: () => stepPages });
+    const lit = () => {
+      let count = 0;
+      rig.deps.scene.traverse((object) => {
+        const material = (object as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+        if (material?.emissive?.getHex() === COLORS.highlight) count++;
+      });
+      return count;
+    };
+    windowTarget.dispatch('keydown', { key: 'ArrowRight' });
+    expect(lit()).toBeGreaterThan(0);
+    world.deactivate();
+    expect(lit()).toBe(0);
+    expect(strips().every((node) => node.hidden)).toBe(true);
+    world.activate();
+    expect(world.booklet.currentPage).toBe(1);
+    expect(lit()).toBeGreaterThan(0);
+    expect(strips().some((node) => !node.hidden)).toBe(true);
+    world.dispose();
+  });
+
+  it('puts its bodies at the record\'s poses whatever spot it was built at', async () => {
+    const rig = await engine();
+    const johnny = createItemWorld(rig.deps);
+    const record = johnny.snapshot();
+    johnny.dispose();
+    const shifted = { position: [1.6, 0, -0.7] as [number, number, number], rotation: boxPlacement().rotation };
+    const again = createItemWorld({ ...rig.deps, at: shifted });
+    expect(boxAt(again)[0]).not.toBeCloseTo(record.box.position[0], 2);
+    again.restore(record);
+    const close = (a: { position: number[] }, b: { position: number[] }) => a.position.forEach((v, i) => expect(v).toBeCloseTo(b.position[i], 5));
+    close(again.snapshot().box, record.box);
+    for (const [id, pose] of Object.entries(record.parts)) close(again.snapshot().parts[id], pose);
+    again.dispose();
+  });
+
+  // Review round 1: what the router draws on a part (a bolt sunk and twisted by its turn) is lost to the next
+  // physics step, which syncs a mesh to its bare body; a kept world puts it back, pack-free, in keep().
+  it('a kept world keeps a half-turned bolt\'s drawn sink after the active world steps the physics world', async () => {
+    const rig = await engine();
+    const pairs: { mesh: THREE.Object3D; body: Body }[] = [];
+    const deps: ItemWorldDeps = {
+      ...rig.deps,
+      physics: {
+        ...rig.deps.physics,
+        register(mesh, spec) {
+          const body = rig.deps.physics.register(mesh, spec);
+          pairs.push({ mesh: mesh as THREE.Object3D, body });
+          return body;
+        },
+      },
+    };
+    const johnny = createItemWorld(deps);
+    const assembly = lastAssembly();
+    const joint = assembly.seat({ partA: 'camLockBolt-1', connectorA: 0, partB: 'sidePanel-1', connectorB: 2, mover: 'camLockBolt-1' });
+    assembly.apply(joint.id, { type: 'crank', radians: FASTENER.boltRadians / 2 });
+    run(johnny, 0.2);
+    const at = johnny.snapshot().parts['camLockBolt-1'].position;
+    const bolt = pairs.reduce((best, p) => (dist([p.body.translation().x, p.body.translation().y, p.body.translation().z], at) < dist([best.body.translation().x, best.body.translation().y, best.body.translation().z], at) ? p : best));
+    const apart = () => Math.hypot(bolt.mesh.position.x - bolt.body.translation().x, bolt.mesh.position.y - bolt.body.translation().y, bolt.mesh.position.z - bolt.body.translation().z);
+    // It really is drawn off its body: sunk into its hole by its progress.
+    expect(apart()).toBeGreaterThan(1e-3);
+    // Drawn off its body by this much, which stays whatever the woken bolt does.
+    const drawnApart = apart();
+
+    johnny.deactivate();
+    setItem('blank');
+    const blank = createItemWorld({ ...rig.deps, at: freeSpot([johnny.footprint()], boxFootprintSize(packedBox())) });
+    bolt.body.wakeUp();
+    for (let t = 0; t < 0.3; t += PHYSICS.timestep) {
+      blank.update(PHYSICS.timestep);
+      johnny.keep();
+    }
+    expect(apart()).toBeCloseTo(drawnApart, 6);
+    blank.dispose();
+    setItem('johnny');
+    johnny.dispose();
+  });
+
+  // Review round 2: a world restored and put away before any frame has never drawn; deactivate draws once before it captures.
+  it('a world restored and kept before any frame still shows its half-turned bolt as drawn', async () => {
+    const rig = await engine();
+    const pairs: { mesh: THREE.Object3D; body: Body }[] = [];
+    const recording: ItemWorldDeps = {
+      ...rig.deps,
+      physics: {
+        ...rig.deps.physics,
+        register(mesh, spec) {
+          const body = rig.deps.physics.register(mesh, spec);
+          pairs.push({ mesh: mesh as THREE.Object3D, body });
+          return body;
+        },
+      },
+    };
+    const apartOf = (id: string, world: { snapshot(): { parts: Record<string, { position: number[] }> } }) => {
+      const at = world.snapshot().parts[id].position;
+      const near = pairs.reduce((best, p) => (dist([p.body.translation().x, p.body.translation().y, p.body.translation().z], at) < dist([best.body.translation().x, best.body.translation().y, best.body.translation().z], at) ? p : best));
+      return Math.hypot(near.mesh.position.x - near.body.translation().x, near.mesh.position.y - near.body.translation().y, near.mesh.position.z - near.body.translation().z);
+    };
+    // A saved room: JOHNNY with a bolt half turned in its panel.
+    const first = createItemWorld(recording);
+    const assembly = lastAssembly();
+    const joint = assembly.seat({ partA: 'camLockBolt-1', connectorA: 0, partB: 'sidePanel-1', connectorB: 2, mover: 'camLockBolt-1' });
+    assembly.apply(joint.id, { type: 'crank', radians: FASTENER.boltRadians / 2 });
+    run(first, 0.2);
+    const activeApart = apartOf('camLockBolt-1', first);
+    expect(activeApart).toBeGreaterThan(1e-3);
+    const record = first.snapshot();
+    first.dispose();
+    pairs.length = 0;
+
+    // The boot: restored, then put away by the next pick, with no frame between.
+    const johnny = createItemWorld(recording);
+    johnny.restore(record);
+    johnny.deactivate();
+    setItem('blank');
+    const blank = createItemWorld({ ...rig.deps, at: freeSpot([johnny.footprint()], boxFootprintSize(packedBox())) });
+    for (let t = 0; t < 0.2; t += PHYSICS.timestep) {
+      blank.update(PHYSICS.timestep);
+      johnny.keep();
+    }
+    expect(apartOf('camLockBolt-1', johnny)).toBeCloseTo(activeApart, 6);
+    blank.dispose();
+    setItem('johnny');
+    johnny.dispose();
+  });
+
+  // Phone bug (round 5): a world restored and put away before a frame had its meshes still packed, and kept them so.
+  it('a restored world kept before any frame has its meshes at their bodies and its parts at the saved poses', async () => {
+    const rig = await engine();
+    const first = createItemWorld(rig.deps);
+    // A saved state away from the packed default: a panel moved out of the box.
+    const saved = first.snapshot();
+    saved.parts['sidePanel-1'] = { position: [-1.2, 0.5, 1.4], rotation: [0, 0, 0, 1] };
+    first.dispose();
+
+    const pairs: { mesh: THREE.Object3D; body: Body }[] = [];
+    const recording: ItemWorldDeps = {
+      ...rig.deps,
+      physics: {
+        ...rig.deps.physics,
+        register(mesh, spec) {
+          const body = rig.deps.physics.register(mesh, spec);
+          pairs.push({ mesh: mesh as THREE.Object3D, body });
+          return body;
+        },
+      },
+    };
+    const johnny = createItemWorld(recording);
+    johnny.restore(saved);
+    johnny.deactivate();
+    setItem('blank');
+    const blank = createItemWorld({ ...rig.deps, at: freeSpot([johnny.footprint()], boxFootprintSize(packedBox())) });
+    blank.update(PHYSICS.timestep);
+    johnny.keep();
+
+    // Every mesh of the kept world sits at its body, not at the packed pose it was built at.
+    expect(pairs.length).toBeGreaterThan(MANIFEST.length);
+    for (const { mesh, body } of pairs) {
+      const { x, y, z } = body.translation();
+      expect(mesh.position.distanceTo(new THREE.Vector3(x, y, z))).toBeLessThan(1e-6);
+    }
+    // And the parts are still where the save put them.
+    const after = johnny.snapshot();
+    expect(after.parts['sidePanel-1'].position[0]).toBeCloseTo(-1.2, 3);
+    expect(after.parts['sidePanel-1'].position[2]).toBeCloseTo(1.4, 3);
+    blank.dispose();
+    setItem('johnny');
+    johnny.dispose();
+  });
+
+  it('deactivating twice, or mid-hold, is harmless', async () => {
+    const rig = await engine();
+    const world = createItemWorld(rig.deps);
+    expect(() => {
+      world.deactivate();
+      world.deactivate();
+      world.activate();
+      world.activate();
+    }).not.toThrow();
     world.dispose();
   });
 });

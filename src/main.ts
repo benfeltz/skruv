@@ -3,8 +3,10 @@ import { catalogEntries, createCatalog } from './game/catalogModel.js';
 import { pickableSet } from './game/pickable.js';
 import { ANY, createBus, EVENT, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
 import { createHaptics, cueFor, patternFor } from './game/haptics.js';
+import { packedBox } from './game/boxLayout.js';
 import { ITEM_ID, ITEM_IDS, itemById, setItem } from './game/item.js';
 import { createItemSlot } from './game/itemSlot.js';
+import { boxFootprintSize, framedAt, freeSpot, nearest } from './game/roomLayout.js';
 import { planRestore } from './game/roomRestore.js';
 import { ROOM_SAVE_FORMAT } from './game/roomSave.js';
 import type { UnknownObject } from './game/roomSave.js';
@@ -72,10 +74,10 @@ tunables.subscribe((key, value) => {
 });
 
 // The camera pivots about the first part along the middle of the screen as a gesture
-// starts — the item world's parts, never the overlays (src/scene/itemWorld.ts); before the
-// first pick there are none, and it pivots about the floor.
+// starts — any world's parts, never the overlays (src/scene/itemWorld.ts); the nearest hit over
+// every world in the room. Before the first pick there are none, and it pivots about the floor.
 const cameraControls = createCameraControls(camera, renderer.domElement, {
-  pickDistance: (origin, direction) => items.current?.pickDistance(origin, direction) ?? null,
+  pickDistance: (origin, direction) => nearest(items.all().map((w) => w.pickDistance(origin, direction))),
 });
 
 // Rotation is free by default; the toggle turns 90° detents on. It is mounted in the control
@@ -96,19 +98,27 @@ events.on(ANY, (event) => {
   if (cue) haptics.cue(cue);
 });
 
-// The item in the room — its flatpack, booklet and everything that works them
-// (src/scene/itemWorld.ts) — none until the first pick. A pick swaps it in-scene as one
-// transaction (src/game/itemSlot.ts): the old world disposed while the door still names it,
-// the door turned, the new world built; a build that throws turns the door back and leaves
-// the room empty, the catalog still in hand. Picking the item already in the room keeps it,
-// progress and all.
+// A page turn is a rest point like any other; the debounce absorbs the peeks. A world's turns are
+// subscribed once, where it is built (its dispose drops them) — never again on a re-activation. A
+// restore turns pages to the saved ones but is not a rest point: the save has nothing new to write.
+let restoring = true;
+const adopt = (world: ItemWorld) => world.booklet.onChange(() => restoring || saver.changed());
+
+// The worlds in the room — each one item's flatpack, booklet and everything that works them
+// (src/scene/itemWorld.ts) — none until the first pick. A pick adds a world beside the ones in
+// the room, or makes the one already there active again (src/game/itemSlot.ts): the active
+// world is deactivated while the door still names it, the door turned, the new world built on
+// the room's first free spot and the camera framed onto it. A build that throws turns the door
+// back and leaves the room as it was, the catalog still in hand. The door names the active
+// world's item; a kept world runs nothing until picked again.
 const items = createItemSlot({
   // The door is item.ts itself: ITEM_ID is a live binding, read at each pick.
   door: { knows: (id) => ITEM_IDS.includes(id), selected: () => ITEM_ID, select: setItem },
-  // An old world's teardown that throws is its bug, not the pick's: logged, and the swap goes on.
+  // A world's teardown that throws is its bug, not the clear's: logged, and the rest are still torn down.
   report: (error) => console.error(error),
-  build: () =>
-    createItemWorld({
+  build: () => {
+    const at = freeSpot(items.all().map((w) => w.footprint()), boxFootprintSize(packedBox()));
+    const world = createItemWorld({
       scene,
       camera,
       domElement: renderer.domElement,
@@ -118,9 +128,14 @@ const items = createItemSlot({
       haptics,
       isFree: () => !snapRotate.pressed,
       ink: room.ink,
+      at,
       // Its controls page shows the device in hand: a coarse pointer is a touch screen.
       pages: () => createBookletPages(renderer, { scheme: matchMedia('(pointer: coarse)').matches ? 'touch' : 'desktop' }),
-    }),
+    });
+    adopt(world);
+    cameraControls.frame(framedAt(at, startPose()));
+    return world;
+  },
 });
 
 // The room's save (src/game/roomSave.ts): written after every rest point — a release, a seat or unseat, a
@@ -153,10 +168,6 @@ for (const type of [EVENT.RELEASE, EVENT.SEAT, EVENT.UNSEAT, EVENT.FASTEN, EVENT
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') saver.flush();
 });
-// A page turn is a rest point like any other; the debounce absorbs the peeks. A world's turns are
-// subscribed when main gets the world, after a pick and after a restore (its dispose drops them).
-const adopt = (world: ItemWorld) => world.booklet.onChange(() => saver.changed());
-
 // The catalog is the splash: the game boots with it open on its cover, and it outlives
 // item worlds, so it is the room's — mounted before any manual. BUILD IT goes straight into
 // the room: the item is built, the catalog put down into the upper-left corner and the new
@@ -169,7 +180,6 @@ const catalog = createCatalogSheet({
   canClose: () => items.current !== null,
   onPick: (id) => {
     const world = items.pick(id);
-    adopt(world);
     catalog.setOpen(false);
     // Focus goes to the item's manual — its strip's centre page — not back to the catalog thumb.
     world.booklet.focus();
@@ -182,7 +192,7 @@ catalogPages.prerender();
 // The restore (src/game/roomRestore.ts): the saved room put back before the first frame, or the empty
 // room as ever. A save this build cannot restore is refused whole, before anything is built; the room
 // starts empty, the catalog says so, and the stored text stays until the next pick writes over it.
-const restored = planRestore(store.read(), { item: (id) => (ITEM_IDS.includes(id) ? itemById(id) : null), capacity: 1 });
+const restored = planRestore(store.read(), { item: (id) => (ITEM_IDS.includes(id) ? itemById(id) : null) });
 if (restored.kind === 'none') console.info('room: no save, starting empty');
 else if (restored.kind === 'refused') {
   console.warn('room: save not restored, starting empty', restored.error);
@@ -191,13 +201,9 @@ else if (restored.kind === 'refused') {
   try {
     const { plan } = restored;
     carried = plan.others;
-    if (plan.dropped.length) console.warn(`room: ${plan.dropped.length} item(s) beyond this build's one world dropped: ${plan.dropped.map((r) => r.id).join(', ')}`);
-    for (const record of plan.items) {
-      const { id } = record;
-      const world = items.pick(id);
-      world.restore(record);
-      adopt(world);
-    }
+    if (plan.dropped.length) console.warn(`room: ${plan.dropped.length} duplicate item record(s) dropped: ${plan.dropped.map((r) => r.id).join(', ')}`);
+    // In the save's order, so the last record is the active world.
+    for (const record of plan.items) items.pick(record.id).restore(record);
     cameraControls.frame(plan.world.camera);
     room.setPhase(plan.world.sky.phase);
     catalog.setOpen(false);
@@ -208,6 +214,7 @@ else if (restored.kind === 'refused') {
     catalog.notify(CATALOG.words.restoreFailed);
   }
 }
+restoring = false;
 // The real sheet now covers index.html's stand-in; it goes in the frame that first paints it.
 requestAnimationFrame(() => document.getElementById('pre-splash')?.remove());
 
@@ -234,6 +241,8 @@ createLoop((delta, rawDelta) => {
   cameraControls.update(delta);
   stageLight.update(room.update(camera.position, renderer, delta));
   items.current?.update(delta);
+  // The kept worlds, after the physics step the active one ran: their riders follow, their drawn hardware is put back.
+  for (const world of items.all()) if (world !== items.current) world.keep();
   // Measured on the true delta: the clamped one would floor every slow device at 15 fps.
   const { render, sample } = fps.frame(rawDelta);
   if (sample) events.emit(fpsEvent(Math.round(sample.fps * 10) / 10, sample.skipping));

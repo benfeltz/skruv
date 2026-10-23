@@ -314,10 +314,9 @@ describe('the room restores at boot (1.9.9.1)', () => {
     expect(main).not.toMatch(/items\.current\?\.snapshot/);
   });
 
-  it("a world's page turns are rest points, in both the pick and the restore", () => {
-    expect(main).toMatch(/const adopt = \(world: ItemWorld\) => world\.booklet\.onChange\(\(\) => saver\.changed\(\)\);/);
-    expect(main).toMatch(/onPick: \(id\) => \{[^}]*adopt\(world\);/);
-    expect(main).toMatch(/world\.restore\(record\);\n\s+adopt\(world\);/);
+  it("a world's page turns are rest points once built, but a restore is not one", () => {
+    expect(main).toMatch(/const adopt = \(world: ItemWorld\) => world\.booklet\.onChange\(\(\) => restoring \|\| saver\.changed\(\)\);/);
+    expect(main).toMatch(/restoring = false;/);
   });
 
   it('sets the sky through the room, never through the constant', () => {
@@ -328,5 +327,43 @@ describe('the room restores at boot (1.9.9.1)', () => {
   it('the store is one object, read by the restore and written by the saver', () => {
     expect(main).toMatch(/planRestore\(store\.read\(\)/);
     expect(main).toMatch(/createRoomSaver\(\{\n\s+store,/);
+  });
+});
+
+describe('the room of several worlds (1.9.9.2)', () => {
+  const build = main.slice(main.indexOf('build: () => {'), main.indexOf('// The room\'s save'));
+
+  it('a pick builds on a free spot and frames the camera there', () => {
+    expect(build).toMatch(/freeSpot\(items\.all\(\)\.map\(\(w\) => w\.footprint\(\)\), boxFootprintSize\(packedBox\(\)\)\)/);
+    expect(build).toMatch(/cameraControls\.frame\(framedAt\(at, startPose\(\)\)\)/);
+  });
+
+  it('a world is adopted where it is built, once: not in onPick, not in the restore loop', () => {
+    expect(build).toMatch(/adopt\(world\);/);
+    const onPick = main.slice(main.indexOf('onPick: (id) => {'), main.indexOf('document.body.append(catalog.scrim'));
+    expect(onPick).not.toMatch(/adopt\(/);
+    const restore = main.slice(main.indexOf('for (const record of plan.items)'), main.indexOf('cameraControls.frame(plan.world.camera)'));
+    expect(restore).not.toMatch(/adopt\(/);
+  });
+
+  it('the camera pivots about any world', () => {
+    expect(main).toMatch(/items\.all\(\)\.map\(\(w\) => w\.pickDistance/);
+    expect(main).not.toMatch(/items\.current\?\.pickDistance/);
+  });
+
+  it('only the active world runs, renders and repacks', () => {
+    expect(main).toMatch(/items\.current\?\.update\(delta\)/);
+    expect(main).toMatch(/items\.current\?\.render\(/);
+    expect(main).toMatch(/items\.current\?\.repack\(\)/);
+    const loop = main.slice(main.indexOf('createLoop('), main.indexOf('}).start()'));
+    // The kept worlds get the pack-free keep pass after the step, and nothing else.
+    expect(loop).toMatch(/for \(const world of items\.all\(\)\) if \(world !== items\.current\) world\.keep\(\);/);
+    expect(loop.match(/items\.all\(\)/g)).toHaveLength(1);
+  });
+
+  it('the restore takes every record, one world each, in the save order', () => {
+    expect(main).not.toMatch(/capacity/);
+    expect(read('src/game/roomRestore.ts')).not.toMatch(/capacity/);
+    expect(main).toMatch(/for \(const record of plan\.items\) items\.pick\(record\.id\)\.restore\(record\);/);
   });
 });

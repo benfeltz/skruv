@@ -151,6 +151,8 @@ export interface GestureRouter {
   verticalReachOf(part: Part, rotation: Quat): VerticalReach;
   carries(part: Part): boolean;
   update(delta?: number): void;
+  /** One frame of a disabled router, reading nothing of the pack: the hardware riding in a panel goes where the panel went. */
+  keep(): void;
   sync(): void;
   unseatAll(ids: PartId[]): void;
   /** The inset's turn ring: turn the tool `grip` by `radians` (positive tightens) through the one crank path. Whether anything moved. */
@@ -159,6 +161,10 @@ export interface GestureRouter {
   pressJoint(id: number): boolean;
   /** The push arrow's second tap: back the pressed `id` out to seated, as a pull on it would. Whether anything changed. */
   pullJoint(id: number): boolean;
+  /** Binds the canvas, document and window listeners (bound at creation); idempotent. */
+  enable(): void;
+  /** Interrupts any gesture in progress as a blur does, then unbinds every listener; the compound stands as it was. Idempotent. */
+  disable(): void;
   dispose(): void;
 }
 
@@ -2138,14 +2144,37 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (document.visibilityState === 'hidden') onInterrupted();
   }
 
-  domElement.addEventListener('pointerdown', onPointerDown, { capture: true });
-  domElement.addEventListener('pointermove', onPointerMove);
-  domElement.addEventListener('pointerup', onPointerUp);
-  domElement.addEventListener('pointercancel', onPointerCancel);
-  domElement.addEventListener('lostpointercapture', onPointerCancel);
-  domElement.addEventListener('wheel', onWheel, { capture: true, passive: false });
-  document.addEventListener('visibilitychange', onVisibilityChange);
-  window.addEventListener('blur', onInterrupted);
+  // The eight listeners, bound while the router is enabled.
+  let bound = false;
+
+  function enable() {
+    if (bound) return;
+    bound = true;
+    domElement.addEventListener('pointerdown', onPointerDown, { capture: true });
+    domElement.addEventListener('pointermove', onPointerMove);
+    domElement.addEventListener('pointerup', onPointerUp);
+    domElement.addEventListener('pointercancel', onPointerCancel);
+    domElement.addEventListener('lostpointercapture', onPointerCancel);
+    domElement.addEventListener('wheel', onWheel, { capture: true, passive: false });
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('blur', onInterrupted);
+  }
+
+  function disable() {
+    if (!bound) return;
+    onInterrupted();
+    bound = false;
+    domElement.removeEventListener('pointerdown', onPointerDown, { capture: true });
+    domElement.removeEventListener('pointermove', onPointerMove);
+    domElement.removeEventListener('pointerup', onPointerUp);
+    domElement.removeEventListener('pointercancel', onPointerCancel);
+    domElement.removeEventListener('lostpointercapture', onPointerCancel);
+    domElement.removeEventListener('wheel', onWheel, { capture: true });
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('blur', onInterrupted);
+  }
+
+  enable();
 
   return {
     // The drag in progress, read-only: which part, and how it is being moved.
@@ -2206,16 +2235,12 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
       if (pulled.length > 0) reconcile();
       return pulled.length > 0;
     },
+    keep: followRiders,
+    enable,
+    disable,
     dispose() {
       onInterrupted();
-      domElement.removeEventListener('pointerdown', onPointerDown, { capture: true });
-      domElement.removeEventListener('pointermove', onPointerMove);
-      domElement.removeEventListener('pointerup', onPointerUp);
-      domElement.removeEventListener('pointercancel', onPointerCancel);
-      domElement.removeEventListener('lostpointercapture', onPointerCancel);
-      domElement.removeEventListener('wheel', onWheel, { capture: true });
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      window.removeEventListener('blur', onInterrupted);
+      disable();
     },
   } satisfies GestureRouter;
 }

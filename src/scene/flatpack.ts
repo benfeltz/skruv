@@ -8,7 +8,7 @@ import { edgesGeometry, inkEdges } from './ink.js';
 import type { Ink } from './ink.js';
 import type { Part } from '../game/partMesh.js';
 import type { PhysicsWorld } from '../physics/world.js';
-import type { Vec3 } from '../../tools/validate/lib/geometry.js';
+import type { Pose, Vec3 } from '../../tools/validate/lib/geometry.js';
 
 /**
  * The box's solid, not its slabs: the outer block and the cavity it holds, so the edge pass draws
@@ -29,9 +29,10 @@ function outlineOf(): THREE.BufferGeometry {
  * over the wall the way a real one does and the empty box can be dragged aside — and its
  * lid closed on top. Both are normal physics parts (`{ id, type, mesh, body }`) for the
  * gesture router to grab like any other. The box and lid take the edge pass, like the room, for
- * their creases and folds; the parts take the hull. Builds once; the poses are src/game/boxLayout.ts's.
+ * their creases and folds; the parts take the hull. Builds once, at the box pose `at` (the room's
+ * free spot); the poses are src/game/boxLayout.ts's.
  */
-export function createFlatpack(physics: PhysicsWorld, ink: Ink): { base: Part; lid: Part } {
+export function createFlatpack(physics: PhysicsWorld, ink: Ink, at: Pose): { base: Part; lid: Part } {
   const slabs = boxSlabs();
   const geometry = mergeGeometries(
     slabs.map(({ size, offset }) => new THREE.BoxGeometry(...size).translate(...offset)),
@@ -41,7 +42,7 @@ export function createFlatpack(physics: PhysicsWorld, ink: Ink): { base: Part; l
   box.castShadow = true;
   box.receiveShadow = true;
   box.add(inkEdges(edgesGeometry(outlineOf()), ink.lines));
-  const rest = baseRest();
+  const rest = baseRest(at);
   // map keeps the length; TS widens a mapped tuple to number[].
   const boxBody = physics.register(box, {
     colliders: slabs.map(({ size, offset }) => ({ halfExtents: size.map((d) => d / 2) as Vec3, offset })),
@@ -54,7 +55,7 @@ export function createFlatpack(physics: PhysicsWorld, ink: Ink): { base: Part; l
   const type = PART_TYPES.boxLid;
   const mesh = createPartMesh(type);
   mesh.add(inkEdges(edgesGeometry(mesh.geometry), ink.lines));
-  const closed = lidRest();
+  const closed = lidRest(at);
   const body = physics.register(mesh, {
     halfExtents: type.size.map((d) => d / 2) as Vec3,
     // The lid has the pack's mass.

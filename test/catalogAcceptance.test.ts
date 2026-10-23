@@ -101,7 +101,7 @@ const entries: CatalogEntry[] = [
 ];
 const ids = entries.map(({ id }) => id);
 
-type Sheet = { scrim: FakeElement; thumb: FakeElement; element: FakeElement; expanded: boolean; currentPage: number; dispose(): void; setOpen(v: boolean): void };
+type Sheet = { scrim: FakeElement; thumb: FakeElement; element: FakeElement; expanded: boolean; currentPage: number; dispose(): void; setOpen(v: boolean): void; setShown(v: boolean): void };
 
 /** The boot as src/main.ts wires it: a slot, a catalog open on its cover that can't close until a pick. */
 function boot({ flag, failBuild = new Set<string>() }: { flag: string; failBuild?: Set<string> }) {
@@ -120,7 +120,8 @@ function boot({ flag, failBuild = new Set<string>() }: { flag: string; failBuild
       body.append(manual.thumb, manual.element);
       manuals.push(manual);
       live.push(manual);
-      return { item: named, manual, dispose: () => manual.dispose() };
+      const id = named;
+      return { id, manual, activate: () => manual.setShown(true), deactivate: () => manual.setShown(false), dispose: () => manual.dispose() };
     },
   });
   const catalog = createCatalogSheet({
@@ -157,8 +158,8 @@ describe('AC1: cold boot opens the catalog on its cover, the room empty (1.9.1)'
   it('main builds no item world at boot: the only build is inside the slot, run by a pick', () => {
     const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
     expect(main.match(/createItemWorld\(/g)).toHaveLength(1);
-    expect(main).toMatch(/build: \(\) =>\s*createItemWorld\(/);
-    expect(main).not.toMatch(/items\.pick\((?!id\))/);
+    expect(main).toMatch(/build: \(\) => \{[^}]*const world = createItemWorld\(/);
+    expect(main).not.toMatch(/items\.pick\((?!id\)|record\.id\))/);
   });
 });
 
@@ -205,7 +206,7 @@ describe('AC3: selecting the catalog returns to picking; tap-outside before any 
     expect(manuals).toHaveLength(1);
   });
 
-  it('picking another item swaps: the old manual goes, a new one docks in front', () => {
+  it('picking another item keeps the first world: its manual is put away, a new one docks in front', () => {
     const { catalog, buildIt, turnTo, items, manuals, door } = boot({ flag: '' });
     turnTo(1);
     buildIt.fire('click');
@@ -214,9 +215,28 @@ describe('AC3: selecting the catalog returns to picking; tap-outside before any 
     buildIt.fire('click');
     expect(door()).toBe('blank');
     expect(manuals).toHaveLength(2);
-    expect(body.children).not.toContain(manuals[0].thumb);
+    expect(items.all()).toHaveLength(2);
+    expect(manuals[0].thumb.hidden).toBe(true);
+    expect(body.children).toContain(manuals[0].thumb);
     expect(body.children).toContain(manuals[1].thumb);
-    expect(items.current).not.toBeNull();
+    expect(manuals[1].thumb.hidden).toBe(false);
+  });
+
+  it('picking an item whose world is in the room builds nothing: one manual per item', () => {
+    const { catalog, buildIt, turnTo, items, manuals, door } = boot({ flag: '' });
+    turnTo(1);
+    buildIt.fire('click');
+    catalog.thumb.fire('click');
+    turnTo(2);
+    buildIt.fire('click');
+    catalog.thumb.fire('click');
+    turnTo(1);
+    buildIt.fire('click');
+    expect(door()).toBe('johnny');
+    expect(manuals).toHaveLength(2);
+    expect(items.all()).toHaveLength(2);
+    expect(manuals[0].thumb.hidden).toBe(false);
+    expect(manuals[1].thumb.hidden).toBe(true);
   });
 });
 

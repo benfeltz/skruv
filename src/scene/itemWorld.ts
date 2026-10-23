@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PICK, RESET, ROOM } from '../constants.js';
+import { DRAWN_EPSILON, LAYOUT, PICK, RESET, ROOM } from '../constants.js';
 import { createAssembly, restoreJoints } from '../game/assembly.js';
 import { EVENT, recoveryEvent, resetEvent } from '../game/events.js';
 import { CUE, homeCue } from '../game/haptics.js';
@@ -8,7 +8,9 @@ import { preferredRelatives } from '../game/panelFit.js';
 import { createPartMesh } from '../game/partMesh.js';
 import { hasEscaped } from '../game/dragMath.js';
 import { fractionOf, heightAt, selectsDuringHold } from '../game/liftLine.js';
-import { baseRest, boxPlacement, boxPoseOf, createPackedWorldLayout, lidRest, respawnSpots } from '../game/boxLayout.js';
+import { baseRest, boxPoseOf, createPackedWorldLayout, lidRest, respawnSpots } from '../game/boxLayout.js';
+import { footprintOf } from '../game/roomLayout.js';
+import type { Footprint } from '../game/roomLayout.js';
 import { isSmallPart } from '../game/pickMath.js';
 import { createPivotPick } from './pivotPick.js';
 import { createGhost } from './ghost.js';
@@ -38,6 +40,8 @@ import type { CameraControls } from './cameraControls.js';
 import type { createBookletPages } from './bookletPages.js';
 import type { Pose, Vec3 } from '../../tools/validate/lib/geometry.js';
 
+const IDENTITY_MATRIX = new THREE.Matrix4();
+
 /** The booklet's pages for the current item, as src/scene/bookletPages.ts draws them. */
 export type BookletPages = Pick<ReturnType<typeof createBookletPages>, 'count' | 'pages' | 'canvas' | 'prerender' | 'dispose'>;
 
@@ -56,6 +60,8 @@ export interface ItemWorldDeps {
   ink: Ink;
   /** Draws the current item's booklet pages. */
   pages: () => BookletPages;
+  /** Where the box is set down — the room's free spot (src/game/roomLayout.ts); its parts are packed in it. */
+  at: Pose;
 }
 
 /**
@@ -68,9 +74,19 @@ export interface ItemWorldDeps {
  * `repack`, the camera's pivot `pickDistance`, the room's saver `snapshot` (this item as a
  * save record: src/game/roomSave.ts). `dispose()` takes it all back out — meshes off
  * the scene, bodies out of the physics world, DOM nodes off the page, every listener it
- * bound unbound — so the room is as it was before it came; an item swap is `dispose()` then
- * another `createItemWorld`. A build that throws takes back what it had built before
- * rethrowing.
+ * bound unbound — so the room is as it was before it came. A build that throws takes back what
+ * it had built before rethrowing.
+ *
+ * A world is one item's build in the room, and the room may hold several (1.9.9.2). It is
+ * built active; `deactivate()` makes it kept — router off, strip put away, gizmo, line, inset
+ * and highlight down — and `activate()` gives it all back. A kept world's bodies stay in the
+ * physics world and its meshes on screen, but nothing of it runs but `keep()`: the loop calls
+ * `update` and `render` on the active world only, and `keep` on the others after the step, which
+ * puts back what the router had drawn on their parts and moves the hardware riding in a bumped
+ * panel — pose maths only, nothing of the pack. The invariant that makes this safe: the door
+ * (src/game/item.ts) names the active world's item, and a kept world runs nothing that reads
+ * the pack — the slot (src/game/itemSlot.ts) turns the door before it activates, restores or
+ * disposes a world. `id` is the item it was built for, `footprint()` where it stands on the floor.
  */
 export function createItemWorld(deps: ItemWorldDeps) {
   // Everything the world puts in the scene, the physics world, the page or the bus, each
@@ -110,7 +126,7 @@ export function createItemWorld(deps: ItemWorldDeps) {
 export type ItemWorld = ReturnType<typeof createItemWorld>;
 
 // The build: every acquisition pushes its own release onto `undo` as it happens.
-function buildItemWorld({ scene, camera, domElement, physics, cameraControls, events, haptics, isFree, ink, pages }: ItemWorldDeps, undo: (() => void)[]) {
+function buildItemWorld({ scene, camera, domElement, physics, cameraControls, events, haptics, isFree, ink, pages, at }: ItemWorldDeps, undo: (() => void)[]) {
   // Which item this world is, fixed at build: the door may turn to another while it stands (1.9.9.2), and the snapshot reports the world's own.
   const id = ITEM_ID;
   const documentCode = IDENTITY.documentCode;
@@ -137,7 +153,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
 
   // The game opens on the closed flatpack: every part packed flat inside, settling at once
   // and resting until the lid comes off and a hand disturbs it.
-  const flatpack = createFlatpack(owning, ink);
+  const flatpack = createFlatpack(owning, ink, at);
   add(flatpack.base.mesh, flatpack.lid.mesh);
 
   // Every part wears the hull; a panel (drawn as its plain box) also its sharp edges, never a faceted round.
@@ -156,7 +172,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   // One record per physical part — what gestures pick, drag and snap. The box and its lid
   // are ones too.
   const parts = [flatpack.base, flatpack.lid];
-  for (const { id, type, position, rotation } of createPackedWorldLayout()) {
+  for (const { id, type, position, rotation } of createPackedWorldLayout(at)) {
     const part = PART_TYPES[type];
     const mesh = createPartMesh(part);
     outline(mesh, type);
@@ -416,7 +432,7 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
   // back to where it last sat in the room — floor it held a moment ago, not the boot spot
   // the player may have built on since.
   let sweepIn = RESET.sweepInterval;
-  let lastBox = boxPlacement();
+  let lastBox = at;
   function sweep(delta: number) {
     sweepIn -= delta;
     if (sweepIn > 0) return;
@@ -438,13 +454,81 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
     loose.forEach(({ body }, i) => physics.place(body, spots[i].position, spots[i].rotation));
   }
 
+  // Active or kept: only the active world has input, a strip and its overlays (see `createItemWorld`).
+  let active = true;
+
+  // What the router draws on top of the simulated poses (a bolt sunk and twisted by its turn, hardware
+  // riding in a turned part) is lost to the next physics step, which syncs a mesh to its bare body. A
+  // kept world takes no `update`, so it keeps its drawn look as each part's pose relative to its body,
+  // captured when it goes kept and put back after every step: pure pose maths, nothing of the pack.
+  const drawn = new Map<Part, THREE.Matrix4>();
+  const here = new THREE.Matrix4();
+  const spare = new THREE.Vector3();
+  const unit = new THREE.Vector3(1, 1, 1);
+  const bodyMatrix = ({ body }: Part) => {
+    const t = body.translation();
+    const r = body.rotation();
+    return here.compose(spare.set(t.x, t.y, t.z), new THREE.Quaternion(r.x, r.y, r.z, r.w), unit);
+  };
+  function captureDrawn() {
+    drawn.clear();
+    for (const part of parts) {
+      const meshMatrix = new THREE.Matrix4().compose(part.mesh.position, part.mesh.quaternion, unit);
+      const local = bodyMatrix(part).invert().multiply(meshMatrix);
+      if (local.elements.some((v, i) => Math.abs(v - IDENTITY_MATRIX.elements[i]) > DRAWN_EPSILON)) drawn.set(part, local.clone());
+    }
+  }
+
   // The rest of the booklet draws in idle time, after the room is on screen.
   bookletPages.prerender();
 
   return {
+    id,
     booklet,
     pickDistance,
     repack,
+    /** Where the world stands on the floor: its box, lid and every player part, padded. */
+    footprint(): Footprint {
+      return footprintOf([flatpack.base, flatpack.lid, ...playerParts].map(({ body }) => {
+        const { x, y, z } = body.translation();
+        return [x, y, z] satisfies Vec3;
+      }), LAYOUT.pad);
+    },
+    /** Makes it kept: lets go of any hold and gesture, and puts every overlay and the strip away. Idempotent. */
+    deactivate() {
+      if (!active) return;
+      active = false;
+      // Drawn once more first, with the door still on this world's item: a world restored and put away
+      // before any frame has meshes at their bare body poses, and the draw is what `captureDrawn` keeps.
+      router.update(0);
+      dropHold();
+      router.disable();
+      select(null);
+      liftLine.hide();
+      highlight.show([]);
+      insetPanel.reset();
+      booklet.setShown(false);
+      captureDrawn();
+    },
+    /**
+     * One frame of a kept world, after the active world's `update` has stepped the physics world:
+     * the hardware riding in a panel follows it, and what the router had drawn on the parts (a sunk,
+     * twisted bolt) is put back over the step's bare body poses. Reads nothing of the pack.
+     */
+    keep() {
+      if (active) return;
+      router.keep();
+      for (const [part, local] of drawn) bodyMatrix(part).multiply(local).decompose(part.mesh.position, part.mesh.quaternion, spare);
+    },
+    /** Makes it active again: input back on, the strip back on its page, that page's parts lit. Idempotent. */
+    activate() {
+      if (active) return;
+      active = true;
+      router.enable();
+      booklet.setShown(true);
+      light(booklet.currentPage);
+      drawn.clear();
+    },
     /** This item as a save record (src/game/roomSave.ts): plain data, read at call time, nothing live in it. */
     snapshot(): ItemRecord {
       return {
@@ -486,6 +570,14 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
       }
       restoreJoints(assembly, record.joints);
       router.sync();
+      // The meshes follow their bodies only inside a physics step; a world put away before its first frame
+      // would otherwise capture the gap between the packed meshes and the restored bodies as drawn hardware.
+      for (const { body, mesh } of parts) {
+        const { x, y, z } = body.translation();
+        const r = body.rotation();
+        mesh.position.set(x, y, z);
+        mesh.quaternion.set(r.x, r.y, r.z, r.w);
+      }
       booklet.goTo(record.page);
       lastBox = boxPose();
     },

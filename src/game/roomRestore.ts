@@ -14,7 +14,7 @@ import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { FastenerState } from './fasteners.js';
 import type { ItemRecord, UnknownObject, WorldState } from './roomSave.js';
 
-/** What the room will hold: the world, the items to rebuild, the unknown objects to carry, the items past capacity. */
+/** What the room will hold: the world, the items to rebuild, the unknown objects to carry, the later records of an id already restored. */
 export interface RestorePlan {
   world: WorldState;
   items: ItemRecord[];
@@ -68,11 +68,13 @@ export function checkItem(record: ItemRecord, item: Item, path: string): void {
 }
 
 /** Reads `text` (null: no save) into what the room will hold; refuses with the parser's or the check's error. */
-export function planRestore(text: string | null, deps: { item: (id: string) => Item | null; capacity: number }): RestoreResult {
+export function planRestore(text: string | null, deps: { item: (id: string) => Item | null }): RestoreResult {
   if (text === null) return { kind: 'none' };
   try {
     const { save } = parse(text);
     const items: ItemRecord[] = [];
+    const dropped: ItemRecord[] = [];
+    const seen = new Set<string>();
     const others: UnknownObject[] = [];
     save.objects.forEach((object, i) => {
       if (object.kind !== 'item') return void others.push(object as UnknownObject);
@@ -80,9 +82,10 @@ export function planRestore(text: string | null, deps: { item: (id: string) => I
       const item = deps.item(record.id);
       expect(item !== null, `objects[${i}].id`, 'an item this build carries');
       checkItem(record, item, `objects[${i}]`);
-      items.push(record);
+      (seen.has(record.id) ? dropped : items).push(record);
+      seen.add(record.id);
     });
-    return { kind: 'room', plan: { world: save.world, items: items.slice(0, deps.capacity), others, dropped: items.slice(deps.capacity) } };
+    return { kind: 'room', plan: { world: save.world, items, others, dropped } };
   } catch (error) {
     return { kind: 'refused', error: error instanceof Error ? error : new Error(String(error)) };
   }
