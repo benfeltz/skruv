@@ -1121,6 +1121,13 @@ export const TUNE = {
   fpsMaxGap: 1,
 };
 
+// The manual fan (src/ui/manualFan.ts, src/game/manualFan.ts): the kept worlds' manuals as a fanned
+// stack across the top, between the menu and the catalog's thumb (CSS px; tilt in degrees). `cover` is
+// a cover's width (its height follows BOOKLET.pageSize), `step` the offset between folded covers,
+// `gap` the space between spread ones, `tilt` the folded covers' lean, alternating, `inset` the
+// space kept to the menu and the thumb, `motionMs` the fold and spread.
+export const FAN = { cover: 56, step: 14, gap: 8, tilt: 5, inset: 12, motionMs: 160 };
+
 // The room's save (src/game/roomStore.ts): the one key it is written under, and how long after the last
 // change the write waits, so a run of seats and releases is one write. The page going to the
 // background writes at once.
