@@ -217,6 +217,14 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
   window.addEventListener('keydown', onKey);
   const onResize = () => place();
   window.addEventListener('resize', onResize);
+  // A turn end over end keeps the window's size but moves the notch, and the cluster and the thumb with it
+  // (their env() insets): not every browser says so with a resize. The insets may settle a frame later.
+  const orientation = typeof screen === 'undefined' ? undefined : screen.orientation;
+  const onTurn = () => {
+    place();
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(place);
+  };
+  orientation?.addEventListener('change', onTurn);
 
   return {
     element,
@@ -245,6 +253,7 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
     dispose() {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', onResize);
+      orientation?.removeEventListener('change', onTurn);
       document.removeEventListener('pointerdown', outside, true);
       element.remove();
     },

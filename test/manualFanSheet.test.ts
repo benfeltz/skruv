@@ -215,6 +215,23 @@ describe('where it lies', () => {
   });
 });
 
+describe('a turn end over end (a landscape phone, the notch changing sides)', () => {
+  it('re-places the fan beside the moved cluster on the orientation change, with no resize', () => {
+    dom.viewport.width = 932;
+    dom.viewport.height = 376;
+    const cluster = new FakeElement('div', dom as never);
+    cluster.className = 'control-cluster';
+    cluster.rect = { left: 59 + CLUSTER.inset, top: CLUSTER.inset, width: 44, height: 44 };
+    dom.body.append(cluster);
+    const { element } = mount(['a', 'b']);
+    expect(element.style.left).toBe(`${59 + CLUSTER.inset + 44 + FAN.inset}px`);
+    // The notch moves to the other side: the cluster follows it through CSS, the window's size unchanged.
+    cluster.rect = { ...cluster.rect, left: CLUSTER.inset };
+    dom.rotate();
+    expect(element.style.left).toBe(`${CLUSTER.inset + 44 + FAN.inset}px`);
+  });
+});
+
 describe('dispose', () => {
   it('removes the element and the window and document listeners', () => {
     const { fan, element, buttons } = mount(['a', 'b']);
@@ -223,5 +240,6 @@ describe('dispose', () => {
     expect(element.parent).toBeNull();
     for (const type of ['keydown', 'resize']) expect(dom.windowListeners.get(type)).toEqual([]);
     expect(dom.documentListeners.get('pointerdown')).toEqual([]);
+    expect(dom.orientationListeners?.get('change')).toEqual([]);
   });
 });
