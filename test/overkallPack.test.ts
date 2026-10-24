@@ -145,11 +145,11 @@ describe('the ÖVERKÄLL pack', () => {
     for (const part of Object.values(pack.partTypes)) expect(COLORS).toHaveProperty(part.color);
   });
 
-  it('draws parts ×2, lying ×5, faceDown ×2, upright ×10', () => {
+  it('draws parts ×2, lying ×5, faceDown ×2, upright ×11', () => {
     const poses = FILE.manual.pages.flatMap((p) => (p.kind === 'step' || p.kind === 'special' ? [p.pose] : []));
     const tally = (pose: string) => poses.filter((p) => p === pose).length;
-    expect(['parts', 'lying', 'faceDown', 'upright'].map(tally)).toEqual([2, 5, 2, 10]);
-    expect(poses).toHaveLength(19);
+    expect(['parts', 'lying', 'faceDown', 'upright'].map(tally)).toEqual([2, 5, 2, 11]);
+    expect(poses).toHaveLength(20);
   });
 });
 
@@ -177,21 +177,21 @@ describe("ÖVERKÄLL's booklet", () => {
     }
   });
 
-  it('builds the drawer first, each part pressed on in one move onto dowels already in, then screwed', () => {
+  it('builds the carcass first, then the drawer alone, and installs it last', () => {
     const steps = pages.flatMap((p) => (p.kind === 'step' ? [p] : []));
-    const drawer = steps.slice(0, 9);
+    const drawer = steps.filter((s) => s.assembly === 'drawer');
     // The bottom first, flat: its side dowels, both sides pressed on; its back-edge and the
     // sides' back-end dowels, the back pressed on; every screw after its dowels; the front last.
     expect(drawer.map((s) => [s.number, s.pose, s.parts.length, s.joints.length, s.tool])).toEqual([
-      [1, 'upright', 1, 4, null],
-      [2, 'upright', 2, 4, null],
-      [3, 'upright', 0, 6, null],
-      [4, 'upright', 1, 6, null],
-      [5, 'upright', 0, 10, 'screwdriver'],
-      [6, 'upright', 0, 4, null],
-      [7, 'upright', 1, 4, null],
-      [8, 'upright', 0, 4, 'screwdriver'],
-      [9, 'upright', 1, 1, 'screwdriver'],
+      [11, 'upright', 1, 4, null],
+      [12, 'upright', 2, 4, null],
+      [13, 'upright', 0, 6, null],
+      [14, 'upright', 1, 6, null],
+      [15, 'upright', 0, 10, 'screwdriver'],
+      [16, 'upright', 0, 4, null],
+      [17, 'upright', 1, 4, null],
+      [18, 'upright', 0, 4, 'screwdriver'],
+      [19, 'upright', 1, 1, 'screwdriver'],
     ]);
     expect(drawer.map((s) => s.parts.map((id) => typeOf.get(id)))).toEqual([
       ['drawerBottom'], ['drawerSide', 'drawerSide'], [], ['drawerBack'], [], [], ['drawerFront'], [], ['knob'],
@@ -199,7 +199,19 @@ describe("ÖVERKÄLL's booklet", () => {
     expect(drawer.map((s) => s.hardware.map((h) => h.type))).toEqual([
       ['dowel'], [], ['dowel'], [], ['screw'], ['dowel'], [], ['screw'], ['screw'],
     ]);
-    const firstCarcass = steps.findIndex((s) => s.parts.some((id) => CARCASS.includes(typeOf.get(id)!)));
-    expect(firstCarcass).toBe(9);
+    const carcass = steps.slice(0, 10);
+    expect(carcass.map((s) => s.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(carcass.at(-1)!.tip).toBe(true);
+    for (const step of carcass) {
+      expect(step.assembly).toBeNull();
+      expect(step.shown.some((id) => DRAWER.includes(typeOf.get(id)!)), `step ${step.number}`).toBe(false);
+    }
+    const install = steps[19];
+    expect(install.number).toBe(20);
+    expect(install.install!.name).toBe('drawer');
+    // 6 parts (bottom, 2 sides, back, front, knob), 14 dowels and 15 screws.
+    expect(install.install!.members).toHaveLength(35);
+    expect(install.shown).toHaveLength(item.assembled.parts.length);
+    for (const type of DRAWER) expect(install.types).toContain(type);
   });
 });
