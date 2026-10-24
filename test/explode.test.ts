@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BOOKLET } from '../src/constants.js';
 import { createBuildSteps } from '../src/game/bookletModel.js';
 import { ITEM_IDS, itemById } from '../src/game/item.js';
-import { explodeStep, floatOut, insetsFor, separation } from '../src/game/explode.js';
+import { explodeStep, floatOut, insetsFor, installStep, separation } from '../src/game/explode.js';
 import type { ExplodeLayout } from '../src/game/explode.js';
 import type { Joint } from '../src/game/item.js';
 import type { Quat, Vec3 } from '../tools/validate/lib/geometry.js';
@@ -83,6 +83,38 @@ describe('separation (the rule)', () => {
     const { offsets } = separation({ joints: [0, 2], pose: 'parts', shown }, layout, partTypes);
     expect(offsets.has('side')).toBe(false);
     expect(offsets.has('d1')).toBe(true);
+  });
+});
+
+describe('installStep', () => {
+  const install = { name: 'top', members: ['side', 'd1'] };
+  const held = BOOKLET.explode.assembly;
+
+  it('holds every member off its place by BOOKLET.explode.assembly toward +z, and no other part', () => {
+    const { offsets } = installStep({ install }, layout, partTypes);
+    expect(offsets.get('side')).toEqual([0, 0, held]);
+    expect(offsets.get('d1')).toEqual([0, 0, held]);
+    expect(offsets.has('plate')).toBe(false);
+    expect(offsets.size).toBe(2);
+  });
+
+  it('runs the arrow from the held centre of the members\' box to the resting centre', () => {
+    const { arrow } = installStep({ install }, layout, partTypes);
+    // side spans x ±0.15, y 0.05..0.07, z ±0.1; d1 spans x 0.095..0.105, y -0.01..0.03: the box is x ±0.15, y -0.01..0.07.
+    expect(arrow![1]).toEqual([expect.closeTo(0), expect.closeTo(0.03), expect.closeTo(0)]);
+    expect(arrow![0]).toEqual([expect.closeTo(0), expect.closeTo(0.03), expect.closeTo(held)]);
+  });
+
+  it('gives a page that installs nothing no offsets and no arrow', () => {
+    expect(installStep({ install: null }, layout, partTypes)).toEqual({ offsets: new Map(), arrow: null });
+  });
+
+  it('shifts the members in explodeStep and leaves the leaders to the page\'s own joints', () => {
+    const { items, leaders, arrow } = explodeStep({ joints: [], pose: 'upright', shown, install }, layout, partTypes);
+    expect(items.find((i) => i.id === 'side')!.position).toEqual([0, 0.06, held]);
+    expect(items.find((i) => i.id === 'plate')!.position).toEqual([0, 0, 0]);
+    expect(leaders).toEqual([]);
+    expect(arrow).not.toBeNull();
   });
 });
 
