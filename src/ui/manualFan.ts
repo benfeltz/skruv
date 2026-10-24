@@ -22,6 +22,9 @@ const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 const [pageW, pageH] = BOOKLET.pageSize;
 const coverHeight = Math.round((FAN.cover * pageH) / pageW);
 const { pocket, name, rule } = BOOKLET_UI.strip;
+// The hold's red fill: it waits out the tap time, then runs to the clear, so it is full the moment the
+// item goes (as Repack's bar is full at its timer).
+const fillMs = FAN.clearHoldMs - GESTURE.tapMaxMs;
 // The badge sits this far in from the cover's corner, its ring as far out around it.
 const badgeInset = 4;
 // The ring's circle (r 16 in a 36 viewBox): its circumference, the dash it fills along.
@@ -137,12 +140,12 @@ function injectStyle() {
       -webkit-touch-callout: none;
       transition: border-color 120ms, box-shadow 120ms;
     }
-    /* Held: gold to red over the hold, starting after the tap time, so a tap never flashes red; let go
-       and it snaps back (the 120 ms above). */
+    /* Held: gold to red over the hold, starting after the tap time, so a tap never flashes red, and red
+       the moment it clears; let go and it snaps back (the 120 ms above). */
     .manual-fan-cover[aria-current='true'][data-holding='true'] {
       border-color: ${css(COLORS.uiDanger)};
       box-shadow: 0 0 0 1px ${css(COLORS.uiDanger)}, 0 4px 14px #0007;
-      transition: border-color ${FAN.clearHoldMs}ms linear ${GESTURE.tapMaxMs}ms, box-shadow ${FAN.clearHoldMs}ms linear ${GESTURE.tapMaxMs}ms;
+      transition: border-color ${fillMs}ms linear ${GESTURE.tapMaxMs}ms, box-shadow ${fillMs}ms linear ${GESTURE.tapMaxMs}ms;
     }
     /* The X badge, at the open cover's outer corner: top-right upright, top-left in landscape. Inside the
        cover's box, which clips. A marker: the whole cover is the target. */
@@ -181,7 +184,7 @@ function injectStyle() {
     .manual-fan-cover[data-holding='true'] .manual-fan-badge { color: ${css(COLORS.uiDanger)}; }
     .manual-fan-cover[data-holding='true'] .manual-fan-ring circle {
       stroke-dashoffset: 0;
-      transition: stroke-dashoffset ${FAN.clearHoldMs}ms linear ${GESTURE.tapMaxMs}ms;
+      transition: stroke-dashoffset ${fillMs}ms linear ${GESTURE.tapMaxMs}ms;
     }
     .manual-fan-cover canvas { display: block; width: 100%; height: 100%; }
     .manual-fan-cover:focus-visible {

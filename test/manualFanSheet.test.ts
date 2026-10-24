@@ -476,11 +476,14 @@ describe('the clear hold on the open cover', () => {
     expect(holds.at(-1)).toEqual(['b', false]);
   });
 
-  it("turns the border red only after the tap time, snaps it back, and still runs no animation", () => {
+  it("turns the border red only after the tap time, full at the clear, and still runs no animation", () => {
     mount(['a']);
     const css = dom.head.children.map((node) => node.textContent).join('');
-    expect(css).toContain(`border-color ${FAN.clearHoldMs}ms linear ${GESTURE.tapMaxMs}ms`);
-    expect(css).toContain(`stroke-dashoffset ${FAN.clearHoldMs}ms linear ${GESTURE.tapMaxMs}ms`);
+    // The fill waits out the tap time and ends at the clear: delay plus duration is the hold.
+    const fill = FAN.clearHoldMs - GESTURE.tapMaxMs;
+    expect(css).toContain(`border-color ${fill}ms linear ${GESTURE.tapMaxMs}ms, box-shadow ${fill}ms linear ${GESTURE.tapMaxMs}ms`);
+    expect(css).toContain(`stroke-dashoffset ${fill}ms linear ${GESTURE.tapMaxMs}ms`);
+    expect(css).not.toContain(`${FAN.clearHoldMs}ms linear`);
     expect(css).toContain(`width: ${FAN.badge}px;`);
     expect(css).not.toContain('animation');
   });
