@@ -1,4 +1,4 @@
-import { CLUSTER, COLORS, MENU, METRICS } from '../constants.js';
+import { CLUSTER, COLORS, LIFT_LINE, MENU, METRICS } from '../constants.js';
 import { createFrameHistogram } from '../game/metricsMath.js';
 
 // The frame-time readout the menu's Metrics row switches on: frames, seconds, slow frames and
@@ -8,6 +8,9 @@ import { createFrameHistogram } from '../game/metricsMath.js';
 
 const STYLE_ID = 'skruv-metrics-overlay';
 const MS_PER_SECOND = 1000;
+// Portrait: the lift line hangs under the menu, its touch band centred on the menu button; the
+// readout starts past that band, so the line's knob is never under it.
+const PAST_LIFT_LINE = CLUSTER.inset + MENU.size / 2 + LIFT_LINE.hitWidth / 2 + CLUSTER.gap;
 const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 
 function injectStyle() {
@@ -17,11 +20,11 @@ function injectStyle() {
   style.textContent = `
     .metrics-overlay {
       position: fixed;
-      /* Clear of the control cluster's corner: under its row in portrait, beside its column in landscape. */
+      /* Clear of the control cluster's corner and the lift line under it: below its row, past the line's band, in portrait; beside its column in landscape. */
       top: calc(${CLUSTER.inset + MENU.size + CLUSTER.gap}px + env(safe-area-inset-top));
-      left: calc(${CLUSTER.inset}px + env(safe-area-inset-left));
+      left: calc(${PAST_LIFT_LINE}px + env(safe-area-inset-left));
       z-index: 3;
-      max-width: calc(100vw - ${CLUSTER.inset * 2}px);
+      max-width: calc(100vw - ${PAST_LIFT_LINE + CLUSTER.inset}px);
       margin: 0;
       padding: 6px 8px;
       border-radius: 8px;

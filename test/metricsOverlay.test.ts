@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CLUSTER, MENU, METRICS } from '../src/constants.js';
+import { CLUSTER, LIFT_LINE, MENU, METRICS } from '../src/constants.js';
 import { createMetricsOverlay } from '../src/ui/metricsOverlay.js';
 import { FakeElement, installFakeDom } from './support/fakeDom.js';
 import type { FakeDom } from './support/fakeDom.js';
@@ -46,6 +46,9 @@ describe('the metrics overlay', () => {
     const css = dom.head.children.find((node) => node.id === 'skruv-metrics-overlay')!.textContent;
     const below = CLUSTER.inset + MENU.size + CLUSTER.gap;
     expect(css).toContain(`top: calc(${below}px + env(safe-area-inset-top))`);
+    // Portrait: past the lift line's touch band, which is centred on the menu button.
+    const pastLine = CLUSTER.inset + MENU.size / 2 + LIFT_LINE.hitWidth / 2 + CLUSTER.gap;
+    expect(css).toContain(`left: calc(${pastLine}px + env(safe-area-inset-left))`);
     expect(css).toContain(`html[data-strip='right'] .metrics-overlay`);
     expect(css).toContain(`left: calc(${below}px + env(safe-area-inset-left))`);
   });
