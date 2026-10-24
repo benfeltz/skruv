@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
-import { createBooklet, createBuildSteps, gamePagesFor } from '../src/game/bookletModel.js';
+import { createBooklet, createBuildSteps, gamePagesFor, membersOf } from '../src/game/bookletModel.js';
+import type { PageFields } from '../src/game/item.js';
 import { ASSEMBLED, ITEM_ID, itemById, MANIFEST, MANUAL, PART_TYPES, resolveConnector } from '../src/game/item.js';
 
 // The current item's fastener kinds, as the booklet reads them (itemById).
@@ -167,6 +168,58 @@ describe('createBuildSteps (from the pack\'s manual pages)', () => {
   it('only names part types the pack knows', () => {
     for (const s of steps) for (const id of s.parts) expect(PART_TYPES).toHaveProperty(typeOf(id));
     for (const s of steps) for (const type of s.types) expect(PART_TYPES).toHaveProperty(type);
+  });
+});
+
+// MANUAL's pages with page `number` building the assembly 'shelves'.
+const tagLast = (number: number): PageFields[] => (MANUAL.pages as PageFields[]).map((page) => (page.number === number ? { ...page, assembly: 'shelves' } : page));
+
+describe('sub-assemblies (JOHNNY\'s manual with its last step tagged and an install page added)', () => {
+  const last = steps.length;
+  const pages = [
+    ...tagLast(last),
+    { kind: 'step' as const, number: last + 1, pose: 'upright' as const, install: 'shelves' },
+  ];
+  const tagged = createBuildSteps(pages, model);
+  const members = membersOf(tagged, layout).get('shelves')!;
+
+  it('derives the members from the tagged page: its parts and the hardware it seats', () => {
+    expect(members).toEqual(steps[last - 1].parts);
+  });
+
+  it('shows a tagged page its members only', () => {
+    expect(tagged[last - 1].shown).toEqual(members);
+    expect(tagged[last - 1].assembly).toBe('shelves');
+    expect(tagged[last - 1].install).toBeNull();
+  });
+
+  it('shows an untagged page what the plain manual shows, before the install', () => {
+    for (const [i, step] of steps.slice(0, last - 1).entries()) expect(tagged[i].shown, `step ${step.number}`).toEqual(step.shown);
+  });
+
+  it('shows the install page every member, with their types for the highlight', () => {
+    const install = tagged[last];
+    expect(install.install).toEqual({ name: 'shelves', members });
+    for (const id of members) expect(install.shown).toContain(id);
+    for (const id of members) expect(install.types).toContain(typeOf(id));
+    expect(new Set(install.shown)).toEqual(new Set(steps[last - 1].shown));
+    expect(install.assembly).toBeNull();
+  });
+
+  it('keeps a member off an untagged page between its tagged page and its install', () => {
+    const between = createBuildSteps(
+      [...tagLast(last), { kind: 'step' as const, number: last + 1, pose: 'upright' as const }, { kind: 'step' as const, number: last + 2, pose: 'upright' as const, install: 'shelves' }],
+      model,
+    );
+    expect(between[last].shown).not.toContain(members[0]);
+    expect(between[last + 1].shown).toContain(members[0]);
+  });
+
+  it('gives a manual with no tags no assembly and no install on any page', () => {
+    for (const step of steps) {
+      expect(step.assembly).toBeNull();
+      expect(step.install).toBeNull();
+    }
   });
 });
 

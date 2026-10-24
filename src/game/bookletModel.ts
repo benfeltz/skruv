@@ -35,6 +35,8 @@ export interface BuildStep {
   tool: string | null;
   tip: boolean;
   shown: InstanceId[];
+  assembly: string | null;
+  install: { name: string; members: InstanceId[] } | null;
 }
 
 /**
@@ -90,7 +92,11 @@ function jointIndices(pairs: [ConnectorName, ConnectorName][] = [], layout: Book
  *              highlight pulses in the room, an aid only
  *   shown    — ids of everything in place once the page is done, as its drawing shows the
  *              carcass: a panel only once a built page brings it in or seats it, and
- *              hardware only once its panel is there
+ *              hardware only once its panel is there. A tagged page shows its assembly
+ *              alone; an untagged page leaves an assembly out until its install page
+ *   assembly — the sub-assembly this page builds, drawn alone (its `assembly`), or null
+ *   install  — the sub-assembly this page brings in whole (its `install`) with its members,
+ *              or null; the members are derived from the tagged pages, never listed
  *   tool     — the tool in hand ('allenWrench', 'screwdriver') or null
  *   tip      — the page tips the carcass upright (a 'special' tipUpright page)
  *   pose     — 'parts' (loose), 'lying' (carcass on its left side), 'faceDown' (on its
@@ -104,9 +110,9 @@ export function createBuildSteps(
   // Every id a page names is a part of the layout.
   const typeOf = (id: InstanceId) => typeById.get(id)!;
   const counted = new Set<InstanceId>();
-  const steps = pages
-    .filter((page) => page.kind === 'step' || page.kind === 'special')
-    .map((page): Omit<BuildStep, 'shown'> & { shown?: InstanceId[] } => {
+  const stepPages = pages.filter((page) => page.kind === 'step' || page.kind === 'special');
+  const steps = stepPages
+    .map((page): Omit<BuildStep, 'shown' | 'install'> & Partial<Pick<BuildStep, 'shown' | 'install'>> => {
       const parts = page.parts ?? [];
       const joints = jointIndices(page.fasten, layout, resolve);
       const turns = jointIndices(page.turn, layout, resolve);
@@ -126,11 +132,51 @@ export function createBuildSteps(
         types: [...types],
         tool: page.tool ?? null,
         tip: page.special === 'tipUpright',
+        assembly: page.assembly ?? null,
       };
     });
-  for (const step of steps) step.shown = shownBy(steps, step.number, layout);
+  const members = membersOf(steps, layout);
+  // Install page number → the assembly it brings in.
+  const installs = new Map(stepPages.filter((page) => page.install !== undefined).map((page) => [page.number!, page.install!]));
+  for (const step of steps) {
+    step.shown = shownFor(steps, step, layout, members, installs);
+    const name = installs.get(step.number);
+    step.install = name === undefined ? null : { name, members: members.get(name) ?? [] };
+    step.types = [...new Set([...step.types, ...step.install?.members.map(typeOf) ?? []])];
+  }
   // Every step's `shown` is set just above.
   return steps as BuildStep[];
+}
+
+/**
+ * The members of each sub-assembly, in first-seen order: the parts its tagged pages bring in
+ * plus the hardware those pages seat. Derived, never listed in the pack.
+ */
+export function membersOf(steps: Pick<BuildStep, 'assembly' | 'parts' | 'joints'>[], layout: BookletLayout): Map<string, InstanceId[]> {
+  const members = new Map<string, Set<InstanceId>>();
+  for (const step of steps) {
+    if (step.assembly === null) continue;
+    const set = members.get(step.assembly) ?? new Set<InstanceId>();
+    for (const id of step.parts) set.add(id);
+    for (const i of step.joints) set.add(layout.joints[i].hardware);
+    members.set(step.assembly, set);
+  }
+  return new Map([...members].map(([name, set]) => [name, [...set]]));
+}
+
+// What page `step` shows. A tagged page shows its assembly's pages alone; any other page
+// shows what the untagged pages have built plus every member of each assembly installed
+// on or before it, so a member never appears before its install.
+function shownFor(
+  steps: Pick<BuildStep, 'number' | 'pose' | 'parts' | 'joints' | 'assembly'>[],
+  step: Pick<BuildStep, 'number' | 'assembly'>,
+  layout: BookletLayout,
+  members: Map<string, InstanceId[]>,
+  installs: Map<number, string>,
+) {
+  if (step.assembly !== null) return shownBy(steps.filter((p) => p.assembly === step.assembly), step.number, layout);
+  const installed = [...installs].filter(([number]) => number <= step.number).flatMap(([, name]) => members.get(name) ?? []);
+  return [...new Set([...shownBy(steps.filter((p) => p.assembly === null), step.number, layout), ...installed])];
 }
 
 // What is in place once page `n` is done. Loose-parts pages prepare pieces off to the side;
