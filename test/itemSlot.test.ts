@@ -184,3 +184,57 @@ describe('clear()', () => {
     expect(items.all()).toEqual([]);
   });
 });
+
+describe('drop', () => {
+  it('on an empty slot returns null and does nothing', () => {
+    const { items, log, reported } = room();
+    expect(items.drop()).toBeNull();
+    expect(log).toEqual([]);
+    expect(reported).toEqual([]);
+  });
+
+  it('disposes the active world with the door naming it, then turns to the previous kept world and activates it', () => {
+    const { items, log, holds } = room();
+    const first = items.pick('johnny');
+    items.pick('blank');
+    log.length = 0;
+    expect(items.drop()).toBe(first);
+    expect(log).toEqual(['dispose blank (door: blank)', 'select johnny', 'activate johnny (door: johnny)']);
+    expect(items.all()).toEqual([first]);
+    expect(items.current).toBe(first);
+    expect(holds()).toBe(true);
+  });
+
+  it('puts the most recently left kept world in hand', () => {
+    const { items, holds } = room();
+    items.pick('johnny');
+    const blank = items.pick('blank');
+    items.pick('overkall');
+    expect(items.drop()).toBe(blank);
+    expect(holds()).toBe(true);
+  });
+
+  it('of the only world leaves the room empty, the door on the dropped item, nothing activated', () => {
+    const { items, log, door, holds } = room();
+    items.pick('blank');
+    log.length = 0;
+    expect(items.drop()).toBeNull();
+    expect(log).toEqual(['dispose blank (door: blank)']);
+    expect(items.all()).toEqual([]);
+    expect(items.current).toBeNull();
+    expect(door.selected()).toBe('blank');
+    expect(holds()).toBe(true);
+  });
+
+  it('reports a dispose that throws; the world is still gone and the previous one activated', () => {
+    const { items, log, reported, holds } = room({ failDispose: new Set(['blank']) });
+    const first = items.pick('johnny');
+    items.pick('blank');
+    log.length = 0;
+    expect(() => items.drop()).not.toThrow();
+    expect((reported as Error[]).map((error) => error.message)).toEqual(['dispose blank broke']);
+    expect(items.all()).toEqual([first]);
+    expect(log).toContain('activate johnny (door: johnny)');
+    expect(holds()).toBe(true);
+  });
+});
