@@ -28,3 +28,20 @@ export function rowLength(count: number, fan: Fan): number {
 export function fanLabel(count: number): string {
   return `${count} ${count === 1 ? 'manual' : 'manuals'} in the room`;
 }
+
+/**
+ * One press on a cover, by Ben's rule (1.9.9.6): released inside the tap time it is a tap (the row
+ * folds); released after it but before the hold ends, a cancel (nothing moves, the row stays spread);
+ * held to the end, a clear. A press that travelled past the tap distance is none of these: a swipe,
+ * the row's scroll.
+ */
+export type PressOutcome = 'tap' | 'cancel' | 'clear' | 'none';
+
+export function pressOutcome(
+  { heldMs, distance }: { heldMs: number; distance: number },
+  { tapMaxMs, tapMaxDistance, holdMs }: { tapMaxMs: number; tapMaxDistance: number; holdMs: number },
+): PressOutcome {
+  if (distance > tapMaxDistance) return 'none';
+  if (heldMs <= tapMaxMs) return 'tap';
+  return heldMs < holdMs ? 'cancel' : 'clear';
+}
