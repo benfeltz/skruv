@@ -492,6 +492,55 @@ describe('the swap: picking from the catalog (1.9.1)', () => {
   });
 });
 
+// 1.9.9.6, the clear: the slot's drop() on real worlds and real physics. The open world goes with the door
+// naming it, the kept one comes back in hand, and the room is exactly as if the cleared item had never been built.
+describe('the clear: drop() on real worlds (1.9.9.6)', () => {
+  const strips = () => body.children.filter((node) => node.className === 'booklet-strip');
+
+  it('drops BLANK while JOHNNY is kept: JOHNNY back in hand with its strip, the room as with JOHNNY alone, then empty at baseline', async () => {
+    const { deps, census } = await engine();
+    const baseline = census();
+    const disposedWith: string[] = [];
+    const items: ReturnType<typeof createItemSlot<ItemWorld>> = createItemSlot({
+      door: { knows: (id) => ITEM_IDS.includes(id), selected: () => ITEM_ID, select: setItem },
+      report: (error) => {
+        throw error;
+      },
+      build: () => {
+        const world = createItemWorld({ ...deps, at: freeSpot(items.all().map((w) => w.footprint()), boxFootprintSize(packedBox())) });
+        const { dispose } = world;
+        // What the door names while each world is torn down: always its own item.
+        world.dispose = () => {
+          disposedWith.push(`${world.id} (door: ${ITEM_ID})`);
+          dispose();
+        };
+        return world;
+      },
+    });
+    try {
+      const johnny = items.pick('johnny');
+      const alone = census();
+      const blank = items.pick('blank');
+      run(blank, 0.3);
+      // Dimmed mid-hold, as the pocket leaves it the moment the clear fires.
+      blank.dim(true);
+      expect(items.drop()).toBe(johnny);
+      expect(disposedWith).toEqual(['blank (door: blank)']);
+      expect(ITEM_ID).toBe('johnny');
+      expect(items.all()).toEqual([johnny]);
+      expect(strips().filter((node) => !node.hidden)).toHaveLength(1);
+      expect(census()).toEqual(alone);
+      run(johnny, 0.2);
+      expect(items.drop()).toBeNull();
+      expect(disposedWith).toEqual(['blank (door: blank)', 'johnny (door: johnny)']);
+      expect(items.current).toBeNull();
+      expect(census()).toEqual(baseline);
+    } finally {
+      setItem('johnny');
+    }
+  });
+});
+
 describe('the manual in the room (1.9.1.2)', () => {
   // The centre page's parts glow whether or not it is open, and a page with no parts lights none.
   it('lights the centre step page\'s parts with the manual docked, and none on a page without parts', async () => {

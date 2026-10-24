@@ -391,3 +391,32 @@ describe('the manuals are the switcher (1.9.9.3)', () => {
     expect(fan).not.toMatch(/\.pick\(/);
   });
 });
+
+// 1.9.9.6: the clear's wiring in main. The end to end is the manual plan; these pin the one path and the
+// save rule (an empty room writes nothing by design, so the clear must clear the store itself).
+describe('the clear (1.9.9.6)', () => {
+  const clear = main.slice(main.indexOf('function clearItem(id: string) {'), main.indexOf('// The restore (src/game/roomRestore.ts)'));
+
+  it("the pocket's hold is the one way in, and the slot's drop the one way out", () => {
+    expect(main.match(/onClear: \(id\) => clearItem\(id\)/g)).toHaveLength(1);
+    expect(main.match(/clearItem\(/g)).toHaveLength(2);
+    expect(main.match(/items\.drop\(\)/g)).toHaveLength(1);
+    expect(clear).toMatch(/if \(items\.current\?\.id !== id\) return;\s*const next = items\.drop\(\);/);
+  });
+
+  it('logs the clear and follows the room in the pocket', () => {
+    expect(clear).toMatch(/events\.emit\(clearEvent\(id\)\);\s*fan\.refresh\(\);/);
+  });
+
+  it('clears the store only when nothing is left to save, and opens the catalog only on an empty room', () => {
+    expect(main.match(/store\.clear\(\)/g)).toHaveLength(1);
+    expect(clear).toMatch(/if \(next \|\| carried\.length\) saver\.changed\(\);\s*else store\.clear\(\);/);
+    expect(clear).toMatch(/if \(!next\) catalog\.setOpen\(true\);/);
+    // The saver's rule stays: it still writes nothing for an empty room.
+    expect(read('src/game/roomStore.ts')).not.toMatch(/store\.clear\(\)/);
+  });
+
+  it('dims only the open world, and only for its own hold', () => {
+    expect(main).toMatch(/onHold: \(id, on\) => \{\s*if \(items\.current\?\.id === id\) items\.current\.dim\(on\);\s*\}/);
+  });
+});
