@@ -41,16 +41,21 @@ describe('the metrics overlay', () => {
     expect(element.textContent).toContain('frames 31 ');
   });
 
-  it('sits clear of the control cluster, under its row and beside its column', () => {
+  it('stands at the room’s foot above the band in portrait, clear of the cluster, the lift line and the inset', () => {
     mount();
     const css = dom.head.children.find((node) => node.id === 'skruv-metrics-overlay')!.textContent;
-    const below = CLUSTER.inset + MENU.size + CLUSTER.gap;
-    expect(css).toContain(`top: calc(${below}px + env(safe-area-inset-top))`);
-    // Portrait: past the lift line's touch band, which is centred on the menu button.
+    const [portrait, landscape] = css.split(`html[data-strip='right'] .metrics-overlay`);
+    // Past the lift line's touch band, which is centred on the menu button.
     const pastLine = CLUSTER.inset + MENU.size / 2 + LIFT_LINE.hitWidth / 2 + CLUSTER.gap;
-    expect(css).toContain(`left: calc(${pastLine}px + env(safe-area-inset-left))`);
-    expect(css).toContain(`html[data-strip='right'] .metrics-overlay`);
-    expect(css).toContain(`left: calc(${below}px + env(safe-area-inset-left))`);
+    expect(portrait).toContain(`bottom: calc(var(--strip-bottom, 0px) + ${CLUSTER.gap}px)`);
+    expect(portrait).toContain(`left: calc(${pastLine}px + env(safe-area-inset-left))`);
+    // Never hung from the top, where portrait is full.
+    expect(portrait).not.toMatch(/\btop:/);
+    // Landscape: beside the cluster's column.
+    const beside = CLUSTER.inset + MENU.size + CLUSTER.gap;
+    expect(landscape).toContain('bottom: auto');
+    expect(landscape).toContain(`top: calc(${CLUSTER.inset}px + env(safe-area-inset-top))`);
+    expect(landscape).toContain(`left: calc(${beside}px + env(safe-area-inset-left))`);
   });
 
   it('is removed from its parent on dispose', () => {

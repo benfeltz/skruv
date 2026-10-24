@@ -20,8 +20,10 @@ function injectStyle() {
   style.textContent = `
     .metrics-overlay {
       position: fixed;
-      /* Clear of the control cluster's corner and the lift line under it: below its row, past the line's band, in portrait; beside its column in landscape. */
-      top: calc(${CLUSTER.inset + MENU.size + CLUSTER.gap}px + env(safe-area-inset-top));
+      /* Portrait's top band is full (the cluster and lift line, the detail inset, the catalog thumb): the
+         readout stands at the room's foot, a gap above the manual's band (--strip-bottom, set by the
+         booklet with the home-indicator inset), past the lift line's band. Landscape, below. */
+      bottom: calc(var(--strip-bottom, 0px) + ${CLUSTER.gap}px);
       left: calc(${PAST_LIFT_LINE}px + env(safe-area-inset-left));
       z-index: 3;
       max-width: calc(100vw - ${PAST_LIFT_LINE + CLUSTER.inset}px);
@@ -34,7 +36,9 @@ function injectStyle() {
       white-space: pre;
       pointer-events: none;
     }
+    /* Landscape: beside the cluster's column, clear of the thumb and the inset at the lower right. */
     html[data-strip='right'] .metrics-overlay {
+      bottom: auto;
       top: calc(${CLUSTER.inset}px + env(safe-area-inset-top));
       left: calc(${CLUSTER.inset + MENU.size + CLUSTER.gap}px + env(safe-area-inset-left));
       max-width: calc(100vw - ${CLUSTER.inset * 2 + MENU.size + CLUSTER.gap}px);
