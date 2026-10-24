@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { KIND } from '../tools/validate/lib/vocabulary.js';
 import { HAPTICS } from '../src/constants.js';
 import { EVENT } from '../src/game/events.js';
-import { createHaptics, CUE, cueFor, homeCue, patternFor } from '../src/game/haptics.js';
+import { createHaptics, CUE, cueFor, homeCue, nativeFor, patternFor } from '../src/game/haptics.js';
 import type { Cue } from '../src/game/haptics.js';
 
 // The haptics module (1.8.2.2 step 3): events to cues, cues to today's exact patterns, and
@@ -42,6 +42,22 @@ describe('patternFor', () => {
   it('reads the knobs live', () => {
     HAPTICS.seatMs = 30;
     expect(patternFor(CUE.SEAT)).toBe(30);
+  });
+});
+
+describe('nativeFor', () => {
+  it('maps seat, engage and tick to light, home to success, lock to heavy', () => {
+    expect(nativeFor(CUE.SEAT)).toBe('light');
+    expect(nativeFor(CUE.ENGAGE)).toBe('light');
+    expect(nativeFor(CUE.TICK)).toBe('light');
+    expect(nativeFor(CUE.HOME)).toBe('success');
+    expect(nativeFor(CUE.LOCK)).toBe('heavy');
+  });
+
+  it('is silent for a cue whose knob is 0, and only that cue', () => {
+    HAPTICS.lockMs = 0;
+    expect(nativeFor(CUE.LOCK)).toBeNull();
+    expect(nativeFor(CUE.HOME)).toBe('success');
   });
 });
 
