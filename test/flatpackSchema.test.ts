@@ -86,11 +86,22 @@ describe('flatpack.schema.json', () => {
     ['a scripted page', (p) => (p.manual.pages[2].script = 'turn()')],
     ['an asset outside assets/', (p) => (p.parts.board.mesh = '../board.glb')],
     ['an unknown top-level section', (p) => (p.scripts = {})],
+    ['a page that both builds and installs', (p) => Object.assign(p.manual.pages[2], { assembly: 'x', install: 'x' })],
+    ['an empty assembly name', (p) => (p.manual.pages[2].assembly = '')],
     ['a five-digit part number broken', (p) => (p.parts.board.partNumber = '1234')],
   ])('rejects %s', (_, mutate) => {
     const pack = fixture();
     mutate(pack);
     expect(validate(pack)).toBe(false);
+  });
+
+  it('accepts a step page that builds an assembly, and one that installs it', () => {
+    const pack: Untyped = fixture();
+    pack.manual.pages[2].assembly = 'shelf';
+    expect(validate(pack), JSON.stringify(validate.errors)).toBe(true);
+    delete pack.manual.pages[2].assembly;
+    pack.manual.pages[2].install = 'shelf';
+    expect(validate(pack), JSON.stringify(validate.errors)).toBe(true);
   });
 
   it('names exactly the engine vocabulary — no drift between schema and lib', () => {

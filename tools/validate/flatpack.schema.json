@@ -186,6 +186,7 @@
           "then": {
             "additionalProperties": false,
             "required": ["number", "pose"],
+            "not": { "required": ["assembly", "install"] },
             "properties": {
               "kind": {},
               "art": {},
@@ -194,7 +195,9 @@
               "parts": { "type": "array", "items": { "$ref": "#/definitions/instanceId" } },
               "fasten": { "type": "array", "items": { "$ref": "#/definitions/pair" } },
               "turn": { "type": "array", "items": { "$ref": "#/definitions/pair" } },
-              "tool": { "$ref": "#/definitions/key" }
+              "tool": { "$ref": "#/definitions/key" },
+              "assembly": { "$ref": "#/definitions/name" },
+              "install": { "$ref": "#/definitions/name" }
             }
           }
         },
