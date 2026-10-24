@@ -8,6 +8,7 @@ Mobile-first, browser-playable 3D flatpack-assembly game. Strict TypeScript, Thr
 |---------|---------|
 | Dev server | `npm run dev` |
 | Production build | `npm run build` |
+| Store build (no Metrics row) | `VITE_METRICS=off npm run build` |
 | Full test suite | `npx vitest run` (same as `npm test`) |
 | Single test file | `npx vitest run <path>` — e.g. `npx vitest run test/clamp.test.ts` |
 | Validate an item | `npx tsx tools/validate/index.ts items/johnny` (and `items/blank`, `items/overkall`, `items/somnlos`; once: `npm ci --prefix tools/validate`) |
@@ -37,6 +38,7 @@ src/
   constants.ts   every tunable (sizes, colors, camera limits, DPR cap, timing)
   scene/         Three.js renderer, room, render loop, camera controls
   physics/       Rapier world + bodies (PR 2)
+  shell/         code that runs only inside the Capacitor app (loaded by dynamic import when the page's protocol is capacitor:)
   game/          rules, state, assembly logic; item.ts is the only door to items/; roomSave.ts is the save format
   ui/            DOM/CSS overlays
 test/            Vitest specs, *.test.ts
