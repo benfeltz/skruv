@@ -1140,7 +1140,8 @@ export const TUNE = {
 // and `edgePad` the least room kept at the spine's sides, `rise` how far the row travels into the band
 // as it folds, `motionMs` the fold and spread. `clearHoldMs` is the hold on the open cover that clears
 // the open item (1.9.9.6): a press past GESTURE.tapMaxMs that lifts before it is a cancel; `badge` the X
-// badge marking the open cover (CSS px).
+// badge marking the open cover (CSS px); `dimOpacity` what the open item's parts fade to while the hold
+// runs, so the player sees what is about to go.
 export const FAN = {
   cover: 56,
   gap: 8,
@@ -1152,6 +1153,7 @@ export const FAN = {
   motionMs: 200,
   clearHoldMs: 900,
   badge: 24,
+  dimOpacity: 0.35,
 };
 
 // The room's save (src/game/roomStore.ts): the one key it is written under, and how long after the last

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CAMERA, COLORS, PHYSICS } from '../src/constants.js';
+import { CAMERA, COLORS, FAN, PHYSICS } from '../src/constants.js';
 import type { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { createBus } from '../src/game/events.js';
 import { parse, serialize } from '../src/game/roomSave.js';
@@ -1105,6 +1105,29 @@ describe('several worlds in one room (1.9.9.2)', () => {
     blank.dispose();
     setItem('johnny');
     johnny.dispose();
+  });
+
+  it('dims its player parts and only them while the clear hold runs, and a deactivate undims them (1.9.9.6)', async () => {
+    const rig = await engine();
+    const before = new Set(rig.deps.scene.children);
+    const world = createItemWorld(rig.deps);
+    const materials = rig.deps.scene.children
+      .filter((child): child is THREE.Mesh => !before.has(child) && child instanceof THREE.Mesh)
+      .map((mesh) => mesh.material)
+      .filter((material): material is THREE.MeshStandardMaterial => material instanceof THREE.MeshStandardMaterial);
+    const box = materials.filter((material) => material.color.getHex() === COLORS.cardboard);
+    const dimmed = () => materials.filter((material) => material.transparent && material.opacity === FAN.dimOpacity);
+    expect(box.length).toBeGreaterThan(0);
+    world.dim(true);
+    expect(dimmed()).toHaveLength(Object.keys(world.snapshot().parts).length);
+    for (const material of box) expect(material.opacity).toBe(1);
+    world.dim(false);
+    expect(dimmed()).toHaveLength(0);
+    expect(materials.every((material) => material.opacity === 1)).toBe(true);
+    world.dim(true);
+    world.deactivate();
+    expect(materials.every((material) => material.opacity === 1 && !dimmed().includes(material))).toBe(true);
+    world.dispose();
   });
 
   it('deactivating twice, or mid-hold, is harmless', async () => {
