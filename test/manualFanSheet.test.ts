@@ -30,7 +30,15 @@ const coverHeight = Math.round((FAN.cover * BOOKLET.pageSize[1]) / BOOKLET.pageS
 function mount(ids: string[]) {
   let room = ids;
   const picks: string[] = [];
-  const fan = createManualFan({ worlds: () => room.map(world), nameOf: (id) => id.toUpperCase(), onPick: (id) => picks.push(id) });
+  const clears: string[] = [];
+  const holds: [string, boolean][] = [];
+  const fan = createManualFan({
+    worlds: () => room.map(world),
+    nameOf: (id) => id.toUpperCase(),
+    onPick: (id) => picks.push(id),
+    onClear: (id) => clears.push(id),
+    onHold: (id, on) => holds.push([id, on]),
+  });
   mounted.push(fan);
   const element = fan.element as unknown as FakeElement;
   dom.body.append(element);
@@ -44,6 +52,8 @@ function mount(ids: string[]) {
     covers: () => row.children,
     edges: () => spine.children,
     picks,
+    clears,
+    holds,
     setRoom(next: string[]) {
       room = next;
       fan.refresh();
@@ -97,7 +107,7 @@ describe('the row, spread', () => {
     const { covers, spine } = mount(['johnny', 'blank', 'overkall']);
     spine.fire('click');
     expect(covers().map((b) => b.dataset.id)).toEqual(['johnny', 'blank', 'overkall']);
-    expect(covers().map((b) => b.attributes['aria-label'])).toEqual(['Switch to JOHNNY', 'Switch to BLANK', 'OVERKALL, open']);
+    expect(covers().map((b) => b.attributes['aria-label'])).toEqual(['Switch to JOHNNY', 'Switch to BLANK', 'OVERKALL, open — hold to clear']);
     expect(covers().map((b) => b.attributes['aria-current'])).toEqual([undefined, undefined, 'true']);
     expect(covers().map((b) => (b.children[0] as FakeElement).drawn)).toEqual([source('johnny'), source('blank'), source('overkall')]);
   });
@@ -325,5 +335,196 @@ describe('dispose', () => {
     for (const type of ['keydown', 'resize']) expect(dom.windowListeners.get(type)).toEqual([]);
     expect(dom.documentListeners.get('pointerdown')).toEqual([]);
     expect(dom.orientationListeners?.get('change')).toEqual([]);
+  });
+});
+
+// 1.9.9.6 (Ben, 2026-10-23): a hold on the open cover clears the open item. One press, three outcomes:
+// a tap folds, a cancel leaves the row spread, the full hold clears.
+describe('the clear hold on the open cover', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const press = (target: FakeElement, init: { x?: number; t?: number } = {}) => target.fire('pointerdown', { clientX: init.x ?? 100, clientY: 20, timeStamp: init.t ?? 0 });
+  const lift = (target: FakeElement, init: { x?: number; t?: number } = {}) => target.fire('pointerup', { clientX: init.x ?? 100, clientY: 20, timeStamp: init.t ?? 50 });
+  const badge = (cover: FakeElement) => cover.children.find((node) => node.className === 'manual-fan-badge');
+  const key = (target: FakeElement, type: 'keydown' | 'keyup', init: { key?: string; t?: number; repeat?: boolean } = {}) => {
+    let prevented = false;
+    target.fire(type, { key: init.key ?? 'Enter', timeStamp: init.t ?? 0, repeat: init.repeat ?? false, preventDefault: () => (prevented = true) } as never);
+    return prevented;
+  };
+
+  it('marks only the open cover with the X badge and the hold in its label, and moves the badge with the room', () => {
+    const { covers, setRoom } = mount(['a', 'b']);
+    expect(badge(covers()[1])).toBeDefined();
+    expect(badge(covers()[1])!.attributes['aria-hidden']).toBe('true');
+    expect(badge(covers()[0])).toBeUndefined();
+    expect(covers()[1].attributes['aria-label']).toBe('B, open — hold to clear');
+    setRoom(['b', 'a']);
+    expect(covers().map((b) => b.dataset.id)).toEqual(['b', 'a']);
+    expect(badge(covers()[0])).toBeUndefined();
+    expect(badge(covers()[1])).toBeDefined();
+  });
+
+  it('a tap on the open cover folds and clears nothing; the hold began and ended', () => {
+    const { fan, spine, covers, clears, holds } = mount(['a', 'b']);
+    spine.fire('click');
+    press(covers()[1]);
+    expect(covers()[1].dataset.holding).toBe('true');
+    lift(covers()[1], { t: 50 });
+    vi.advanceTimersByTime(FAN.clearHoldMs);
+    expect(clears).toEqual([]);
+    expect(fan.expanded).toBe(false);
+    expect(holds).toEqual([
+      ['b', true],
+      ['b', false],
+    ]);
+  });
+
+  it('a release after the tap time is a cancel: nothing cleared, the row still spread, the border back', () => {
+    const { fan, spine, covers, clears, holds, picks } = mount(['a', 'b']);
+    spine.fire('click');
+    press(covers()[1]);
+    vi.advanceTimersByTime(GESTURE.tapMaxMs + 1);
+    lift(covers()[1], { t: GESTURE.tapMaxMs + 1 });
+    vi.advanceTimersByTime(FAN.clearHoldMs);
+    expect(clears).toEqual([]);
+    expect(picks).toEqual([]);
+    expect(fan.expanded).toBe(true);
+    expect(covers()[1].dataset.holding).toBe('false');
+    expect(holds.at(-1)).toEqual(['b', false]);
+  });
+
+  it('the full hold clears the open item once and folds; the release after it does nothing more', () => {
+    const { fan, spine, covers, clears, holds, picks } = mount(['a', 'b']);
+    spine.fire('click');
+    const open = covers()[1];
+    press(open);
+    vi.advanceTimersByTime(FAN.clearHoldMs);
+    expect(clears).toEqual(['b']);
+    expect(fan.expanded).toBe(false);
+    expect(holds).toEqual([
+      ['b', true],
+      ['b', false],
+    ]);
+    lift(open, { t: FAN.clearHoldMs + 10 });
+    vi.advanceTimersByTime(FAN.clearHoldMs);
+    expect(clears).toEqual(['b']);
+    expect(picks).toEqual([]);
+  });
+
+  it('a hold on a kept cover never clears and never dims', () => {
+    const { spine, covers, clears, holds } = mount(['a', 'b']);
+    spine.fire('click');
+    press(covers()[0]);
+    vi.advanceTimersByTime(FAN.clearHoldMs * 2);
+    lift(covers()[0], { t: FAN.clearHoldMs * 2 });
+    expect(clears).toEqual([]);
+    expect(holds).toEqual([]);
+    expect(covers()[0].dataset.holding).toBeUndefined();
+  });
+
+  it('holds nothing while folded', () => {
+    const { covers, clears, holds } = mount(['a', 'b']);
+    press(covers()[1]);
+    vi.advanceTimersByTime(FAN.clearHoldMs);
+    expect(clears).toEqual([]);
+    expect(holds).toEqual([]);
+  });
+
+  it('a move past the tap distance during the hold is a swipe: it stops, nothing clears, the row stays spread', () => {
+    const { fan, spine, covers, clears, holds } = mount(['a', 'b']);
+    spine.fire('click');
+    press(covers()[1]);
+    covers()[1].fire('pointermove', { clientX: 100 + GESTURE.tapMaxDistance + 1, clientY: 20 });
+    expect(holds.at(-1)).toEqual(['b', false]);
+    vi.advanceTimersByTime(FAN.clearHoldMs);
+    lift(covers()[1], { x: 100 + GESTURE.tapMaxDistance + 1, t: FAN.clearHoldMs });
+    expect(clears).toEqual([]);
+    expect(fan.expanded).toBe(true);
+  });
+
+  it('a browser-cancelled press stops the hold', () => {
+    const { spine, covers, clears, holds } = mount(['a', 'b']);
+    spine.fire('click');
+    press(covers()[1]);
+    covers()[1].fire('pointercancel');
+    vi.advanceTimersByTime(FAN.clearHoldMs);
+    expect(clears).toEqual([]);
+    expect(holds.at(-1)).toEqual(['b', false]);
+  });
+
+  it('fold() and Escape during a hold stop it and undim', () => {
+    for (const how of ['fold', 'escape'] as const) {
+      const { fan, spine, covers, clears, holds } = mount(['a', 'b']);
+      spine.fire('click');
+      press(covers()[1]);
+      if (how === 'fold') fan.fold();
+      else dom.key('Escape');
+      expect(holds.at(-1)).toEqual(['b', false]);
+      vi.advanceTimersByTime(FAN.clearHoldMs);
+      expect(clears).toEqual([]);
+    }
+  });
+
+  it('dispose during a hold stops it', () => {
+    const { fan, spine, covers, clears, holds } = mount(['a', 'b']);
+    spine.fire('click');
+    press(covers()[1]);
+    fan.dispose();
+    vi.advanceTimersByTime(FAN.clearHoldMs);
+    expect(clears).toEqual([]);
+    expect(holds.at(-1)).toEqual(['b', false]);
+  });
+
+  it("turns the border red only after the tap time, snaps it back, and still runs no animation", () => {
+    mount(['a']);
+    const css = dom.head.children.map((node) => node.textContent).join('');
+    expect(css).toContain(`border-color ${FAN.clearHoldMs}ms linear ${GESTURE.tapMaxMs}ms`);
+    expect(css).toContain(`stroke-dashoffset ${FAN.clearHoldMs}ms linear ${GESTURE.tapMaxMs}ms`);
+    expect(css).toContain(`width: ${FAN.badge}px;`);
+    expect(css).not.toContain('animation');
+  });
+
+  describe('from the keyboard', () => {
+    it('Enter held for the hold clears once; its keydown is prevented, so the browser makes no click of it', () => {
+      const { fan, spine, covers, clears } = mount(['a', 'b']);
+      spine.fire('click');
+      expect(key(covers()[1], 'keydown')).toBe(true);
+      // The key repeats while held: no second hold.
+      key(covers()[1], 'keydown', { repeat: true, t: 500 });
+      vi.advanceTimersByTime(FAN.clearHoldMs);
+      expect(clears).toEqual(['b']);
+      expect(fan.expanded).toBe(false);
+    });
+
+    it('a key held to half and let go is a cancel: nothing cleared, still spread; its click does not fold', () => {
+      const { fan, spine, covers, clears } = mount(['a', 'b']);
+      spine.fire('click');
+      key(covers()[1], 'keydown', { key: ' ' });
+      vi.advanceTimersByTime(FAN.clearHoldMs / 2);
+      key(covers()[1], 'keyup', { key: ' ', t: FAN.clearHoldMs / 2 });
+      covers()[1].fire('click', { detail: 0 });
+      vi.advanceTimersByTime(FAN.clearHoldMs);
+      expect(clears).toEqual([]);
+      expect(fan.expanded).toBe(true);
+    });
+
+    it('a quick key press on the open cover folds, as a tap does', () => {
+      const { fan, spine, covers, clears } = mount(['a', 'b']);
+      spine.fire('click');
+      key(covers()[1], 'keydown');
+      key(covers()[1], 'keyup', { t: 80 });
+      expect(fan.expanded).toBe(false);
+      expect(clears).toEqual([]);
+    });
+
+    it('leaves a kept cover\'s keys to the browser: no hold, and its click picks', () => {
+      const { spine, covers, picks, holds } = mount(['a', 'b']);
+      spine.fire('click');
+      expect(key(covers()[0], 'keydown')).toBe(false);
+      covers()[0].fire('click', { detail: 0 });
+      expect(holds).toEqual([]);
+      expect(picks).toEqual(['a']);
+    });
   });
 });
