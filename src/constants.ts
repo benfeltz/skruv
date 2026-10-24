@@ -316,6 +316,8 @@ export const COLORS = {
   uiSurface: 0x2a2d34,
   uiText: 0xf1eee6,
   uiAccent: 0xe0a64a,
+  // The clear's red: the open manual's cover border and its badge's ring while held (src/ui/manualFan.ts).
+  uiDanger: 0xd8553f,
   // Snap preview (src/scene/ghost.ts).
   ghost: 0xe0a64a,
   // The ghost, and the glow on the hole it seats in, when a panel's fit on offer is where it
@@ -1136,8 +1138,21 @@ export const TUNE = {
 // BOOKLET.pageSize), `gap` the space between spread covers, `inset` the space kept between the row and
 // the band and the cluster, `edge` a cover's edge in the spine, `edgeStep` the offset between edges
 // and `edgePad` the least room kept at the spine's sides, `rise` how far the row travels into the band
-// as it folds, `motionMs` the fold and spread.
-export const FAN = { cover: 56, gap: 8, inset: 12, edge: 12, edgeStep: 4, edgePad: 4, rise: 24, motionMs: 200 };
+// as it folds, `motionMs` the fold and spread. `clearHoldMs` is the hold on the open cover that clears
+// the open item (1.9.9.6): a press past GESTURE.tapMaxMs that lifts before it is a cancel; `badge` the X
+// badge marking the open cover (CSS px).
+export const FAN = {
+  cover: 56,
+  gap: 8,
+  inset: 12,
+  edge: 12,
+  edgeStep: 4,
+  edgePad: 4,
+  rise: 24,
+  motionMs: 200,
+  clearHoldMs: 900,
+  badge: 24,
+};
 
 // The room's save (src/game/roomStore.ts): the one key it is written under, and how long after the last
 // change the write waits, so a run of seats and releases is one write. The page going to the
