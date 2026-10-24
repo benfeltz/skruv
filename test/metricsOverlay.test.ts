@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { METRICS } from '../src/constants.js';
+import { CLUSTER, MENU, METRICS } from '../src/constants.js';
 import { createMetricsOverlay } from '../src/ui/metricsOverlay.js';
 import { FakeElement, installFakeDom } from './support/fakeDom.js';
 import type { FakeDom } from './support/fakeDom.js';
@@ -39,6 +39,15 @@ describe('the metrics overlay', () => {
     overlay.frame(0);
     for (let i = 0; i < 31; i++) overlay.frame(1 / 60);
     expect(element.textContent).toContain('frames 31 ');
+  });
+
+  it('sits clear of the control cluster, under its row and beside its column', () => {
+    mount();
+    const css = dom.head.children.find((node) => node.id === 'skruv-metrics-overlay')!.textContent;
+    const below = CLUSTER.inset + MENU.size + CLUSTER.gap;
+    expect(css).toContain(`top: calc(${below}px + env(safe-area-inset-top))`);
+    expect(css).toContain(`html[data-strip='right'] .metrics-overlay`);
+    expect(css).toContain(`left: calc(${below}px + env(safe-area-inset-left))`);
   });
 
   it('is removed from its parent on dispose', () => {

@@ -1,4 +1,4 @@
-import { COLORS, METRICS } from '../constants.js';
+import { CLUSTER, COLORS, MENU, METRICS } from '../constants.js';
 import { createFrameHistogram } from '../game/metricsMath.js';
 
 // The frame-time readout the menu's Metrics row switches on: frames, seconds, slow frames and
@@ -17,10 +17,11 @@ function injectStyle() {
   style.textContent = `
     .metrics-overlay {
       position: fixed;
-      top: calc(env(safe-area-inset-top) + 8px);
-      left: calc(env(safe-area-inset-left) + 8px);
+      /* Clear of the control cluster's corner: under its row in portrait, beside its column in landscape. */
+      top: calc(${CLUSTER.inset + MENU.size + CLUSTER.gap}px + env(safe-area-inset-top));
+      left: calc(${CLUSTER.inset}px + env(safe-area-inset-left));
       z-index: 3;
-      max-width: calc(100vw - 16px);
+      max-width: calc(100vw - ${CLUSTER.inset * 2}px);
       margin: 0;
       padding: 6px 8px;
       border-radius: 8px;
@@ -29,6 +30,11 @@ function injectStyle() {
       font: 11px/1.35 ui-monospace, Menlo, monospace;
       white-space: pre;
       pointer-events: none;
+    }
+    html[data-strip='right'] .metrics-overlay {
+      top: calc(${CLUSTER.inset}px + env(safe-area-inset-top));
+      left: calc(${CLUSTER.inset + MENU.size + CLUSTER.gap}px + env(safe-area-inset-left));
+      max-width: calc(100vw - ${CLUSTER.inset * 2 + MENU.size + CLUSTER.gap}px);
     }
   `;
   document.head.append(style);
