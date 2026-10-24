@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DRAWN_EPSILON, LAYOUT, PICK, RESET, ROOM } from '../constants.js';
+import { DRAWN_EPSILON, FAN, LAYOUT, PICK, RESET, ROOM } from '../constants.js';
 import { createAssembly, restoreJoints } from '../game/assembly.js';
 import { EVENT, recoveryEvent, resetEvent } from '../game/events.js';
 import { CUE, homeCue } from '../game/haptics.js';
@@ -69,10 +69,11 @@ export interface ItemWorldDeps {
  * now: its flatpack and packed parts, the assembly graph and
  * the compound seam, the gizmo, the gesture router, the elevation line and Shift hold, the
  * booklet and its highlight, the detail inset, repack and the recovery sweep. Returns `{ update(delta),
- * render(renderer, scene), repack(), snapshot(), pickDistance, booklet, dispose() }`: the loop calls `update`
+ * render(renderer, scene), repack(), snapshot(), dim(on), pickDistance, booklet, dispose() }`: the loop calls `update`
  * and, after the main render, `render` (the inset's one extra pass), the reset button
  * `repack`, the camera's pivot `pickDistance`, the room's saver `snapshot` (this item as a
- * save record: src/game/roomSave.ts). `dispose()` takes it all back out — meshes off
+ * save record: src/game/roomSave.ts), the pocket's hold on the open cover `dim` (1.9.9.6: the parts
+ * the clear would take fade while it runs). `dispose()` takes it all back out — meshes off
  * the scene, bodies out of the physics world, DOM nodes off the page, every listener it
  * bound unbound — so the room is as it was before it came. A build that throws takes back what
  * it had built before rethrowing.
@@ -109,8 +110,9 @@ export function createItemWorld(deps: ItemWorldDeps) {
     const world = buildItemWorld(deps, undo);
     return {
       ...world,
-      /** Takes the world back out, every release run; any that threw are thrown together after. */
+      /** Takes the world back out, every release run; any that threw are thrown together after. Its parts are undimmed first. */
       dispose() {
+        world.dim(false);
         const errors = teardown();
         if (errors.length) throw new AggregateError(errors, 'item world teardown: some releases threw');
       },
@@ -482,6 +484,23 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
     }
   }
 
+  /**
+   * Fades the player's parts (on) or brings them back (off) while the pocket's clear hold runs
+   * (1.9.9.6). Each part mesh owns its material (src/game/partMesh.ts), so no other world's parts
+   * change; the decals keep theirs (a dimmed hole is not worth a loop), and the box and lid are not
+   * the player's parts, so they stay. Only the active world is ever dimmed.
+   */
+  function dim(on: boolean) {
+    for (const { mesh } of playerParts) {
+      // Three bakes `transparent` into the shader program, so a flip asks for it again (cached after the first).
+      if (mesh.material.transparent !== on) {
+        mesh.material.transparent = on;
+        mesh.material.needsUpdate = true;
+      }
+      mesh.material.opacity = on ? FAN.dimOpacity : 1;
+    }
+  }
+
   // The rest of the booklet draws in idle time, after the room is on screen.
   bookletPages.prerender();
 
@@ -503,8 +522,10 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
         LAYOUT.pad,
       );
     },
-    /** Makes it kept: lets go of any hold and gesture, and puts every overlay and the strip away. Idempotent. */
+    dim,
+    /** Makes it kept: lets go of any hold and gesture, and puts every overlay and the strip away. Undims its parts — a kept world is never dimmed. Idempotent. */
     deactivate() {
+      dim(false);
       if (!active) return;
       active = false;
       // Drawn once more first, with the door still on this world's item: a world restored and put away

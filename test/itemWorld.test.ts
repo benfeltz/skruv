@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CAMERA, COLORS, PHYSICS } from '../src/constants.js';
+import { CAMERA, COLORS, FAN, PHYSICS } from '../src/constants.js';
 import type { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { createBus } from '../src/game/events.js';
 import { parse, serialize } from '../src/game/roomSave.js';
@@ -485,6 +485,55 @@ describe('the swap: picking from the catalog (1.9.1)', () => {
       expect(census().physics.registered).toBe(both.physics.registered);
       expect(items.all()).toEqual([blank, johnny]);
       items.clear();
+      expect(census()).toEqual(baseline);
+    } finally {
+      setItem('johnny');
+    }
+  });
+});
+
+// 1.9.9.6, the clear: the slot's drop() on real worlds and real physics. The open world goes with the door
+// naming it, the kept one comes back in hand, and the room is exactly as if the cleared item had never been built.
+describe('the clear: drop() on real worlds (1.9.9.6)', () => {
+  const strips = () => body.children.filter((node) => node.className === 'booklet-strip');
+
+  it('drops BLANK while JOHNNY is kept: JOHNNY back in hand with its strip, the room as with JOHNNY alone, then empty at baseline', async () => {
+    const { deps, census } = await engine();
+    const baseline = census();
+    const disposedWith: string[] = [];
+    const items: ReturnType<typeof createItemSlot<ItemWorld>> = createItemSlot({
+      door: { knows: (id) => ITEM_IDS.includes(id), selected: () => ITEM_ID, select: setItem },
+      report: (error) => {
+        throw error;
+      },
+      build: () => {
+        const world = createItemWorld({ ...deps, at: freeSpot(items.all().map((w) => w.footprint()), boxFootprintSize(packedBox())) });
+        const { dispose } = world;
+        // What the door names while each world is torn down: always its own item.
+        world.dispose = () => {
+          disposedWith.push(`${world.id} (door: ${ITEM_ID})`);
+          dispose();
+        };
+        return world;
+      },
+    });
+    try {
+      const johnny = items.pick('johnny');
+      const alone = census();
+      const blank = items.pick('blank');
+      run(blank, 0.3);
+      // Dimmed mid-hold, as the pocket leaves it the moment the clear fires.
+      blank.dim(true);
+      expect(items.drop()).toBe(johnny);
+      expect(disposedWith).toEqual(['blank (door: blank)']);
+      expect(ITEM_ID).toBe('johnny');
+      expect(items.all()).toEqual([johnny]);
+      expect(strips().filter((node) => !node.hidden)).toHaveLength(1);
+      expect(census()).toEqual(alone);
+      run(johnny, 0.2);
+      expect(items.drop()).toBeNull();
+      expect(disposedWith).toEqual(['blank (door: blank)', 'johnny (door: johnny)']);
+      expect(items.current).toBeNull();
       expect(census()).toEqual(baseline);
     } finally {
       setItem('johnny');
@@ -1105,6 +1154,29 @@ describe('several worlds in one room (1.9.9.2)', () => {
     blank.dispose();
     setItem('johnny');
     johnny.dispose();
+  });
+
+  it('dims its player parts and only them while the clear hold runs, and a deactivate undims them (1.9.9.6)', async () => {
+    const rig = await engine();
+    const before = new Set(rig.deps.scene.children);
+    const world = createItemWorld(rig.deps);
+    const materials = rig.deps.scene.children
+      .filter((child): child is THREE.Mesh => !before.has(child) && child instanceof THREE.Mesh)
+      .map((mesh) => mesh.material)
+      .filter((material): material is THREE.MeshStandardMaterial => material instanceof THREE.MeshStandardMaterial);
+    const box = materials.filter((material) => material.color.getHex() === COLORS.cardboard);
+    const dimmed = () => materials.filter((material) => material.transparent && material.opacity === FAN.dimOpacity);
+    expect(box.length).toBeGreaterThan(0);
+    world.dim(true);
+    expect(dimmed()).toHaveLength(Object.keys(world.snapshot().parts).length);
+    for (const material of box) expect(material.opacity).toBe(1);
+    world.dim(false);
+    expect(dimmed()).toHaveLength(0);
+    expect(materials.every((material) => material.opacity === 1)).toBe(true);
+    world.dim(true);
+    world.deactivate();
+    expect(materials.every((material) => material.opacity === 1 && !dimmed().includes(material))).toBe(true);
+    world.dispose();
   });
 
   it('deactivating twice, or mid-hold, is harmless', async () => {

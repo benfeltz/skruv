@@ -1,7 +1,7 @@
 import { CATALOG, LAYER, RENDER, SAVE, STAGE, TUNE } from './constants.js';
 import { catalogEntries, createCatalog } from './game/catalogModel.js';
 import { pickableSet } from './game/pickable.js';
-import { ANY, createBus, EVENT, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
+import { ANY, clearEvent, createBus, EVENT, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
 import { createHaptics, cueFor, patternFor } from './game/haptics.js';
 import { packedBox } from './game/boxLayout.js';
 import { ITEM_ID, ITEM_IDS, itemById, setItem } from './game/item.js';
@@ -186,8 +186,16 @@ catalogPages.prerender();
 
 // The manuals are the switcher (1.9.9.3, option B): every world's manual in the pocket at the band's
 // end, spread out of it as a row of covers on a tap. A tap on a cover is a pick like the catalog's;
-// the pocket never touches a kept world, it draws the cover the world handed out.
-const fan = createManualFan({ worlds: () => items.all(), nameOf: (id) => itemById(id).identity.product, onPick: (id) => pickItem(id) });
+// the pocket never touches a kept world, it draws the cover the world handed out. A hold on the open
+// cover clears the open item (1.9.9.6), its parts dimmed while the hold runs — the open world's only.
+const fan = createManualFan({ worlds: () => items.all(),
+  nameOf: (id) => itemById(id).identity.product,
+  onPick: (id) => pickItem(id),
+  onClear: (id) => clearItem(id),
+  onHold: (id, on) => {
+    if (items.current?.id === id) items.current.dim(on);
+  },
+});
 document.body.append(fan.element);
 // An opening catalog never leaves the row spread under its scrim.
 catalog.onChange(({ expanded }) => {
@@ -202,6 +210,24 @@ function pickItem(id: string) {
   world.booklet.focus();
   saver.changed();
   fan.refresh();
+}
+
+// One clear, for the pocket's hold: the open world out of the room, the previous kept one in hand on its
+// page (the slot's drop), its record out of the save. The saver writes nothing for an empty room by
+// design (a refused save survives until a pick writes over it), so a room with nothing left to save
+// clears the store here, or the cleared item would come back on reload; the catalog is then the
+// splash, as at boot, and cannot be put down.
+function clearItem(id: string) {
+  // The pocket only offers the open item; this guards a stale callback.
+  if (items.current?.id !== id) return;
+  const next = items.drop();
+  events.emit(clearEvent(id));
+  fan.refresh();
+  next?.booklet.focus();
+  // Objects of a kind this build does not know still make a save worth writing.
+  if (next || carried.length) saver.changed();
+  else store.clear();
+  if (!next) catalog.setOpen(true);
 }
 
 // The restore (src/game/roomRestore.ts): the saved room put back before the first frame, or the empty

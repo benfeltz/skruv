@@ -1,5 +1,5 @@
 import { BOOKLET, BOOKLET_UI, CLUSTER, COLORS, FAN, GESTURE, RENDER } from '../constants.js';
-import { fanLabel, rowLength, spineEdges } from '../game/manualFan.js';
+import { fanLabel, pressOutcome, rowLength, spineEdges } from '../game/manualFan.js';
 import { fanBox, type Rect } from '../game/screenLayout.js';
 import { BAND } from './booklet.js';
 
@@ -7,14 +7,32 @@ import { BAND } from './booklet.js';
 // end upright, the foot in landscape — holds every world's manual. At rest it is a spine, only the
 // covers' edges, the open manual's on top in gold. A tap on it brings every cover out as a row (above
 // the band upright, leftward into the room in landscape), the open one nearest the pocket; a tap on
-// another cover is the caller's pick, and the row folds back. Two states, spine and spread; no timers.
+// another cover is the caller's pick, and the row folds back. Two states, spine and spread.
 // It draws the covers the worlds hand out and asks nothing else of them: a kept world is never touched.
+//
+// The clear (1.9.9.6; Ben, 2026-10-23): the open cover, spread, wears an X badge (a marker, never a
+// button) and the whole cover takes a hold. One press, three outcomes (src/game/manualFan.ts's
+// pressOutcome): released inside GESTURE.tapMaxMs it is a tap and folds; released later it is a cancel
+// and the row stays spread; held for FAN.clearHoldMs it is the caller's clear. While held the border runs
+// gold to red and the badge's ring fills, both only after the tap time, so a tap never flashes red.
+// The hold's one timer is the only timer here.
 
 const STYLE_ID = 'skruv-manual-fan';
 const css = (hex: number) => `#${hex.toString(16).padStart(6, '0')}`;
 const [pageW, pageH] = BOOKLET.pageSize;
 const coverHeight = Math.round((FAN.cover * pageH) / pageW);
 const { pocket, name, rule } = BOOKLET_UI.strip;
+// The hold's red fill: it waits out the tap time, then runs to the clear, so it is full the moment the
+// item goes (as Repack's bar is full at its timer).
+const fillMs = FAN.clearHoldMs - GESTURE.tapMaxMs;
+// The badge sits this far in from the cover's corner, its ring as far out around it.
+const badgeInset = 4;
+// The ring's circle (r 16 in a 36 viewBox): its circumference, the dash it fills along.
+const RING = (2 * Math.PI * 16).toFixed(1);
+// The X and its ring, drawn once per badge.
+const BADGE_SVG =
+  '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg>' +
+  '<svg class="manual-fan-ring" aria-hidden="true" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16"/></svg>';
 
 function injectStyle() {
   if (document.getElementById(STYLE_ID)) return;
@@ -116,8 +134,57 @@ function injectStyle() {
       scroll-snap-align: end;
     }
     .manual-fan-cover[aria-current='true'] {
+      position: relative;
       border-color: ${css(COLORS.uiAccent)};
       box-shadow: 0 0 0 1px ${css(COLORS.uiAccent)}, 0 4px 14px #0007;
+      -webkit-touch-callout: none;
+      transition: border-color 120ms, box-shadow 120ms;
+    }
+    /* Held: gold to red over the hold, starting after the tap time, so a tap never flashes red, and red
+       the moment it clears; let go and it snaps back (the 120 ms above). */
+    .manual-fan-cover[aria-current='true'][data-holding='true'] {
+      border-color: ${css(COLORS.uiDanger)};
+      box-shadow: 0 0 0 1px ${css(COLORS.uiDanger)}, 0 4px 14px #0007;
+      transition: border-color ${fillMs}ms linear ${GESTURE.tapMaxMs}ms, box-shadow ${fillMs}ms linear ${GESTURE.tapMaxMs}ms;
+    }
+    /* The X badge, at the open cover's outer corner: top-right upright, top-left in landscape. Inside the
+       cover's box, which clips. A marker: the whole cover is the target. */
+    .manual-fan-badge {
+      position: absolute;
+      top: ${badgeInset}px;
+      right: ${badgeInset}px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: ${FAN.badge}px;
+      height: ${FAN.badge}px;
+      border-radius: 50%;
+      background: ${css(COLORS.uiText)};
+      color: ${css(COLORS.bookletInk)};
+      box-shadow: 0 0 0 2px ${css(COLORS.bookletInk)};
+      pointer-events: none;
+    }
+    ${landscape} .manual-fan-badge { right: auto; left: ${badgeInset}px; }
+    .manual-fan-badge svg { display: block; }
+    .manual-fan-ring {
+      position: absolute;
+      inset: -${badgeInset}px;
+      width: ${FAN.badge + 2 * badgeInset}px;
+      height: ${FAN.badge + 2 * badgeInset}px;
+      transform: rotate(-90deg);
+    }
+    .manual-fan-ring circle {
+      fill: none;
+      stroke: ${css(COLORS.uiDanger)};
+      stroke-width: 3;
+      stroke-dasharray: ${RING};
+      stroke-dashoffset: ${RING};
+      transition: stroke-dashoffset 120ms;
+    }
+    .manual-fan-cover[data-holding='true'] .manual-fan-badge { color: ${css(COLORS.uiDanger)}; }
+    .manual-fan-cover[data-holding='true'] .manual-fan-ring circle {
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset ${fillMs}ms linear ${GESTURE.tapMaxMs}ms;
     }
     .manual-fan-cover canvas { display: block; width: 100%; height: 100%; }
     .manual-fan-cover:focus-visible {
@@ -126,6 +193,9 @@ function injectStyle() {
     }
     @media (prefers-reduced-motion: reduce) {
       .manual-fan-row, .manual-fan[data-expanded='false'] .manual-fan-row { transition: none; }
+      /* The border still turns red on a hold, at once; the ring shows it full. */
+      .manual-fan-cover[aria-current='true'], .manual-fan-cover[aria-current='true'][data-holding='true'],
+      .manual-fan-ring circle, .manual-fan-cover[data-holding='true'] .manual-fan-ring circle { transition: none; }
     }
   `;
   document.head.append(style);
@@ -143,8 +213,25 @@ export interface FanWorld {
  * A tap on the spine spreads the row (and folds it again); a tap on a cover calls `onPick(id)` and folds
  * (on the open one's, it only folds); a pointer that travels past the tap distance (the row scrolling)
  * picks nothing. A tap outside, Escape and `fold()` put it away. `refresh()` follows the room.
+ * A hold on the open cover (pointer, or Enter / Space held) calls `onHold(id, true)` as it starts and
+ * `onHold(id, false)` as it ends however it ends, and `onClear(id)` when it runs the full FAN.clearHoldMs
+ * (the row folds first); a hold on a kept cover does nothing.
  */
-export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly FanWorld[]; nameOf(id: string): string; onPick(id: string): void }) {
+export function createManualFan({
+  worlds,
+  nameOf,
+  onPick,
+  onClear = () => undefined,
+  onHold = () => undefined,
+}: {
+  worlds(): readonly FanWorld[];
+  nameOf(id: string): string;
+  onPick(id: string): void;
+  /** The full hold ran on the open cover: clear it (main's clearItem). */
+  onClear?(id: string): void;
+  /** A hold on the open cover began (true) or ended, however it ended (false): main dims the world's parts. */
+  onHold?(id: string, holding: boolean): void;
+}) {
   injectStyle();
   const element = document.createElement('div');
   element.className = 'manual-fan';
@@ -162,7 +249,7 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
   element.append(spine, row);
 
   const ratio = Math.min(window.devicePixelRatio || 1, RENDER.maxPixelRatio);
-  const covers = new Map<string, { button: HTMLButtonElement; canvas: HTMLCanvasElement; source: CanvasImageSource | null }>();
+  const covers = new Map<string, { button: HTMLButtonElement; canvas: HTMLCanvasElement; source: CanvasImageSource | null; badge: HTMLElement | null }>();
   let edges: HTMLElement[] = [];
   let ids: string[] = [];
   let activeId: string | null = null;
@@ -224,7 +311,7 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
       canvas.width = Math.round(FAN.cover * ratio);
       canvas.height = Math.round(coverHeight * ratio);
       button.append(canvas);
-      entry = { button, canvas, source: null };
+      entry = { button, canvas, source: null, badge: null };
       covers.set(id, entry);
     }
     // Drawn once per cover: again only if the world handed out a different canvas (a rebuilt world).
@@ -233,9 +320,22 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
       entry.canvas.getContext('2d')!.drawImage(source, 0, 0, entry.canvas.width, entry.canvas.height);
       entry.source = source;
     }
-    entry.button.setAttribute('aria-label', id === activeId ? `${nameOf(id)}, open` : `Switch to ${nameOf(id)}`);
-    if (id === activeId) entry.button.setAttribute('aria-current', 'true');
-    else entry.button.removeAttribute('aria-current');
+    entry.button.setAttribute('aria-label', id === activeId ? `${nameOf(id)}, open — hold to clear` : `Switch to ${nameOf(id)}`);
+    if (id === activeId) {
+      entry.button.setAttribute('aria-current', 'true');
+      if (!entry.badge) {
+        entry.badge = document.createElement('span');
+        entry.badge.className = 'manual-fan-badge';
+        entry.badge.setAttribute('aria-hidden', 'true');
+        entry.badge.innerHTML = BADGE_SVG;
+        entry.button.append(entry.badge);
+      }
+    } else {
+      entry.button.removeAttribute('aria-current');
+      entry.badge?.remove();
+      entry.badge = null;
+      delete entry.button.dataset.holding;
+    }
     return entry.button;
   }
 
@@ -250,6 +350,7 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
   }
 
   function fold() {
+    stopHold();
     if (!expanded) return;
     expanded = false;
     document.removeEventListener('pointerdown', outside, true);
@@ -290,27 +391,100 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
 
   spine.addEventListener('click', () => (expanded ? fold() : spread()));
 
+  // The hold on the open cover: one timer at a time (the Repack pattern, src/ui/resetButton.ts).
+  let hold: { id: string; timer: ReturnType<typeof setTimeout> } | null = null;
+  function startHold(id: string) {
+    if (hold || !expanded || id !== activeId) return;
+    const button = covers.get(id)?.button;
+    if (button) button.dataset.holding = 'true';
+    onHold(id, true);
+    hold = {
+      id,
+      timer: setTimeout(() => {
+        stopHold();
+        press = null;
+        keyHold = null;
+        fold();
+        onClear(id);
+      }, FAN.clearHoldMs),
+    };
+  }
+  function stopHold() {
+    if (!hold) return;
+    const { id, timer } = hold;
+    hold = null;
+    clearTimeout(timer);
+    const button = covers.get(id)?.button;
+    if (button) button.dataset.holding = 'false';
+    onHold(id, false);
+  }
+  const thresholds = { ...GESTURE, holdMs: FAN.clearHoldMs };
+  const coverId = (event: Event) => (event.target as Element | null)?.closest('button')?.dataset.id;
+
   // A tap, by the thresholds the rest of the screen uses; a press that travels is the row's scroll
-  // (the browser takes a touch for a pan and cancels it), never a pick.
+  // (the browser takes a touch for a pan and cancels it), never a pick, and never a clear.
   let press: { pointerId: number; x: number; y: number; t: number } | null = null;
   row.addEventListener('pointerdown', (event) => {
-    if (press === null) press = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, t: event.timeStamp };
+    if (press !== null) return;
+    press = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, t: event.timeStamp };
+    const id = coverId(event);
+    if (id) startHold(id);
+  });
+  row.addEventListener('pointermove', (event) => {
+    if (press && hold && Math.hypot(event.clientX - press.x, event.clientY - press.y) > GESTURE.tapMaxDistance) stopHold();
   });
   row.addEventListener('pointerup', (event) => {
     if (!press || event.pointerId !== press.pointerId) return;
     const { x, y, t } = press;
     press = null;
-    const tapped = Math.hypot(event.clientX - x, event.clientY - y) <= GESTURE.tapMaxDistance && event.timeStamp - t <= GESTURE.tapMaxMs;
-    const id = (event.target as Element | null)?.closest('button')?.dataset.id;
-    if (tapped && id) choose(id);
+    const id = coverId(event);
+    const outcome = pressOutcome({ heldMs: event.timeStamp - t, distance: Math.hypot(event.clientX - x, event.clientY - y) }, thresholds);
+    // A cancel (or a swipe) leaves the row spread: the player backed out, nothing moves under the finger.
+    stopHold();
+    if (outcome === 'tap' && id) choose(id);
   });
   row.addEventListener('pointercancel', () => {
     press = null;
+    stopHold();
+  });
+  // A long press is a hold here, not a context menu.
+  row.addEventListener('contextmenu', (event) => event.preventDefault());
+
+  // Enter or Space held on the open cover is the same hold. Its keydown is prevented, so the browser makes
+  // no click of it (Enter would click at once, and again on every repeat); its keyup decides, as a pointer's
+  // up does. `keyed` swallows the one keyboard click that may still follow a key hold.
+  let keyHold: { t: number } | null = null;
+  let keyed = false;
+  const isActivation = (event: KeyboardEvent) => event.key === 'Enter' || event.key === ' ';
+  row.addEventListener('keydown', (event) => {
+    if (!isActivation(event) || coverId(event) !== activeId || !expanded) return;
+    event.preventDefault();
+    if (event.repeat || keyHold) return;
+    keyed = true;
+    keyHold = { t: event.timeStamp };
+    startHold(activeId!);
+  });
+  row.addEventListener('keyup', (event) => {
+    if (!isActivation(event) || !keyHold) return;
+    const { t } = keyHold;
+    keyHold = null;
+    const outcome = pressOutcome({ heldMs: event.timeStamp - t, distance: 0 }, thresholds);
+    stopHold();
+    if (outcome === 'tap' && activeId) choose(activeId);
+  });
+  row.addEventListener('focusout', () => {
+    keyHold = null;
+    if (!press) stopHold();
   });
   // A key press on a focused cover arrives as a click with no pointer (detail 0); a pointer's own click is handled above.
   row.addEventListener('click', (event) => {
-    const id = (event.target as Element | null)?.closest('button')?.dataset.id;
-    if (event.detail === 0 && id) choose(id);
+    const id = coverId(event);
+    if (event.detail !== 0 || !id) return;
+    if (id === activeId && keyed) {
+      keyed = false;
+      return;
+    }
+    choose(id);
   });
 
   const onKey = (event: KeyboardEvent) => {
@@ -363,6 +537,7 @@ export function createManualFan({ worlds, nameOf, onPick }: { worlds(): readonly
       return expanded;
     },
     dispose() {
+      stopHold();
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', onResize);
       orientation?.removeEventListener('change', onTurn);

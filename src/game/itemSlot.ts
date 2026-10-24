@@ -24,6 +24,11 @@
 // gets a BuildFailed (main keeps the catalog in hand and says the item couldn't be built).
 // createItemWorld takes back its own half-built work.
 //
+// drop() (1.9.9.6, the clear) takes the active world out of the room: it is disposed while the
+// door still names it, then the door turns to the previous kept world — the most recently left,
+// the slot's own order, as a switch reads it — and that world is activated. Dropping the last
+// world leaves the door on the dropped item, as clear() does.
+//
 /** A pick whose new world could not be built: the room is empty, the door named as before. `cause` is the build's error. */
 export class BuildFailed extends Error {
   constructor(
@@ -53,9 +58,10 @@ export interface SlotWorld {
 }
 
 /**
- * `{ current, all(), pick(id), clear() }`: `current` is the active world, null until the first
- * pick; `all()` every world, kept first and the active one last (the order the room's save
- * writes and the restore reads); `pick` adds or re-activates as above; `clear()` disposes them all.
+ * `{ current, all(), pick(id), drop(), clear() }`: `current` is the active world, null until the
+ * first pick; `all()` every world, kept first and the active one last (the order the room's save
+ * writes and the restore reads); `pick` adds or re-activates as above; `drop()` disposes the
+ * active world and activates the previous kept one; `clear()` disposes them all.
  */
 export function createItemSlot<World extends SlotWorld>({
   door,
@@ -117,6 +123,28 @@ export function createItemSlot<World extends SlotWorld>({
           report(error);
         }
       }
+    },
+    /**
+     * Takes the active world out of the room and puts the previous kept one in hand; returns the
+     * new active world, or null when the room is left empty. A dispose that throws goes to
+     * `report` — the world is out of the room either way.
+     */
+    drop(): World | null {
+      const gone = worlds.pop();
+      if (!gone) return null;
+      // The door already names it (it was active). No deactivate first: dispose takes down the
+      // strip and the listeners a deactivate would only hide.
+      try {
+        gone.dispose();
+      } catch (error) {
+        report(error);
+      }
+      const next = active();
+      if (next) {
+        door.select(next.id);
+        next.activate();
+      }
+      return next;
     },
     pick(id: string) {
       const now = active();

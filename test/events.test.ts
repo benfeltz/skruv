@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   ANY,
+  clearEvent,
   createBus,
   EVENT,
   EVENT_FIELDS,
@@ -35,6 +36,7 @@ describe('event factories', () => {
     fastenEvent(joint),
     unfastenEvent(joint),
     resetEvent(),
+    clearEvent('johnny'),
     recoveryEvent(['pin-2']),
     fpsEvent(58.2, false),
     tuneEvent('snap.maxDistance', 0.05),
@@ -56,6 +58,11 @@ describe('event factories', () => {
   it('take the joint fields from an assembly joint record', () => {
     expect(fastenEvent(joint)).toEqual({ type: 'fasten', joint: 'j1', kind: 'cam', hardware: 'cam-1', host: 'side-l', state: 'locked' });
     expect(snapCandidateEvent('dowel-1', offer)).toMatchObject({ target: 'side-l', connector: 0, targetConnector: 3 });
+  });
+
+  it('name the cleared item', () => {
+    expect(clearEvent('johnny')).toEqual({ type: 'clear', item: 'johnny' });
+    expect(EVENT_FIELDS[EVENT.CLEAR]).toEqual(['item']);
   });
 
   it('default a release to neither seated nor cancelled', () => {
