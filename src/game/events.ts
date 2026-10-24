@@ -30,6 +30,7 @@
 //   unfasten       joint, kind,       a fastener came back to plain seated
 //                  hardware, host
 //   reset          —                  the player repacked
+//   clear          item               the player cleared `item` from the room
 //   recovery       parts              parts that left the room were set down by the box
 //   fps            fps, skipping      a sampled frame rate, and whether the render-skip
 //                                      fallback is engaged
@@ -47,6 +48,7 @@ export const EVENT = Object.freeze({
   FASTEN: 'fasten',
   UNFASTEN: 'unfasten',
   RESET: 'reset',
+  CLEAR: 'clear',
   RECOVERY: 'recovery',
   FPS: 'fps',
   TUNE: 'tune',
@@ -80,6 +82,7 @@ export const EVENT_FIELDS: Readonly<Record<EventType, string[]>> = Object.freeze
   [EVENT.FASTEN]: [...JOINT_FIELDS, 'state'],
   [EVENT.UNFASTEN]: JOINT_FIELDS,
   [EVENT.RESET]: [],
+  [EVENT.CLEAR]: ['item'],
   [EVENT.RECOVERY]: ['parts'],
   [EVENT.FPS]: ['fps', 'skipping'],
   [EVENT.TUNE]: ['key', 'value'],
@@ -112,6 +115,7 @@ export const unseatEvent = (joint: AssemblyJoint) => build(EVENT.UNSEAT, jointFi
 export const fastenEvent = (joint: AssemblyJoint) => build(EVENT.FASTEN, { ...jointFields(joint), state: joint.fastener.state });
 export const unfastenEvent = (joint: AssemblyJoint) => build(EVENT.UNFASTEN, jointFields(joint));
 export const resetEvent = () => build(EVENT.RESET);
+export const clearEvent = (item: string) => build(EVENT.CLEAR, { item });
 export const recoveryEvent = (parts: Iterable<PartId>) => build(EVENT.RECOVERY, { parts: [...parts] });
 export const fpsEvent = (fps: number, skipping: boolean) => build(EVENT.FPS, { fps, skipping });
 export const tuneEvent = (key: string, value: number) => build(EVENT.TUNE, { key, value });

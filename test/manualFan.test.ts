@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FAN } from '../src/constants.js';
-import { fanLabel, rowLength, spineEdges } from '../src/game/manualFan.js';
+import { fanLabel, pressOutcome, rowLength, spineEdges } from '../src/game/manualFan.js';
 
 // 1.9.9.3, option B: the pocket's model, headless — the spine's edges, the row's length, the name.
 
@@ -41,5 +41,23 @@ describe('the row', () => {
   it('names the pocket by its count', () => {
     expect(fanLabel(1)).toBe('1 manual in the room');
     expect(fanLabel(3)).toBe('3 manuals in the room');
+  });
+});
+
+describe('a press on a cover', () => {
+  const t = { tapMaxMs: 350, tapMaxDistance: 10, holdMs: 900 };
+  const at = (heldMs: number, distance = 0) => pressOutcome({ heldMs, distance }, t);
+
+  it('is a tap through the tap time, a cancel after it, a clear at the hold', () => {
+    expect(at(0)).toBe('tap');
+    expect(at(t.tapMaxMs)).toBe('tap');
+    expect(at(t.tapMaxMs + 1)).toBe('cancel');
+    expect(at(t.holdMs - 1)).toBe('cancel');
+    expect(at(t.holdMs)).toBe('clear');
+  });
+
+  it('is none past the tap distance, whatever the time', () => {
+    for (const ms of [0, t.tapMaxMs, t.tapMaxMs + 1, t.holdMs, t.holdMs * 2]) expect(at(ms, t.tapMaxDistance + 1)).toBe('none');
+    expect(at(0, t.tapMaxDistance)).toBe('tap');
   });
 });
