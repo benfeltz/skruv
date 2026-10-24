@@ -1,4 +1,4 @@
-import { CATALOG, LAYER, RENDER, SAVE, STAGE, TUNE } from './constants.js';
+import { CATALOG, LAYER, RENDER, SAVE, SHELL, STAGE, TUNE } from './constants.js';
 import { catalogEntries, createCatalog } from './game/catalogModel.js';
 import { pickableSet } from './game/pickable.js';
 import { ANY, clearEvent, createBus, EVENT, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
@@ -87,13 +87,18 @@ const snapRotate = createToggleButton({ label: 'Snap rotate' });
 
 // Haptics: every moment buzzes a named cue through the buzzer slot. The web's buzzer plays
 // HAPTICS patterns through navigator.vibrate (absent on iOS Safari; a 0 ms knob is silent); a
-// native shell plugs its own in with haptics.setBuzzer.
+// native shell plugs its own in with haptics.setBuzzer (src/shell/capacitorHaptics.ts).
 const haptics = createHaptics({
   buzzer: (cue) => {
     const pattern = patternFor(cue);
     if (pattern !== null) navigator.vibrate?.(pattern);
   },
 });
+// Inside the Capacitor shell the web buzzer is silent (no navigator.vibrate on iOS): the
+// shell's buzzer takes the slot. Loaded only there — the web never fetches the plugin.
+if (location.protocol === SHELL.protocol) {
+  import('./shell/capacitorHaptics.js').then(({ connectNativeHaptics }) => connectNativeHaptics(haptics));
+}
 events.on(ANY, (event) => {
   const cue = cueFor(event);
   if (cue) haptics.cue(cue);
