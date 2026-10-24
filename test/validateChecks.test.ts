@@ -40,6 +40,7 @@ const MUTATIONS: [Rule, string, (p: FlatpackFile) => unknown][] = [
     delete step(p, 8).parts;
     step(p, 12).parts!.push('backPanel-1');
   }],
+  ['assemblies', 'a page building an assembly nobody installs', (p) => (step(p, 1).assembly = 'shelf')],
   ['counts', 'a spare counted in a step', (p) => (step(p, 1).fasten[0][0] = 'dowel-15/dowelEnd-1')],
   ['packing', 'two parts packed through each other', (p) => (p.packing.placements[1].position = [...p.packing.placements[0].position] as Vec3)],
 ];
@@ -93,6 +94,33 @@ describe('checkPack on JOHNNY', () => {
     const pack = screwed();
     pack.parts.sidePanel.box[2] = 0.23;
     expect(checkPack(pack).filter((e) => e.rule === 'fitting-through').map((e) => e.message)).toContain('backFitting-1 passes into no panel');
+  });
+
+  it('[assemblies] holds a tagged page to its own parts, an install after its pages, and an install to a built assembly', () => {
+    const messages = (mutate: (p: FlatpackFile) => unknown) => {
+      const pack = copy();
+      mutate(pack);
+      return checkPack(pack).filter((e) => e.rule === 'assemblies').map((e) => e.message);
+    };
+    const page = (p: FlatpackFile, number: number) => (p.manual.pages as PageFields[]).find((q) => q.number === number) as StepPage;
+    // Step 2 tagged on its own: the assembly is never installed.
+    expect(messages((p) => (step(p, 2).assembly = 'a'))).toContain('a is installed 0 times, not 1');
+    // Step 1 tagged: a later untagged page before the install still fastens into its parts.
+    expect(messages((p) => {
+      step(p, 1).assembly = 'a';
+      page(p, 12).install = 'a';
+    }).some((m) => /belongs to a, installed on page 12/.test(m))).toBe(true);
+    // A tagged page that fastens into a part it did not bring in.
+    expect(messages((p) => {
+      delete page(p, 1).parts;
+      page(p, 1).assembly = 'a';
+      page(p, 12).install = 'a';
+    }).some((m) => /is not part of a/.test(m))).toBe(true);
+    expect(messages((p) => {
+      step(p, 12).assembly = 'a';
+      page(p, 3).install = 'a';
+    })).toContain('a is installed on page 3 before its last page 12');
+    expect(messages((p) => (step(p, 12).install = 'ghost'))).toContain('no page builds ghost');
   });
 
   it('seeds every rule with a mutation', () => {
