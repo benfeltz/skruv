@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BOOKLET } from '../src/constants.js';
 import { createBuildSteps } from '../src/game/bookletModel.js';
 import { ITEM_IDS, itemById } from '../src/game/item.js';
-import { explodeStep, extentAlong, floatOut, insetsFor, installStep, separation, toolOn } from '../src/game/explode.js';
+import { actionAt, actionFor, explodeStep, extentAlong, floatOut, insetsFor, installStep, separation, toolOn } from '../src/game/explode.js';
 import type { ExplodeLayout } from '../src/game/explode.js';
 import type { Joint } from '../src/game/item.js';
 import { connectorInWorld } from '../tools/validate/lib/geometry.js';
@@ -231,6 +231,14 @@ describe.each(ITEM_IDS)('%s: every step page', (id) => {
       }
     }
   });
+
+  it('has an action inset on every tool page, the tool in hand', () => {
+    for (const step of steps.filter((st) => st.tool)) {
+      const action = actionFor(step, layout, item.partTypes);
+      expect(action, `step ${step.number}`).not.toBeNull();
+      expect(action!.items[action!.items.length - 1].type, `step ${step.number}`).toBe(step.tool);
+    }
+  });
 });
 
 describe('toolOn', () => {
@@ -264,5 +272,40 @@ describe('extentAlong', () => {
   it('follows the rotation', () => {
     const quarterZ: Quat = [0, 0, Math.SQRT1_2, Math.SQRT1_2];
     expect(extentAlong(size, quarterZ, [1, 0, 0])).toBeCloseTo(0.01);
+  });
+});
+
+describe('actionAt / actionFor', () => {
+  const bolted: ExplodeLayout = {
+    parts: [...layout.parts, at('b1', 'bolt', [0, 0.04, 0.05]), at('d9', 'dowel', [0, 0.5, 0])],
+    joints: [joint('d9', 0, 'plate', 0, 'd9'), joint('b1', 0, 'plate', 2, 'b1')],
+  };
+
+  it('shows the host and the seated fastener with the tool on it, framed round the ring', () => {
+    const action = actionAt(1, 'wrench', bolted, partTypes)!;
+    expect(action.items.map((i) => i.id)).toEqual(['plate', 'b1', 'tool:wrench']);
+    expect(action.items[1].position).toEqual([0, 0.04, 0.05]);
+    // The socket is at the bolt's head: y 0.04 + 0.02.
+    expect(action.ring).toEqual([expect.closeTo(0), expect.closeTo(0.06), expect.closeTo(0.05)]);
+    for (const k of [0, 1, 2]) {
+      expect(action.focus.min[k]).toBeLessThan(action.ring[k]);
+      expect(action.focus.max[k]).toBeGreaterThan(action.ring[k]);
+    }
+    expect(action.axis).toEqual([0, 1, 0]);
+  });
+
+  it('acts on the first turned joint when the page turns, not a fastened one', () => {
+    const step = { joints: [0], turns: [1], hardware: [{ type: 'dowel', count: 1, partNumber: 'D' }], tool: 'wrench' };
+    expect(actionFor(step, bolted, partTypes)!.joint).toBe(1);
+  });
+
+  it('is null without a tool, or with a tool only a dowel joint to work', () => {
+    expect(actionFor({ joints: [1], turns: [], hardware: [], tool: null }, bolted, partTypes)).toBeNull();
+    expect(actionFor({ joints: [0], turns: [], hardware: [{ type: 'dowel', count: 1, partNumber: 'D' }], tool: 'wrench' }, bolted, partTypes)).toBeNull();
+  });
+
+  it('picks the first fastened joint the tool mates', () => {
+    const hardware = [{ type: 'dowel', count: 1, partNumber: 'D' }, { type: 'bolt', count: 1, partNumber: 'B' }];
+    expect(actionFor({ joints: [0, 1], turns: [], hardware, tool: 'wrench' }, bolted, partTypes)!.joint).toBe(1);
   });
 });

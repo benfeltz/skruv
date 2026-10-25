@@ -248,3 +248,52 @@ export function extentAlong(size: Size, rotation: Quat, direction: Vec3): number
   const axes: Vec3[] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   return axes.reduce((sum, axis, k) => sum + (Math.abs(dot(direction, rotateVector(rotation, axis))) * size[k]) / 2, 0);
 }
+
+/** An action inset: a joint with its fastener seated and the tool on it, and where the ring arrow goes. */
+export interface Action {
+  /** Index into `layout.joints` of the joint the tool works. */
+  joint: number;
+  /** The host and the fastener at their seated poses, then the tool on the fastener. */
+  items: ExplodedItem[];
+  /** The box the inset frames: the drive connector's world position, `BOOKLET.action.focus` of the tool's shortest side either way. */
+  focus: { min: Vec3; max: Vec3 };
+  /** The hole's world axis, out of its mouth: the inset turns it as a detail inset does. */
+  axis: Vec3;
+  /** The ring arrow's centre: the drive connector's world position. */
+  ring: Vec3;
+}
+
+/** The action view of one joint with `tool` on its fastener, seated; null when the tool does not mate it. */
+export function actionAt(jointIndex: number, tool: string, layout: ExplodeLayout, partTypes: PartTypes): Action | null {
+  const { part, hole } = lookups(layout, partTypes);
+  const joint = layout.joints[jointIndex];
+  const posed = toolOn(joint, tool, layout, partTypes);
+  if (!posed) return null;
+  const tip = partTypes[tool].connectors.find((c) => c.type in COMPATIBLE)!;
+  const ring = connectorInWorld(tip, posed).position;
+  const reach = Math.min(...partTypes[tool].size) * BOOKLET.action.focus;
+  const [host, fastener] = [part(joint.host), part(joint.hardware)];
+  return {
+    joint: jointIndex,
+    items: [host, fastener].map(({ id, type, position, rotation }) => ({ id, type, position, rotation })).concat(posed),
+    focus: { min: ring.map((v) => v - reach) as Vec3, max: ring.map((v) => v + reach) as Vec3 },
+    axis: hole(joint).axis,
+    ring,
+  };
+}
+
+/**
+ * The page's action inset: on its first turned joint when it turns any, otherwise on the
+ * first detail inset's joint (in `step.hardware` order) the tool mates; null without a tool
+ * or a drivable joint.
+ */
+export function actionFor(step: Pick<BuildStep, 'joints' | 'turns' | 'hardware' | 'tool'>, layout: ExplodeLayout, partTypes: PartTypes): Action | null {
+  const { tool } = step;
+  if (!tool) return null;
+  if (step.turns.length) return actionAt(step.turns[0], tool, layout, partTypes);
+  for (const { joint } of insetsFor(step, layout, partTypes)) {
+    const action = actionAt(joint, tool, layout, partTypes);
+    if (action) return action;
+  }
+  return null;
+}
