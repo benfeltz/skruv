@@ -34,6 +34,7 @@ const STATES_OF: Readonly<Record<FastenerKind, readonly FastenerState[]>> = Obje
   [KIND.SCREW]: [STATE.SEATED, STATE.SCREWED],
   [KIND.CAM]: [STATE.SEATED, STATE.LOCKED],
   [KIND.TOOL]: [STATE.SEATED],
+  [KIND.SLIDE]: [STATE.SEATED, STATE.PRESSED],
 });
 const TAP_KINDS: readonly FastenerKind[] = [KIND.DOWEL, KIND.PIN, KIND.FITTING];
 
