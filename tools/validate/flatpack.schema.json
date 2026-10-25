@@ -158,7 +158,16 @@
         "id": { "$ref": "#/definitions/instanceId" },
         "role": { "$ref": "#/definitions/key" },
         "position": { "$ref": "#/definitions/vector" },
-        "rotation": { "$ref": "#/definitions/quaternion" }
+        "rotation": { "$ref": "#/definitions/quaternion" },
+        "open": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["position", "rotation"],
+          "properties": {
+            "position": { "$ref": "#/definitions/vector" },
+            "rotation": { "$ref": "#/definitions/quaternion" }
+          }
+        }
       }
     },
     "page": {

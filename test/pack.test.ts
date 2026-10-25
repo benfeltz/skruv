@@ -63,6 +63,15 @@ describe('loadPack', () => {
     expect(pack.assembled[1]).toEqual({ id: 'dowel-2', type: 'dowel', role: 'hardware', ...POSE });
   });
 
+  it('keeps an open pose on the instance that has it, and leaves no key on the others', () => {
+    const json = fixture();
+    const open: Pose = { position: [0, 0, 0.2], rotation: [0, 0, 0, 1] };
+    json.assembled[0] = { ...json.assembled[0], open };
+    const loaded = loadPack(json);
+    expect(loaded.assembled[0].open).toEqual(open);
+    expect('open' in loaded.assembled[1]).toBe(false);
+  });
+
   it('defaults tuning to empty', () => {
     expect(pack.tuning).toEqual({});
   });

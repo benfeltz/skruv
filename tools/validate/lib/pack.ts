@@ -70,6 +70,8 @@ export interface InstancePose extends Pose {
 /** One instance in the finished item. */
 export interface AssembledSpec extends InstancePose {
   role: string;
+  /** The instance's open pose, for a part that slides (a drawer side); the travel is derived from the difference. */
+  open?: Pose;
 }
 
 /** How a booklet page draws the item. */
@@ -269,7 +271,7 @@ export function refOf(partTypes: Record<string, PartType>, typeOf: (part: Instan
  *   partTypes — `shapeParts`
  *   manifest  — `[{ id, type }]`, spares numbered last within their type
  *   spares    — ids of the spare instances
- *   assembled — `[{ id, type, role, position, rotation }]`
+ *   assembled — `[{ id, type, role, position, rotation, open? }]`
  *   identity, manual, packing, tuning — as in the file
  *   resolve   — `createResolver`
  */
@@ -278,9 +280,9 @@ export function loadPack(json: FlatpackFile): Pack {
   const partTypes = shapeParts(json.parts);
   const expanded = expandManifest(json.parts);
   const typeOf = new Map(expanded.map(({ id, type }) => [id, type]));
-  const assembled = json.assembled.map(({ id, role, position, rotation }) => {
+  const assembled = json.assembled.map(({ id, role, position, rotation, open }) => {
     if (!typeOf.has(id)) throw new Error(`assembled: no instance ${id}`);
-    return { id, type: typeOf.get(id)!, role, position, rotation };
+    return { id, type: typeOf.get(id)!, role, position, rotation, ...(open && { open }) };
   });
   const manifest = expanded.map(({ id, type }) => ({ id, type }));
   return {
