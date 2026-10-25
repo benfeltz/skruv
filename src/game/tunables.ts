@@ -11,7 +11,7 @@
 // never a JS object path — and units are the schema's, in the engine's own units; a key
 // once published is renamed only with a profile format bump.
 
-import { AIM, CAMERA, FASTENER, GESTURE, HAPTICS, LIFT_LINE, PANEL, PHYSICS, RENDER, RING, SNAP, STAGE, TUNE, TURN_RING } from '../constants.js';
+import { AIM, CAMERA, FASTENER, GESTURE, HAPTICS, LIFT_LINE, PANEL, PHYSICS, RENDER, RING, SLIDE, SNAP, STAGE, TUNE, TURN_RING } from '../constants.js';
 
 /** Bumped whenever a key is renamed or its unit changes, so old profiles stay readable. */
 export const PROFILE_FORMAT = 1;
@@ -142,6 +142,14 @@ export const LIVE_KNOBS: Readonly<Record<string, Knob>> = Object.freeze({
   'joint.playDamping': {
     object: FASTENER, prop: 'playDamping', min: 0, max: 5000, step: 50, unit: 'N·m·s/rad', group: 'joint',
     desc: 'Resistance to the slump: a sag, not a drop',
+  },
+  'slide.stiffness': {
+    object: SLIDE, prop: 'stiffness', min: 0, max: 2000, step: 10, unit: 'N/m', group: 'slide',
+    desc: 'How hard a dragged drawer chases the finger along its runners',
+  },
+  'slide.damping': {
+    object: SLIDE, prop: 'damping', min: 0, max: 400, step: 5, unit: 'N·s/m', group: 'slide',
+    desc: 'Drag on the drawer along its runners: alone, it holds the drawer where it was left',
   },
   'stage.skyCycleMinutes': {
     object: STAGE.sky, prop: 'cycleMinutes', min: 1, max: 60, step: 1, unit: 'min', group: 'stage',
