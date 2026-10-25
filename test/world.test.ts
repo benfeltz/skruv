@@ -106,3 +106,11 @@ describe('world.remove', () => {
     expect(physics.census().joints).toBe(1);
   });
 });
+
+describe('world.slide', () => {
+  it('throws on a joint that is not a slide', async () => {
+    const physics = await createPhysicsWorld();
+    const joint = physics.join(box(physics, 0), box(physics, 0.3), frame, 'rigid');
+    expect(() => physics.slide(joint, 0.05)).toThrow('not a slide joint');
+  });
+});

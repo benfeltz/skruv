@@ -673,7 +673,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     }
     for (const [key, bond] of wanted) {
       if (bonds.has(key)) continue;
-      const joint = physics.join(partById.get(bond.a)!.body, partById.get(bond.b)!.body, bond.frame, bond.mode);
+      const joint = physics.join(partById.get(bond.a)!.body, partById.get(bond.b)!.body, bond.frame, bond.mode, bond.slide);
       bonds.set(key, { joint, signature: bond.signature, a: bond.a, b: bond.b });
     }
     for (const part of placed) {
