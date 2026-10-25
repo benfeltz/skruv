@@ -12,11 +12,13 @@
 //                                      hidden is an abandon
 //   grab           part, mode         a drag began: 'move' (free part), 'compound' (carried
 //                                      through its joints), 'crank' (a tool turning its
-//                                      fastener) or 'pull' (drawing a fastened part out)
+//                                      fastener), 'pull' (drawing a fastened part out) or
+//                                      'slide' (a drawer moved on its runners)
 //   release        part, mode,        the drag ended: seated (it dropped into a seat) or
 //                  seated, cancelled  cancelled (interrupted — never seats). Every grab has
 //                                      one release of the same mode: a pull that frees its
 //                                      part releases as 'pull' and grabs again as 'move'
+//                                      (and a drawer pulled off its runners, as 'slide')
 //   snapCandidate  part, target,      the seat on offer under the dragged part changed;
 //                  connector,         target (and both connectors) null when the offer
 //                  targetConnector    is withdrawn

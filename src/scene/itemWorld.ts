@@ -309,6 +309,8 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
       const cue = homeCue(kind);
       if (cue) haptics.cue(cue);
     },
+    // A drawer reaching either end of its runners seats like a part: one buzz, no sound.
+    onSlideEnd: () => haptics.cue(CUE.SEAT),
   });
   insetPanel.connect(router);
   // It lets go of any gesture and unbinds from the room's canvas.
