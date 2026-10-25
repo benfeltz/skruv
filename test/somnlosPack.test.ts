@@ -64,6 +64,7 @@ describe('the SÖMNLÖS pack', () => {
   it('derives 50 joints: 24 dowel ends, 8 bolt, 8 cam, 6 pin, 4 screw', () => {
     expect(joints).toHaveLength(50);
     expect([KIND.DOWEL, KIND.BOLT, KIND.CAM, KIND.PIN, KIND.SCREW].map((k) => ofKind(k).length)).toEqual([24, 8, 8, 6, 4]);
+    expect(ofKind(KIND.SLIDE)).toHaveLength(0);
   });
 
   it('sets the headboard and the footboard between the rails on two dowels and two cam bolts at each end', () => {

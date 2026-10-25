@@ -61,6 +61,7 @@ describe('the ÖVERKÄLL pack', () => {
   it('derives 73 joints: 44 dowel ends, 4 bolt, 4 cam, 6 fitting, 15 screw', () => {
     expect(joints).toHaveLength(73);
     expect([KIND.DOWEL, KIND.BOLT, KIND.CAM, KIND.FITTING, KIND.SCREW].map((k) => ofKind(k).length)).toEqual([44, 4, 4, 6, 15]);
+    expect(ofKind(KIND.SLIDE)).toHaveLength(0);
   });
 
   it('seats every dowel end once: 8 dowels in the carcass, an end in a panel and an end in a side', () => {
