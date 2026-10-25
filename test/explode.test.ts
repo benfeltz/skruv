@@ -2,20 +2,27 @@ import { describe, expect, it } from 'vitest';
 import { BOOKLET } from '../src/constants.js';
 import { createBuildSteps } from '../src/game/bookletModel.js';
 import { ITEM_IDS, itemById } from '../src/game/item.js';
-import { explodeStep, floatOut, insetsFor, installStep, separation } from '../src/game/explode.js';
+import { explodeStep, extentAlong, floatOut, insetsFor, installStep, separation, toolOn } from '../src/game/explode.js';
 import type { ExplodeLayout } from '../src/game/explode.js';
 import type { Joint } from '../src/game/item.js';
+import { connectorInWorld } from '../tools/validate/lib/geometry.js';
 import type { Quat, Vec3 } from '../tools/validate/lib/geometry.js';
+import type { ConnectorType } from '../tools/validate/lib/vocabulary.js';
 
 // The explode maths on a made-up layout, so each rule is pinned by numbers you can check by
 // eye: a plate lying at the origin with a dowel hole in its top face (axis +y), a dowel
 // seated in it, and a side whose two holes press onto two dowels standing in the plate.
 const ID: Quat = [0, 0, 0, 1];
+const conn = (position: Vec3, axis: Vec3, type: ConnectorType) => ({ position, axis, type });
 const partTypes = {
-  plate: { partNumber: 'P', size: [0.4, 0.02, 0.2] as Vec3, connectors: [{ position: [0.1, 0.01, 0] as Vec3, axis: [0, 1, 0] as Vec3 }, { position: [-0.1, 0.01, 0] as Vec3, axis: [0, 1, 0] as Vec3 }] },
-  dowel: { partNumber: 'D', size: [0.01, 0.04, 0.01] as Vec3, connectors: [{ position: [0, 0.02, 0] as Vec3, axis: [0, -1, 0] as Vec3 }, { position: [0, -0.02, 0] as Vec3, axis: [0, 1, 0] as Vec3 }] },
+  plate: { partNumber: 'P', size: [0.4, 0.02, 0.2] as Vec3, connectors: [conn([0.1, 0.01, 0], [0, 1, 0], 'dowelHole'), conn([-0.1, 0.01, 0], [0, 1, 0], 'dowelHole'), conn([0, 0.01, 0.05], [0, 1, 0], 'camBoltHole')] },
+  dowel: { partNumber: 'D', size: [0.01, 0.04, 0.01] as Vec3, connectors: [conn([0, 0.02, 0], [0, -1, 0], 'dowelEnd'), conn([0, -0.02, 0], [0, 1, 0], 'dowelEnd')] },
+  // A bolt: thread down, a hex socket in its head (axis out of the head).
+  bolt: { partNumber: 'B', size: [0.01, 0.04, 0.01] as Vec3, connectors: [conn([0, -0.02, 0], [0, 1, 0], 'boltThread'), conn([0, 0.02, 0], [0, 1, 0], 'hexSocket')] },
+  // A wrench whose tip sits off its origin, pointing along +x.
+  wrench: { partNumber: 'W', size: [0.1, 0.01, 0.01] as Vec3, connectors: [conn([0.05, 0, 0], [1, 0, 0], 'wrenchTip')] },
   // A side standing on the dowels: its holes face down.
-  side: { partNumber: 'S', size: [0.3, 0.02, 0.2] as Vec3, connectors: [{ position: [0.1, -0.01, 0] as Vec3, axis: [0, -1, 0] as Vec3 }, { position: [-0.1, -0.01, 0] as Vec3, axis: [0, -1, 0] as Vec3 }] },
+  side: { partNumber: 'S', size: [0.3, 0.02, 0.2] as Vec3, connectors: [conn([0.1, -0.01, 0], [0, -1, 0], 'dowelHole'), conn([-0.1, -0.01, 0], [0, -1, 0], 'dowelHole')] },
 };
 const at = (id: string, type: string, position: Vec3) => ({ id, type, position, rotation: ID });
 const joint = (hardware: string, hardwareConnector: number, host: string, hostConnector: number, mover: string): Joint => ({
@@ -223,5 +230,39 @@ describe.each(ITEM_IDS)('%s: every step page', (id) => {
         if (joint.mover === joint.hardware) expect(offsets.has(joint.hardware), joint.hardware).toBe(true);
       }
     }
+  });
+});
+
+describe('toolOn', () => {
+  const bolted: ExplodeLayout = {
+    parts: [...layout.parts, at('b1', 'bolt', [0.1, 0.1, 0]), at('d9', 'dowel', [0, 0.5, 0])],
+    joints: [joint('b1', 0, 'plate', 2, 'b1'), joint('d9', 0, 'plate', 0, 'd9')],
+  };
+
+  it('puts the tip on the socket, axes opposed', () => {
+    const tool = toolOn(bolted.joints[0], 'wrench', bolted, partTypes)!;
+    const tip = connectorInWorld(partTypes.wrench.connectors[0], tool);
+    const socket = connectorInWorld(partTypes.bolt.connectors[1], bolted.parts.find((p) => p.id === 'b1')!);
+    expect(tool.type).toBe('wrench');
+    for (const k of [0, 1, 2]) {
+      expect(tip.position[k]).toBeCloseTo(socket.position[k]);
+      expect(tip.axis[k]).toBeCloseTo(-socket.axis[k]);
+    }
+  });
+
+  it('is null when the fastener has no connector the tip mates', () => {
+    expect(toolOn(bolted.joints[1], 'wrench', bolted, partTypes)).toBeNull();
+  });
+});
+
+describe('extentAlong', () => {
+  const size: Vec3 = [0.4, 0.02, 0.2];
+  it('reaches half the box along each axis', () => {
+    expect(extentAlong(size, ID, [1, 0, 0])).toBeCloseTo(0.2);
+    expect(extentAlong(size, ID, [0, 1, 0])).toBeCloseTo(0.01);
+  });
+  it('follows the rotation', () => {
+    const quarterZ: Quat = [0, 0, Math.SQRT1_2, Math.SQRT1_2];
+    expect(extentAlong(size, quarterZ, [1, 0, 0])).toBeCloseTo(0.01);
   });
 });

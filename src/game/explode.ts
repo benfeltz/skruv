@@ -4,8 +4,9 @@
 // distance is BOOKLET.explode / BOOKLET.inset.
 
 import { BOOKLET } from '../constants.js';
-import { add, connectorInWorld, rotateVector, scale } from '../../tools/validate/lib/geometry.js';
-import type { Pose, Vec3 } from '../../tools/validate/lib/geometry.js';
+import { add, connectorInWorld, rotateVector, rotationBetween, scale, sub } from '../../tools/validate/lib/geometry.js';
+import type { Pose, Quat, Size, Vec3 } from '../../tools/validate/lib/geometry.js';
+import { COMPATIBLE } from '../../tools/validate/lib/vocabulary.js';
 import type { BuildStep, PartCount } from './bookletModel.js';
 import type { Connector, GamePartType, InstanceId, Joint } from './item.js';
 
@@ -15,7 +16,7 @@ export interface ExplodeLayout {
   joints: readonly Joint[];
 }
 
-type PartTypes = Readonly<Record<string, Pick<GamePartType, 'partNumber' | 'size'> & { connectors: readonly Pick<Connector, 'position' | 'axis'>[] }>>;
+type PartTypes = Readonly<Record<string, Pick<GamePartType, 'partNumber' | 'size'> & { connectors: readonly Pick<Connector, 'position' | 'axis' | 'type'>[] }>>;
 
 /** One part as an exploded drawing places it. */
 export interface ExplodedItem extends Pose {
@@ -43,6 +44,7 @@ export interface Inset extends PartCount {
 }
 
 const ZERO: Vec3 = [0, 0, 0];
+const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 // A layout's parts by id, built once per layout.
 const partsOf = new WeakMap<ExplodeLayout, ReadonlyMap<InstanceId, ExplodeLayout['parts'][number]>>();
@@ -223,4 +225,26 @@ export function insetsFor(step: Pick<BuildStep, 'joints' | 'hardware'>, layout: 
     });
   }
   return insets;
+}
+
+/**
+ * A tool posed on a joint's fastener: the tool's tip connector (its first whose type has a
+ * compatible hole) sits on the fastener's drive connector (the compatible one), axes opposed,
+ * no sink. Null when the tool has no tip or the fastener no connector the tip mates.
+ */
+export function toolOn(joint: Joint, tool: string, layout: ExplodeLayout, partTypes: PartTypes): ExplodedItem | null {
+  const { part } = lookups(layout, partTypes);
+  const fastener = part(joint.hardware);
+  const tip = partTypes[tool].connectors.find((c) => c.type in COMPATIBLE);
+  const drive = tip && partTypes[fastener.type].connectors.find((c) => c.type === COMPATIBLE[tip.type]);
+  if (!tip || !drive) return null;
+  const world = connectorInWorld(drive, fastener);
+  const rotation = rotationBetween(tip.axis, scale(world.axis, -1));
+  return { id: `tool:${tool}`, type: tool, position: sub(world.position, rotateVector(rotation, tip.position)), rotation };
+}
+
+/** How far a box of `size` posed at `rotation` reaches from its centre along unit `direction`. */
+export function extentAlong(size: Size, rotation: Quat, direction: Vec3): number {
+  const axes: Vec3[] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  return axes.reduce((sum, axis, k) => sum + (Math.abs(dot(direction, rotateVector(rotation, axis))) * size[k]) / 2, 0);
 }
