@@ -29,8 +29,8 @@ owns — together, the Flatpack format's TypeScript mirror of the schema. The ga
 |--------|---------------|
 | `vocabulary.ts` | Connector types (`ConnectorType`), which end fits which hole, the fastener machines' names (`FastenerKind`), and `CONTRACT` (sink depths, cam capture radius, mate reach and tolerance) |
 | `geometry.ts` | `Vec3`, `Quat`, `Pose`; quaternion and pose maths: `rotateVector`, `connectorInWorld`, `contains`, `placeLayout` |
-| `pack.ts` | The file's types (`FlatpackFile` and its parts, pages, packing) and the engine's (`Pack`, `PartType`, `Connector`); `loadPack(json)`: engine-shaped part types (connectors in file order, each keeping its `id`), the manifest with spares numbered last, `resolve("<instance>/<connector>") → { part, connector: index }` |
-| `joints.ts` | `Joint`; `deriveJoints(pack)`: joints from the assembled poses — a fastener end its sink depth down a compatible, facing hole; a cam's `captured` bolt; a back fitting's `through` panel |
+| `pack.ts` | The file's types (`FlatpackFile` and its parts, pages, packing) and the engine's (`Pack`, `PartType`, `Connector`); `loadPack(json)`: engine-shaped part types (connectors in file order, each keeping its `id`), the manifest with spares numbered last, each assembled instance's optional `open` pose, `resolve("<instance>/<connector>") → { part, connector: index }` |
+| `joints.ts` | `Joint`; `deriveJoints(pack)`: joints from the assembled poses — a fastener end its sink depth down a compatible, facing hole; a cam's `captured` bolt; a back fitting's `through` panel; a slide's `mover` is always the groove side; `slideTravel(part)`: the world vector from a part's closed pose to its `open` one |
 | `checks.ts` | `CheckError`, `Rule`; `checkPack(json, { assetExists })`: the semantic rules |
 
 Joints are never authored: an item's mating is whatever its assembled poses make coincide.
