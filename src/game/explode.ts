@@ -6,13 +6,14 @@
 import { BOOKLET } from '../constants.js';
 import { add, connectorInWorld, rotateVector, rotationBetween, scale, sub } from '../../tools/validate/lib/geometry.js';
 import type { Pose, Quat, Size, Vec3 } from '../../tools/validate/lib/geometry.js';
-import { COMPATIBLE } from '../../tools/validate/lib/vocabulary.js';
+import { COMPATIBLE, KIND } from '../../tools/validate/lib/vocabulary.js';
 import type { BuildStep, PartCount } from './bookletModel.js';
 import type { Connector, GamePartType, InstanceId, Joint } from './item.js';
+import { worldTravel } from './slideMath.js';
 
 /** The assembled item an exploded drawing is worked out from: poses and derived joints. */
 export interface ExplodeLayout {
-  parts: readonly (Pose & { id: InstanceId; type: string })[];
+  parts: readonly (Pose & { id: InstanceId; type: string; open?: Pose })[];
   joints: readonly Joint[];
 }
 
@@ -72,12 +73,15 @@ function lookups(layout: ExplodeLayout, partTypes: PartTypes) {
  *   - hardware that floats out of a part that is itself pulled away goes along with it;
  *     hardware already sitting only in pulled-away parts rides with them;
  *   - everything else — already-built parts, hardware seated earlier — stays put.
+ * A slide joint whose mover is a member of the page's install moves with the install, not by
+ * this rule: a drawer on its runners is held off whole, its slides pull nothing apart.
  * A loose-parts page (pose 'parts') fans its panels instead, so only hardware floats there.
  * Returns each displaced id's offset, the floated fasteners' leaders and the ids pulled away.
  */
-export function separation(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'>, layout: ExplodeLayout, partTypes: PartTypes) {
+export function separation(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'> & Partial<Pick<BuildStep, 'install'>>, layout: ExplodeLayout, partTypes: PartTypes) {
   const { hole, end } = lookups(layout, partTypes);
-  const joints = step.joints.map((i) => layout.joints[i]);
+  const installed = new Set(step.install?.members);
+  const joints = step.joints.map((i) => layout.joints[i]).filter((j) => !(j.kind === KIND.SLIDE && installed.has(j.mover)));
 
   const pressedOn = new Map<InstanceId, Vec3>();
   if (step.pose !== 'parts') {
@@ -129,14 +133,25 @@ export function separation(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'>, l
 
 /**
  * An install page's assembly held off its place: every member moves `BOOKLET.explode.assembly`
- * along `BOOKLET.explode.installDirection`, no leaders. `arrow` runs from the centre of the
+ * along the page's way in, no leaders. The way in is the normalised mean travel of the page's
+ * slide hosts that are members (the drawer is held off along the runners it slides on), else
+ * `BOOKLET.explode.installDirection`. `arrow` runs from the centre of the
  * members' box where it is held to the centre where it rests; null on any other page.
  */
-export function installStep(step: Partial<Pick<BuildStep, 'install'>>, layout: ExplodeLayout, partTypes: PartTypes) {
+export function installStep(step: Partial<Pick<BuildStep, 'install' | 'joints'>>, layout: ExplodeLayout, partTypes: PartTypes) {
   const offsets = new Map<InstanceId, Vec3>();
   if (!step.install) return { offsets, arrow: null };
   const { part } = lookups(layout, partTypes);
-  const offset = scale(BOOKLET.explode.installDirection, BOOKLET.explode.assembly);
+  const members = new Set(step.install.members);
+  const travels = (step.joints ?? [])
+    .map((i) => layout.joints[i])
+    .filter((j) => j.kind === KIND.SLIDE && members.has(j.host))
+    .map((j) => worldTravel(part(j.host)))
+    .filter((t): t is Vec3 => t !== null);
+  const sum = travels.reduce(add, ZERO);
+  const length = Math.hypot(...sum);
+  const direction = length > BOOKLET.explode.cancel ? scale(sum, 1 / length) : BOOKLET.explode.installDirection;
+  const offset = scale(direction, BOOKLET.explode.assembly);
   const lo: Vec3 = [Infinity, Infinity, Infinity];
   const hi: Vec3 = [-Infinity, -Infinity, -Infinity];
   for (const id of step.install.members) {

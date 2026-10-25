@@ -280,3 +280,16 @@ describe('no validation anywhere (Ben, 2026-10-04)', () => {
     }
   });
 });
+
+describe('a runner is no page\'s hardware', () => {
+  const partTypes = { runner: { partNumber: 'R' }, side: { partNumber: 'S' } };
+  const joint = { hardware: 'runner-1', hardwareConnector: 0, host: 'side-1', hostConnector: 0, kind: KIND.SLIDE, mover: 'side-1', through: null, captured: null };
+  const runnerLayout = { parts: [{ id: 'runner-1', type: 'runner' }, { id: 'side-1', type: 'side' }], joints: [joint] };
+  const resolve = (ref: string) => ({ part: ref.split('/')[0], connector: 0 });
+
+  it('counts none for a page that seats a runner by its slide', () => {
+    const [step] = createBuildSteps([{ kind: 'step', number: 1, pose: 'upright', install: 'drawer', fasten: [['runner-1/railEnd-1', 'side-1/railGroove-1']] }] as PageFields[], { layout: runnerLayout, partTypes, resolve });
+    expect(step.joints).toEqual([0]);
+    expect(step.hardware).toEqual([]);
+  });
+});

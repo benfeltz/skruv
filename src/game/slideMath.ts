@@ -19,6 +19,11 @@ export function localTravel(part: Pick<AssembledPart, 'position' | 'rotation' | 
   return rotateVector(inverse, sub(part.open.position, part.position));
 }
 
+/** A part's travel in the pack's frame: its open position less its closed one. Null without an open pose. */
+export function worldTravel(part: Pick<AssembledPart, 'position' | 'open'>): Vec3 | null {
+  return part.open ? sub(part.open.position, part.position) : null;
+}
+
 /** A position along the travel held to the drawer's limits `[0, travel]`. */
 export const clampTravel = (t: number, travel: number) => Math.min(Math.max(t, 0), travel);
 
