@@ -1,13 +1,16 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAssembly, restoreJoints } from '../src/game/assembly.js';
 import { ASSEMBLED, setItem } from '../src/game/item.js';
 import { STATE } from '../src/game/fasteners.js';
 import type { SavedJoint } from '../src/game/roomSave.js';
+import { PLATE_GROOVE_L, RUNNER_END } from './support/railParts.js';
 import type { FastenerKind } from '../tools/validate/lib/vocabulary.js';
 
 // restoreJoints (1.9.9.1): a saved joint list goes back through the fastener machine's own
 // events, and what lands must equal what was saved. The pairs are the packs' own assembled
 // joints, so the connectors and the `through`/`captured` parts are real.
+
+vi.mock('../src/game/item.js', async (original) => (await import('./support/railParts.js')).withRails(await original()));
 
 afterEach(() => setItem('johnny'));
 
@@ -128,5 +131,35 @@ describe('restoreJoints on OVERKALL', () => {
     const screw = saved('screw', STATE.SCREWED, 1);
     expect(screw.through).not.toBeNull();
     expect(fieldForField(restoreJoints(fresh(), [screw]))).toEqual([screw]);
+  });
+});
+
+describe('restoreJoints on a slide', () => {
+  const slide = (state: SavedJoint['fastener']['state'], progress: number): SavedJoint => ({
+    hardware: 'runner-1',
+    hardwareConnector: RUNNER_END,
+    host: 'plate-1',
+    hostConnector: PLATE_GROOVE_L,
+    kind: 'slide',
+    mover: 'plate-1',
+    fastener: { state, progress },
+    through: null,
+    captured: null,
+  });
+
+  it('keeps a slide on its runners as seat leaves it, with no event', () => {
+    const on = slide(STATE.PRESSED, 1);
+    const assembly = fresh();
+    expect(fieldForField(restoreJoints(assembly, [on]))).toEqual([on]);
+    expect(assembly.get(1)!.fastener).toEqual({ kind: 'slide', state: STATE.PRESSED, progress: 1 });
+  });
+
+  it('lands a slide pulled off as seated', () => {
+    const off = slide(STATE.SEATED, 0);
+    expect(fieldForField(restoreJoints(fresh(), [off]))).toEqual([off]);
+  });
+
+  it('refuses a slide screwed, naming the joint', () => {
+    expect(() => restoreJoints(fresh(), [slide(STATE.SCREWED, 1)])).toThrow('runner-1→plate-1');
   });
 });
