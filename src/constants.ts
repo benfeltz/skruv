@@ -1128,6 +1128,12 @@ export const SLIDE = {
   damping: 40,
 };
 
+// A drawer seated off square squares up on its runners (src/game/assembly.ts): only when it is
+// seated within this angle of the assembled way. Past it the drawer is the wrong way round
+// (backwards, upside down) and a runner only goes on one way, so it is left as it sits.
+export const SLIDE_SQUARE = {
+  maxAngle: (120 * Math.PI) / 180,
+};
 
 // Telemetry and live tuning (src/game/events.ts, src/game/sessionBuffer.ts,
 // src/game/tunables.ts).

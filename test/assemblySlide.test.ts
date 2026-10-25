@@ -129,3 +129,32 @@ describe('a slide seated at a tilt (the assembled rest squares it)', () => {
     for (const bond of bonds) expect(frameOf(bond)).not.toEqual(frameOf(square.find((b) => b.b === bond.b)!));
   });
 });
+
+describe('a drawer put in the wrong way round is not squared (a runner only goes on one way)', () => {
+  const restOf = (hardware: string, host: string) => relativePose(poseOf(host), poseOf(hardware)).rotation;
+  const about = (axis: Vec3, angle: number): Quat => [axis[0] * Math.sin(angle / 2), axis[1] * Math.sin(angle / 2), axis[2] * Math.sin(angle / 2), Math.cos(angle / 2)];
+  const turned = (q: Quat): PoseOf => (id) => (id === 'plate-1' ? { position: poseOf(id).position, rotation: q } : poseOf(id));
+  const railedWith = (rest?: typeof restOf) => {
+    const assembly = createAssembly(typeOf, plateTravel, rest);
+    assembly.seat({ partA: 'runner-1', connectorA: RUNNER_END, partB: 'plate-1', connectorB: PLATE_GROOVE_L, mover: 'plate-1' });
+    assembly.seat({ partA: 'runner-2', connectorA: RUNNER_END, partB: 'plate-1', connectorB: PLATE_GROOVE_R, mover: 'plate-1' });
+    return assembly;
+  };
+
+  it.each([
+    ['about x', [1, 0, 0] as Vec3],
+    ['about y', [0, 1, 0] as Vec3],
+    ['about z', [0, 0, 1] as Vec3],
+  ])('keeps the frame it would have without restOf when turned half a turn %s', (_, axis) => {
+    const q = about(axis, Math.PI);
+    const without = railedWith().bonds(turned(q));
+    const withRest = railedWith(restOf).bonds(turned(q));
+    expect(withRest.map((b) => b.frame)).toEqual(without.map((b) => b.frame));
+  });
+
+  it('squares a roll of 90° about the rail axis, still', () => {
+    const q = about([0, 0, 1], Math.PI / 2);
+    const square = railedWith(restOf).bonds(poseOf);
+    for (const bond of railedWith(restOf).bonds(turned(q))) expect(bond.frame.rotation).toEqual(square.find((b) => b.b === bond.b)!.frame.rotation);
+  });
+});

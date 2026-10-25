@@ -17,7 +17,7 @@
 // rigid: a prismatic joint along the host's travel, limited to `[0, travel]`. The parts a drawer
 // is fastened of by anything but a slide are its *unit* (`slideOf`): it slides as one.
 
-import { FASTENER } from '../constants.js';
+import { FASTENER, SLIDE_SQUARE } from '../constants.js';
 import { PART_TYPES } from './item.js';
 import { COMPATIBLE, CONTRACT, KIND, kindOf, passesThrough } from '../../tools/validate/lib/vocabulary.js';
 import { add, connectorInWorld, multiplyQuaternions, rotateVector, rotationBetween, scale, sub } from '../../tools/validate/lib/geometry.js';
@@ -213,6 +213,12 @@ function normalize(q: Quat): Quat {
   const n = Math.hypot(...q);
   // map keeps the length; TS widens a mapped tuple to number[].
   return q.map((c) => c / n) as Quat;
+}
+
+/** The angle between two rotations, in radians, the short way round. */
+function angleBetween(a: Quat, b: Quat): number {
+  const dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
+  return 2 * Math.acos(Math.min(1, Math.abs(dot)));
 }
 
 /** `b`'s pose expressed in `a`'s frame, as `{ anchor, rotation }`. */
@@ -792,7 +798,9 @@ export function createAssembly(typeOf: (part: PartId) => string, travelOf: Trave
       if (travel) {
         // A runner on a rail: no sink, free along the host's travel (a host without one embeds, rigid).
         const length = Math.hypot(...travel);
-        const rest = restOf(hardware, first.host);
+        // Squared to the assembled rotation only from near it: a drawer half a turn out is left as it sits.
+        const assembled = restOf(hardware, first.host);
+        const rest = assembled && angleBetween(assembled, relativePose(poseOf(first.host), poseOf(hardware)).rotation) <= SLIDE_SQUARE.maxAngle ? assembled : null;
         out.push({
           key: `slide:${hardware}`,
           a: first.host,

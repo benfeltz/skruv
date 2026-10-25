@@ -118,3 +118,12 @@ describe('a plate seated at a tilt under physics', () => {
     expect(Math.abs(plate.translation().x - start.x)).toBeLessThan(0.005);
   });
 });
+
+describe('a plate put in the wrong way round under physics', () => {
+  it('stays within its travel of where it is put, not flung by a half-turn correction', async () => {
+    const { physics, plate, start } = await rig(0, Math.PI);
+    run(physics, 2);
+    const t = plate.translation();
+    expect(Math.hypot(t.x - start.x, t.y - start.y, t.z - start.z)).toBeLessThan(RAIL_TRAVEL + 0.02);
+  });
+});
