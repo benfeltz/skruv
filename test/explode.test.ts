@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BOOKLET } from '../src/constants.js';
 import { createBuildSteps } from '../src/game/bookletModel.js';
 import { ITEM_IDS, itemById } from '../src/game/item.js';
-import { actionAt, actionFor, explodeStep, extentAlong, floatOut, insetsFor, installStep, separation, toolOn } from '../src/game/explode.js';
+import { actionAt, actionFor, explodeStep, extentAlong, floatOut, insetsFor, installStep, panelsFor, separation, toolOn } from '../src/game/explode.js';
 import type { ExplodeLayout } from '../src/game/explode.js';
 import type { Joint } from '../src/game/item.js';
 import { connectorInWorld } from '../tools/validate/lib/geometry.js';
@@ -232,6 +232,12 @@ describe.each(ITEM_IDS)('%s: every step page', (id) => {
     }
   });
 
+  it('has one sequence panel per cam it turns, capped, and none on a page that turns nothing', () => {
+    for (const step of steps) {
+      expect(panelsFor(step, layout, item.partTypes), `step ${step.number}`).toHaveLength(step.tool ? Math.min(step.turns.length, BOOKLET.sequence.max) : 0);
+    }
+  });
+
   it('has an action inset on every tool page, the tool in hand', () => {
     for (const step of steps.filter((st) => st.tool)) {
       const action = actionFor(step, layout, item.partTypes);
@@ -307,5 +313,25 @@ describe('actionAt / actionFor', () => {
   it('picks the first fastened joint the tool mates', () => {
     const hardware = [{ type: 'dowel', count: 1, partNumber: 'D' }, { type: 'bolt', count: 1, partNumber: 'B' }];
     expect(actionFor({ joints: [0, 1], turns: [], hardware, tool: 'wrench' }, bolted, partTypes)!.joint).toBe(1);
+  });
+});
+
+describe('panelsFor', () => {
+  const many: ExplodeLayout = {
+    parts: [...layout.parts, ...[0, 1, 2, 3, 4].map((n) => at(`b${n}`, 'bolt', [0, 0.04, 0.05 + n]))],
+    joints: [0, 1, 2, 3, 4].map((n) => joint(`b${n}`, 0, 'plate', 2, `b${n}`)),
+  };
+
+  it('gives one panel per turned joint, in turns order', () => {
+    const panels = panelsFor({ turns: [2, 0], tool: 'wrench' }, many, partTypes);
+    expect(panels.map((p) => p.joint)).toEqual([2, 0]);
+  });
+
+  it('shows at most BOOKLET.sequence.max', () => {
+    expect(panelsFor({ turns: [0, 1, 2, 3, 4], tool: 'wrench' }, many, partTypes)).toHaveLength(BOOKLET.sequence.max);
+  });
+
+  it('is empty without a tool', () => {
+    expect(panelsFor({ turns: [0], tool: null }, many, partTypes)).toEqual([]);
   });
 });

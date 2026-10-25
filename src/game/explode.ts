@@ -297,3 +297,11 @@ export function actionFor(step: Pick<BuildStep, 'joints' | 'turns' | 'hardware' 
   }
   return null;
 }
+
+/** A cam-turn page's sequence panels: the action view of each joint it turns, in order, at most `BOOKLET.sequence.max`. */
+export function panelsFor(step: Pick<BuildStep, 'turns' | 'tool'>, layout: ExplodeLayout, partTypes: PartTypes): Action[] {
+  const { tool } = step;
+  if (!tool) return [];
+  const panels = step.turns.slice(0, BOOKLET.sequence.max).map((i) => actionAt(i, tool, layout, partTypes));
+  return panels.filter((panel): panel is Action => panel !== null);
+}
