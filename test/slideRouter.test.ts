@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SLIDE } from '../src/constants.js';
 import { EVENT } from '../src/game/events.js';
-import { makePart, mount } from './support/routerBench.js';
+import { insetRecorder, makePart, mount } from './support/routerBench.js';
 import { DOWEL_BOTTOM, PLATE_DOWEL_TOP, PLATE_GROOVE_L, PLATE_GROOVE_R, RAIL_TRAVEL, RUNNER_END, railsLayout } from './support/railParts.js';
 import type { Vec3 } from '../tools/validate/lib/geometry.js';
 
@@ -15,10 +15,10 @@ const typeOf = (id: string) => id.replace(/-\d+$/, '');
 const travelOf = (part: string): Vec3 | null => (part === 'plate-1' ? [0, 0, RAIL_TRAVEL] : null);
 
 /** The plate seated on both runners (a slide starts fastened), over a dowel pressed into it when asked. */
-function railed(withDowel = false) {
+function railed(withDowel = false, inset?: ReturnType<typeof insetRecorder>) {
   const parts = railsLayout().map(({ id, position, rotation }) => makePart(id, typeOf(id), position, rotation));
   if (withDowel) parts.push(makePart('dowel-1', 'dowel', [0.016, 0.05, 0.1]));
-  const bench = mount(parts, [0, 1.2, 0.8], undefined, undefined, travelOf);
+  const bench = mount(parts, [0, 1.2, 0.8], inset, undefined, travelOf);
   const { assembly } = bench;
   assembly.seat({ partA: 'runner-1', connectorA: RUNNER_END, partB: 'plate-1', connectorB: PLATE_GROOVE_L, mover: 'plate-1' });
   assembly.seat({ partA: 'runner-2', connectorA: RUNNER_END, partB: 'plate-1', connectorB: PLATE_GROOVE_R, mover: 'plate-1' });
@@ -142,5 +142,15 @@ describe('a slide pulled to seated', () => {
     const at = bench.screen(bench.part('plate-1').mesh.position);
     dragAlong(bench, at, 0.05);
     expect(bench.router.dragging?.mode).not.toBe('slide');
+  });
+});
+
+describe('the detail inset', () => {
+  it('never lists a slide among the joints engaged', () => {
+    const inset = insetRecorder();
+    const bench = railed(true, inset);
+    bench.hold(3);
+    expect(inset.frames.length).toBeGreaterThan(0);
+    for (const frame of inset.frames) expect(frame.engaged.map((subject) => subject.kind)).not.toContain('slide');
   });
 });

@@ -13,6 +13,8 @@
 //            Shift + scroll sets its height (desktop: src/main.ts, the router's wheel)
 //   tools    on a fastener, circle the tool (or its turn ring) to turn it, or hold it still
 //            to drive it home
+//   drawers  drag any part of a drawer along its runners (items with a slide only); dragged
+//            past the end, it comes off
 //   legs     a part set onto its stud is circled itself, no tool (items with studs only)
 //   booklet  swipe to flip (touch); the arrows or arrow keys (desktop) — src/ui/booklet.ts
 //   repack   press and hold the button until its bar fills (src/ui/resetButton.ts)
@@ -39,6 +41,7 @@ export type PictogramId =
   | 'turnTool'
   | 'turnPart'
   | 'pullApart'
+  | 'slide'
   | 'flip'
   | 'repack';
 
@@ -58,6 +61,7 @@ const SHARED_ROWS = (flip: string): ControlRow[] => [
   { pictogram: 'turnTool', label: 'Circle or hold', needs: KIND.TOOL },
   { pictogram: 'turnPart', label: 'Circle to screw', needs: KIND.STUD },
   { pictogram: 'pullApart', label: 'Pull apart' },
+  { pictogram: 'slide', label: 'Pull to open', needs: KIND.SLIDE },
   { pictogram: 'flip', label: flip },
   { pictogram: 'repack', label: 'Repack: hold' },
 ];

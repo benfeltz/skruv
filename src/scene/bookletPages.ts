@@ -1105,6 +1105,13 @@ const PICTOGRAMS: Readonly<Record<PictogramId, (ctx: Ctx, scheme: Scheme) => voi
     arrow(ctx, 80, 54, 80, 14);
     press(ctx, scheme, 50, 20);
   },
+  slide: (ctx, scheme) => {
+    // A carcass slab, its drawer part-way out along the travel, and the arrow that draws it on.
+    slab(ctx, 8, 14, 40, 70);
+    slab(ctx, 30, 40, 62, 24);
+    arrow(ctx, 56, 84, 90, 84);
+    press(ctx, scheme, 78, 52);
+  },
   flip: (ctx, scheme) => {
     roundRect(ctx, 26, 8, 48, 64, 4);
     ctx.fill();
