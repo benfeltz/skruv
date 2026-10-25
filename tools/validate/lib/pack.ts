@@ -93,6 +93,10 @@ export interface StepPage extends PageBase {
   fasten?: Pair[];
   turn?: Pair[];
   tool?: string;
+  /** This page builds the named sub-assembly, drawn alone. */
+  assembly?: string;
+  /** This page brings the named sub-assembly in whole. */
+  install?: string;
 }
 export interface SpecialPage extends PageBase {
   kind: 'special';

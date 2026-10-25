@@ -54,6 +54,7 @@ is no scripting in format 1.
 | `pilot-hole` | Every screw's tip lands in a `screwPilot` of the part behind its hole (within `CONTRACT.pilotRadius` of its axis, no deeper than `CONTRACT.pilotDepth`), and every `screwPilot` of an assembled part takes a tip |
 | `step-coverage` | Step pages fasten every derived joint exactly once and turn every cam exactly once |
 | `step-order` | Pages run in number order; each panel is brought in once, no later than its first joint; a cam turns on or after its seat page |
+| `assemblies` | A tagged page fastens only its own assembly's parts; each assembly is installed once, after its last page; no untagged page before the install fastens into it; every `install` names an assembly some page builds |
 | `counts` | Steps fasten each built-in hardware type's `quantity`; spares are never fastened |
 | `packing` | Every instance, spares included, is packed once, inside `boxInner`, through nothing, resting on the floor or on a part |
 | `assets` | Every `mesh`, page `art` and `boxArt` exists beside the pack |
@@ -79,6 +80,7 @@ rule:
 | `pilot-hole` | a `screwPilot` added to a `sidePanel`, which no screw tip reaches |
 | `step-coverage` | one pair dropped from step 1 |
 | `step-order` | the back panel brought in on step 12, after its fittings on step 9 |
+| `assemblies` | step 1 tagged as an assembly nobody installs |
 | `counts` | a spare dowel (`dowel-15`) fastened in step 1 |
 | `packing` | two placements at the same position |
 | `assets` | a `sidePanel` mesh that is not beside the pack |

@@ -4,7 +4,7 @@
 // distance is BOOKLET.explode / BOOKLET.inset.
 
 import { BOOKLET } from '../constants.js';
-import { add, connectorInWorld, scale } from '../../tools/validate/lib/geometry.js';
+import { add, connectorInWorld, rotateVector, scale } from '../../tools/validate/lib/geometry.js';
 import type { Pose, Vec3 } from '../../tools/validate/lib/geometry.js';
 import type { BuildStep, PartCount } from './bookletModel.js';
 import type { Connector, GamePartType, InstanceId, Joint } from './item.js';
@@ -122,17 +122,49 @@ export function separation(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'>, l
 }
 
 /**
- * The page's drawing: every part of `step.shown` at its pose with its separation offset,
- * the leaders from floated fasteners back to their holes, and each displaced part's offset.
+ * An install page's assembly held off its place: every member moves `BOOKLET.explode.assembly`
+ * along `BOOKLET.explode.installDirection`, no leaders. `arrow` runs from the centre of the
+ * members' box where it is held to the centre where it rests; null on any other page.
  */
-export function explodeStep(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'>, layout: ExplodeLayout, partTypes: PartTypes) {
+export function installStep(step: Partial<Pick<BuildStep, 'install'>>, layout: ExplodeLayout, partTypes: PartTypes) {
+  const offsets = new Map<InstanceId, Vec3>();
+  if (!step.install) return { offsets, arrow: null };
+  const { part } = lookups(layout, partTypes);
+  const offset = scale(BOOKLET.explode.installDirection, BOOKLET.explode.assembly);
+  const lo: Vec3 = [Infinity, Infinity, Infinity];
+  const hi: Vec3 = [-Infinity, -Infinity, -Infinity];
+  for (const id of step.install.members) {
+    offsets.set(id, offset);
+    const { type, position, rotation } = part(id);
+    const [sx, sy, sz] = partTypes[type].size;
+    // The member's box corners in the world, to bound the whole assembly.
+    for (const corner of [-1, 1].flatMap((x) => [-1, 1].flatMap((y) => [-1, 1].map((z): Vec3 => [(x * sx) / 2, (y * sy) / 2, (z * sz) / 2])))) {
+      const world = add(position, rotateVector(rotation, corner));
+      for (const k of [0, 1, 2]) {
+        lo[k] = Math.min(lo[k], world[k]);
+        hi[k] = Math.max(hi[k], world[k]);
+      }
+    }
+  }
+  const centre = [0, 1, 2].map((k) => (lo[k] + hi[k]) / 2) as Vec3;
+  return { offsets, arrow: [add(centre, offset), centre] as [Vec3, Vec3] };
+}
+
+/**
+ * The page's drawing: every part of `step.shown` at its pose with its separation offset
+ * (an install page's members held off their place besides), the leaders from floated
+ * fasteners back to their holes, each displaced part's offset, and an install page's arrow.
+ */
+export function explodeStep(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'> & Partial<Pick<BuildStep, 'install'>>, layout: ExplodeLayout, partTypes: PartTypes) {
   const { offsets, leaders } = separation(step, layout, partTypes);
+  const install = installStep(step, layout, partTypes);
+  for (const [id, offset] of install.offsets) offsets.set(id, add(offsets.get(id) ?? ZERO, offset));
   const { part } = lookups(layout, partTypes);
   const items = step.shown.map((id): ExplodedItem => {
     const { type, position, rotation } = part(id);
     return { id, type, position: add(position, offsets.get(id) ?? ZERO), rotation };
   });
-  return { items, leaders, offsets };
+  return { items, leaders, offsets, arrow: install.arrow };
 }
 
 /**

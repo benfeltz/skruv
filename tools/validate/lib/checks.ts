@@ -314,6 +314,82 @@ function stepOrder({ partTypes, assembled, resolve, pages, steps }: Context) {
   return errors;
 }
 
+/**
+ * Each sub-assembly's members, derived from the pages that build it: the parts those pages
+ * bring in and the hardware they fasten. Never listed in the pack.
+ */
+function membersOf(steps: Context['steps'], resolve: Context['resolve']) {
+  const members = new Map<string, Set<InstanceId>>();
+  for (const { page } of steps) {
+    if (page.assembly === undefined) continue;
+    const set = members.get(page.assembly) ?? new Set<InstanceId>();
+    for (const id of page.parts ?? []) set.add(id);
+    for (const [end] of page.fasten ?? []) {
+      const a = resolve(end);
+      if (a) set.add(a.part);
+    }
+    members.set(page.assembly, set);
+  }
+  return members;
+}
+
+/** A tagged page fastens only its own assembly's parts. */
+function taggedFasten({ resolve, steps }: Context, members: Map<string, Set<InstanceId>>) {
+  const errors: CheckError[] = [];
+  for (const { page, path } of steps) {
+    const own = page.assembly === undefined ? undefined : members.get(page.assembly);
+    (page.fasten ?? []).forEach(([end, hole], i) => {
+      for (const ref of [resolve(end), resolve(hole)]) {
+        if (ref && own && !own.has(ref.part)) errors.push(error('assemblies', `${path}.fasten[${i}]`, `${ref.part} is not part of ${page.assembly}`));
+      }
+    });
+  }
+  return errors;
+}
+
+/** Each built assembly is installed once, after its last page; each install names a built one. */
+function installs({ steps }: Context, members: Map<string, Set<InstanceId>>) {
+  const errors: CheckError[] = [];
+  for (const name of members.keys()) {
+    const installed = steps.filter(({ page }) => page.install === name);
+    if (installed.length !== 1) {
+      errors.push(error('assemblies', 'manual.pages', `${name} is installed ${installed.length} times, not 1`));
+      continue;
+    }
+    const last = Math.max(...steps.filter(({ page }) => page.assembly === name).map(({ page }) => page.number));
+    const { page, path } = installed[0];
+    if (page.number <= last) errors.push(error('assemblies', `${path}.install`, `${name} is installed on page ${page.number} before its last page ${last}`));
+  }
+  for (const { page, path } of steps) {
+    if (page.install !== undefined && !members.has(page.install)) errors.push(error('assemblies', `${path}.install`, `no page builds ${page.install}`));
+  }
+  return errors;
+}
+
+/** No untagged page numbered before the install fastens into an assembly. */
+function earlyFasten({ resolve, steps }: Context, members: Map<string, Set<InstanceId>>) {
+  const errors: CheckError[] = [];
+  for (const [name, own] of members) {
+    const at = steps.find(({ page }) => page.install === name)?.page.number;
+    if (at === undefined) continue;
+    for (const { page, path } of steps) {
+      if (page.assembly !== undefined || page.number >= at) continue;
+      (page.fasten ?? []).forEach(([end, hole], i) => {
+        for (const ref of [resolve(end), resolve(hole)]) {
+          if (ref && own.has(ref.part)) errors.push(error('assemblies', `${path}.fasten[${i}]`, `${ref.part} belongs to ${name}, installed on page ${at}`));
+        }
+      });
+    }
+  }
+  return errors;
+}
+
+/** The four sub-assembly checks of the format's section 5. */
+function assemblies(ctx: Context) {
+  const members = membersOf(ctx.steps, ctx.resolve);
+  return [...taggedFasten(ctx, members), ...installs(ctx, members), ...earlyFasten(ctx, members)];
+}
+
 /** Steps seat each built-in hardware type's quantity, spares never. */
 function counts({ pack, typeOf, spares, resolve, steps, isTool }: Context) {
   const errors: CheckError[] = [];
@@ -412,6 +488,7 @@ export const RULES = Object.freeze([
   'pilot-hole',
   'step-coverage',
   'step-order',
+  'assemblies',
   'counts',
   'packing',
   'assets',
@@ -439,6 +516,7 @@ export function checkPack(pack: FlatpackFile, { assetExists = () => true }: { as
     ...pilotHoles(ctx),
     ...stepCoverage(ctx),
     ...stepOrder(ctx),
+    ...assemblies(ctx),
     ...counts(ctx),
     ...packing(ctx),
     ...assets(ctx, assetExists),

@@ -373,7 +373,9 @@ export const BOOKLET = {
   // pulled away, and (sub-assembly install pages, PR 2) a built assembly held off its place.
   // `leaderLine` is the weight of the faint line back from a floated fastener to its hole.
   // `cancel` is the length below which a part's pulls from opposing joints count as none.
-  explode: { hardware: 0.05, part: 0.2, assembly: 0.35, leaderLine: 1, cancel: 1e-9 },
+  // `installDirection` is the way an install page holds its assembly off: with no joints to
+  // give a direction, an assembly comes in from the front.
+  explode: { hardware: 0.05, part: 0.2, assembly: 0.35, installDirection: [0, 0, 1] satisfies Vec3, leaderLine: 1, cancel: 1e-9 },
   // Detail insets (src/scene/bookletPages.ts `step`), page-canvas pixels except `focus`: one
   // circle per fastener type across the top, shrunk to fit the row. `float` is how far an inset
   // floats its fastener out of the hole, and `focus` how far it frames beyond the hole mouth and
