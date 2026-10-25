@@ -4,7 +4,7 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { BOOKLET, COLORS } from '../constants.js';
 import { createBooklet, gamePagesFor } from '../game/bookletModel.js';
-import { actionFor, explodeStep, floatOut, insetsFor } from '../game/explode.js';
+import { actionFor, explodeStep, floatOut, insetsFor, panelsFor } from '../game/explode.js';
 import type { Action } from '../game/explode.js';
 import { fanLayout } from '../game/looseFan.js';
 import type { Inset } from '../game/explode.js';
@@ -219,6 +219,21 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     ringArrow(ctx, project(action.ring), radius * BOOKLET.action.ring);
   }
 
+  // The sequence panels: a row of boxed frames along `frame`'s foot, each a cam's turn — the action
+  // view of its joint with the ring arrow, left to right in turn order.
+  function sequencePanels(ctx: Ctx, panels: Action[], [x, y, , h]: Rect) {
+    const { height, gap, line } = BOOKLET.sequence;
+    panels.forEach((panel, i) => {
+      const px = x + i * (height + gap);
+      const py = y + h - height;
+      const project = views.draw(ctx, panel.items.map((it) => ({ ...it, weight: 'bold' as const })), [px, py, height, height], liftOf(panel.axis), { frame: panel.focus });
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = line;
+      ctx.strokeRect(px, py, height, height);
+      ringArrow(ctx, project(panel.ring), height * BOOKLET.action.ring / 2);
+    });
+  }
+
   function step({ ctx }: Sheet, page: BuildStep) {
     const m = BOOKLET.margin;
     ctx.fillStyle = INK;
@@ -290,6 +305,12 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     // Under the lower of the labels and the action circle.
     const top = Math.max(m + 2 * maxRadius + 80, actionFoot + gap);
     const frame: Rect = [m, top, pageW - 2 * m, pageH - m - top];
+    // A cam-turn page keeps the foot of its frame for the row of panels.
+    const panels = panelsFor(page, layout, item.partTypes);
+    if (panels.length) {
+      sequencePanels(ctx, panels, frame);
+      frame[3] -= BOOKLET.sequence.height + BOOKLET.sequence.gap;
+    }
     const { items, lines, arrows, anchorOf } = drawingOf(page);
     const project = views.draw(ctx, items, frame, orientation, { lines });
     ctx.strokeStyle = INK;
