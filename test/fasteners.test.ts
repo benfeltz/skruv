@@ -184,6 +184,27 @@ describe('screw: seated ⇄ screwed by signed crank, either direction free', () 
   });
 });
 
+describe('slide: held on seat, seated on a pull', () => {
+  it('starts pressed at full progress, fastened, and is no tap kind', () => {
+    const f = createFastener(KIND.SLIDE);
+    expect(f).toEqual({ kind: KIND.SLIDE, state: STATE.PRESSED, progress: 1 });
+    expect(isFastened(f)).toBe(true);
+    expect(isTapKind(KIND.SLIDE)).toBe(false);
+  });
+
+  it('is seated, and so releasable, on a pull', () => {
+    const seated = transition(createFastener(KIND.SLIDE), PULL);
+    expect(seated).toEqual({ kind: KIND.SLIDE, state: STATE.SEATED, progress: 0 });
+    expect(canRelease([seated])).toBe(true);
+  });
+
+  it('ignores a tap and a crank (same record back)', () => {
+    const f = createFastener(KIND.SLIDE);
+    expect(transition(f, TAP)).toBe(f);
+    expect(transition(f, crank(1))).toBe(f);
+  });
+});
+
 describe('cam: seated ⇄ locked by quarter turn, lock gated on capture', () => {
   const quarter = FASTENER.quarterTurn;
 

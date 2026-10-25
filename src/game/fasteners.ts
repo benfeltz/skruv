@@ -10,6 +10,7 @@
 //   screw        seated ⇄ screwed          signed crank progress (screwdriver)
 //   cam          seated ⇄ locked           signed quarter turn (screwdriver), lock needs a
 //                                          captured bolt head
+//   slide        held on seat ⇄ seated     pull (off its rails)
 //   tool         always seated             a tool on a head or slot fastens nothing
 //
 // Correctness never enters here: any type-compatible seated pair fastens.
@@ -89,7 +90,9 @@ export const isHandTurned = (joint: { kind: FastenerKind; hardware: string; move
 /** Fastened so it ties its two hosts solid: a locked cam onto its bolt, a screw into what lies behind. */
 export const bindsRigidly = (f: Fastener) => isFastened(f) && (f.kind === KIND.CAM || f.kind === KIND.SCREW);
 
-export const createFastener = (kind: FastenerKind): Fastener => ({ kind, state: STATE.SEATED, progress: 0 });
+// A slide is held the moment it seats, so its bond exists at once; only a pull frees it.
+export const createFastener = (kind: FastenerKind): Fastener =>
+  kind === KIND.SLIDE ? { kind, state: STATE.PRESSED, progress: 1 } : { kind, state: STATE.SEATED, progress: 0 };
 
 /** Past seated: the joint holds and physics should bond it. */
 export const isFastened = (f: Fastener) => f.state !== STATE.SEATED;
@@ -146,6 +149,8 @@ export function transition(f: Fastener, event: FastenerEvent, ctx: FastenerConte
     case KIND.CAM:
       if (event.type !== 'crank') return f;
       return turned(f, event.radians, spanOf(f.kind), { canFasten: !!ctx.captured, canLoosen: true }, STATE.LOCKED);
+    case KIND.SLIDE:
+      return event.type === 'pull' ? tapPull(f, 'pull') : f;
     default:
       return f;
   }

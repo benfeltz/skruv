@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ROOM_SAVE_FORMAT, serialize } from '../src/game/roomSave.js';
 import { checkItem, planRestore } from '../src/game/roomRestore.js';
 import { ITEM_IDS, itemById } from '../src/game/item.js';
+import type { Item } from '../src/game/item.js';
 import type { ItemRecord, RoomSave, SavedJoint } from '../src/game/roomSave.js';
 
 // The pure restore plan (1.9.9.1): what a stored text becomes, and what a record must satisfy
@@ -97,6 +98,34 @@ describe('checkItem', () => {
   it('refuses a bolt pressed', () => {
     const bolt = jointOf('johnny', 'bolt', { state: 'pressed', progress: 1 });
     expect(() => check(recordOf('johnny', [bolt]))).toThrow('objects[0].joints[0].fastener.state');
+  });
+});
+
+describe('checkItem on a slide', () => {
+  // A made-up item: a drawer side on a runner, as a pack with a rail pair will have them.
+  const connectors = {
+    plate: [{ id: 'railGroove-1', type: 'railGroove', position: [0, 0, 0], axis: [-1, 0, 0] }],
+    runner: [{ id: 'railEnd-1', type: 'railEnd', position: [0, 0, 0], axis: [1, 0, 0] }],
+  };
+  const item = {
+    identity: { documentCode: 'SK-1' },
+    manifest: [{ id: 'plate-1', type: 'plate' }, { id: 'runner-1', type: 'runner' }],
+    partTypes: { plate: { connectors: connectors.plate }, runner: { connectors: connectors.runner } },
+  } as unknown as Item;
+  const slide = (fastener: SavedJoint['fastener']): ItemRecord => ({
+    ...recordOf('johnny'),
+    documentCode: 'SK-1',
+    parts: { 'plate-1': IDENTITY_POSE, 'runner-1': IDENTITY_POSE },
+    joints: [{ hardware: 'runner-1', hardwareConnector: 0, host: 'plate-1', hostConnector: 0, kind: 'slide', mover: 'plate-1', fastener, through: null, captured: null }],
+  });
+
+  it('passes a slide held on seat, and one pulled to seated', () => {
+    expect(() => checkItem(slide({ state: 'pressed', progress: 1 }), item, 'objects[0]')).not.toThrow();
+    expect(() => checkItem(slide({ state: 'seated', progress: 0 }), item, 'objects[0]')).not.toThrow();
+  });
+
+  it('refuses a slide screwed', () => {
+    expect(() => checkItem(slide({ state: 'screwed', progress: 1 }), item, 'objects[0]')).toThrow('objects[0].joints[0].fastener.state');
   });
 });
 
