@@ -2,20 +2,29 @@ import { describe, expect, it } from 'vitest';
 import { BOOKLET } from '../src/constants.js';
 import { createBuildSteps } from '../src/game/bookletModel.js';
 import { ITEM_IDS, itemById } from '../src/game/item.js';
-import { explodeStep, floatOut, insetsFor, installStep, separation } from '../src/game/explode.js';
+import { actionAt, actionFor, explodeStep, extentAlong, floatOut, insetsFor, installStep, panelsFor, separation, toolOn } from '../src/game/explode.js';
 import type { ExplodeLayout } from '../src/game/explode.js';
 import type { Joint } from '../src/game/item.js';
+import { connectorInWorld } from '../tools/validate/lib/geometry.js';
 import type { Quat, Vec3 } from '../tools/validate/lib/geometry.js';
+import type { ConnectorType } from '../tools/validate/lib/vocabulary.js';
 
 // The explode maths on a made-up layout, so each rule is pinned by numbers you can check by
 // eye: a plate lying at the origin with a dowel hole in its top face (axis +y), a dowel
 // seated in it, and a side whose two holes press onto two dowels standing in the plate.
 const ID: Quat = [0, 0, 0, 1];
+const conn = (position: Vec3, axis: Vec3, type: ConnectorType) => ({ position, axis, type });
 const partTypes = {
-  plate: { partNumber: 'P', size: [0.4, 0.02, 0.2] as Vec3, connectors: [{ position: [0.1, 0.01, 0] as Vec3, axis: [0, 1, 0] as Vec3 }, { position: [-0.1, 0.01, 0] as Vec3, axis: [0, 1, 0] as Vec3 }] },
-  dowel: { partNumber: 'D', size: [0.01, 0.04, 0.01] as Vec3, connectors: [{ position: [0, 0.02, 0] as Vec3, axis: [0, -1, 0] as Vec3 }, { position: [0, -0.02, 0] as Vec3, axis: [0, 1, 0] as Vec3 }] },
+  plate: { partNumber: 'P', size: [0.4, 0.02, 0.2] as Vec3, connectors: [conn([0.1, 0.01, 0], [0, 1, 0], 'dowelHole'), conn([-0.1, 0.01, 0], [0, 1, 0], 'dowelHole'), conn([0, 0.01, 0.05], [0, 1, 0], 'camBoltHole')] },
+  dowel: { partNumber: 'D', size: [0.01, 0.04, 0.01] as Vec3, connectors: [conn([0, 0.02, 0], [0, -1, 0], 'dowelEnd'), conn([0, -0.02, 0], [0, 1, 0], 'dowelEnd')] },
+  // A bolt: thread down, a hex socket in its head (axis out of the head).
+  bolt: { partNumber: 'B', size: [0.01, 0.04, 0.01] as Vec3, connectors: [conn([0, -0.02, 0], [0, 1, 0], 'boltThread'), conn([0, 0.02, 0], [0, 1, 0], 'hexSocket')] },
+  // A stud with a hex socket at each end, the lower (buried) one listed first.
+  stud: { partNumber: 'T', size: [0.01, 0.04, 0.01] as Vec3, connectors: [conn([0, -0.02, 0], [0, -1, 0], 'hexSocket'), conn([0, 0.02, 0], [0, 1, 0], 'hexSocket')] },
+  // A wrench whose tip sits off its origin, pointing along +x.
+  wrench: { partNumber: 'W', size: [0.1, 0.01, 0.01] as Vec3, connectors: [conn([0.05, 0, 0], [1, 0, 0], 'wrenchTip')] },
   // A side standing on the dowels: its holes face down.
-  side: { partNumber: 'S', size: [0.3, 0.02, 0.2] as Vec3, connectors: [{ position: [0.1, -0.01, 0] as Vec3, axis: [0, -1, 0] as Vec3 }, { position: [-0.1, -0.01, 0] as Vec3, axis: [0, -1, 0] as Vec3 }] },
+  side: { partNumber: 'S', size: [0.3, 0.02, 0.2] as Vec3, connectors: [conn([0.1, -0.01, 0], [0, -1, 0], 'dowelHole'), conn([-0.1, -0.01, 0], [0, -1, 0], 'dowelHole')] },
 };
 const at = (id: string, type: string, position: Vec3) => ({ id, type, position, rotation: ID });
 const joint = (hardware: string, hardwareConnector: number, host: string, hostConnector: number, mover: string): Joint => ({
@@ -110,11 +119,11 @@ describe('installStep', () => {
   });
 
   it('shifts the members in explodeStep and leaves the leaders to the page\'s own joints', () => {
-    const { items, leaders, arrow } = explodeStep({ joints: [], pose: 'upright', shown, install }, layout, partTypes);
+    const { items, leaders, arrows } = explodeStep({ joints: [], pose: 'upright', shown, install }, layout, partTypes);
     expect(items.find((i) => i.id === 'side')!.position).toEqual([0, 0.06, held]);
     expect(items.find((i) => i.id === 'plate')!.position).toEqual([0, 0, 0]);
     expect(leaders).toEqual([]);
-    expect(arrow).not.toBeNull();
+    expect(arrows).toHaveLength(1);
   });
 });
 
@@ -133,6 +142,26 @@ describe('explodeStep', () => {
     const [from, to] = leaders[0];
     expect(from).toEqual(expect.arrayContaining([expect.closeTo(0.1), expect.closeTo(0.03)]));
     expect(to[1] - from[1]).toBeCloseTo(BOOKLET.explode.hardware);
+  });
+
+  it('runs a solid arrow for a pulled-away part from its held-off face to its seated face', () => {
+    const { arrows } = explodeStep({ joints: [2], pose: 'upright', shown }, layout, partTypes);
+    // The side's half-thickness is 0.01, seated at y 0.06.
+    expect(arrows).toHaveLength(1);
+    at3(arrows[0][0], 0.06 + BOOKLET.explode.part - 0.01);
+    at3(arrows[0][1], 0.06 - 0.01);
+  });
+
+  it('gives a floated dowel no arrow, and a page that pulls and installs nothing none', () => {
+    expect(explodeStep({ joints: [0], pose: 'upright', shown }, layout, partTypes).arrows).toEqual([]);
+    expect(explodeStep({ joints: [], pose: 'upright', shown }, layout, partTypes).arrows).toEqual([]);
+  });
+
+  it('puts the motion arrows before the install arrow', () => {
+    const install = { name: 'top', members: ['side', 'd1'] };
+    const { arrows } = explodeStep({ joints: [2], pose: 'upright', shown, install }, layout, partTypes);
+    expect(arrows).toHaveLength(2);
+    expect(arrows[1]).toEqual(installStep({ install }, layout, partTypes).arrow);
   });
 
   it('draws no leaders for a part that is only pulled away', () => {
@@ -223,5 +252,127 @@ describe.each(ITEM_IDS)('%s: every step page', (id) => {
         if (joint.mover === joint.hardware) expect(offsets.has(joint.hardware), joint.hardware).toBe(true);
       }
     }
+  });
+
+  it('has one sequence panel per cam it turns, capped, and none on a page that turns nothing', () => {
+    for (const step of steps) {
+      expect(panelsFor(step, layout, item.partTypes), `step ${step.number}`).toHaveLength(step.tool ? Math.min(step.turns.length, BOOKLET.sequence.max) : 0);
+    }
+  });
+
+  it('has one solid arrow per pulled-away part plus the install arrow, each motion arrow the pull long', () => {
+    for (const step of steps) {
+      const { pulled } = separation(step, layout, item.partTypes);
+      const { arrows } = explodeStep(step, layout, item.partTypes);
+      expect(arrows, `step ${step.number}`).toHaveLength(pulled.length + (step.install ? 1 : 0));
+      for (const [from, to] of arrows.slice(0, pulled.length)) expect(Math.hypot(from[0] - to[0], from[1] - to[1], from[2] - to[2])).toBeCloseTo(BOOKLET.explode.part);
+    }
+  });
+
+  it('has an action inset on every tool page, the tool in hand', () => {
+    for (const step of steps.filter((st) => st.tool)) {
+      const action = actionFor(step, layout, item.partTypes);
+      expect(action, `step ${step.number}`).not.toBeNull();
+      expect(action!.items[action!.items.length - 1].type, `step ${step.number}`).toBe(step.tool);
+    }
+  });
+});
+
+describe('toolOn', () => {
+  const bolted: ExplodeLayout = {
+    parts: [...layout.parts, at('b1', 'bolt', [0.1, 0.1, 0]), at('d9', 'dowel', [0, 0.5, 0])],
+    joints: [joint('b1', 0, 'plate', 2, 'b1'), joint('d9', 0, 'plate', 0, 'd9')],
+  };
+
+  it('holds the tip off the socket along its axis, axes opposed', () => {
+    const tool = toolOn(bolted.joints[0], 'wrench', bolted, partTypes)!;
+    const tip = connectorInWorld(partTypes.wrench.connectors[0], tool);
+    const socket = connectorInWorld(partTypes.bolt.connectors[1], bolted.parts.find((p) => p.id === 'b1')!);
+    expect(tool.type).toBe('wrench');
+    const hold = 0.04 * BOOKLET.action.hold;
+    for (const k of [0, 1, 2]) {
+      expect(tip.position[k]).toBeCloseTo(socket.position[k] + hold * socket.axis[k]);
+      expect(tip.axis[k]).toBeCloseTo(-socket.axis[k]);
+    }
+  });
+
+  it('takes the drive connector farthest out of the hole, not the one buried in it', () => {
+    // A stud standing in the plate's hole (axis +y): its +y socket is the free end, its -y one is in the wood.
+    const studded: ExplodeLayout = { parts: [...layout.parts, at('s1', 'stud', [0.1, 0.03, 0])], joints: [joint('s1', 0, 'plate', 0, 's1')] };
+    const tool = toolOn(studded.joints[0], 'wrench', studded, partTypes)!;
+    const tip = connectorInWorld(partTypes.wrench.connectors[0], tool);
+    expect(tip.position[1]).toBeGreaterThan(0.03 + 0.02);
+    expect(tip.axis[1]).toBeCloseTo(-1);
+  });
+
+  it('is null when the fastener has no connector the tip mates', () => {
+    expect(toolOn(bolted.joints[1], 'wrench', bolted, partTypes)).toBeNull();
+  });
+});
+
+describe('extentAlong', () => {
+  const size: Vec3 = [0.4, 0.02, 0.2];
+  it('reaches half the box along each axis', () => {
+    expect(extentAlong(size, ID, [1, 0, 0])).toBeCloseTo(0.2);
+    expect(extentAlong(size, ID, [0, 1, 0])).toBeCloseTo(0.01);
+  });
+  it('follows the rotation', () => {
+    const quarterZ: Quat = [0, 0, Math.SQRT1_2, Math.SQRT1_2];
+    expect(extentAlong(size, quarterZ, [1, 0, 0])).toBeCloseTo(0.01);
+  });
+});
+
+describe('actionAt / actionFor', () => {
+  const bolted: ExplodeLayout = {
+    parts: [...layout.parts, at('b1', 'bolt', [0, 0.04, 0.05]), at('d9', 'dowel', [0, 0.5, 0])],
+    joints: [joint('d9', 0, 'plate', 0, 'd9'), joint('b1', 0, 'plate', 2, 'b1')],
+  };
+
+  it('shows the host and the seated fastener with the tool on it, framed round the ring', () => {
+    const action = actionAt(1, 'wrench', bolted, partTypes)!;
+    expect(action.items.map((i) => i.id)).toEqual(['plate', 'b1', 'tool:wrench']);
+    expect(action.items[1].position).toEqual([0, 0.04, 0.05]);
+    // The socket is at the bolt's head (y 0.04 + 0.02); the tool is held off it along +y.
+    expect(action.ring).toEqual([expect.closeTo(0), expect.closeTo(0.06 + 0.04 * BOOKLET.action.hold), expect.closeTo(0.05)]);
+    for (const k of [0, 1, 2]) {
+      expect(action.focus.min[k]).toBeLessThan(action.ring[k]);
+      expect(action.focus.max[k]).toBeGreaterThan(action.ring[k]);
+    }
+    expect(action.axis).toEqual([0, 1, 0]);
+  });
+
+  it('acts on the first turned joint when the page turns, not a fastened one', () => {
+    const step = { joints: [0], turns: [1], hardware: [{ type: 'dowel', count: 1, partNumber: 'D' }], tool: 'wrench' };
+    expect(actionFor(step, bolted, partTypes)!.joint).toBe(1);
+  });
+
+  it('is null without a tool, or with a tool only a dowel joint to work', () => {
+    expect(actionFor({ joints: [1], turns: [], hardware: [], tool: null }, bolted, partTypes)).toBeNull();
+    expect(actionFor({ joints: [0], turns: [], hardware: [{ type: 'dowel', count: 1, partNumber: 'D' }], tool: 'wrench' }, bolted, partTypes)).toBeNull();
+  });
+
+  it('picks the first fastened joint the tool mates', () => {
+    const hardware = [{ type: 'dowel', count: 1, partNumber: 'D' }, { type: 'bolt', count: 1, partNumber: 'B' }];
+    expect(actionFor({ joints: [0, 1], turns: [], hardware, tool: 'wrench' }, bolted, partTypes)!.joint).toBe(1);
+  });
+});
+
+describe('panelsFor', () => {
+  const many: ExplodeLayout = {
+    parts: [...layout.parts, ...[0, 1, 2, 3, 4].map((n) => at(`b${n}`, 'bolt', [0, 0.04, 0.05 + n]))],
+    joints: [0, 1, 2, 3, 4].map((n) => joint(`b${n}`, 0, 'plate', 2, `b${n}`)),
+  };
+
+  it('gives one panel per turned joint, in turns order', () => {
+    const panels = panelsFor({ turns: [2, 0], tool: 'wrench' }, many, partTypes);
+    expect(panels.map((p) => p.joint)).toEqual([2, 0]);
+  });
+
+  it('shows at most BOOKLET.sequence.max', () => {
+    expect(panelsFor({ turns: [0, 1, 2, 3, 4], tool: 'wrench' }, many, partTypes)).toHaveLength(BOOKLET.sequence.max);
+  });
+
+  it('is empty without a tool', () => {
+    expect(panelsFor({ turns: [0], tool: null }, many, partTypes)).toEqual([]);
   });
 });

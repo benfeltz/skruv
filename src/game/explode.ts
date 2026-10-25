@@ -4,8 +4,9 @@
 // distance is BOOKLET.explode / BOOKLET.inset.
 
 import { BOOKLET } from '../constants.js';
-import { add, connectorInWorld, rotateVector, scale } from '../../tools/validate/lib/geometry.js';
-import type { Pose, Vec3 } from '../../tools/validate/lib/geometry.js';
+import { add, connectorInWorld, rotateVector, rotationBetween, scale, sub } from '../../tools/validate/lib/geometry.js';
+import type { Pose, Quat, Size, Vec3 } from '../../tools/validate/lib/geometry.js';
+import { COMPATIBLE } from '../../tools/validate/lib/vocabulary.js';
 import type { BuildStep, PartCount } from './bookletModel.js';
 import type { Connector, GamePartType, InstanceId, Joint } from './item.js';
 
@@ -15,7 +16,7 @@ export interface ExplodeLayout {
   joints: readonly Joint[];
 }
 
-type PartTypes = Readonly<Record<string, Pick<GamePartType, 'partNumber' | 'size'> & { connectors: readonly Pick<Connector, 'position' | 'axis'>[] }>>;
+type PartTypes = Readonly<Record<string, Pick<GamePartType, 'partNumber' | 'size'> & { connectors: readonly Pick<Connector, 'position' | 'axis' | 'type'>[] }>>;
 
 /** One part as an exploded drawing places it. */
 export interface ExplodedItem extends Pose {
@@ -43,6 +44,7 @@ export interface Inset extends PartCount {
 }
 
 const ZERO: Vec3 = [0, 0, 0];
+const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 // A layout's parts by id, built once per layout.
 const partsOf = new WeakMap<ExplodeLayout, ReadonlyMap<InstanceId, ExplodeLayout['parts'][number]>>();
@@ -71,7 +73,7 @@ function lookups(layout: ExplodeLayout, partTypes: PartTypes) {
  *     hardware already sitting only in pulled-away parts rides with them;
  *   - everything else — already-built parts, hardware seated earlier — stays put.
  * A loose-parts page (pose 'parts') fans its panels instead, so only hardware floats there.
- * Returns each displaced id's offset and the floated fasteners' leaders.
+ * Returns each displaced id's offset, the floated fasteners' leaders and the ids pulled away.
  */
 export function separation(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'>, layout: ExplodeLayout, partTypes: PartTypes) {
   const { hole, end } = lookups(layout, partTypes);
@@ -85,10 +87,14 @@ export function separation(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'>, l
     }
   }
   const offsets = new Map<InstanceId, Vec3>();
+  const pulled: InstanceId[] = [];
   for (const [id, sum] of pressedOn) {
     const length = Math.hypot(...sum);
     // Opposing joints cancel: nothing to pull away along.
-    if (length > BOOKLET.explode.cancel) offsets.set(id, scale(sum, BOOKLET.explode.part / length));
+    if (length > BOOKLET.explode.cancel) {
+      offsets.set(id, scale(sum, BOOKLET.explode.part / length));
+      pulled.push(id);
+    }
   }
 
   const leaders: Leader[] = [];
@@ -118,7 +124,7 @@ export function separation(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'>, l
     if (offsets.has(id) || !hosts.length || !hosts.every((h) => offsets.has(h) && !floated.has(h))) continue;
     offsets.set(id, offsets.get(hosts[0])!);
   }
-  return { offsets, leaders };
+  return { offsets, leaders, pulled };
 }
 
 /**
@@ -151,20 +157,34 @@ export function installStep(step: Partial<Pick<BuildStep, 'install'>>, layout: E
 }
 
 /**
+ * The solid arrow of a part pulled away by `offset`: from its held-off face to its seated face,
+ * along the offset — the part's far face along the pull, so the arrow spans the gap exactly.
+ */
+function motionArrow(part: ExplodeLayout['parts'][number], offset: Vec3, partTypes: PartTypes): Leader {
+  const length = Math.hypot(...offset);
+  const direction = scale(offset, 1 / length);
+  const seated = sub(part.position, scale(direction, extentAlong(partTypes[part.type].size, part.rotation, direction)));
+  return [add(seated, offset), seated];
+}
+
+/**
  * The page's drawing: every part of `step.shown` at its pose with its separation offset
  * (an install page's members held off their place besides), the leaders from floated
- * fasteners back to their holes, each displaced part's offset, and an install page's arrow.
+ * fasteners back to their holes, each displaced part's offset, and the solid arrows: one per
+ * part pulled away, then an install page's.
  */
 export function explodeStep(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'> & Partial<Pick<BuildStep, 'install'>>, layout: ExplodeLayout, partTypes: PartTypes) {
-  const { offsets, leaders } = separation(step, layout, partTypes);
+  const { offsets, leaders, pulled } = separation(step, layout, partTypes);
+  const { part } = lookups(layout, partTypes);
+  const arrows = pulled.map((id) => motionArrow(part(id), offsets.get(id)!, partTypes));
   const install = installStep(step, layout, partTypes);
   for (const [id, offset] of install.offsets) offsets.set(id, add(offsets.get(id) ?? ZERO, offset));
-  const { part } = lookups(layout, partTypes);
+  if (install.arrow) arrows.push(install.arrow);
   const items = step.shown.map((id): ExplodedItem => {
     const { type, position, rotation } = part(id);
     return { id, type, position: add(position, offsets.get(id) ?? ZERO), rotation };
   });
-  return { items, leaders, offsets, arrow: install.arrow };
+  return { items, leaders, offsets, arrows };
 }
 
 /**
@@ -223,4 +243,91 @@ export function insetsFor(step: Pick<BuildStep, 'joints' | 'hardware'>, layout: 
     });
   }
   return insets;
+}
+
+/**
+ * A tool posed on a joint's fastener: the tool's tip connector (its first whose type has a
+ * compatible hole) mates the fastener's drive connector (the compatible one farthest out of the
+ * hole's mouth — a double-ended stud has one at each end, and the one in the hole is buried),
+ * axes opposed, held off along the drive's axis by `BOOKLET.action.hold` of the fastener's
+ * longest side so the fastener shows under it. Null when the tool has no tip or the fastener
+ * no connector the tip mates.
+ */
+export function toolOn(joint: Joint, tool: string, layout: ExplodeLayout, partTypes: PartTypes): ExplodedItem | null {
+  const { part, hole } = lookups(layout, partTypes);
+  const fastener = part(joint.hardware);
+  const tip = partTypes[tool].connectors.find((c) => c.type in COMPATIBLE);
+  if (!tip) return null;
+  const outward = hole(joint).axis;
+  const drives = partTypes[fastener.type].connectors.filter((c) => c.type === COMPATIBLE[tip.type]).map((c) => connectorInWorld(c, fastener));
+  const world = drives.sort((a, b) => dot(b.position, outward) - dot(a.position, outward))[0];
+  if (!world) return null;
+  const rotation = rotationBetween(tip.axis, scale(world.axis, -1));
+  const held = add(world.position, scale(world.axis, Math.max(...partTypes[fastener.type].size) * BOOKLET.action.hold));
+  return { id: `tool:${tool}`, type: tool, position: sub(held, rotateVector(rotation, tip.position)), rotation };
+}
+
+/** How far a box of `size` posed at `rotation` reaches from its centre along unit `direction`. */
+export function extentAlong(size: Size, rotation: Quat, direction: Vec3): number {
+  const axes: Vec3[] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  return axes.reduce((sum, axis, k) => sum + (Math.abs(dot(direction, rotateVector(rotation, axis))) * size[k]) / 2, 0);
+}
+
+/** An action inset: a joint with its fastener seated and the tool on it, and where the ring arrow goes. */
+export interface Action {
+  /** Index into `layout.joints` of the joint the tool works. */
+  joint: number;
+  /** The host and the fastener at their seated poses, then the tool on the fastener. */
+  items: ExplodedItem[];
+  /** The box the inset frames: the tool's held tip, `BOOKLET.action.focus` of the larger of the fastener's longest side and the tool's cross-section either way. */
+  focus: { min: Vec3; max: Vec3 };
+  /** The hole's world axis, out of its mouth: the inset turns it as a detail inset does. */
+  axis: Vec3;
+  /** The ring arrow's centre: the tool's held tip, round its shaft. */
+  ring: Vec3;
+}
+
+/** The action view of one joint with `tool` held on its seated fastener; null when the tool does not mate it. */
+export function actionAt(jointIndex: number, tool: string, layout: ExplodeLayout, partTypes: PartTypes): Action | null {
+  const { part, hole } = lookups(layout, partTypes);
+  const joint = layout.joints[jointIndex];
+  const posed = toolOn(joint, tool, layout, partTypes);
+  if (!posed) return null;
+  const tip = partTypes[tool].connectors.find((c) => c.type in COMPATIBLE)!;
+  const ring = connectorInWorld(tip, posed).position;
+  const [host, fastener] = [part(joint.host), part(joint.hardware)];
+  // Wide enough for the fastener and for the tool's own cross-section, so the ring clears the shaft.
+  const [, across] = [...partTypes[tool].size].sort((x, y) => x - y);
+  const reach = Math.max(...partTypes[fastener.type].size, across) * BOOKLET.action.focus;
+  return {
+    joint: jointIndex,
+    items: [host, fastener].map(({ id, type, position, rotation }) => ({ id, type, position, rotation })).concat(posed),
+    focus: { min: ring.map((v) => v - reach) as Vec3, max: ring.map((v) => v + reach) as Vec3 },
+    axis: hole(joint).axis,
+    ring,
+  };
+}
+
+/**
+ * The page's action inset: on its first turned joint when it turns any, otherwise on the
+ * first detail inset's joint (in `step.hardware` order) the tool mates; null without a tool
+ * or a drivable joint.
+ */
+export function actionFor(step: Pick<BuildStep, 'joints' | 'turns' | 'hardware' | 'tool'>, layout: ExplodeLayout, partTypes: PartTypes): Action | null {
+  const { tool } = step;
+  if (!tool) return null;
+  if (step.turns.length) return actionAt(step.turns[0], tool, layout, partTypes);
+  for (const { joint } of insetsFor(step, layout, partTypes)) {
+    const action = actionAt(joint, tool, layout, partTypes);
+    if (action) return action;
+  }
+  return null;
+}
+
+/** A cam-turn page's sequence panels: the action view of each joint it turns, in order, at most `BOOKLET.sequence.max`. */
+export function panelsFor(step: Pick<BuildStep, 'turns' | 'tool'>, layout: ExplodeLayout, partTypes: PartTypes): Action[] {
+  const { tool } = step;
+  if (!tool) return [];
+  const panels = step.turns.slice(0, BOOKLET.sequence.max).map((i) => actionAt(i, tool, layout, partTypes));
+  return panels.filter((panel): panel is Action => panel !== null);
 }

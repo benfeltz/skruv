@@ -4,7 +4,8 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { BOOKLET, COLORS } from '../constants.js';
 import { createBooklet, gamePagesFor } from '../game/bookletModel.js';
-import { explodeStep, floatOut, insetsFor } from '../game/explode.js';
+import { actionFor, explodeStep, floatOut, insetsFor, panelsFor } from '../game/explode.js';
+import type { Action } from '../game/explode.js';
 import { fanLayout } from '../game/looseFan.js';
 import type { Inset } from '../game/explode.js';
 import { createPageCache, FAINT, font, INK, newPage, PAPER } from './pagePaper.js';
@@ -202,6 +203,37 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     });
   }
 
+  // The turn that takes a hole's world axis to the inset's `lift`: the fastener floats up off a face the viewer sees.
+  const liftOf = (axis: Vec3) => new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(...axis), new THREE.Vector3(...BOOKLET.inset.lift).normalize());
+
+  // The action inset: the joint seated with the tool on it, in a circle at `centre`, the ring arrow
+  // round the tool's drive.
+  function actionInset(ctx: Ctx, action: Action, [cx, cy]: [number, number], radius: number) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+    ctx.clip();
+    const project = views.draw(ctx, action.items.map((it) => ({ ...it, weight: 'bold' as const })), [cx - radius, cy - radius, 2 * radius, 2 * radius], liftOf(action.axis), { frame: action.focus });
+    ctx.restore();
+    ring(ctx, cx, cy, radius);
+    ringArrow(ctx, project(action.ring), radius * BOOKLET.action.ring);
+  }
+
+  // The sequence panels: a row of boxed frames along `frame`'s foot, each a cam's turn — the action
+  // view of its joint with the ring arrow, left to right in turn order.
+  function sequencePanels(ctx: Ctx, panels: Action[], [x, y, , h]: Rect) {
+    const { height, gap, line } = BOOKLET.sequence;
+    panels.forEach((panel, i) => {
+      const px = x + i * (height + gap);
+      const py = y + h - height;
+      const project = views.draw(ctx, panel.items.map((it) => ({ ...it, weight: 'bold' as const })), [px, py, height, height], liftOf(panel.axis), { frame: panel.focus });
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = line;
+      ctx.strokeRect(px, py, height, height);
+      ringArrow(ctx, project(panel.ring), height * BOOKLET.action.ring / 2);
+    });
+  }
+
   function step({ ctx }: Sheet, page: BuildStep) {
     const m = BOOKLET.margin;
     ctx.fillStyle = INK;
@@ -228,7 +260,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
         d,
         d,
         // Turned so the fastener floats up off a face the viewer sees, whatever the page's pose.
-        new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(...axis), new THREE.Vector3(...BOOKLET.inset.lift).normalize()),
+        liftOf(axis),
         { frame: focus, lines: [leader] },
       );
       ctx.save();
@@ -246,8 +278,18 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
       ctx.fillText(partNumber, cx, cy + r + BOOKLET.inset.partDrop);
       ctx.textAlign = 'left';
     });
-    if (page.tool) {
-      // In the first inset's lower right; alone in the first slot when the step fastens nothing.
+    // The linked action inset, down and right of the first slot's circle; alone in the first slot
+    // on a page that fastens nothing. Without a drivable joint, the lone tool disc stays.
+    const action = actionFor(page, layout, item.partTypes);
+    let actionFoot = 0;
+    if (action) {
+      const rA = insets.length ? r * BOOKLET.action.size : r;
+      const [x0, y0] = centres[0] ?? [left + r, cy];
+      const [dx, dy] = BOOKLET.action.at;
+      const at: [number, number] = insets.length ? [x0 + (r + rA) * dx, y0 + (r + rA) * dy] : [x0, y0];
+      actionInset(ctx, action, at, rA);
+      actionFoot = at[1] + rA;
+    } else if (page.tool) {
       const [cx] = centres[0] ?? [left + BOOKLET.inset.toolOnly, cy];
       const rad = insets.length ? r * BOOKLET.inset.tool : BOOKLET.inset.toolOnly;
       const [tx, ty] = insets.length ? [cx + r * BOOKLET.inset.toolAt, cy + r * BOOKLET.inset.toolAt] : [cx, cy];
@@ -260,18 +302,20 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
       views.draw(ctx, [single(page.tool)], [tx - fill, ty - fill, 2 * fill, 2 * fill]);
     }
 
-    const top = m + 2 * maxRadius + 80;
+    // Under the lower of the labels and the action circle.
+    const top = Math.max(m + 2 * maxRadius + 80, actionFoot + gap);
     const frame: Rect = [m, top, pageW - 2 * m, pageH - m - top];
-    const { items, lines, arrow: install, anchorOf } = drawingOf(page);
-    const project = views.draw(ctx, items, frame, orientation, { lines });
-    if (install) {
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = BOOKLET.boldLine;
-      arrow(ctx, ...project(install[0]), ...project(install[1]));
+    // A cam-turn page keeps the foot of its frame for the row of panels.
+    const panels = panelsFor(page, layout, item.partTypes);
+    if (panels.length) {
+      sequencePanels(ctx, panels, frame);
+      frame[3] -= BOOKLET.sequence.height + BOOKLET.sequence.gap;
     }
+    const { items, lines, arrows, anchorOf } = drawingOf(page);
+    const project = views.draw(ctx, items, frame, orientation, { lines });
+    for (const [from, to] of arrows) solidArrow(ctx, ...project(from), ...project(to));
     // From under the labels, so the line never crosses the count or the part number.
     insets.forEach((inset, i) => tail(ctx, [centres[i][0], cy + r + BOOKLET.inset.tailFrom], project(anchorOf(inset))));
-    if (page.turns.length) turnArrow(ctx, frame[0] + frame[2] - 80, frame[1] + 70, 46);
     if (page.tip) {
       // Two people tip it up together: an arc over the drawing, a figure at each side.
       tipArrow(ctx, frame[0] + frame[2] * 0.5, frame[1] + frame[3] * 0.45, frame[2] * 0.36);
@@ -321,15 +365,15 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
   // What a step page's frame draws: its new parts and fasteners pulled apart along their holes
   // (src/game/explode.ts), with leader lines back; a loose-parts page keeps its fan.
   // `anchorOf(inset)` is where the inset's joint is in that drawing, for its tail. An install
-  // page also returns `arrow`, the held-off members' way into place (else null).
-  function drawingOf(page: BuildStep): { items: ViewItem[]; lines: [Vec3, Vec3][]; arrow: [Vec3, Vec3] | null; anchorOf: (inset: Inset) => Vec3 } {
+  // page also returns `arrows`: the solid arrow of each part pulled away and the held-off members' way into place.
+  function drawingOf(page: BuildStep): { items: ViewItem[]; lines: [Vec3, Vec3][]; arrows: [Vec3, Vec3][]; anchorOf: (inset: Inset) => Vec3 } {
     if (page.pose === 'parts') return looseParts(page);
     const bold = page.tip ? new Set<InstanceId>() : boldOf(page);
-    const { items, leaders, offsets, arrow } = explodeStep(page, layout, item.partTypes);
+    const { items, leaders, offsets, arrows } = explodeStep(page, layout, item.partTypes);
     return {
       items: items.map((it) => ({ ...it, weight: bold.has(it.id) ? 'bold' : 'faint' })),
       lines: leaders,
-      arrow,
+      arrows,
       // The hole goes with its host when the host is pulled away.
       anchorOf: ({ joint, anchor }) => add(anchor, offsets.get(layout.joints[joint].host) ?? [0, 0, 0]),
     };
@@ -380,7 +424,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
         return { position: [p.x, p.y, p.z + offset] as Vec3, rotation: q.toArray() as Quat };
       }
     });
-    return { items, lines, arrow: null, anchorOf: ({ joint, anchor }: Inset) => placers.get(layout.joints[joint].host)!(anchor) };
+    return { items, lines, arrows: [], anchorOf: ({ joint, anchor }: Inset) => placers.get(layout.joints[joint].host)!(anchor) };
   }
 
   const single = (type: string): ViewItem & { id: string } => ({ id: type, type, position: [0, 0, 0], rotation: [0, 0, 0, 1], weight: 'bold' });
@@ -812,6 +856,34 @@ function arrow(ctx: Ctx, x0: number, y0: number, x1: number, y1: number) {
   ctx.stroke();
 }
 
+// A big solid arrow from (x0, y0) to (x1, y1): a motion arrow. Ink with a paper outline, so it reads over
+// the drawing's lines; shorter than the head, the head alone scaled to fit.
+function solidArrow(ctx: Ctx, x0: number, y0: number, x1: number, y1: number) {
+  const { shaft, head, headLength } = BOOKLET.arrow;
+  const length = Math.hypot(x1 - x0, y1 - y0);
+  const k = Math.min(1, length / headLength);
+  const [hl, hw, sw] = [headLength * k, head * k, shaft * k];
+  ctx.save();
+  ctx.translate(x0, y0);
+  ctx.rotate(Math.atan2(y1 - y0, x1 - x0));
+  const neck = length - hl;
+  ctx.beginPath();
+  ctx.moveTo(0, -sw / 2);
+  ctx.lineTo(neck, -sw / 2);
+  ctx.lineTo(neck, -hw / 2);
+  ctx.lineTo(length, 0);
+  ctx.lineTo(neck, hw / 2);
+  ctx.lineTo(neck, sw / 2);
+  ctx.lineTo(0, sw / 2);
+  ctx.closePath();
+  ctx.fillStyle = INK;
+  ctx.strokeStyle = PAPER;
+  ctx.lineWidth = BOOKLET.arrow.outline;
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
 // Round (cx, cy) from angle `from` to `to`, its head at `to`.
 function arcArrow(ctx: Ctx, cx: number, cy: number, r: number, from: number, to: number) {
   ctx.beginPath();
@@ -822,6 +894,13 @@ function arcArrow(ctx: Ctx, cx: number, cy: number, r: number, from: number, to:
   // Along the tangent, a short step back from the end: the head's tail.
   const back = 0.3;
   arrow(ctx, cx + r * Math.cos(to - back), cy + r * Math.sin(to - back), ex, ey);
+}
+
+// The ring arrow round a tool's shaft: a circle round `centre`, its head the turn this way.
+function ringArrow(ctx: Ctx, [x, y]: [number, number], radius: number) {
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = BOOKLET.action.ringLine;
+  arcArrow(ctx, x, y, radius, ...BOOKLET.action.sweep);
 }
 
 // A fingertip on the glass: a dot in a ring.
