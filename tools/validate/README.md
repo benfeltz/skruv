@@ -52,6 +52,7 @@ is no scripting in format 1.
 | `cam-capture` | Every cam catches a bolt head within `CONTRACT.captureRadius`, one bolt per cam |
 | `fitting-through` | Every back fitting's tip lands inside a panel behind its host |
 | `pilot-hole` | Every screw's tip lands in a `screwPilot` of the part behind its hole (within `CONTRACT.pilotRadius` of its axis, no deeper than `CONTRACT.pilotDepth`), and every `screwPilot` of an assembled part takes a tip |
+| `slides` | Every open pose is on a part a rail runs in, and every such part has one; the open pose is a pure translation across the mate axis that keeps the groove inside the runner's box; parts joined by anything but a slide share one travel |
 | `step-coverage` | Step pages fasten every derived joint exactly once and turn every cam exactly once |
 | `step-order` | Pages run in number order; each panel is brought in once, no later than its first joint; a cam turns on or after its seat page |
 | `assemblies` | A tagged page fastens only its own assembly's parts; each assembly is installed once, after its last page; no untagged page before the install fastens into it; every `install` names an assembly some page builds |
@@ -78,6 +79,7 @@ rule:
 | `cam-capture` | `camLockBolt-1` removed from the assembly |
 | `fitting-through` | side panels made 26 cm deep, short of the back fittings' tips |
 | `pilot-hole` | a `screwPilot` added to a `sidePanel`, which no screw tip reaches |
+| `slides` | an `open` pose given to `sidePanel-1`, which no rail runs in |
 | `step-coverage` | one pair dropped from step 1 |
 | `step-order` | the back panel brought in on step 12, after its fittings on step 9 |
 | `assemblies` | step 1 tagged as an assembly nobody installs |
