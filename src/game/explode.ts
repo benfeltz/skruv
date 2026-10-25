@@ -73,7 +73,7 @@ function lookups(layout: ExplodeLayout, partTypes: PartTypes) {
  *     hardware already sitting only in pulled-away parts rides with them;
  *   - everything else — already-built parts, hardware seated earlier — stays put.
  * A loose-parts page (pose 'parts') fans its panels instead, so only hardware floats there.
- * Returns each displaced id's offset and the floated fasteners' leaders.
+ * Returns each displaced id's offset, the floated fasteners' leaders and the ids pulled away.
  */
 export function separation(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'>, layout: ExplodeLayout, partTypes: PartTypes) {
   const { hole, end } = lookups(layout, partTypes);
@@ -87,10 +87,14 @@ export function separation(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'>, l
     }
   }
   const offsets = new Map<InstanceId, Vec3>();
+  const pulled: InstanceId[] = [];
   for (const [id, sum] of pressedOn) {
     const length = Math.hypot(...sum);
     // Opposing joints cancel: nothing to pull away along.
-    if (length > BOOKLET.explode.cancel) offsets.set(id, scale(sum, BOOKLET.explode.part / length));
+    if (length > BOOKLET.explode.cancel) {
+      offsets.set(id, scale(sum, BOOKLET.explode.part / length));
+      pulled.push(id);
+    }
   }
 
   const leaders: Leader[] = [];
@@ -120,7 +124,7 @@ export function separation(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'>, l
     if (offsets.has(id) || !hosts.length || !hosts.every((h) => offsets.has(h) && !floated.has(h))) continue;
     offsets.set(id, offsets.get(hosts[0])!);
   }
-  return { offsets, leaders };
+  return { offsets, leaders, pulled };
 }
 
 /**
@@ -153,20 +157,34 @@ export function installStep(step: Partial<Pick<BuildStep, 'install'>>, layout: E
 }
 
 /**
+ * The solid arrow of a part pulled away by `offset`: from its held-off face to its seated face,
+ * along the offset — the part's far face along the pull, so the arrow spans the gap exactly.
+ */
+function motionArrow(part: ExplodeLayout['parts'][number], offset: Vec3, partTypes: PartTypes): Leader {
+  const length = Math.hypot(...offset);
+  const direction = scale(offset, 1 / length);
+  const seated = sub(part.position, scale(direction, extentAlong(partTypes[part.type].size, part.rotation, direction)));
+  return [add(seated, offset), seated];
+}
+
+/**
  * The page's drawing: every part of `step.shown` at its pose with its separation offset
  * (an install page's members held off their place besides), the leaders from floated
- * fasteners back to their holes, each displaced part's offset, and an install page's arrow.
+ * fasteners back to their holes, each displaced part's offset, and the solid arrows: one per
+ * part pulled away, then an install page's.
  */
 export function explodeStep(step: Pick<BuildStep, 'joints' | 'pose' | 'shown'> & Partial<Pick<BuildStep, 'install'>>, layout: ExplodeLayout, partTypes: PartTypes) {
-  const { offsets, leaders } = separation(step, layout, partTypes);
+  const { offsets, leaders, pulled } = separation(step, layout, partTypes);
+  const { part } = lookups(layout, partTypes);
+  const arrows = pulled.map((id) => motionArrow(part(id), offsets.get(id)!, partTypes));
   const install = installStep(step, layout, partTypes);
   for (const [id, offset] of install.offsets) offsets.set(id, add(offsets.get(id) ?? ZERO, offset));
-  const { part } = lookups(layout, partTypes);
+  if (install.arrow) arrows.push(install.arrow);
   const items = step.shown.map((id): ExplodedItem => {
     const { type, position, rotation } = part(id);
     return { id, type, position: add(position, offsets.get(id) ?? ZERO), rotation };
   });
-  return { items, leaders, offsets, arrow: install.arrow };
+  return { items, leaders, offsets, arrows };
 }
 
 /**

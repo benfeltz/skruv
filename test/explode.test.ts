@@ -117,11 +117,11 @@ describe('installStep', () => {
   });
 
   it('shifts the members in explodeStep and leaves the leaders to the page\'s own joints', () => {
-    const { items, leaders, arrow } = explodeStep({ joints: [], pose: 'upright', shown, install }, layout, partTypes);
+    const { items, leaders, arrows } = explodeStep({ joints: [], pose: 'upright', shown, install }, layout, partTypes);
     expect(items.find((i) => i.id === 'side')!.position).toEqual([0, 0.06, held]);
     expect(items.find((i) => i.id === 'plate')!.position).toEqual([0, 0, 0]);
     expect(leaders).toEqual([]);
-    expect(arrow).not.toBeNull();
+    expect(arrows).toHaveLength(1);
   });
 });
 
@@ -140,6 +140,26 @@ describe('explodeStep', () => {
     const [from, to] = leaders[0];
     expect(from).toEqual(expect.arrayContaining([expect.closeTo(0.1), expect.closeTo(0.03)]));
     expect(to[1] - from[1]).toBeCloseTo(BOOKLET.explode.hardware);
+  });
+
+  it('runs a solid arrow for a pulled-away part from its held-off face to its seated face', () => {
+    const { arrows } = explodeStep({ joints: [2], pose: 'upright', shown }, layout, partTypes);
+    // The side's half-thickness is 0.01, seated at y 0.06.
+    expect(arrows).toHaveLength(1);
+    at3(arrows[0][0], 0.06 + BOOKLET.explode.part - 0.01);
+    at3(arrows[0][1], 0.06 - 0.01);
+  });
+
+  it('gives a floated dowel no arrow, and a page that pulls and installs nothing none', () => {
+    expect(explodeStep({ joints: [0], pose: 'upright', shown }, layout, partTypes).arrows).toEqual([]);
+    expect(explodeStep({ joints: [], pose: 'upright', shown }, layout, partTypes).arrows).toEqual([]);
+  });
+
+  it('puts the motion arrows before the install arrow', () => {
+    const install = { name: 'top', members: ['side', 'd1'] };
+    const { arrows } = explodeStep({ joints: [2], pose: 'upright', shown, install }, layout, partTypes);
+    expect(arrows).toHaveLength(2);
+    expect(arrows[1]).toEqual(installStep({ install }, layout, partTypes).arrow);
   });
 
   it('draws no leaders for a part that is only pulled away', () => {
@@ -235,6 +255,15 @@ describe.each(ITEM_IDS)('%s: every step page', (id) => {
   it('has one sequence panel per cam it turns, capped, and none on a page that turns nothing', () => {
     for (const step of steps) {
       expect(panelsFor(step, layout, item.partTypes), `step ${step.number}`).toHaveLength(step.tool ? Math.min(step.turns.length, BOOKLET.sequence.max) : 0);
+    }
+  });
+
+  it('has one solid arrow per pulled-away part plus the install arrow, each motion arrow the pull long', () => {
+    for (const step of steps) {
+      const { pulled } = separation(step, layout, item.partTypes);
+      const { arrows } = explodeStep(step, layout, item.partTypes);
+      expect(arrows, `step ${step.number}`).toHaveLength(pulled.length + (step.install ? 1 : 0));
+      for (const [from, to] of arrows.slice(0, pulled.length)) expect(Math.hypot(from[0] - to[0], from[1] - to[1], from[2] - to[2])).toBeCloseTo(BOOKLET.explode.part);
     }
   });
 

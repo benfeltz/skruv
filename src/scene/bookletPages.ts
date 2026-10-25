@@ -262,13 +262,11 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
 
     const top = m + 2 * maxRadius + 80;
     const frame: Rect = [m, top, pageW - 2 * m, pageH - m - top];
-    const { items, lines, arrow: install, anchorOf } = drawingOf(page);
+    const { items, lines, arrows, anchorOf } = drawingOf(page);
     const project = views.draw(ctx, items, frame, orientation, { lines });
-    if (install) {
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = BOOKLET.boldLine;
-      arrow(ctx, ...project(install[0]), ...project(install[1]));
-    }
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = BOOKLET.boldLine;
+    for (const [from, to] of arrows) arrow(ctx, ...project(from), ...project(to));
     // From under the labels, so the line never crosses the count or the part number.
     insets.forEach((inset, i) => tail(ctx, [centres[i][0], cy + r + BOOKLET.inset.tailFrom], project(anchorOf(inset))));
     if (page.turns.length) turnArrow(ctx, frame[0] + frame[2] - 80, frame[1] + 70, 46);
@@ -321,15 +319,15 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
   // What a step page's frame draws: its new parts and fasteners pulled apart along their holes
   // (src/game/explode.ts), with leader lines back; a loose-parts page keeps its fan.
   // `anchorOf(inset)` is where the inset's joint is in that drawing, for its tail. An install
-  // page also returns `arrow`, the held-off members' way into place (else null).
-  function drawingOf(page: BuildStep): { items: ViewItem[]; lines: [Vec3, Vec3][]; arrow: [Vec3, Vec3] | null; anchorOf: (inset: Inset) => Vec3 } {
+  // page also returns `arrows`: the solid arrow of each part pulled away and the held-off members' way into place.
+  function drawingOf(page: BuildStep): { items: ViewItem[]; lines: [Vec3, Vec3][]; arrows: [Vec3, Vec3][]; anchorOf: (inset: Inset) => Vec3 } {
     if (page.pose === 'parts') return looseParts(page);
     const bold = page.tip ? new Set<InstanceId>() : boldOf(page);
-    const { items, leaders, offsets, arrow } = explodeStep(page, layout, item.partTypes);
+    const { items, leaders, offsets, arrows } = explodeStep(page, layout, item.partTypes);
     return {
       items: items.map((it) => ({ ...it, weight: bold.has(it.id) ? 'bold' : 'faint' })),
       lines: leaders,
-      arrow,
+      arrows,
       // The hole goes with its host when the host is pulled away.
       anchorOf: ({ joint, anchor }) => add(anchor, offsets.get(layout.joints[joint].host) ?? [0, 0, 0]),
     };
@@ -380,7 +378,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
         return { position: [p.x, p.y, p.z + offset] as Vec3, rotation: q.toArray() as Quat };
       }
     });
-    return { items, lines, arrow: null, anchorOf: ({ joint, anchor }: Inset) => placers.get(layout.joints[joint].host)!(anchor) };
+    return { items, lines, arrows: [], anchorOf: ({ joint, anchor }: Inset) => placers.get(layout.joints[joint].host)!(anchor) };
   }
 
   const single = (type: string): ViewItem & { id: string } => ({ id: type, type, position: [0, 0, 0], rotation: [0, 0, 0, 1], weight: 'bold' });
