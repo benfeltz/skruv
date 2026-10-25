@@ -101,6 +101,9 @@ export interface Bond {
 /** A part's travel in its own frame (`slideMath.localTravel`), or null when it never slides. */
 export type TravelOf = (part: PartId) => Vec3 | null;
 
+/** A piece of hardware's assembled rotation in its host's frame, or null when the item has none for the pair. */
+export type RestOf = (hardware: PartId, host: PartId) => Quat | null;
+
 /**
  * What a part slides with: its drawer `unit` (the parts fastened together by anything but a
  * slide), the fastened slide `joints` the unit hangs on (`host` in the unit, `hardware` out of
@@ -334,9 +337,11 @@ export function restoreJoints(assembly: Assembly, saved: readonly SavedJoint[]):
 
 /**
  * `typeOf(partId)` names each part's catalog type; `travelOf(partId)` the part's travel in its
- * own frame when it slides on rails (the default: none does).
+ * own frame when it slides on rails (the default: none does); `restOf(hardware, host)` the
+ * rotation a slide holds in the host's frame, so a drawer seated at a tilt squares up (the
+ * default: none, the seated pose's own).
  */
-export function createAssembly(typeOf: (part: PartId) => string, travelOf: TravelOf = () => null) {
+export function createAssembly(typeOf: (part: PartId) => string, travelOf: TravelOf = () => null, restOf: RestOf = () => null) {
   const joints = new Map<number, AssemblyJoint>();
   let nextId = 1;
   // A part type's coincident connectors, by `type#index` — a property of the type, found once.
@@ -714,7 +719,13 @@ export function createAssembly(typeOf: (part: PartId) => string, travelOf: Trave
     const h = hardwareConnector(joint);
     const o = hostConnector(joint);
     const current = relativePose(poseOf(joint.host), poseOf(joint.hardware)).rotation;
-    const rotation = normalize(multiplyQuaternions(rotationBetween(rotateVector(current, h.axis), negate(o.axis)), current));
+    return restPoseAt(joint, normalize(multiplyQuaternions(rotationBetween(rotateVector(current, h.axis), negate(o.axis)), current)), sink);
+  }
+
+  // The hardware's pose in its host's frame at `rotation`, its end `sink` deep in the hole.
+  function restPoseAt(joint: AssemblyJoint, rotation: Quat, sink: number): RelativePose {
+    const h = hardwareConnector(joint);
+    const o = hostConnector(joint);
     const target = sub(o.position, scale(o.axis, sink));
     return { anchor: sub(target, rotateVector(rotation, h.position)), rotation };
   }
@@ -781,12 +792,13 @@ export function createAssembly(typeOf: (part: PartId) => string, travelOf: Trave
       if (travel) {
         // A runner on a rail: no sink, free along the host's travel (a host without one embeds, rigid).
         const length = Math.hypot(...travel);
+        const rest = restOf(hardware, first.host);
         out.push({
           key: `slide:${hardware}`,
           a: first.host,
           b: hardware,
           mode: 'slide',
-          frame: jointFrame(seatedPose(first, poseOf, 0), hardwareConnector(first).position),
+          frame: jointFrame(rest ? restPoseAt(first, rest, 0) : seatedPose(first, poseOf, 0), hardwareConnector(first).position),
           signature: `slide|${first.id}|${length}`,
           slide: { axis: scale(travel, 1 / length), travel: length },
         });
