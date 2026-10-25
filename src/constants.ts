@@ -416,8 +416,8 @@ export const BOOKLET = {
   // cam turned. `height` is a panel's side, `gap` the space between, `max` how many a page shows at
   // most, `line` the box's line weight.
   sequence: { height: 150, gap: 16, max: 4, line: 3 },
-  // The solid motion arrow (`solidArrow`): shaft and head widths, and the head's length.
-  arrow: { shaft: 14, head: 34, headLength: 30 },
+  // The solid motion arrow (`solidArrow`): shaft and head widths, the head's length, and the paper outline's weight.
+  arrow: { shaft: 14, head: 34, headLength: 30, outline: 2 },
   font: 'system-ui, -apple-system, "Segoe UI", sans-serif',
   // The controls page (src/game/controlsPage.ts): a title, then rows in columns — each a
   // square pictogram, drawn on a 100-unit grid at `pictogramLine`, and its label beside it,

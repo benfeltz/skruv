@@ -313,9 +313,7 @@ export function createBookletPages(renderer: THREE.WebGLRenderer, { scheme }: { 
     }
     const { items, lines, arrows, anchorOf } = drawingOf(page);
     const project = views.draw(ctx, items, frame, orientation, { lines });
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = BOOKLET.boldLine;
-    for (const [from, to] of arrows) arrow(ctx, ...project(from), ...project(to));
+    for (const [from, to] of arrows) solidArrow(ctx, ...project(from), ...project(to));
     // From under the labels, so the line never crosses the count or the part number.
     insets.forEach((inset, i) => tail(ctx, [centres[i][0], cy + r + BOOKLET.inset.tailFrom], project(anchorOf(inset))));
     if (page.tip) {
@@ -856,6 +854,34 @@ function arrow(ctx: Ctx, x0: number, y0: number, x1: number, y1: number) {
   ctx.lineTo(x1, y1);
   ctx.lineTo(x1 - head * Math.cos(angle + 0.5), y1 - head * Math.sin(angle + 0.5));
   ctx.stroke();
+}
+
+// A big solid arrow from (x0, y0) to (x1, y1): a motion arrow. Ink with a paper outline, so it reads over
+// the drawing's lines; shorter than the head, the head alone scaled to fit.
+function solidArrow(ctx: Ctx, x0: number, y0: number, x1: number, y1: number) {
+  const { shaft, head, headLength } = BOOKLET.arrow;
+  const length = Math.hypot(x1 - x0, y1 - y0);
+  const k = Math.min(1, length / headLength);
+  const [hl, hw, sw] = [headLength * k, head * k, shaft * k];
+  ctx.save();
+  ctx.translate(x0, y0);
+  ctx.rotate(Math.atan2(y1 - y0, x1 - x0));
+  const neck = length - hl;
+  ctx.beginPath();
+  ctx.moveTo(0, -sw / 2);
+  ctx.lineTo(neck, -sw / 2);
+  ctx.lineTo(neck, -hw / 2);
+  ctx.lineTo(length, 0);
+  ctx.lineTo(neck, hw / 2);
+  ctx.lineTo(neck, sw / 2);
+  ctx.lineTo(0, sw / 2);
+  ctx.closePath();
+  ctx.fillStyle = INK;
+  ctx.strokeStyle = PAPER;
+  ctx.lineWidth = BOOKLET.arrow.outline;
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
 }
 
 // Round (cx, cy) from angle `from` to `to`, its head at `to`.
