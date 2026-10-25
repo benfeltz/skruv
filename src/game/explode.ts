@@ -273,7 +273,7 @@ export interface Action {
   joint: number;
   /** The host and the fastener at their seated poses, then the tool on the fastener. */
   items: ExplodedItem[];
-  /** The box the inset frames: the drive connector's world position, `BOOKLET.action.focus` of the tool's shortest side either way. */
+  /** The box the inset frames: the drive connector's world position, `BOOKLET.action.focus` of the fastener's longest side either way. */
   focus: { min: Vec3; max: Vec3 };
   /** The hole's world axis, out of its mouth: the inset turns it as a detail inset does. */
   axis: Vec3;
@@ -289,8 +289,8 @@ export function actionAt(jointIndex: number, tool: string, layout: ExplodeLayout
   if (!posed) return null;
   const tip = partTypes[tool].connectors.find((c) => c.type in COMPATIBLE)!;
   const ring = connectorInWorld(tip, posed).position;
-  const reach = Math.min(...partTypes[tool].size) * BOOKLET.action.focus;
   const [host, fastener] = [part(joint.host), part(joint.hardware)];
+  const reach = Math.max(...partTypes[fastener.type].size) * BOOKLET.action.focus;
   return {
     joint: jointIndex,
     items: [host, fastener].map(({ id, type, position, rotation }) => ({ id, type, position, rotation })).concat(posed),
