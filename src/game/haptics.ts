@@ -25,7 +25,8 @@ export type Buzzer = (cue: Cue) => void;
  * The cue a bus event buzzes, or null: a part seating buzzes `seat`, a tool seating on a
  * head or slot `engage`; a bolt screwed home `home`, a cam lock locking `lock`. The ratchet
  * tick is no event — the router reports it (`onRatchet`), as it does a fastener backed off
- * partway and turned home again (`onRehome`, buzzing `homeCue`).
+ * partway and turned home again (`onRehome`, buzzing `homeCue`)., and a drawer reaching
+ * either end of its runners (`onSlideEnd`, buzzing `seat`).
  */
 export function cueFor(event: { type: string; kind?: unknown }): Cue | null {
   if (event.type === EVENT.SEAT) return event.kind === KIND.TOOL ? CUE.ENGAGE : CUE.SEAT;
