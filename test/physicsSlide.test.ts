@@ -26,8 +26,8 @@ async function rig(open = 0, tilt = 0) {
     layout.map(({ id, position, rotation }) => {
       const at: Vec3 = [position[0], HEIGHT, position[2] + (id === 'plate-1' ? open : 0)];
       const size = PART_TYPES[typeOf(id)].size;
-      // A tilted plate is posed off the rails' line about their axis (z).
-      const turned: Quat = id === 'plate-1' && tilt ? [0, 0, Math.sin(tilt / 2), Math.cos(tilt / 2)] : rotation;
+      // A tilted plate is turned about the grooves' axis (x), the twist a seat would otherwise keep.
+      const turned: Quat = id === 'plate-1' && tilt ? [Math.sin(tilt / 2), 0, 0, Math.cos(tilt / 2)] : rotation;
       const body = physics.register(stubMesh(), { halfExtents: size.map((d) => d / 2) as Vec3, mass: PART_TYPES[typeOf(id)].mass ?? 1, position: at, rotation: turned });
       if (id !== 'plate-1') physics.grab(body);
       return [id, body] as const;
@@ -40,7 +40,7 @@ async function rig(open = 0, tilt = 0) {
   assembly.seat({ partA: 'runner-2', connectorA: RUNNER_END, partB: 'plate-1', connectorB: PLATE_GROOVE_R, mover: 'plate-1' });
   // The bond frames are taken from the plate at its closed pose, as the router's reconcile does on seat.
   const closed = new Map(square);
-  if (tilt) closed.set('plate-1', { ...square.get('plate-1')!, rotation: [0, 0, Math.sin(tilt / 2), Math.cos(tilt / 2)] });
+  if (tilt) closed.set('plate-1', { ...square.get('plate-1')!, rotation: [Math.sin(tilt / 2), 0, 0, Math.cos(tilt / 2)] });
   const joints: PhysicsJoint[] = assembly.bonds((id) => closed.get(id)!).map((bond) => physics.join(bodies.get(bond.a)!, bodies.get(bond.b)!, bond.frame, bond.mode, bond.slide));
   const plate = bodies.get('plate-1')!;
   const start = plate.translation();
