@@ -247,18 +247,24 @@ export function insetsFor(step: Pick<BuildStep, 'joints' | 'hardware'>, layout: 
 
 /**
  * A tool posed on a joint's fastener: the tool's tip connector (its first whose type has a
- * compatible hole) sits on the fastener's drive connector (the compatible one), axes opposed,
- * no sink. Null when the tool has no tip or the fastener no connector the tip mates.
+ * compatible hole) mates the fastener's drive connector (the compatible one farthest out of the
+ * hole's mouth — a double-ended stud has one at each end, and the one in the hole is buried),
+ * axes opposed, held off along the drive's axis by `BOOKLET.action.hold` of the fastener's
+ * longest side so the fastener shows under it. Null when the tool has no tip or the fastener
+ * no connector the tip mates.
  */
 export function toolOn(joint: Joint, tool: string, layout: ExplodeLayout, partTypes: PartTypes): ExplodedItem | null {
-  const { part } = lookups(layout, partTypes);
+  const { part, hole } = lookups(layout, partTypes);
   const fastener = part(joint.hardware);
   const tip = partTypes[tool].connectors.find((c) => c.type in COMPATIBLE);
-  const drive = tip && partTypes[fastener.type].connectors.find((c) => c.type === COMPATIBLE[tip.type]);
-  if (!tip || !drive) return null;
-  const world = connectorInWorld(drive, fastener);
+  if (!tip) return null;
+  const outward = hole(joint).axis;
+  const drives = partTypes[fastener.type].connectors.filter((c) => c.type === COMPATIBLE[tip.type]).map((c) => connectorInWorld(c, fastener));
+  const world = drives.sort((a, b) => dot(b.position, outward) - dot(a.position, outward))[0];
+  if (!world) return null;
   const rotation = rotationBetween(tip.axis, scale(world.axis, -1));
-  return { id: `tool:${tool}`, type: tool, position: sub(world.position, rotateVector(rotation, tip.position)), rotation };
+  const held = add(world.position, scale(world.axis, Math.max(...partTypes[fastener.type].size) * BOOKLET.action.hold));
+  return { id: `tool:${tool}`, type: tool, position: sub(held, rotateVector(rotation, tip.position)), rotation };
 }
 
 /** How far a box of `size` posed at `rotation` reaches from its centre along unit `direction`. */
@@ -273,15 +279,15 @@ export interface Action {
   joint: number;
   /** The host and the fastener at their seated poses, then the tool on the fastener. */
   items: ExplodedItem[];
-  /** The box the inset frames: the drive connector's world position, `BOOKLET.action.focus` of the fastener's longest side either way. */
+  /** The box the inset frames: the tool's held tip, `BOOKLET.action.focus` of the larger of the fastener's longest side and the tool's cross-section either way. */
   focus: { min: Vec3; max: Vec3 };
   /** The hole's world axis, out of its mouth: the inset turns it as a detail inset does. */
   axis: Vec3;
-  /** The ring arrow's centre: the drive connector's world position. */
+  /** The ring arrow's centre: the tool's held tip, round its shaft. */
   ring: Vec3;
 }
 
-/** The action view of one joint with `tool` on its fastener, seated; null when the tool does not mate it. */
+/** The action view of one joint with `tool` held on its seated fastener; null when the tool does not mate it. */
 export function actionAt(jointIndex: number, tool: string, layout: ExplodeLayout, partTypes: PartTypes): Action | null {
   const { part, hole } = lookups(layout, partTypes);
   const joint = layout.joints[jointIndex];
@@ -290,7 +296,9 @@ export function actionAt(jointIndex: number, tool: string, layout: ExplodeLayout
   const tip = partTypes[tool].connectors.find((c) => c.type in COMPATIBLE)!;
   const ring = connectorInWorld(tip, posed).position;
   const [host, fastener] = [part(joint.host), part(joint.hardware)];
-  const reach = Math.max(...partTypes[fastener.type].size) * BOOKLET.action.focus;
+  // Wide enough for the fastener and for the tool's own cross-section, so the ring clears the shaft.
+  const [, across] = [...partTypes[tool].size].sort((x, y) => x - y);
+  const reach = Math.max(...partTypes[fastener.type].size, across) * BOOKLET.action.focus;
   return {
     joint: jointIndex,
     items: [host, fastener].map(({ id, type, position, rotation }) => ({ id, type, position, rotation })).concat(posed),

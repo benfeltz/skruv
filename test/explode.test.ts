@@ -19,6 +19,8 @@ const partTypes = {
   dowel: { partNumber: 'D', size: [0.01, 0.04, 0.01] as Vec3, connectors: [conn([0, 0.02, 0], [0, -1, 0], 'dowelEnd'), conn([0, -0.02, 0], [0, 1, 0], 'dowelEnd')] },
   // A bolt: thread down, a hex socket in its head (axis out of the head).
   bolt: { partNumber: 'B', size: [0.01, 0.04, 0.01] as Vec3, connectors: [conn([0, -0.02, 0], [0, 1, 0], 'boltThread'), conn([0, 0.02, 0], [0, 1, 0], 'hexSocket')] },
+  // A stud with a hex socket at each end, the lower (buried) one listed first.
+  stud: { partNumber: 'T', size: [0.01, 0.04, 0.01] as Vec3, connectors: [conn([0, -0.02, 0], [0, -1, 0], 'hexSocket'), conn([0, 0.02, 0], [0, 1, 0], 'hexSocket')] },
   // A wrench whose tip sits off its origin, pointing along +x.
   wrench: { partNumber: 'W', size: [0.1, 0.01, 0.01] as Vec3, connectors: [conn([0.05, 0, 0], [1, 0, 0], 'wrenchTip')] },
   // A side standing on the dowels: its holes face down.
@@ -282,15 +284,25 @@ describe('toolOn', () => {
     joints: [joint('b1', 0, 'plate', 2, 'b1'), joint('d9', 0, 'plate', 0, 'd9')],
   };
 
-  it('puts the tip on the socket, axes opposed', () => {
+  it('holds the tip off the socket along its axis, axes opposed', () => {
     const tool = toolOn(bolted.joints[0], 'wrench', bolted, partTypes)!;
     const tip = connectorInWorld(partTypes.wrench.connectors[0], tool);
     const socket = connectorInWorld(partTypes.bolt.connectors[1], bolted.parts.find((p) => p.id === 'b1')!);
     expect(tool.type).toBe('wrench');
+    const hold = 0.04 * BOOKLET.action.hold;
     for (const k of [0, 1, 2]) {
-      expect(tip.position[k]).toBeCloseTo(socket.position[k]);
+      expect(tip.position[k]).toBeCloseTo(socket.position[k] + hold * socket.axis[k]);
       expect(tip.axis[k]).toBeCloseTo(-socket.axis[k]);
     }
+  });
+
+  it('takes the drive connector farthest out of the hole, not the one buried in it', () => {
+    // A stud standing in the plate's hole (axis +y): its +y socket is the free end, its -y one is in the wood.
+    const studded: ExplodeLayout = { parts: [...layout.parts, at('s1', 'stud', [0.1, 0.03, 0])], joints: [joint('s1', 0, 'plate', 0, 's1')] };
+    const tool = toolOn(studded.joints[0], 'wrench', studded, partTypes)!;
+    const tip = connectorInWorld(partTypes.wrench.connectors[0], tool);
+    expect(tip.position[1]).toBeGreaterThan(0.03 + 0.02);
+    expect(tip.axis[1]).toBeCloseTo(-1);
   });
 
   it('is null when the fastener has no connector the tip mates', () => {
@@ -320,8 +332,8 @@ describe('actionAt / actionFor', () => {
     const action = actionAt(1, 'wrench', bolted, partTypes)!;
     expect(action.items.map((i) => i.id)).toEqual(['plate', 'b1', 'tool:wrench']);
     expect(action.items[1].position).toEqual([0, 0.04, 0.05]);
-    // The socket is at the bolt's head: y 0.04 + 0.02.
-    expect(action.ring).toEqual([expect.closeTo(0), expect.closeTo(0.06), expect.closeTo(0.05)]);
+    // The socket is at the bolt's head (y 0.04 + 0.02); the tool is held off it along +y.
+    expect(action.ring).toEqual([expect.closeTo(0), expect.closeTo(0.06 + 0.04 * BOOKLET.action.hold), expect.closeTo(0.05)]);
     for (const k of [0, 1, 2]) {
       expect(action.focus.min[k]).toBeLessThan(action.ring[k]);
       expect(action.focus.max[k]).toBeGreaterThan(action.ring[k]);

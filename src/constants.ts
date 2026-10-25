@@ -410,8 +410,8 @@ export const BOOKLET = {
   // its radius as a share of the detail inset's; `at` the direction (times the two radii) from the
   // first slot's centre to its centre; `ring` the ring arrow's radius as a share of the circle's and
   // `sweep` its (from, to) angles in radians, drawn at `ringLine`; `focus` how far the view frames
-  // beyond the drive connector, in multiples of the fastener's longest side (a tool's own length would frame a screwdriver's whole shaft).
-  action: { size: 0.85, at: [0.95, 0.6] satisfies [number, number], ring: 0.42, sweep: [Math.PI * 0.15, Math.PI * 1.55] satisfies [number, number], ringLine: 4, focus: 1.1 },
+  // beyond the tool's held tip, in multiples of the larger of the fastener's longest side and the tool's cross-section (a tool's own length would frame a screwdriver's whole shaft); `hold` how far the tool is held off the drive along its axis, as a share of the fastener's longest side, so the fastener shows under it.
+  action: { size: 0.85, at: [0.95, 0.6] satisfies [number, number], ring: 0.42, sweep: [Math.PI * 0.15, Math.PI * 1.55] satisfies [number, number], ringLine: 4, focus: 1.6, hold: 0.6 },
   // Sequence panels (`panelsFor`): a cam-turn page's row of boxed frames under the drawing, one per
   // cam turned. `height` is a panel's side, `gap` the space between, `max` how many a page shows at
   // most, `line` the box's line weight.
