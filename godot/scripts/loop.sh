@@ -4,6 +4,7 @@
 # Exit 0 only when every stage passes. No stage opens the editor.
 #
 #   godot/scripts/loop.sh            # the whole loop
+#   godot/scripts/loop.sh screenshot # named stages only, in the order given (e.g. while a test is red)
 #   GODOT=/path/to/godot loop.sh     # another binary (default: /opt/homebrew/bin/godot, 4.7.2)
 #
 # Logs land in godot/out/<stage>.log.
@@ -16,7 +17,8 @@ GODOT="${GODOT:-/opt/homebrew/bin/godot}"
 GODOT_VERSION="4.7.2.stable"
 STAGE_TIMEOUT_S=180
 SHOT_FPS=20
-SHOT_FRAMES=10
+# The drop is filmed at these seconds; frame N of the movie is at N / SHOT_FPS s.
+SHOT_SECONDS=(0 1 3)
 
 GDUNIT_TAG="v6.2.2"
 GDUNIT_URL="https://github.com/godot-gdunit-labs/gdUnit4/archive/refs/tags/${GDUNIT_TAG}.tar.gz"
@@ -86,21 +88,33 @@ stage_test() {
 }
 
 # Windowed on purpose: `--headless --write-movie` crashes 4.7.2 with signal 11. A window
-# shows for about 3 s. Always started through main.gd, because a bare run with no main
-# scene shows a native macOS alert that someone has to click. The frame is the project's viewport
+# shows for about 4 s. Always started through main.gd, because a bare run with no main
+# scene shows a native macOS alert that someone has to click. Frames are the project's viewport
 # size (1152x648 by default); `--resolution` is ignored by the movie writer on 4.7.2.
+# Keeps out/shot-<s>s.png for each of SHOT_SECONDS; out/screenshot.png is the last of them.
 stage_screenshot() {
-  rm -f "$OUT"/frame*.png "$OUT/screenshot.png"
+  rm -f "$OUT"/frame*.png "$OUT"/shot-*.png "$OUT/screenshot.png"
+  local last_s="${SHOT_SECONDS[${#SHOT_SECONDS[@]}-1]}"
   godot_run screenshot --path "$ROOT" -s res://main.gd \
     --write-movie "$OUT/frame.png" \
-    --fixed-fps "$SHOT_FPS" --quit-after "$SHOT_FRAMES" || fail screenshot
+    --fixed-fps "$SHOT_FPS" --quit-after "$(( last_s * SHOT_FPS + 1 ))" || fail screenshot
   if grep -q 'SCRIPT ERROR' "$OUT/screenshot.log"; then fail screenshot; fi
-  local last; last="$(ls "$OUT"/frame*.png 2>/dev/null | sort | tail -1)"
-  [[ -n "$last" ]] || fail screenshot
-  mv "$last" "$OUT/screenshot.png"
+  local sec frame
+  for sec in "${SHOT_SECONDS[@]}"; do
+    frame="$(printf '%s/frame%08d.png' "$OUT" "$(( sec * SHOT_FPS ))")"
+    [[ -f "$frame" ]] || fail screenshot
+    cp "$frame" "$OUT/shot-${sec}s.png"
+  done
+  cp "$OUT/shot-${last_s}s.png" "$OUT/screenshot.png"
   rm -f "$OUT"/frame*.png "$OUT/frame.wav"
-  echo "loop: screenshot $OUT/screenshot.png"
+  echo "loop: screenshots $(cd "$OUT" && ls shot-*.png | tr '\n' ' ')in $OUT"
+  grep '^stillness:' "$OUT/screenshot.log" | tail -1 | sed 's/^/loop: windowed /'
 }
+
+if (( $# > 0 )); then
+  for stage in "$@"; do "stage_$stage"; done
+  exit 0
+fi
 
 stage_export
 stage_version
