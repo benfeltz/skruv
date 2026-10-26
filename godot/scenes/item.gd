@@ -12,6 +12,9 @@ extends Node3D
 const DROP_HEIGHT := 0.02
 ## The one fastener kind whose hardware stays solid once seated (a shelf rests on it).
 const SOLID_KIND := "pin"
+## Tuning attempt 2 (step 5): anchor each joint midway between its two parts' centres instead
+## of at the hole. False anchors at the hole.
+const ANCHOR_AT_MIDPOINT := true
 
 var data: ItemData
 var bodies: Dictionary[String, RigidBody3D] = {}
@@ -50,8 +53,12 @@ func _embedded_hardware() -> Dictionary[String, bool]:
 	return out
 
 
-## A joint with every axis locked, anchored at `at` (world, at the assembled pose plus the drop).
-func _lock(a: String, b: String, at: Vector3) -> void:
+## A joint with every axis locked, anchored at `hole` (world, at the assembled pose), or midway
+## between the two parts with ANCHOR_AT_MIDPOINT; raised by the drop.
+func _lock(a: String, b: String, hole: Vector3) -> void:
+	var at := hole
+	if ANCHOR_AT_MIDPOINT:
+		at = (data.instance(a).position + data.instance(b).position) / 2.0
 	var joint := Generic6DOFJoint3D.new()
 	joint.name = "%s~%s" % [a, b]
 	joint.position = at + Vector3(0.0, DROP_HEIGHT, 0.0)
