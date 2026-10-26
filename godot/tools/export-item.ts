@@ -7,8 +7,8 @@
 //   npx tsx godot/tools/export-item.ts items/johnny godot/items/johnny.json --check  # exit 1 on drift
 //
 // Output (format 1):
-//   types     { <type>: { size: [x,y,z] m, color: "#rrggbb", mass: kg, hardware: bool } }, only
-//             the types the assembled item uses
+//   types     { <type>: { size: [x,y,z] m, color: "#rrggbb", mass: kg, hardware: bool } }, every
+//             part type in the pack, the tools included (the assembled item uses none of them)
 //   instances [{ id, type, role, position: [x,y,z], rotation: [x,y,z,w] }] in assembled order
 //   joints    [{ host, hardware, kind, position, axis }]: `position` is the hardware's seated end
 //             in world space (the hole it sits in), `axis` the hole's world axis
@@ -40,17 +40,13 @@ export function exportItem(file: FlatpackFile, source: string) {
   const pack = loadPack(file);
   const joints = deriveJoints(pack);
   const byId = new Map(pack.assembled.map((inst) => [inst.id, inst]));
-  const used = [...new Set(pack.assembled.map((inst) => inst.type))];
   return {
     format: FORMAT,
     source,
     generator: 'godot/tools/export-item.ts',
     product: pack.identity.product,
     types: Object.fromEntries(
-      used.map((type) => {
-        const t = pack.partTypes[type];
-        return [type, { size: t.size, color: colorOf(t.color), mass: t.mass, hardware: isHardwareType(t) }];
-      }),
+      Object.entries(pack.partTypes).map(([type, t]) => [type, { size: t.size, color: colorOf(t.color), mass: t.mass, hardware: isHardwareType(t) }]),
     ),
     instances: pack.assembled.map(({ id, type, role, position, rotation }) => ({ id, type, role, position, rotation })),
     joints: joints.map((j) => {

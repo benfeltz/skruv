@@ -14,16 +14,6 @@
       "mass": 6,
       "hardware": false
     },
-    "plinth": {
-      "size": [
-        0.768,
-        0.06,
-        0.016
-      ],
-      "color": "#f1eee6",
-      "mass": 0.6,
-      "hardware": false
-    },
     "topBottomPanel": {
       "size": [
         0.768,
@@ -42,6 +32,26 @@
       ],
       "color": "#f1eee6",
       "mass": 2.3,
+      "hardware": false
+    },
+    "adjustableShelf": {
+      "size": [
+        0.764,
+        0.016,
+        0.26
+      ],
+      "color": "#f1eee6",
+      "mass": 2.1,
+      "hardware": false
+    },
+    "plinth": {
+      "size": [
+        0.768,
+        0.06,
+        0.016
+      ],
+      "color": "#f1eee6",
+      "mass": 0.6,
       "hardware": false
     },
     "backPanel": {
@@ -104,15 +114,25 @@
       "mass": 0.001,
       "hardware": true
     },
-    "adjustableShelf": {
+    "allenWrench": {
       "size": [
-        0.764,
-        0.016,
-        0.26
+        0.07,
+        0.004,
+        0.025
       ],
-      "color": "#f1eee6",
-      "mass": 2.1,
-      "hardware": false
+      "color": "#2f3136",
+      "mass": 0.015,
+      "hardware": true
+    },
+    "screwdriver": {
+      "size": [
+        0.022,
+        0.2,
+        0.022
+      ],
+      "color": "#d9a21b",
+      "mass": 0.08,
+      "hardware": true
     }
   },
   "instances": [
