@@ -10,8 +10,10 @@
 //   types     { <type>: { size: [x,y,z] m, color: "#rrggbb", mass: kg, hardware: bool } }, every
 //             part type in the pack, the tools included (the assembled item uses none of them)
 //   instances [{ id, type, role, position: [x,y,z], rotation: [x,y,z,w] }] in assembled order
-//   joints    [{ host, hardware, kind, position, axis }]: `position` is the hardware's seated end
-//             in world space (the hole it sits in), `axis` the hole's world axis
+//   joints    [{ host, hardware, kind, through, captured, position, axis }]: `position` is the
+//             hardware's seated end in world space (the hole it sits in), `axis` the hole's world
+//             axis; `through` (a fitting's or screw's far panel) and `captured` (a cam's bolt)
+//             are the lib's, or null
 // World positions are rounded to ROUND_M; every other number is the pack's own.
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -54,7 +56,15 @@ export function exportItem(file: FlatpackFile, source: string) {
       const host = byId.get(j.host)!;
       const end = connectorInWorld(pack.partTypes[hardware.type].connectors[j.hardwareConnector], hardware);
       const hole = connectorInWorld(pack.partTypes[host.type].connectors[j.hostConnector], host);
-      return { host: j.host, hardware: j.hardware, kind: j.kind, position: roundVec(end.position), axis: roundVec(hole.axis) };
+      return {
+        host: j.host,
+        hardware: j.hardware,
+        kind: j.kind,
+        through: j.through,
+        captured: j.captured,
+        position: roundVec(end.position),
+        axis: roundVec(hole.axis),
+      };
     }),
   };
 }

@@ -30,6 +30,10 @@ class JointSpec:
 	var host: String
 	var hardware: String
 	var kind: String
+	## A fitting's or screw's far panel, or "" (the lib's `through`).
+	var through: String
+	## A cam's bolt, or "" (the lib's `captured`).
+	var captured: String
 	## World position of the hardware's seated end, at the assembled pose.
 	var position: Vector3
 	## The hole's world axis.
@@ -84,6 +88,8 @@ static func load_file(path: String) -> ItemData:
 		joint.host = raw["host"]
 		joint.hardware = raw["hardware"]
 		joint.kind = raw["kind"]
+		joint.through = _id_or_empty(raw["through"])
+		joint.captured = _id_or_empty(raw["captured"])
 		joint.position = _vec3(raw["position"])
 		joint.axis = _vec3(raw["axis"])
 		item.joints.append(joint)
@@ -99,6 +105,10 @@ func instance(id: String) -> Instance:
 
 func type_of(inst: Instance) -> PartType:
 	return types[inst.type]
+
+
+static func _id_or_empty(v: Variant) -> String:
+	return "" if v == null else String(v)
 
 
 static func _vec3(a: Array) -> Vector3:
