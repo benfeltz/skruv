@@ -47,7 +47,7 @@ describe('AC2: the carcass is JOHNNY\'s vocabulary; the drawer is built with scr
     const used = (file: FlatpackFile) => new Set(carcass.flatMap((t) => file.parts[t].connectors.map((c) => c.type)));
     expect([...used(OVERKALL)].filter((type) => !used(JOHNNY).has(type))).toEqual(['screwPilot']);
     expect(OVERKALL.parts.sidePanel.connectors.filter((c) => c.type === 'screwPilot')).toHaveLength(2);
-    expect(OVERKALL.parts.runner.connectors.map((c) => c.type)).toEqual(['railEnd', 'screwHole', 'screwHole']);
+    expect(OVERKALL.parts.runner.connectors.map((c) => c.type)).toEqual(['railEnd', 'screwHole', 'screwHole', 'dowelHole', 'dowelHole']);
     for (const t of ['dowel', 'camLockBolt', 'camLock', 'backFitting']) {
       expect(OVERKALL.parts[t].connectors.map((c) => c.type), t).toEqual(JOHNNY.parts[t].connectors.map((c) => c.type));
     }
