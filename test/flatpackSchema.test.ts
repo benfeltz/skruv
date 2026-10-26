@@ -95,6 +95,16 @@ describe('flatpack.schema.json', () => {
     expect(validate(pack)).toBe(false);
   });
 
+  it('accepts an open pose on an assembled instance, and refuses one missing its rotation or carrying an unknown key', () => {
+    const pack: Untyped = fixture();
+    pack.assembled[0].open = { position: [0, 0, 0.2], rotation: [0, 0, 0, 1] };
+    expect(validate(pack), JSON.stringify(validate.errors)).toBe(true);
+    delete pack.assembled[0].open.rotation;
+    expect(validate(pack)).toBe(false);
+    pack.assembled[0].open = { position: [0, 0, 0.2], rotation: [0, 0, 0, 1], travel: 0.2 };
+    expect(validate(pack)).toBe(false);
+  });
+
   it('accepts a step page that builds an assembly, and one that installs it', () => {
     const pack: Untyped = fixture();
     pack.manual.pages[2].assembly = 'shelf';

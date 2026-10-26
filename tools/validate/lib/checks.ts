@@ -6,9 +6,9 @@
 // These are 0.0.1's integrity tests, promoted to the contract; the mutated fixtures in
 // test/validateChecks.test.ts (one per rule) are the conformance seeds for other engines.
 
-import { connectorInWorld, rotateVector } from './geometry.js';
+import { connectorInWorld, contains, rotateVector } from './geometry.js';
 import type { Pose, Size, Vec3 } from './geometry.js';
-import { deriveJoints, isHardwareType, seatedPoint } from './joints.js';
+import { deriveJoints, isHardwareType, seatedPoint, slideTravel } from './joints.js';
 import type { Joint } from './joints.js';
 import { expandManifest, shapeParts } from './pack.js';
 import type { ConnectorName, ConnectorRef, FlatpackFile, InstanceId, PageFields, PartType, StepPage } from './pack.js';
@@ -240,6 +240,101 @@ function pilotHoles({ partTypes, assembled, joints }: Context) {
     if (!filled.has(p.key)) errors.push(error('pilot-hole', `assembled[${p.id}]`, `${p.id}/${p.name} takes no screw tip`));
   }
   return errors;
+}
+
+// What `slides` reads: the instances by id, and the slide joints among the derived ones.
+const slideFacts = ({ assembled, joints }: Context) => ({
+  byId: new Map(assembled.map((a) => [a.id, a])),
+  slides: (joints ?? []).filter((j) => j.kind === KIND.SLIDE),
+});
+type SlideFacts = ReturnType<typeof slideFacts>;
+const dotOf = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+/** An open pose belongs to a part some rail runs in. */
+function openOnlyOnSlideHosts({ assembled }: Context, { slides }: SlideFacts) {
+  const hosts = new Set(slides.map((j) => j.host));
+  return assembled.filter((a) => a.open && !hosts.has(a.id)).map((a) => error('slides', `assembled[${a.id}].open`, `${a.id} has an open pose but no rail runs in it`));
+}
+
+/** Every part a rail runs in has an open pose. */
+function everySlideHostOpens(_: Context, { byId, slides }: SlideFacts) {
+  return slides.filter((j) => !byId.get(j.host)!.open).map((j) => error('slides', `assembled[${j.host}]`, `${j.host} runs on ${j.hardware} but has no open pose`));
+}
+
+/** A slide is a pure translation: the open rotation is the closed one. */
+function pureTranslation({ assembled }: Context) {
+  return assembled
+    .filter((a) => a.open && a.open.rotation.some((v, i) => Math.abs(v - a.rotation[i]) > CONTRACT.mateTolerance))
+    .map((a) => error('slides', `assembled[${a.id}].open.rotation`, `${a.id} opens with a turn; a slide only translates`));
+}
+
+/** The travel is not nothing, and lies across the groove's axis. */
+function travelAcrossTheMate({ partTypes }: Context, { byId, slides }: SlideFacts) {
+  return slides.flatMap((j) => {
+    const host = byId.get(j.host)!;
+    const travel = slideTravel(host);
+    if (!travel) return [];
+    const length = Math.hypot(...travel);
+    if (length <= CONTRACT.mateTolerance) return [error('slides', `assembled[${j.host}].open`, `${j.host} opens to where it is closed`)];
+    const axis = connectorInWorld(partTypes![host.type].connectors[j.hostConnector], host).axis;
+    if (Math.abs(dotOf(travel, axis)) / length > CONTRACT.mateTolerance) return [error('slides', `assembled[${j.host}].open`, `${j.host} opens along its groove, not across it`)];
+    return [];
+  });
+}
+
+/** At open, each groove's point still lies inside its runner's box. */
+function staysOnTheRunner({ partTypes }: Context, { byId, slides }: SlideFacts) {
+  return slides.flatMap((j) => {
+    const host = byId.get(j.host)!;
+    const travel = slideTravel(host);
+    if (!travel) return [];
+    const runner = byId.get(j.hardware)!;
+    const groove = connectorInWorld(partTypes![host.type].connectors[j.hostConnector], host).position;
+    const atOpen = groove.map((v, i) => v + travel[i]) as Vec3;
+    if (contains(partTypes![runner.type].size, runner, atOpen, CONTRACT.mateTolerance)) return [];
+    return [error('slides', `assembled[${j.host}].open`, `${j.host} leaves ${j.hardware} when open`)];
+  });
+}
+
+/** Parts linked by anything but a slide move together, so their open travels agree. */
+function oneTravelPerUnit({ assembled, joints }: Context, { slides }: SlideFacts) {
+  const root = new Map(assembled.map((a) => [a.id, a.id]));
+  const find = (id: InstanceId): InstanceId => (root.get(id) === id ? id : find(root.get(id)!));
+  for (const j of (joints ?? []).filter((k) => !slides.includes(k))) {
+    for (const other of [j.host, j.through, j.captured]) if (other) root.set(find(other), find(j.hardware));
+  }
+  const first = new Map<InstanceId, { id: InstanceId; travel: Vec3 }>();
+  return assembled.flatMap((a) => {
+    const travel = slideTravel(a);
+    if (!travel) return [];
+    const unit = find(a.id);
+    const anchor = first.get(unit);
+    if (!anchor) {
+      first.set(unit, { id: a.id, travel });
+      return [];
+    }
+    if (distance(travel, anchor.travel) <= CONTRACT.mateTolerance) return [];
+    return [error('slides', `assembled[${a.id}].open`, `${a.id} opens differently from ${anchor.id}, which it is joined to`)];
+  });
+}
+
+/**
+ * A part that slides (a drawer side on its runners) is posed twice: `open` is allowed only on
+ * the host of a slide joint and every such host has one; the open pose is a pure translation,
+ * non-zero and across the mate axis; at open each groove still lies inside its runner's box;
+ * and parts joined by anything but a slide share one travel.
+ */
+function slides(ctx: Context) {
+  if (!ctx.joints) return [];
+  const facts = slideFacts(ctx);
+  return [
+    ...openOnlyOnSlideHosts(ctx, facts),
+    ...everySlideHostOpens(ctx, facts),
+    ...pureTranslation(ctx),
+    ...travelAcrossTheMate(ctx, facts),
+    ...staysOnTheRunner(ctx, facts),
+    ...oneTravelPerUnit(ctx, facts),
+  ];
 }
 
 /** Step pages fasten every derived joint exactly once, and turn every cam exactly once. */
@@ -486,6 +581,7 @@ export const RULES = Object.freeze([
   'cam-capture',
   'fitting-through',
   'pilot-hole',
+  'slides',
   'step-coverage',
   'step-order',
   'assemblies',
@@ -514,6 +610,7 @@ export function checkPack(pack: FlatpackFile, { assetExists = () => true }: { as
     ...holeOnce(ctx),
     ...camAndFitting(ctx),
     ...pilotHoles(ctx),
+    ...slides(ctx),
     ...stepCoverage(ctx),
     ...stepOrder(ctx),
     ...assemblies(ctx),

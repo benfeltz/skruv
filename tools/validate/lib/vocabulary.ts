@@ -27,6 +27,9 @@ export const CONNECTOR = Object.freeze({
   SCREW_HOLE: 'screwHole',
   // A hole in the part a wood screw's tip lands in: it takes no fastener end of its own.
   SCREW_PILOT: 'screwPilot',
+  // A runner's rail and the channel in a drawer side it runs in; the mate axis is across the travel.
+  RAIL_END: 'railEnd',
+  RAIL_GROOVE: 'railGroove',
 });
 
 /** A connector type the format knows (the schema's `connectorType`). */
@@ -43,6 +46,7 @@ export const COMPATIBLE: Readonly<Partial<Record<ConnectorType, ConnectorType>>>
   [CONNECTOR.SCREWDRIVER_TIP]: CONNECTOR.DRIVE_SLOT,
   [CONNECTOR.STUD_END]: CONNECTOR.STUD_HOLE,
   [CONNECTOR.SCREW_THREAD]: CONNECTOR.SCREW_HOLE,
+  [CONNECTOR.RAIL_END]: CONNECTOR.RAIL_GROOVE,
 });
 
 export const areCompatible = (a: ConnectorType, b: ConnectorType) => COMPATIBLE[a] === b || COMPATIBLE[b] === a;
@@ -63,6 +67,8 @@ export const KIND = Object.freeze({
   STUD: 'stud',
   // A slotted wood screw: driven through a hole in the part it attaches, into the part behind.
   SCREW: 'screw',
+  // A sliding fit: seated it holds, and the part runs along its travel (a drawer on its runners).
+  SLIDE: 'slide',
 });
 
 /** A fastener machine the format knows (the schema's `fastenerKind`). */
@@ -79,6 +85,7 @@ const KIND_FOR_END: Readonly<Partial<Record<ConnectorType, FastenerKind>>> = Obj
   [CONNECTOR.SCREWDRIVER_TIP]: KIND.TOOL,
   [CONNECTOR.STUD_END]: KIND.STUD,
   [CONNECTOR.SCREW_THREAD]: KIND.SCREW,
+  [CONNECTOR.RAIL_END]: KIND.SLIDE,
 });
 
 /** The fastener kind for a pair whose fastener end has connector type `endType`, or null. */

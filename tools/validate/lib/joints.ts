@@ -46,11 +46,15 @@ export const seatedPoint = (hole: Frame, kind: FastenerKind): Vec3 => {
   return hole.position.map((v, i) => v - hole.axis[i] * sink) as Vec3;
 };
 
+/** A part's travel when it slides: its open position less its closed one (world), or null without an open pose. */
+export const slideTravel = (part: Pick<AssembledPart, 'position' | 'open'>): Vec3 | null => (part.open ? sub(part.open.position, part.position) : null);
+
 /**
  * Every seated pair in the assembled poses. Each fastener end goes in the nearest
  * compatible, facing hole within `CONTRACT.mateReach` of its seated spot. A piece of
  * hardware is pushed in by its first seated end (`mover` is the hardware); any later end
- * has a panel pressed onto it (`mover` is that panel).
+ * has a panel pressed onto it (`mover` is that panel). A slide is the one exception: a rail
+ * is fixed, so what runs on it (the groove's side) is always the mover.
  */
 export function pairJoints({ partTypes, assembled }: PosedItem): Joint[] {
   const world = (inst: AssembledPart, index: number) => connectorInWorld(partTypes[inst.type].connectors[index], inst);
@@ -82,7 +86,7 @@ export function pairJoints({ partTypes, assembled }: PosedItem): Joint[] {
         host: best.inst.id,
         hostConnector: best.index,
         kind,
-        mover: first ? inst.id : best.inst.id,
+        mover: kind === KIND.SLIDE ? best.inst.id : first ? inst.id : best.inst.id,
         through: null,
         captured: null,
       });

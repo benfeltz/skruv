@@ -34,9 +34,10 @@ describe('Flatpack vocabulary', () => {
     }
   });
 
-  it('sinks every fastener kind but the tool', () => {
-    for (const kind of Object.values(KIND).filter((k) => k !== KIND.TOOL)) expect(CONTRACT.sinkDepth[kind]).toBeGreaterThan(0);
+  it('sinks every fastener kind but the tool and the slide', () => {
+    for (const kind of Object.values(KIND).filter((k) => k !== KIND.TOOL && k !== KIND.SLIDE)) expect(CONTRACT.sinkDepth[kind]).toBeGreaterThan(0);
     expect(CONTRACT.sinkDepth).not.toHaveProperty(KIND.TOOL);
+    expect(CONTRACT.sinkDepth).not.toHaveProperty(KIND.SLIDE);
   });
 
   it('pairs a stud end with a stud hole, both ways, and runs the stud machine', () => {
@@ -53,6 +54,15 @@ describe('Flatpack vocabulary', () => {
     expect(areCompatible(CONNECTOR.SCREW_HOLE, CONNECTOR.SCREW_THREAD)).toBe(true);
     expect(areCompatible(CONNECTOR.SCREW_THREAD, CONNECTOR.STUD_HOLE)).toBe(false);
     expect(CONTRACT.sinkDepth.screw).toBeGreaterThan(0);
+  });
+
+  it('pairs a rail end with a groove as the sliding fit', () => {
+    expect(areCompatible(CONNECTOR.RAIL_END, CONNECTOR.RAIL_GROOVE)).toBe(true);
+    expect(areCompatible(CONNECTOR.RAIL_GROOVE, CONNECTOR.RAIL_END)).toBe(true);
+    expect(kindOf(CONNECTOR.RAIL_END)).toBe(KIND.SLIDE);
+    expect(isFastenerEnd(CONNECTOR.RAIL_END)).toBe(true);
+    expect(isFastenerEnd(CONNECTOR.RAIL_GROOVE)).toBe(false);
+    expect(passesThrough(KIND.SLIDE)).toBe(false);
   });
 
   it('passes through to the part behind for a fitting and a screw only', () => {

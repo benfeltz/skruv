@@ -170,6 +170,7 @@ describe('the built JOHNNY', () => {
     const count = (kind: FastenerKind) => layout.joints.filter((j) => j.kind === kind).length;
     expect(layout.joints).toHaveLength(60);
     expect([count(KIND.DOWEL), count(KIND.BOLT), count(KIND.CAM), count(KIND.PIN), count(KIND.FITTING)]).toEqual([28, 8, 8, 8, 8]);
+    expect(layout.joints.some((j) => j.kind === KIND.SLIDE)).toBe(false);
   });
 
   it('names one panel per role, two shelves', () => {

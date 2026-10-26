@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { checkPack, RULES } from '../tools/validate/lib/checks.js';
 import type { Rule } from '../tools/validate/lib/checks.js';
 import { rotateVector } from '../tools/validate/lib/geometry.js';
-import type { Vec3, Pose } from '../tools/validate/lib/geometry.js';
+import type { Quat, Vec3, Pose } from '../tools/validate/lib/geometry.js';
 import { CONTRACT } from '../tools/validate/lib/vocabulary.js';
-import type { FlatpackFile, PageFields, StepPage } from '../tools/validate/lib/pack.js';
+import type { ConnectorSpec, FlatpackFile, PageFields, StepPage } from '../tools/validate/lib/pack.js';
 
 const JOHNNY: FlatpackFile = JSON.parse(readFileSync(new URL('../items/johnny/flatpack.json', import.meta.url), 'utf8'));
 const copy = () => structuredClone(JOHNNY);
@@ -35,6 +35,7 @@ const MUTATIONS: [Rule, string, (p: FlatpackFile) => unknown][] = [
     p.vocabulary.connectors.push('screwPilot');
     p.parts.sidePanel.connectors.push({ id: 'screwPilot-1', type: 'screwPilot', position: [0.008, 0, 0], axis: [1, 0, 0] });
   }],
+  ['slides', 'an open pose on a part no rail runs in', (p) => (posed(p, 'sidePanel-1').open = { position: [...posed(p, 'sidePanel-1').position] as Vec3, rotation: [...posed(p, 'sidePanel-1').rotation] as Quat })],
   ['step-coverage', 'a step missing a joint', (p) => step(p, 1).fasten.pop()],
   ['step-order', 'the back panel brought in after its fittings', (p) => {
     delete step(p, 8).parts;
@@ -125,6 +126,82 @@ describe('checkPack on JOHNNY', () => {
 
   it('seeds every rule with a mutation', () => {
     expect(new Set([...MUTATIONS.map(([rule]) => rule), 'assets'])).toEqual(new Set(RULES));
+  });
+});
+
+describe('slides on a plate on two rails', () => {
+  const IDENTITY: Quat = [0, 0, 0, 1];
+  const TURNED: Quat = [0, 1, 0, 0];
+  const connector = (id: string, type: ConnectorSpec['type'], position: Vec3, axis: Vec3): ConnectorSpec => ({ id, type, position, axis });
+  // A plate with a groove on each x face; a runner against each face, its rail end seated in the groove.
+  // A second plate stands on the first on a dowel, to be joined to it.
+  function rails(): FlatpackFile {
+    return {
+      format: 1,
+      identity: { product: 'TEST', maker: 'SKRUV', documentCode: 'SK-0', category: 'Drawer', variants: [{ name: 'White', color: 'partPanel', article: '999.000.01' }] },
+      vocabulary: { connectors: ['railGroove', 'railEnd', 'dowelHole', 'dowelEnd'], fasteners: ['slide', 'dowel'] },
+      parts: {
+        plate: {
+          partNumber: '10000', box: [0.02, 0.1, 0.3], mass: 1, color: 'partPanel', quantity: 2,
+          connectors: [
+            connector('railGroove-1', 'railGroove', [-0.01, 0, 0.05], [-1, 0, 0]),
+            connector('railGroove-2', 'railGroove', [0.01, 0, -0.05], [1, 0, 0]),
+            connector('dowelHole-1', 'dowelHole', [0, 0.05, 0.1], [0, 1, 0]),
+            connector('dowelHole-2', 'dowelHole', [0, -0.05, 0.1], [0, -1, 0]),
+          ],
+        },
+        runner: { partNumber: '10001', box: [0.012, 0.02, 0.3], mass: 0.1, color: 'partPanel', quantity: 2, connectors: [connector('railEnd-1', 'railEnd', [0.006, 0, 0.05], [1, 0, 0])] },
+        dowel: {
+          partNumber: '10002', box: [0.008, 0.03, 0.008], mass: 0.01, color: 'partDowel', quantity: 1,
+          connectors: [connector('dowelEnd-1', 'dowelEnd', [0, -0.015, 0], [0, -1, 0]), connector('dowelEnd-2', 'dowelEnd', [0, 0.015, 0], [0, 1, 0])],
+        },
+      },
+      assembled: [
+        { id: 'plate-1', role: 'drawerSide', position: [0.016, 0, 0], rotation: IDENTITY, open: { position: [0.016, 0, 0.1], rotation: IDENTITY } },
+        { id: 'runner-1', role: 'runner', position: [0, 0, 0], rotation: IDENTITY },
+        { id: 'runner-2', role: 'runner', position: [0.032, 0, 0], rotation: TURNED },
+      ],
+      manual: { pages: [{ kind: 'cover' }] },
+      packing: { boxInner: [0.3, 0.1, 0.3], wall: 0.01, floor: 0.01, lid: { thickness: 0.008, partNumber: '10003', mass: 0.2, color: 'cardboard' }, placements: [] },
+    };
+  }
+  const messages = (mutate: (p: FlatpackFile) => unknown) => {
+    const pack = rails();
+    mutate(pack);
+    return checkPack(pack).filter((e) => e.rule === 'slides').map((e) => e.message);
+  };
+  const plate = (p: FlatpackFile) => posed(p, 'plate-1');
+
+  it('passes a plate that opens along its rails', () => {
+    expect(messages(() => undefined)).toEqual([]);
+  });
+
+  it('wants an open pose on a part a rail runs in', () => {
+    expect(messages((p) => delete plate(p).open)).toContain('plate-1 runs on runner-1 but has no open pose');
+  });
+
+  it('wants the open pose to be a pure translation', () => {
+    expect(messages((p) => (plate(p).open!.rotation = TURNED))).toContain('plate-1 opens with a turn; a slide only translates');
+  });
+
+  it('wants a travel, across the groove', () => {
+    expect(messages((p) => (plate(p).open!.position = [...plate(p).position] as Vec3))).toContain('plate-1 opens to where it is closed');
+    expect(messages((p) => (plate(p).open!.position = [0.116, 0, 0]))).toContain('plate-1 opens along its groove, not across it');
+  });
+
+  it('keeps the groove on the runner when open', () => {
+    expect(messages((p) => (plate(p).open!.position = [0.016, 0, 0.5]))).toContain('plate-1 leaves runner-1 when open');
+  });
+
+  it('makes parts joined by a dowel open alike', () => {
+    const joined = (open: Vec3) => (p: FlatpackFile) => {
+      p.assembled.push(
+        { id: 'plate-2', role: 'drawerSide', position: [0.016, 0.1, 0], rotation: IDENTITY, open: { position: open, rotation: IDENTITY } },
+        { id: 'dowel-1', role: 'hardware', position: [0.016, 0.05, 0.1], rotation: IDENTITY },
+      );
+    };
+    expect(messages(joined([0.016, 0.1, 0.1])).filter((m) => m.includes('differently'))).toEqual([]);
+    expect(messages(joined([0.016, 0.1, 0.05]))).toContain('plate-2 opens differently from plate-1, which it is joined to');
   });
 });
 

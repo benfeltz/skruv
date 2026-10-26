@@ -45,6 +45,7 @@ describe('the BLANK pack', () => {
   it('derives eight stud joints: each stud driven into the top, each leg pressed onto a stud', () => {
     expect(joints).toHaveLength(8);
     expect(joints.every((j) => j.kind === KIND.STUD)).toBe(true);
+    expect(joints.some((j) => j.kind === KIND.SLIDE)).toBe(false);
     const intoTop = joints.filter((j) => j.host === 'top-1');
     const intoLeg = joints.filter((j) => j.host.startsWith('leg-'));
     expect([intoTop.length, intoLeg.length]).toEqual([4, 4]);

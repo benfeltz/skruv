@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveJoints } from '../tools/validate/lib/joints.js';
+import { deriveJoints, slideTravel } from '../tools/validate/lib/joints.js';
 import { CONTRACT, KIND } from '../tools/validate/lib/vocabulary.js';
 import type { AssembledPart, PartType } from '../tools/validate/lib/pack.js';
 import type { Quat, Vec3 } from '../tools/validate/lib/geometry.js';
@@ -120,6 +120,37 @@ describe('deriveJoints', () => {
     it('passes into nothing when the panel behind is too thin for its tip to reach', () => {
       const joints = deriveJoints({ partTypes: screwTypes(0.005), assembled: [rail, panel(0.005), screw] });
       expect(joints.map((j) => [j.kind, j.through])).toEqual([[KIND.SCREW, null]]);
+    });
+  });
+  describe('a rail in a groove', () => {
+    // A plate with a groove on each of its x faces, and a runner against each face with its rail end seated in it.
+    const railTypes = {
+      plate: { size: [0.02, 0.1, 0.3], connectors: [c('railGroove', [-0.01, 0, 0], [-1, 0, 0]), c('railGroove', [0.01, 0, 0.1], [1, 0, 0])] },
+      runner: { size: [0.012, 0.02, 0.3], connectors: [c('railEnd', [0.006, 0, 0], [1, 0, 0]), c('railEnd', [-0.006, 0, 0], [-1, 0, 0])] },
+    } as unknown as Record<string, PartType>;
+    const plate: AssembledPart = { id: 'plate-1', type: 'plate', role: 'drawerSide', position: [0.016, 0, 0], rotation: IDENTITY };
+    // The first runner's +x end meets the plate's -x face; the second's -x end its +x face.
+    const runner1: AssembledPart = { id: 'runner-1', type: 'runner', role: 'runner', position: [0, 0, 0], rotation: IDENTITY };
+    const runner2: AssembledPart = { id: 'runner-2', type: 'runner', role: 'runner', position: [0.032, 0, 0.1], rotation: IDENTITY };
+
+    it('is a slide joint whose mover is the plate, the groove side', () => {
+      const joints = deriveJoints({ partTypes: railTypes, assembled: [plate, runner1] });
+      expect(joints).toEqual([
+        { hardware: 'runner-1', hardwareConnector: 0, host: 'plate-1', hostConnector: 0, kind: KIND.SLIDE, mover: 'plate-1', through: null, captured: null },
+      ]);
+    });
+
+    it('keeps the plate the mover of both, whichever runner is first', () => {
+      for (const assembled of [[plate, runner1, runner2], [plate, runner2, runner1]]) {
+        const joints = deriveJoints({ partTypes: railTypes, assembled });
+        expect(joints).toHaveLength(2);
+        expect(joints.every((j) => j.kind === KIND.SLIDE && j.mover === 'plate-1')).toBe(true);
+      }
+    });
+
+    it('reads the travel from the open pose, and has none without one', () => {
+      expect(slideTravel({ ...plate, open: { position: [0.016, 0, 0.22], rotation: IDENTITY } })).toEqual([0, 0, 0.22]);
+      expect(slideTravel(plate)).toBeNull();
     });
   });
 });
