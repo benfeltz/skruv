@@ -1,0 +1,7 @@
+# Godot's import cache, rebuilt by `--import`
+.godot/
+# Fetched by scripts/loop.sh at a pinned version and checksum, never committed
+addons/gdUnit4/
+# Loop output: screenshots, logs, test reports
+out/
+reports/

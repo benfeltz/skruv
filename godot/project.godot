@@ -1,0 +1,15 @@
+; Written by hand, never by the editor. Imported with `godot --headless --path godot --import`.
+; There is no main scene on purpose: scenes are built in GDScript, and the project always
+; starts through `-s res://main.gd`. Running it bare pops a native "no main scene" alert.
+
+config_version=5
+
+[application]
+
+config/name="Skruv"
+config/features=PackedStringArray("4.7", "Forward Plus")
+
+[debug]
+
+; Typed GDScript is enforced: an untyped declaration is a compile error, not a warning.
+gdscript/warnings/untyped_declaration=2
