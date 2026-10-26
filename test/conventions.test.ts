@@ -397,7 +397,9 @@ describe('telemetry pairs every grab with a release of its mode (1.6 review)', (
   const pull = router.slice(router.indexOf('function pullTo('), router.indexOf('// --- crank'));
 
   it('reports a pull that frees its part as a pull released and a move grabbed', () => {
-    expect(pull).toMatch(/events\?\.emit\(releaseEvent\(part\.id, 'pull'\)\);\s*beginMove\(part, grab, pointer, 'move'\);\s*events\?\.emit\(grabEvent\(part\.id, 'move'\)\);/);
+    // The tail is shared with the slide's pull-out (continueFree): the pull leaves as `from`, the freed part grabs as a move.
+    expect(pull).toMatch(/continueFree\(part, pointer, 'pull'\);/);
+    expect(pull).toMatch(/events\?\.emit\(releaseEvent\(part\.id, from\)\);\s*if \(carried\) beginCarry\(part, carried, grab, pointer\);\s*else beginMove\(part, grab, pointer, free \? 'move' : 'compound'\);\s*events\?\.emit\(grabEvent\(part\.id, free \|\| carried \? 'move' : 'compound'\)\);/);
   });
 });
 

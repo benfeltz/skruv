@@ -33,6 +33,10 @@ describe('which control a subject gets', () => {
     expect(controlFor(subject({ kind: 'bolt' }))).toBeNull();
   });
 
+  it('none for a slide: a drawer is dragged, not pressed or circled', () => {
+    expect(controlFor(subject({ kind: 'slide' }))).toBeNull();
+  });
+
   it('a ring for a hand turn too: its grip, no tool; a stud with no grip gets none', () => {
     expect(controlFor(hand())).toBe('turn');
     expect(controlFor(hand({ grip: null }))).toBeNull();

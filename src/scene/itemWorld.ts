@@ -4,6 +4,7 @@ import { createAssembly, restoreJoints } from '../game/assembly.js';
 import { EVENT, recoveryEvent, resetEvent } from '../game/events.js';
 import { CUE, homeCue } from '../game/haptics.js';
 import { ASSEMBLED, IDENTITY, ITEM_ID, PART_TYPES } from '../game/item.js';
+import { localTravel } from '../game/slideMath.js';
 import { preferredRelatives } from '../game/panelFit.js';
 import { createPartMesh } from '../game/partMesh.js';
 import { hasEscaped } from '../game/dragMath.js';
@@ -196,7 +197,13 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
 
   // What is seated on and fastened to what — every type-compatible pair, right or wrong.
   const typeById = new Map(parts.map(({ id, type }) => [id, type]));
-  const assembly = createAssembly((id) => typeById.get(id)!);
+  // A part's travel on its rails, in its own frame, for the parts of the pack that have an open pose.
+  const travelById = new Map<PartId, Vec3>();
+  for (const part of ASSEMBLED.parts) {
+    const travel = localTravel(part);
+    if (travel) travelById.set(part.id, travel);
+  }
+  const assembly = createAssembly((id) => typeById.get(id)!, (id) => travelById.get(id) ?? null);
   // Manipulation goes through these seams: a fastened compound moves as one, and while a
   // finger is on the elevation line its part is held in mid-air at the line's height.
   const hold = createLiftHold(createCompoundPhysics(physics, parts, assembly));
@@ -302,6 +309,8 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
       const cue = homeCue(kind);
       if (cue) haptics.cue(cue);
     },
+    // A drawer reaching either end of its runners seats like a part: one buzz, no sound.
+    onSlideEnd: () => haptics.cue(CUE.SEAT),
   });
   insetPanel.connect(router);
   // It lets go of any gesture and unbinds from the room's canvas.

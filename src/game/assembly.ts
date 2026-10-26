@@ -13,7 +13,9 @@
 // `bonds()` derives the physics joints fastener state calls for: each fastened piece of
 // hardware embeds rigidly in its first host, and two hosts sharing fastened hardware are
 // bridged — with angular play while only dowels hold them, rigid once a cam locks or a
-// screw drives home.
+// screw drives home. A slide (a drawer side on a runner's rail) is the one bond that is not
+// rigid: a prismatic joint along the host's travel, limited to `[0, travel]`. The parts a drawer
+// is fastened of by anything but a slide are its *unit* (`slideOf`): it slides as one.
 
 import { FASTENER } from '../constants.js';
 import { PART_TYPES } from './item.js';
@@ -82,7 +84,7 @@ export interface JointFrame {
   rotation: Quat;
 }
 
-export type BondMode = 'embed' | 'rigid' | 'play';
+export type BondMode = 'embed' | 'rigid' | 'play' | 'slide';
 
 /** A physics joint the graph calls for — see `bonds`. */
 export interface Bond {
@@ -92,6 +94,23 @@ export interface Bond {
   mode: BondMode;
   frame: JointFrame;
   signature: string;
+  /** A `slide` bond only: the travel's unit direction in `a`'s frame, and its length (m). */
+  slide?: { axis: Vec3; travel: number };
+}
+
+/** A part's travel in its own frame (`slideMath.localTravel`), or null when it never slides. */
+export type TravelOf = (part: PartId) => Vec3 | null;
+
+/**
+ * What a part slides with: its drawer `unit` (the parts fastened together by anything but a
+ * slide), the fastened slide `joints` the unit hangs on (`host` in the unit, `hardware` out of
+ * it), the `host` of the first, and its `travel` in the host's frame.
+ */
+export interface Slide {
+  unit: ReadonlySet<PartId>;
+  joints: AssemblyJoint[];
+  host: PartId;
+  travel: Vec3;
 }
 
 // A candidate bridge between two hosts, before one is chosen per pair.
@@ -290,7 +309,10 @@ export function restoreJoints(assembly: Assembly, saved: readonly SavedJoint[]):
     const ctx = { through: s.through, captured: s.captured };
     const { state, progress } = s.fastener;
     const span = spanOf(s.kind);
-    if (isTapKind(s.kind)) {
+    if (s.kind === KIND.SLIDE) {
+      // A slide starts fastened (pressed/1) on its runners; seated/0 is one pulled off.
+      if (state === STATE.SEATED) assembly.apply(id, { type: 'pull' });
+    } else if (isTapKind(s.kind)) {
       if (state === STATE.PRESSED) assembly.apply(id, { type: 'tap' }, ctx);
     } else if (state === STATE.SEATED) {
       if (progress > 0) assembly.apply(id, { type: 'crank', radians: progress * span });
@@ -311,9 +333,10 @@ export function restoreJoints(assembly: Assembly, saved: readonly SavedJoint[]):
 }
 
 /**
- * `typeOf(partId)` names each part's catalog type.
+ * `typeOf(partId)` names each part's catalog type; `travelOf(partId)` the part's travel in its
+ * own frame when it slides on rails (the default: none does).
  */
-export function createAssembly(typeOf: (part: PartId) => string) {
+export function createAssembly(typeOf: (part: PartId) => string, travelOf: TravelOf = () => null) {
   const joints = new Map<number, AssemblyJoint>();
   let nextId = 1;
   // A part type's coincident connectors, by `type#index` — a property of the type, found once.
@@ -672,6 +695,19 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     return seen;
   }
 
+  /**
+   * The slide `part` moves with, or null: `part`'s unit is everything fastened to it but across
+   * a slide, and the slide is the fastened slide joints that unit is the host side of. Null when
+   * none is fastened, or the host has no travel.
+   */
+  function slideOf(part: PartId): Slide | null {
+    const unit = compoundIn(part, all().filter((j) => j.kind !== KIND.SLIDE));
+    const slides = all().filter((j) => j.kind === KIND.SLIDE && isFastened(j.fastener) && unit.has(j.host) && !unit.has(j.hardware));
+    if (!slides.length) return null;
+    const travel = travelOf(slides[0].host);
+    return travel ? { unit, joints: slides, host: slides[0].host, travel } : null;
+  }
+
   // Hardware's pose in its host's frame with its end `sink` deep in the hole: axis exactly
   // reversed against the hole's, twist about it kept from the current poses.
   function seatedPose(joint: AssemblyJoint, poseOf: PoseOf, sink: number): RelativePose {
@@ -720,6 +756,8 @@ export function createAssembly(typeOf: (part: PartId) => string) {
   /**
    * The physics joints the graph calls for, from `poseOf(partId)`:
    * `{ key, a, b, mode: 'embed' | 'rigid' | 'play', frame: { anchorA, anchorB, rotation }, signature }`.
+   * A slide's bond is `mode: 'slide'` with `slide: { axis, travel }`; a slide host `travelOf` has no travel
+   * for gets a plain `embed` (it still bonds, rigidly).
    * A bond whose `signature` is unchanged needs no rebuild — frames taken from live poses
    * are only meaningful when the bond is first made.
    */
@@ -739,6 +777,21 @@ export function createAssembly(typeOf: (part: PartId) => string) {
       const sink = sinkOf(first);
       // A shelf pin stays solid so a shelf can rest on it; anything else sits inside wood.
       const mode = first.kind === KIND.PIN ? 'rigid' : 'embed';
+      const travel = first.kind === KIND.SLIDE ? travelOf(first.host) : null;
+      if (travel) {
+        // A runner on a rail: no sink, free along the host's travel (a host without one embeds, rigid).
+        const length = Math.hypot(...travel);
+        out.push({
+          key: `slide:${hardware}`,
+          a: first.host,
+          b: hardware,
+          mode: 'slide',
+          frame: jointFrame(seatedPose(first, poseOf, 0), hardwareConnector(first).position),
+          signature: `slide|${first.id}|${length}`,
+          slide: { axis: scale(travel, 1 / length), travel: length },
+        });
+        continue;
+      }
       out.push({
         key: `embed:${hardware}`,
         a: first.host,
@@ -810,6 +863,7 @@ export function createAssembly(typeOf: (part: PartId) => string) {
     screwedBolts,
     isHeld,
     compoundOf,
+    slideOf,
     bonds,
     restPose,
     jointsOf,

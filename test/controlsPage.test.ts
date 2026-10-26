@@ -101,6 +101,13 @@ describe('rowsFor', () => {
     expect(none).toEqual(CONTROLS.desktop.filter((row) => row.needs === undefined).map((row) => row.pictogram));
   });
 
+  it.each(['touch', 'desktop'] as const)("shows 'Pull to open' only for an item with a slide, after Pull apart (%s)", (scheme) => {
+    const rows = rowsFor(scheme, kinds(KIND.SLIDE, KIND.DOWEL));
+    expect(rows.map((row) => [row.pictogram, row.label])).toContainEqual(['slide', 'Pull to open']);
+    expect(rows.findIndex((row) => row.pictogram === 'slide')).toBe(rows.findIndex((row) => row.pictogram === 'pullApart') + 1);
+    for (const id of ['johnny', 'blank', 'overkall'] as const) expect(rowsFor(scheme, itemById(id).kinds).map((row) => row.pictogram)).not.toContain('slide');
+  });
+
   it('labels the new row in three words with no mouse in it, and BLANK shows it', () => {
     const row = CONTROLS.touch.find((r) => r.pictogram === 'turnPart')!;
     expect(row.label.split(' ').length).toBeLessThanOrEqual(3);

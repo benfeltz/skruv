@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { AIM, COLORS, DROP, FASTENER, GESTURE, PANEL, PICK, RING, ROOM, SNAP, TURN_RING } from '../constants.js';
+import { AIM, COLORS, DROP, FASTENER, GESTURE, PANEL, PICK, RING, ROOM, SLIDE, SNAP, TURN_RING } from '../constants.js';
 import { areCompatible, canPassInto, CONNECTOR, isFastenerEnd, KIND, kindOf, passesThrough } from '../../tools/validate/lib/vocabulary.js';
 import { connectorInWorld, contains, rotateVector } from '../../tools/validate/lib/geometry.js';
 import { advancing, capture, carryPose, layersOf } from '../game/assembly.js';
 import { PART_TYPES } from '../game/item.js';
 import { socketUnder } from '../game/decals.js';
 import { createCrank, tightenSign } from '../game/crankMath.js';
+import { clampTravel, pastOpen, pixelsPerMetre } from '../game/slideMath.js';
 import { driveRadians, ratchetTicks } from '../game/driveMath.js';
 import { clampLift, clampToRoom, easeToward, fitsInRoom, intersectDragPlane, pullAlong, rebaseDragOffset, rotatedHalfExtents } from '../game/dragMath.js';
 import { fastensOn, isCrankKind, isFastened, isHome, isTapKind, sinksAsTurned, spanOf, STATE } from '../game/fasteners.js';
@@ -32,7 +33,7 @@ import { gripOf, isDrawn, isTurnHome, isTurnStalled, pickDial, tightensClockwise
 import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 import type { FitPair, Relatives } from '../game/panelFit.js';
 import type { Snap } from '../game/snapMath.js';
-import type { Assembly, AssemblyJoint, Head, PartId, Turn } from '../game/assembly.js';
+import type { Assembly, AssemblyJoint, Head, PartId, Slide, Turn } from '../game/assembly.js';
 import type { Bus } from '../game/events.js';
 import type { ApplyContext } from '../game/assembly.js';
 import type { GestureEffect } from '../game/gestureState.js';
@@ -101,9 +102,9 @@ interface ClientPoint {
 
 // The drag in progress. One record for every mode; each sets only its own fields —
 // 'move'/'compound' the plane drag's (beginMove), 'pull' start and joints (beginPull),
-// 'crank' the crank (beginCrank) — what it turns is read from the graph's turn each move.
+// 'slide' the slide, its screen axis and scale (beginSlide), 'crank' the crank (beginCrank) — what it turns is read from the graph's turn each move.
 interface Drag {
-  mode: 'move' | 'compound' | 'pull' | 'crank';
+  mode: 'move' | 'compound' | 'pull' | 'crank' | 'slide';
   part: Part;
   planeY: number;
   height: number;
@@ -122,6 +123,12 @@ interface Drag {
   joints: { id: number; axis: ScreenPoint }[];
   crank: ReturnType<typeof createCrank>;
   carry: Carry | null;
+  slide: Slide;
+  /** The slide: the travel on screen, its pixels per metre, where the drawer was along it, and whether it sat at an end. */
+  axis: ScreenPoint;
+  scale: number;
+  t0: number;
+  atEnd: boolean;
 }
 
 /**
@@ -185,7 +192,7 @@ export interface GestureRouterOptions {
   domElement: HTMLElement;
   camera: THREE.Camera;
   cameraControls: { enable(): void; disable(): void };
-  physics: Pick<PhysicsWorld, 'grab' | 'move' | 'release' | 'join' | 'unjoin'>;
+  physics: Pick<PhysicsWorld, 'grab' | 'move' | 'release' | 'join' | 'unjoin'> & Partial<Pick<PhysicsWorld, 'slide'>>;
   parts: Part[];
   assembly: Assembly;
   rings?: Rings;
@@ -200,6 +207,7 @@ export interface GestureRouterOptions {
   inset?: InsetHook;
   onRatchet?: (count: number) => void;
   onRehome?: (kind: FastenerKind) => void;
+  onSlideEnd?: () => void;
   relatives?: Relatives;
 }
 
@@ -238,6 +246,9 @@ const PULL_AXIS_PROBE = 0.05;
  *   drag      an engaged tool cranks its fastener; a part pushed into fastened seats pulls
  *             back out along their axis, and once nothing holds it, moves on as a normal
  *             drag; a part bonded into a compound moves it all through its joints
+ *            a drawer on its runners slides along them, clamped, its prismatic motors driven (never
+ *            grabbed — the compound seam would carry the carcass); dragged `SLIDE.pullOut` past the
+ *            open end it comes off and the drag carries on as a free one
  * After every change the physics joints are reconciled with `assembly.bonds()`.
  *
  * `parts` is the registry `[{ id, type, mesh, body }]`. Optional hooks:
@@ -307,7 +318,7 @@ const PULL_AXIS_PROBE = 0.05;
  * turns carried hardware's end toward a seat near it (self-aim), eases a dragged part
  * toward the seat on offer (seat assist) and fades the seat flash.
  */
-export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, targetRings, events, hold, turnRing, inset, onRatchet, onRehome, relatives = new Map() }: GestureRouterOptions) {
+export function createGestureRouter({ domElement, camera, cameraControls, physics, parts, assembly, rings, onTap, ghost, sprue, dropGuide, targetRings, events, hold, turnRing, inset, onRatchet, onRehome, onSlideEnd, relatives = new Map() }: GestureRouterOptions) {
   const state = createGestureState<Press>();
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -673,7 +684,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     }
     for (const [key, bond] of wanted) {
       if (bonds.has(key)) continue;
-      const joint = physics.join(partById.get(bond.a)!.body, partById.get(bond.b)!.body, bond.frame, bond.mode);
+      const joint = physics.join(partById.get(bond.a)!.body, partById.get(bond.b)!.body, bond.frame, bond.mode, bond.slide);
       bonds.set(key, { joint, signature: bond.signature, a: bond.a, b: bond.b });
     }
     for (const part of placed) {
@@ -724,7 +735,7 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   }
 
   // Whether `part` is in hand being moved — carried, dragged, pulled — rather than cranked.
-  const carrying = (part: Part) => drag?.part === part && drag.mode !== 'crank';
+  const carrying = (part: Part) => drag?.part === part && drag.mode !== 'crank' && drag.mode !== 'slide';
 
   // A part held for a seat goes back to the simulation.
   function release(part: Part) {
@@ -800,7 +811,10 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     // seam stops the pull (pullable), and the panel carries its assembly instead.
     const pulls = assembly.pullable(part.id).length > 0;
     const carried = pulls ? null : carryOf(part);
+    // A drawer on its runners slides, whichever of its parts is grabbed.
+    const slide = assembly.slideOf(part.id);
     if (turns) beginCrank(part, event);
+    else if (slide) beginSlide(part, slide, event);
     else if (pulls) beginPull(part, event);
     else if (carried) beginCarry(part, carried, point, event);
     else if (assembly.canRelease(part.id)) {
@@ -1413,6 +1427,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // Lets go of the drag; true if the part seated.
   function endDrag() {
     const { mode, part } = drag!;
+    if (mode === 'slide') {
+      letGoSlide();
+      stopDrag();
+      return false;
+    }
     if (mode === 'crank' || mode === 'pull') {
       stopDrag();
       // A part circled all the way out was the drag's own while it turned, so it was not
@@ -1480,8 +1499,14 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     return assembly.jointsOf(part.id).find((j) => j.hardware === part.id && carried.has(j.host))!.host;
   }
 
+  // The drawer is let go where it is: the motors back to damping alone, so it stays.
+  function letGoSlide() {
+    for (const joint of slideJoints(drag!.slide)) physics.slide?.(joint, null);
+  }
+
   function cancelDrag() {
     const { mode } = drag!;
+    if (mode === 'slide') letGoSlide();
     if (mode === 'move' || mode === 'compound') physics.release(drag!.part.body);
     stopDrag();
     if (mode === 'crank') reconcile();
@@ -1598,26 +1623,79 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
     if (pulled.length === 0) return;
     for (const { id } of pulled) reportFastening(id, true);
     drag!.joints = joints.filter((j) => !pulled.includes(j));
+    continueFree(part, pointer, 'pull');
+  }
+
+  // A part let off its seats by a pull (or a drawer pulled off its runners) carries on from the
+  // pointer as a normal drag: its assembly with it for a panel, else the part alone — or, with
+  // the slide gone and the part still bonded into a compound, that compound.
+  function continueFree(part: Part, pointer: ClientPoint, from: 'pull' | 'slide') {
     // Still pushed home somewhere: the pull goes on, as beginDrag has it.
     const carried = assembly.pullable(part.id).length > 0 ? null : carryOf(part);
-    if (!carried && !assembly.canRelease(part.id)) return reconcile();
+    const free = !!carried || assembly.canRelease(part.id);
+    if (!free && (from === 'pull' || !isBonded(part))) return reconcile();
     // Pulled free: it leaves its seats and carries on as a normal drag from here — a panel
     // with everything it carries.
-    if (!carried) for (const joint of assembly.jointsOf(part.id)) unseat(joint);
+    if (!carried && free) for (const joint of assembly.jointsOf(part.id)) unseat(joint);
     reconcile();
     aim(pointer);
     const { origin, direction } = raycaster.ray;
     const grab = intersectDragPlane(origin.toArray(), direction.toArray(), part.mesh.position.y) ?? part.mesh.position.toArray();
-    if (carried) {
-      events?.emit(releaseEvent(part.id, 'pull'));
-      beginCarry(part, carried, grab, pointer);
-      events?.emit(grabEvent(part.id, 'move'));
-      return;
-    }
     // Telemetry: the pull ends here and a move begins, so each grab pairs with its release.
-    events?.emit(releaseEvent(part.id, 'pull'));
-    beginMove(part, grab, pointer, 'move');
-    events?.emit(grabEvent(part.id, 'move'));
+    events?.emit(releaseEvent(part.id, from));
+    if (carried) beginCarry(part, carried, grab, pointer);
+    else beginMove(part, grab, pointer, free ? 'move' : 'compound');
+    events?.emit(grabEvent(part.id, free || carried ? 'move' : 'compound'));
+  }
+
+  // --- slide: a drag on a drawer moves it along its runners; past the end it comes off ---
+  //
+  // The drawer is never grabbed: the physics seam's grab spans the fastened slide, so it would
+  // carry the carcass along. The unit stays dynamic and each prismatic joint's motor is given a
+  // position target — the finger's travel along the axis, clamped — and, let go, damping alone.
+
+  function beginSlide(part: Part, slide: Slide, event: ClientPoint) {
+    const [joint] = slide.joints;
+    const host = poseOf(slide.host);
+    const travel = rotateVector(host.rotation, slide.travel);
+    const length = Math.hypot(...travel);
+    const from = screenPoint(host.position);
+    const to = screenPoint(host.position.map((v, i) => v + (travel[i] / length) * PULL_AXIS_PROBE) as Vec3);
+    // Where the drawer is along its travel: how far the groove's mouth is from the rail's end, on the axis.
+    const mouth = connectorWorld(joint.host, joint.hostConnector).position;
+    const end = connectorWorld(joint.hardware, joint.hardwareConnector).position;
+    const t0 = mouth.reduce((sum, v, i) => sum + (v - end[i]) * (travel[i] / length), 0);
+    const atEnd = t0 <= 0 || t0 >= length;
+    // The slide's fields only.
+    drag = { mode: 'slide', part, start: [event.clientX, event.clientY], slide, axis: [to[0] - from[0], to[1] - from[1]], scale: pixelsPerMetre(from, to, PULL_AXIS_PROBE), t0, atEnd } as Drag;
+  }
+
+  // The prismatic joints standing for the slide, as the bonds have them now.
+  const slideJoints = (slide: Slide) => slide.joints.flatMap(({ hardware }) => bonds.get(`slide:${hardware}`)?.joint ?? []);
+
+  function slideTo(pointer: ClientPoint) {
+    const { start, slide, axis, scale, t0, atEnd } = drag!;
+    const travel = Math.hypot(...slide.travel);
+    // A drawer seen end-on has no scale and does not move.
+    if (scale === 0) return;
+    const raw = t0 + pullAlong(start, [pointer.clientX, pointer.clientY], axis) / scale;
+    if (pastOpen(raw, travel, SLIDE.pullOut)) return pullOut(pointer);
+    const t = clampTravel(raw, travel);
+    for (const joint of slideJoints(slide)) physics.slide?.(joint, t);
+    const end = t <= 0 || t >= travel;
+    if (end && !atEnd) onSlideEnd?.();
+    drag!.atEnd = end;
+  }
+
+  // Dragged past the open limit: the drawer comes off its runners, and the drag carries on from
+  // the pointer as any pulled part's.
+  function pullOut(pointer: ClientPoint) {
+    const { part, slide } = drag!;
+    for (const joint of slide.joints) {
+      if (assembly.apply(joint.id, { type: 'pull' })) reportFastening(joint.id, true);
+      unseat(joint);
+    }
+    continueFree(part, pointer, 'slide');
   }
 
   // --- crank: a drag turns what the grip's turn turns ---
@@ -1992,10 +2070,11 @@ export function createGestureRouter({ domElement, camera, cameraControls, physic
   // A live drag's move or lift: the primary pointer's move, or a second finger's or the
   // wheel's lift.
   function moveDrag(effect: Extract<GestureEffect<Press>, { type: 'lift' | 'dragMove' }>, event: MouseEvent) {
-    if (drag!.mode === 'crank' || drag!.mode === 'pull') {
-      // Nothing to lift: the primary pointer's move is a crank or a pull.
+    if (drag!.mode === 'crank' || drag!.mode === 'pull' || drag!.mode === 'slide') {
+      // Nothing to lift: the primary pointer's move is a crank, a pull or a slide.
       if (effect.type === 'lift') return;
       if (drag!.mode === 'crank') crankTo(event);
+      else if (drag!.mode === 'slide') slideTo(event);
       else pullTo(event);
     } else if (effect.type === 'lift') liftDrag(effect.dy, liftRate(event));
     else updateDrag(event);

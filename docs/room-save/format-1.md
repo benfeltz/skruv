@@ -76,7 +76,7 @@ This is the test fixture (`test/fixtures/roomSave/format-1.json`), copied verbat
 | `id`, `documentCode` | Which pack. `documentCode` guards against a pack whose manifest changed taking its old poses. |
 | `box`, `lid` | Poses of the box base and its lid. |
 | `parts` | Pose by instance id (`<type>-<n>`, like `sidePanel-1`) of every player part. |
-| `joints` | Every seated pair: `hardware`/`hardwareConnector`, `host`/`hostConnector`, `kind` (a fastener kind from the pack vocabulary), `mover`, `fastener` (`state` one of `seated`, `pressed`, `screwed`, `locked`; `progress` in `[0, 1]`), `through`, `captured` (part id or `null`). The physics joints are derived from these, never saved. |
+| `joints` | Every seated pair: `hardware`/`hardwareConnector`, `host`/`hostConnector`, `kind` (a fastener kind from the pack vocabulary), `mover`, `fastener` (`state` one of `seated`, `pressed`, `screwed`, `locked`; `progress` in `[0, 1]`), `through`, `captured` (part id or `null`). The physics joints are derived from these, never saved. A `slide` kind (a drawer side on a runner's rail) is `pressed`/1 while it is on its runners and `seated`/0 once pulled off; where the drawer sits along its travel is its body's saved pose. |
 | `page` | The manual's page (a non-negative integer). |
 
 A pose is `{ "position": [x, y, z], "rotation": [x, y, z, w] }`: metres and a quaternion, as everywhere in the game. Two `item` records may name the same pack; their part ids are their own, so nothing collides across records, and the restorer builds one world per record.

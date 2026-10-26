@@ -12,6 +12,7 @@ import type { InsetSubject } from '../../src/game/insetModel.js';
 import type { ScreenPoint } from '../../src/game/dragMath.js';
 import type { Relatives } from '../../src/game/panelFit.js';
 import type { Dial } from '../../src/ui/turnRing.js';
+import type { TravelOf } from '../../src/game/assembly.js';
 import type { Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
 
 // The real gesture router over fake parts, a fake canvas and a recording bus — the bench the
@@ -105,18 +106,21 @@ export function insetRecorder(): InsetRecorder {
 }
 
 /** The router mounted over `parts`, with the camera looking down at the origin from above; `inset` is the recorder it reports to, if any. */
-export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8], inset?: InsetRecorder, relatives?: Relatives) {
+export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8], inset?: InsetRecorder, relatives?: Relatives, travelOf?: TravelOf) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
   camera.position.set(...cameraAt);
   camera.lookAt(0, 0, 0);
   camera.updateMatrixWorld(true);
   const typeById = new Map(parts.map(({ id, type }) => [id, type]));
-  const assembly = createAssembly((id) => typeById.get(id)!);
+  const assembly = createAssembly((id) => typeById.get(id)!, travelOf);
 
   // Every body the router held kinematic, in order — what a part re-held at its seat shows up as.
   const grabbed: Body[] = [];
   // And every body it handed back to the simulation.
   const released: Body[] = [];
+  // Every position target a slide joint was given (null: let go), and every joint made.
+  const slides: { joint: PhysicsJoint; target: number | null }[] = [];
+  const joined: PhysicsJoint[] = [];
   const physics: GestureRouterOptions['physics'] = {
     grab: (body: Body) => {
       grabbed.push(body);
@@ -133,8 +137,15 @@ export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8], inset?: Ins
     release: (body: Body) => {
       released.push(body);
     },
-    join: () => ({}) as PhysicsJoint,
+    join: () => {
+      const joint = {} as PhysicsJoint;
+      joined.push(joint);
+      return joint;
+    },
     unjoin: () => {},
+    slide: (joint: PhysicsJoint, target: number | null) => {
+      slides.push({ joint, target });
+    },
   };
   const log: StampedEvent[] = [];
   const events = createBus();
@@ -153,6 +164,7 @@ export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8], inset?: Ins
   };
   const ratchet: number[] = [];
   const rehomes: string[] = [];
+  let slideEnds = 0;
 
   const canvas = new FakeCanvas();
   const router = createGestureRouter({
@@ -173,6 +185,7 @@ export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8], inset?: Ins
     },
     onRatchet: (count) => ratchet.push(count),
     onRehome: (kind) => rehomes.push(kind),
+    onSlideEnd: () => slideEnds++,
   });
   const screen = (point: Vec3 | THREE.Vector3): ClientPoint => {
     const v = (Array.isArray(point) ? new THREE.Vector3(...point) : point.clone()).project(camera);
@@ -208,5 +221,5 @@ export function mount(parts: Part[], cameraAt: Vec3 = [0, 1.2, 0.8], inset?: Ins
     }
     canvas.fire('pointerup', at(degrees));
   }
-  return { router, canvas, assembly, log, dials, taps, ratchet, rehomes, screen, hold, tap, fastens, clicks, circle, camera, grabbed, released, rings };
+  return { router, canvas, assembly, log, dials, taps, ratchet, rehomes, screen, hold, tap, fastens, clicks, circle, camera, grabbed, released, rings, slides, joined, slideEnds: () => slideEnds };
 }

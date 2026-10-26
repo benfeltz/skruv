@@ -1,9 +1,10 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import { FASTENER, PHYSICS } from '../constants.js';
+import { FASTENER, PHYSICS, SLIDE } from '../constants.js';
 import { colliderBoxes, sizeAndCentre } from '../game/stageBoxes.js';
 import { createAccumulator } from './stepping.js';
 import type { Pose, Quat, Vec3 } from '../../tools/validate/lib/geometry.js';
-import type { BondMode, JointFrame } from '../game/assembly.js';
+import { multiplyQuaternions } from '../../tools/validate/lib/geometry.js';
+import type { Bond, BondMode, JointFrame } from '../game/assembly.js';
 
 // Rapier's types, for the modules that hold bodies and joints — they import them from here,
 // never from Rapier.
@@ -43,6 +44,7 @@ const toVector = ([x, y, z]: number[]) => ({ x, y, z });
 const toRotation = ([x, y, z, w]: number[]) => ({ x, y, z, w });
 const ZERO = { x: 0, y: 0, z: 0 };
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
+const conjugate = ([x, y, z, w]: Quat): Quat => [-x, -y, -z, w];
 const DEGREES = Math.PI / 180;
 // Collision groups: membership in nothing, interested in nothing — collides with nothing.
 const NO_COLLISIONS = 0;
@@ -77,7 +79,7 @@ function addRoomColliders(world: RAPIER.World) {
  * advances the simulation by whole fixed steps and copies body poses onto their meshes.
  * `grab`/`move`/`release` hand a registered body between the simulation and direct
  * control (part manipulation). `join`/`unjoin` add and remove the joints fastener state
- * calls for (src/game/assembly.ts `bonds()`). `retune` re-applies the live-tunable values
+ * calls for (src/game/assembly.ts `bonds()`), and `slide` drives a slide joint's motor. `retune` re-applies the live-tunable values
  * baked in at creation (src/game/tunables.ts) to every body, collider and joint. `remove`
  * takes a registered body back out — an item swap's teardown — and `census` counts what
  * the world holds.
@@ -187,9 +189,13 @@ export async function createPhysicsWorld() {
    *            pivot, heavily damped: it slumps to the limit and stays — no spring, no bounce.
    *            At zero play (the shipped default) it is a fixed joint: a zero-width limit
    *            on a spherical joint lets a carcass creep where a fixed joint holds it square.
+   *   'slide'  prismatic joint along `slide.axis` (a's frame), limited to [0, slide.travel],
+   *            its motor damping alone — the drawer stays where it is left (see `slide`).
+   *            b keeps colliding with the world; the pair itself does not.
    */
-  function join(bodyA: Body, bodyB: Body, { anchorA, anchorB, rotation }: JointFrame, mode: BondMode) {
+  function join(bodyA: Body, bodyB: Body, { anchorA, anchorB, rotation }: JointFrame, mode: BondMode, slide?: Bond['slide']) {
     const play = mode === 'play' && FASTENER.angularPlayDegrees > 0;
+    if (mode === 'slide') return joinSlide(bodyA, bodyB, { anchorA, anchorB, rotation }, slide);
     const data = play
       ? RAPIER.JointData.spherical(toVector(anchorA), toVector(anchorB))
       : RAPIER.JointData.fixed(toVector(anchorA), toRotation(rotation), toVector(anchorB), IDENTITY);
@@ -206,6 +212,39 @@ export async function createPhysicsWorld() {
     }
     joints.set(joint, { mode, bodyB, play });
     return joint;
+  }
+
+  function joinSlide(bodyA: Body, bodyB: Body, { anchorA, anchorB, rotation }: JointFrame, slide: Bond['slide']) {
+    if (!slide) throw new Error('join: a slide bond carries its axis and travel');
+    // The joint's coordinate is b's displacement from a along its axis; the runner (b) stays and the
+    // drawer (a) travels, so the axis is turned round and the coordinate is the drawer's travel.
+    const data = RAPIER.JointData.prismatic(toVector(anchorA), toVector(anchorB), toVector(slide.axis.map((c) => -c)));
+    data.limitsEnabled = true;
+    data.limits = [0, slide.travel];
+    const joint = world.createImpulseJoint(data, bodyA, bodyB, true);
+    if (!(joint instanceof RAPIER.PrismaticImpulseJoint)) throw new Error('join: a prismatic joint came back as another kind');
+    joint.setContactsEnabled(false);
+    // JointData.prismatic takes the bodies aligned; b rests turned by `rotation` in a, so b's
+    // frame carries it: frame2 = conj(rotation) · frame1 puts the axis in b's own frame.
+    const { x, y, z, w } = joint.frameX1();
+    const [fx, fy, fz, fw] = multiplyQuaternions(conjugate(rotation), [x, y, z, w]);
+    joint.setFrameX2({ x: fx, y: fy, z: fz, w: fw });
+    joint.configureMotorVelocity(0, SLIDE.damping);
+    joints.set(joint, { mode: 'slide', bodyB, play: false });
+    return joint;
+  }
+
+  /**
+   * Drives a slide joint (from `join` with mode 'slide') to `target`, a position along its
+   * axis in metres, held between the limits, with SLIDE's stiffness and damping; `null` lets go:
+   * velocity zero with damping alone, so the drawer stays where it was left. Both bodies wake.
+   */
+  function slide(joint: PhysicsJoint, target: number | null) {
+    if (joints.get(joint)?.mode !== 'slide' || !(joint instanceof RAPIER.PrismaticImpulseJoint)) throw new Error('slide: not a slide joint');
+    if (target === null) joint.configureMotorVelocity(0, SLIDE.damping);
+    else joint.configureMotorPosition(target, SLIDE.stiffness, SLIDE.damping);
+    joint.body1().wakeUp();
+    joint.body2().wakeUp();
   }
 
   // The play joint's angular limit and damping, from FASTENER. The spherical joint has no
@@ -278,7 +317,7 @@ export async function createPhysicsWorld() {
     return { bodies: world.bodies.len(), colliders: world.colliders.len(), joints: world.impulseJoints.len(), registered: bodies.size };
   }
 
-  return { register, step, grab, move, release, place, join, unjoin, retune, remove, census };
+  return { register, step, grab, move, release, place, join, slide, unjoin, retune, remove, census };
 }
 
 export type PhysicsWorld = Awaited<ReturnType<typeof createPhysicsWorld>>;

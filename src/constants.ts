@@ -1114,6 +1114,21 @@ export const FASTENER = {
 };
 
 
+// A drawer on its runners (src/game/slideMath.ts, src/game/assembly.ts, src/physics/world.ts,
+// src/scene/gestureRouter.ts). Distances in metres; the motor's units are Rapier's.
+export const SLIDE = {
+  // Dragged this far (m) past the open limit, the drawer comes off its runners and the drag
+  // carries on as a carry (?tune it).
+  pullOut: 0.04,
+  // The prismatic motors' position stiffness while the drawer is dragged: how hard it chases
+  // the finger along the travel (?tune it).
+  stiffness: 400,
+  // Their damping, both while dragged and at rest: at rest it alone holds the drawer where
+  // it was left (?tune it).
+  damping: 40,
+};
+
+
 // Telemetry and live tuning (src/game/events.ts, src/game/sessionBuffer.ts,
 // src/game/tunables.ts).
 export const TUNE = {
