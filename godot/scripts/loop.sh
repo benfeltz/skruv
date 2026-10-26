@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# The agent loop for the Godot project: fetch addons → import → compile check → headless tests.
+# The agent loop for the Godot project: fetch addons → import → compile check → headless
+# tests → windowed screenshot to godot/out/screenshot.png.
 # Exit 0 only when every stage passes. No stage opens the editor.
 #
 #   godot/scripts/loop.sh            # the whole loop
@@ -13,12 +14,15 @@ OUT="$ROOT/out"
 GODOT="${GODOT:-/opt/homebrew/bin/godot}"
 GODOT_VERSION="4.7.2.stable"
 STAGE_TIMEOUT_S=180
+SHOT_FPS=20
+SHOT_FRAMES=10
 
 GDUNIT_TAG="v6.2.2"
 GDUNIT_URL="https://github.com/godot-gdunit-labs/gdUnit4/archive/refs/tags/${GDUNIT_TAG}.tar.gz"
 GDUNIT_SHA256="53ba53c23328d8f30205acc2f7ffe3d663773847d09b8f48edab1df6a5950571"
 
 mkdir -p "$OUT"
+touch "$OUT/.gdignore"  # keep Godot from importing the loop's own PNGs and logs
 
 fail() { echo "loop: FAIL at $1 (see $OUT/$1.log)" >&2; exit 1; }
 
@@ -64,9 +68,26 @@ stage_check() {
 
 stage_test() {
   godot_run test --headless --path "$ROOT" \
-    -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd --ignoreHeadlessMode -rd "$OUT/reports" -a res://test \
+    -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd --ignoreHeadlessMode -rd out/reports -a res://test \
     || fail test
   echo "loop: tests ok"
+}
+
+# Windowed on purpose: `--headless --write-movie` crashes 4.7.2 with signal 11. A window
+# shows for about 3 s. Always started through main.gd, because a bare run with no main
+# scene shows a native macOS alert that someone has to click. The frame is the project's viewport
+# size (1152x648 by default); `--resolution` is ignored by the movie writer on 4.7.2.
+stage_screenshot() {
+  rm -f "$OUT"/frame*.png "$OUT/screenshot.png"
+  godot_run screenshot --path "$ROOT" -s res://main.gd \
+    --write-movie "$OUT/frame.png" \
+    --fixed-fps "$SHOT_FPS" --quit-after "$SHOT_FRAMES" || fail screenshot
+  if grep -q 'SCRIPT ERROR' "$OUT/screenshot.log"; then fail screenshot; fi
+  local last; last="$(ls "$OUT"/frame*.png 2>/dev/null | sort | tail -1)"
+  [[ -n "$last" ]] || fail screenshot
+  mv "$last" "$OUT/screenshot.png"
+  rm -f "$OUT"/frame*.png "$OUT/frame.wav"
+  echo "loop: screenshot $OUT/screenshot.png"
 }
 
 stage_version
@@ -74,4 +95,5 @@ stage_addons
 stage_import
 stage_check
 stage_test
+stage_screenshot
 echo "loop: PASS"
