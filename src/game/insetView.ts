@@ -104,11 +104,6 @@ export function safeWithin(box: Box, screen: Viewport, safe: SafeInsets): SafeIn
   };
 }
 
-/** A circle in `box`'s own px moved into window px: where its canvas stands in the window. */
-export function inWindow({ centre, radius }: InsetFrame, box: Pick<Box, 'left' | 'top'>): InsetFrame {
-  return { centre: [centre[0] + box.left, centre[1] + box.top], radius };
-}
-
 /** Whether a client-px `point` is on or inside the circle. */
 export function insideInset([x, y]: ScreenPoint, { centre, radius }: InsetFrame) {
   return Math.hypot(x - centre[0], y - centre[1]) <= radius;

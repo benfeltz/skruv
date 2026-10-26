@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INSET } from '../src/constants.js';
 import { bubbleOf } from '../src/game/insetControls.js';
-import { insetFrame, inWindow } from '../src/game/insetView.js';
+import { insetFrame } from '../src/game/insetView.js';
 import { createInsetPanel } from '../src/scene/insetPanel.js';
 import type { InsetSubject } from '../src/game/insetModel.js';
 import type { Part } from '../src/game/partMesh.js';
@@ -32,6 +32,9 @@ class FakeElement {
     this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]);
   }
   setPointerCapture() {}
+  getBoundingClientRect() {
+    return { left: 0, top: 0 };
+  }
   fire(type: string, init: object = {}) {
     for (const fn of this.listeners.get(type) ?? []) fn({ type, pointerId: 1, target: this, ...init });
   }
@@ -48,7 +51,26 @@ class FakeElement {
 const resizeListeners = new Set<() => void>();
 const screenListeners = new Set<() => void>();
 const windowListeners = new Map<string, (() => void)[]>();
+// What the panel's ResizeObserver asked to watch, and the callbacks to fire as the canvas's box changes.
+const observers: { callback: () => void; observed: unknown[]; disconnected: boolean }[] = [];
 beforeEach(() => {
+  observers.length = 0;
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      entry = { callback: () => {}, observed: [] as unknown[], disconnected: false };
+      constructor(callback: () => void) {
+        this.entry.callback = callback;
+        observers.push(this.entry);
+      }
+      observe(element: unknown) {
+        this.entry.observed.push(element);
+      }
+      disconnect() {
+        this.entry.disconnected = true;
+      }
+    },
+  );
   resizeListeners.clear();
   windowListeners.clear();
   vi.stubGlobal('window', {
@@ -163,18 +185,22 @@ describe('the inset panel', () => {
     expect(svg.attributes['data-state']).toBe('offered');
   });
 
-  it('puts the ring, the taps and the controls in window px beside a canvas that starts past the notch', () => {
-    const { panel, svg, frame, reads } = mount({ left: 47, top: 0, width: 701, height: 390 });
+  it('puts the ring, the taps and the controls in view px beside a canvas that starts past the notch', () => {
+    const left = 47;
+    const { panel, svg, frame, reads } = mount({ left, top: 0, width: 701, height: 390 });
     panel.hook.candidates(null, [subject()], nothing);
     panel.update();
-    const { centre, radius } = inWindow(frame(), { left: 47, top: 0 });
+    const { centre, radius } = frame();
+    // The ring is drawn in the canvas's own px, whatever the canvas's offset in the window.
     const ring = svg.children[0].children[0];
     expect(Number(ring.attributes.cx)).toBeCloseTo(centre[0]);
     expect(Number(ring.attributes.cy)).toBeCloseTo(centre[1]);
-    // A press on the picture's right-hand edge is on the circle; the same point in canvas px would not be.
-    expect(panel.hook.covers([centre[0] + radius - 1, centre[1]])).toBe(true);
-    expect(panel.hook.covers([centre[0] + radius + 1, centre[1]])).toBe(false);
     expect(reads()).toBe(1);
+    // A press on the picture's right-hand edge is on the circle, given in window px; the same point in view px would not be.
+    expect(panel.hook.covers([left + centre[0] + radius - 1, centre[1]])).toBe(true);
+    expect(panel.hook.covers([left + centre[0] + radius + 1, centre[1]])).toBe(false);
+    // One fresh read per tap, none per frame.
+    expect(reads()).toBe(3);
   });
 
   it('places the circle again when the screen turns, without a resize', () => {
@@ -185,6 +211,27 @@ describe('the inset panel', () => {
     for (const fn of screenListeners) fn();
     panel.update();
     expect(reads()).toBe(2);
+  });
+
+  it("reads layout again when the canvas's box changes without a window resize (the shell's late safe-area inset)", () => {
+    const { panel, reads } = mount();
+    panel.hook.candidates(null, [subject()], nothing);
+    for (let i = 0; i < 5; i++) panel.update();
+    expect(reads()).toBe(1);
+    for (const { callback } of observers) callback();
+    panel.update();
+    expect(reads()).toBe(2);
+    panel.update();
+    expect(reads()).toBe(2);
+  });
+
+  it('stops observing the canvas on dispose', () => {
+    const { panel } = mount();
+    expect(observers).toHaveLength(1);
+    expect(observers[0].observed).toHaveLength(1);
+    expect(observers[0].disconnected).toBe(false);
+    panel.dispose();
+    expect(observers[0].disconnected).toBe(true);
   });
 
   it('goes active, full ink, when the parts engage', () => {

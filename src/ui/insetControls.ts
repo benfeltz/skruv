@@ -47,9 +47,10 @@ function injectStyle() {
   style.textContent = `
     .inset-controls {
       position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
+      top: 0;
+      left: var(--strip-left, 0px);
+      width: calc(100% - var(--strip-left, 0px) - var(--strip-right, 0px));
+      height: calc(100% - var(--strip-bottom, 0px));
       overflow: visible;
       pointer-events: none;
     }
@@ -111,8 +112,9 @@ function chevron(x: number, y: number, angle: number, size: number) {
 
 // The spinner, drawn round the bubble's centre (the group's origin): the paper disc, a thin ink track and the green
 // arc of progress from twelve o'clock clockwise, the tighten chevron at three pointing clockwise and the loosen one at
-// nine pointing anticlockwise. A press on the disc starts a sweep about its centre.
-function createTurn({ onTurn }: InsetControlHandlers) {
+// nine pointing anticlockwise. A press on the disc starts a sweep about its centre. The centre is in the overlay's px,
+// which start where the view does, so a press reads where the overlay stands (`origin`) once and brings each client point into them.
+function createTurn({ onTurn }: InsetControlHandlers, origin: () => ScreenPoint) {
   const group = svg('g', 'inset-controls__control inset-controls__turn');
   const disc = svg('circle', 'inset-controls__bubble');
   const track = svg('circle', 'inset-controls__track');
@@ -124,16 +126,19 @@ function createTurn({ onTurn }: InsetControlHandlers) {
 
   let centre: ScreenPoint = [0, 0];
   let crank: ReturnType<typeof createCrank> | null = null;
+  let from: ScreenPoint = [0, 0];
+  const inOverlay = (event: PointerEvent): ScreenPoint => [event.clientX - from[0], event.clientY - from[1]];
   const end = () => {
     crank = null;
   };
   group.addEventListener('pointerdown', (event) => {
     (event.target as Element | null)?.setPointerCapture?.(event.pointerId);
+    from = origin();
     crank = createCrank(FASTENER.crankDeadzone);
-    crank.move(centre, pointOf(event));
+    crank.move(centre, inOverlay(event));
   });
   group.addEventListener('pointermove', (event) => {
-    const sweep = crank?.move(centre, pointOf(event));
+    const sweep = crank?.move(centre, inOverlay(event));
     if (sweep) onTurn(ringRadians(sweep));
   });
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) group.addEventListener(type, end);
@@ -216,7 +221,10 @@ export function createInsetControls(container: HTMLElement, handlers: InsetContr
   element.setAttribute('class', 'inset-controls');
   element.setAttribute('aria-hidden', 'true');
   element.setAttribute('hidden', '');
-  const turn = createTurn(handlers);
+  const turn = createTurn(handlers, () => {
+    const { left, top } = element.getBoundingClientRect();
+    return [left, top];
+  });
   const push = createPush(handlers);
   turn.group.setAttribute('hidden', '');
   push.group.setAttribute('hidden', '');
