@@ -17,5 +17,11 @@ gdscript/warnings/untyped_declaration=2
 
 [editor_plugins]
 
-; Enabled by editing this file. No editor step. scripts/loop.sh fetches the addon.
-enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg")
+; Enabled by editing this file. No editor step. loop.sh fetches gdUnit4; godot_mcp is committed.
+enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg", "res://addons/godot_mcp/plugin.cfg")
+
+[godot_mcp]
+
+; The godot_mcp addon (voidrot/godot-mcp @ 57715ac, copied into addons/) serves the editor as an
+; MCP server. The port is set here by hand so the editor never writes it into this file.
+server/port=6550

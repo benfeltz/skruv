@@ -1,0 +1,26 @@
+#!/usr/bin/env perl
+# A stand-in for GNU coreutils `timeout`, which macOS lacks and the godot_mcp addon runs its
+# jobs under. Covers only the forms the addon uses:
+#   timeout --version
+#   timeout [-k KILL_AFTER] LIMIT command [args...]
+# Sends SIGTERM to the command at LIMIT seconds and SIGKILL KILL_AFTER seconds later; exits 124
+# on a timeout, otherwise with the command's own status. editor.sh puts this directory on PATH.
+use strict; use warnings; use POSIX ":sys_wait_h";
+if (@ARGV && $ARGV[0] eq '--version') { print "timeout (godot/scripts/bin shim)\n"; exit 0; }
+my $kill_after = 0;
+if (@ARGV >= 2 && $ARGV[0] eq '-k') { shift @ARGV; $kill_after = shift @ARGV; }
+my $limit = shift @ARGV;
+die "usage: timeout [-k N] LIMIT command...\n" unless defined $limit && @ARGV;
+my $pid = fork() // die "fork: $!\n";
+if ($pid == 0) { exec { $ARGV[0] } @ARGV or exit 127; }
+my $timed_out = 0;
+local $SIG{ALRM} = sub {
+  $timed_out = 1; kill 'TERM', $pid;
+  if ($kill_after > 0) { $SIG{ALRM} = sub { kill 'KILL', $pid }; alarm $kill_after; }
+};
+alarm $limit;
+while (waitpid($pid, 0) == -1) { last unless $!{EINTR}; }
+my $status = $?;
+alarm 0;
+exit 124 if $timed_out;
+exit(WIFSIGNALED($status) ? 128 + WTERMSIG($status) : WEXITSTATUS($status));

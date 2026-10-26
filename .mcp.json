@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "godot-editor": {
+      "type": "http",
+      "url": "http://127.0.0.1:6550/mcp",
+      "headersHelper": "cat godot/.godot/godot_mcp/headers.json",
+      "timeout": 600000
+    }
+  }
+}
