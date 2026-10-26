@@ -18,10 +18,6 @@ const SOLID_KIND := "pin"
 ## Tuning attempt 2 (step 5): anchor each joint midway between its two parts' centres instead
 ## of at the hole. False anchors at the hole.
 const ANCHOR_AT_MIDPOINT := true
-## Tuning attempt 5 (step 5, beyond the plan): no body simulates lighter than this (kg), as in the
-## web build (PHYSICS.minBodyMass, src/constants.ts), whose Rapier joints went soft the same way:
-## a 1 g pin under a 2 kg shelf. The data keeps the true masses.
-const MIN_BODY_MASS := 0.2
 
 var data: ItemData
 var compound: bool
@@ -58,11 +54,6 @@ func _ready() -> void:
 			_lock(spec.through, spec.hardware, spec.position)
 		if spec.captured != "":
 			_lock(spec.hardware, spec.captured, spec.position)
-
-
-## The mass a part simulates with: its own, floored at MIN_BODY_MASS.
-static func sim_mass(part: ItemData.PartType) -> float:
-	return maxf(part.mass, MIN_BODY_MASS)
 
 
 ## An instance's world pose now.
@@ -133,7 +124,7 @@ func _make_body(inst: ItemData.Instance, part: ItemData.PartType) -> RigidBody3D
 	var body := RigidBody3D.new()
 	body.name = inst.id
 	body.transform = start_transform(inst)
-	body.mass = sim_mass(part)
+	body.mass = part.mass
 	body.add_child(_make_collider(part))
 	body.add_child(_make_mesh(part))
 	return body

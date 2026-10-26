@@ -61,5 +61,4 @@ func test_item_builds_one_body_per_instance_at_its_pose() -> void:
 	for inst: ItemData.Instance in data.instances:
 		var body: RigidBody3D = item.bodies[inst.id]
 		assert_vector(body.position).is_equal_approx(inst.position + Vector3(0.0, Item.DROP_HEIGHT, 0.0), Vector3.ONE * 1e-6)
-		var mass := Item.sim_mass(data.type_of(inst))
-		assert_float(body.mass).is_equal_approx(mass, mass * 1e-6)
+		assert_float(body.mass).is_equal_approx(data.type_of(inst).mass, data.type_of(inst).mass * 1e-6)
