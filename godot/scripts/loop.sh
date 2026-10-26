@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The agent loop for the Godot project: fetch addons → import → compile check → headless
-# tests → windowed screenshot to godot/out/screenshot.png.
+# The agent loop for the Godot project: export check → fetch addons → import → compile check →
+# headless tests → windowed screenshot to godot/out/screenshot.png.
 # Exit 0 only when every stage passes. No stage opens the editor.
 #
 #   godot/scripts/loop.sh            # the whole loop
@@ -10,6 +10,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO="$(cd "$ROOT/.." && pwd)"
 OUT="$ROOT/out"
 GODOT="${GODOT:-/opt/homebrew/bin/godot}"
 GODOT_VERSION="4.7.2.stable"
@@ -31,6 +32,16 @@ fail() { echo "loop: FAIL at $1 (see $OUT/$1.log)" >&2; exit 1; }
 godot_run() {
   local stage="$1"; shift
   perl -e 'alarm shift; exec @ARGV' "$STAGE_TIMEOUT_S" "$GODOT" "$@" >"$OUT/$stage.log" 2>&1
+}
+
+# The item Godot reads is generated from the pack by the TS exporter, through the one pack
+# implementation. The exporter must typecheck, and the committed json must be its exact output.
+stage_export() {
+  [[ -d "$REPO/node_modules" ]] || { echo "loop: run npm ci at the repo root first (the exporter needs it)" >&2; exit 1; }
+  ( cd "$REPO" && npx tsc -p godot/tsconfig.json \
+      && npx tsx godot/tools/export-item.ts items/johnny godot/items/johnny.json --check ) >"$OUT/export.log" 2>&1 \
+    || fail export
+  tail -1 "$OUT/export.log" | sed 's/^/loop: /'
 }
 
 stage_version() {
@@ -90,6 +101,7 @@ stage_screenshot() {
   echo "loop: screenshot $OUT/screenshot.png"
 }
 
+stage_export
 stage_version
 stage_addons
 stage_import
