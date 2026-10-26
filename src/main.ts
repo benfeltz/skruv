@@ -1,4 +1,4 @@
-import { CATALOG, LAYER, RENDER, SAVE, STAGE, TUNE } from './constants.js';
+import { CATALOG, LAYER, RENDER, SAVE, SHELL, STAGE, TUNE } from './constants.js';
 import { catalogEntries, createCatalog } from './game/catalogModel.js';
 import { pickableSet } from './game/pickable.js';
 import { ANY, clearEvent, createBus, EVENT, fpsEvent, sessionEvent, tuneEvent } from './game/events.js';
@@ -29,6 +29,7 @@ import { createCatalogSheet } from './ui/catalogSheet.js';
 import { createControlCluster } from './ui/controlCluster.js';
 import { createManualFan } from './ui/manualFan.js';
 import { createMenuButton } from './ui/menuButton.js';
+import type { MetricsOverlay } from './ui/metricsOverlay.js';
 import { createResetButton } from './ui/resetButton.js';
 import { createToggleButton } from './ui/toggleButton.js';
 
@@ -87,13 +88,18 @@ const snapRotate = createToggleButton({ label: 'Snap rotate' });
 
 // Haptics: every moment buzzes a named cue through the buzzer slot. The web's buzzer plays
 // HAPTICS patterns through navigator.vibrate (absent on iOS Safari; a 0 ms knob is silent); a
-// native shell plugs its own in with haptics.setBuzzer.
+// native shell plugs its own in with haptics.setBuzzer (src/shell/capacitorHaptics.ts).
 const haptics = createHaptics({
   buzzer: (cue) => {
     const pattern = patternFor(cue);
     if (pattern !== null) navigator.vibrate?.(pattern);
   },
 });
+// Inside the Capacitor shell the web buzzer is silent (no navigator.vibrate on iOS): the
+// shell's buzzer takes the slot. Loaded only there — the web never fetches the plugin.
+if (location.protocol === SHELL.protocol) {
+  import('./shell/capacitorHaptics.js').then(({ connectNativeHaptics }) => connectNativeHaptics(haptics));
+}
 events.on(ANY, (event) => {
   const cue = cueFor(event);
   if (cue) haptics.cue(cue);
@@ -274,6 +280,27 @@ const repack = createResetButton({
 // Closing the menu drops a Repack hold in progress.
 menu.add(repack.element, { onClose: repack.cancel });
 menu.add(snapRotate.element);
+// Metrics: a frame-time readout, switched from the menu. Built in unless VITE_METRICS=off
+// (the store release): the guard is a build-time constant, so an off build drops the row,
+// the module and its chunk — the same way the DEV guard below drops src/dev.
+if (import.meta.env.VITE_METRICS !== 'off') {
+  const metricsToggle = createToggleButton({
+    label: 'Metrics',
+    onChange: async (on) => {
+      if (!on) {
+        metrics?.dispose();
+        metrics = null;
+        return;
+      }
+      const { createMetricsOverlay } = await import('./ui/metricsOverlay.js');
+      // Flipped off, or on again, while the import was in flight: only the first on-branch to land mounts.
+      if (!metricsToggle.pressed || metrics) return;
+      metrics = createMetricsOverlay();
+      document.body.append(metrics.element);
+    },
+  });
+  menu.add(metricsToggle.element);
+}
 cluster.add(menu.element);
 document.body.append(cluster.element);
 // The row reaches to the cluster, which is on screen now to be measured.
@@ -281,6 +308,8 @@ fan.refresh();
 
 // Under sustained load the room renders every other frame; everything else runs every frame.
 const fps = createFpsGuard();
+// The frame-time readout while the Metrics row is on.
+let metrics: MetricsOverlay | null = null;
 
 createLoop((delta, rawDelta) => {
   cameraControls.update(delta);
@@ -290,6 +319,7 @@ createLoop((delta, rawDelta) => {
   for (const world of items.all()) if (world !== items.current) world.keep();
   // Measured on the true delta: the clamped one would floor every slow device at 15 fps.
   const { render, sample } = fps.frame(rawDelta);
+  metrics?.frame(rawDelta);
   if (sample) events.emit(fpsEvent(Math.round(sample.fps * 10) / 10, sample.skipping));
   if (render) {
     renderer.shadowMap.needsUpdate = true;

@@ -1,10 +1,10 @@
 // Haptic moments: which game event buzzes as which named cue, and the buzzer slot the cues
 // go to. Pure — events in, cue names out; the buzzer is injected. The web build's default
 // buzzer (src/main.ts) plays `patternFor(cue)` through navigator.vibrate; a native shell
-// swaps in its own with `setBuzzer`, mapping cues to its impact styles — cues, never
-// millisecond patterns, cross that seam.
+// swaps in its own with `setBuzzer`, mapping cues to its impact styles (`nativeFor`) — cues,
+// never millisecond patterns, cross that seam.
 
-import { HAPTICS } from '../constants.js';
+import { HAPTICS, type NativeStyle } from '../constants.js';
 import { KIND } from '../../tools/validate/lib/vocabulary.js';
 import { EVENT } from './events.js';
 
@@ -60,6 +60,14 @@ export function patternFor(cue: Cue): number | number[] | null {
     default:
       return null;
   }
+}
+
+/**
+ * The native style a cue plays in the shell (HAPTICS.native), or null when its knob is 0 —
+ * off on native as on the web.
+ */
+export function nativeFor(cue: Cue): NativeStyle | null {
+  return patternFor(cue) === null ? null : HAPTICS.native[cue];
 }
 
 /** The buzzer slot: `cue(name)` buzzes through whichever buzzer `setBuzzer` last plugged in. */

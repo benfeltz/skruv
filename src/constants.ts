@@ -1207,6 +1207,35 @@ export const HAPTICS = {
   lockGapMs: 60,
   tickMs: 4,
   homeMs: 24,
+  // The native shell's buzzer (src/shell/capacitorHaptics.ts) plays each cue as one of
+  // Capacitor's impact styles, or the success notification; tuned on the phone. A cue whose
+  // knob above is 0 is silent on native too.
+  native: {
+    seat: 'light',
+    engage: 'light',
+    tick: 'light',
+    home: 'success',
+    lock: 'heavy',
+  } satisfies Record<string, NativeStyle>,
+};
+
+/** A native haptic: Capacitor's three impact styles, plus its success notification. */
+export type NativeStyle = 'light' | 'medium' | 'heavy' | 'success';
+
+// The Capacitor shell: the iOS app serves the bundled build from capacitor://localhost/ and
+// can't append a query to a bundled file, so its scheme is how the page knows it is inside.
+// Android's shell serves from https://localhost and is not detected yet.
+export const SHELL = { protocol: 'capacitor:' };
+
+// The metrics overlay (src/ui/metricsOverlay.ts), switched from the menu. Frame deltas land
+// in fixed bins of this width (ms), up to this ceiling (a longer one counts in the last
+// bin); a frame longer than `slowFrameMs` counts as a dropped-frame stall; the readout is
+// redrawn every `readoutSeconds`.
+export const METRICS = {
+  histogramBinMs: 0.25,
+  histogramMaxMs: 1000,
+  slowFrameMs: 33,
+  readoutSeconds: 0.5,
 };
 
 // Dev stream (dev server only — never in a build): the socket a dev session streams its
