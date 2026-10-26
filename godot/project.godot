@@ -22,6 +22,9 @@ gdscript/warnings/untyped_declaration=2
 ; Tuning attempt 1 (step 5): solver iterations, from Jolt's 10 and 2.
 jolt_physics_3d/simulation/velocity_steps=100
 jolt_physics_3d/simulation/position_steps=20
+; Tuning attempt 4 (step 5, beyond the plan): contact slop and speculative distance, from 20 mm.
+jolt_physics_3d/simulation/penetration_slop=0.001
+jolt_physics_3d/simulation/speculative_contact_distance=0.002
 
 [editor_plugins]
 
