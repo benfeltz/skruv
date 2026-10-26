@@ -15,6 +15,11 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 ; Addons are exempt (exclude_addons is on by default).
 gdscript/warnings/untyped_declaration=2
 
+[physics]
+
+; Jolt, set explicitly, so the stillness result is about Jolt and not whatever the default is.
+3d/physics_engine="Jolt Physics"
+
 [editor_plugins]
 
 ; Enabled by editing this file. No editor step. loop.sh fetches gdUnit4; godot_mcp is committed.

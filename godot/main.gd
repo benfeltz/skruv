@@ -3,6 +3,6 @@ extends SceneTree
 
 
 func _initialize() -> void:
-	var room := Room.new()
-	room.name = "Room"
-	root.add_child(room)
+	var world := World.new()
+	world.name = "World"
+	root.add_child(world)

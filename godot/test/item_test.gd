@@ -51,3 +51,14 @@ func test_every_instance_has_a_type() -> void:
 	var item := _item()
 	for inst: ItemData.Instance in item.instances:
 		assert_bool(item.types.has(inst.type)).override_failure_message("no type %s" % inst.type).is_true()
+
+
+func test_item_builds_one_body_per_instance_at_its_pose() -> void:
+	var data := _item()
+	var item: Item = auto_free(Item.new(data))
+	add_child(item)
+	assert_int(item.bodies.size()).is_equal(data.instances.size())
+	for inst: ItemData.Instance in data.instances:
+		var body: RigidBody3D = item.bodies[inst.id]
+		assert_vector(body.position).is_equal_approx(inst.position + Vector3(0.0, Item.DROP_HEIGHT, 0.0), Vector3.ONE * 1e-6)
+		assert_float(body.mass).is_equal_approx(data.type_of(inst).mass, data.type_of(inst).mass * 1e-6)
