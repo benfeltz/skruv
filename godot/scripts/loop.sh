@@ -77,9 +77,10 @@ stage_check() {
   grep '^check:' "$OUT/check.log" | sed 's/^/loop: /'
 }
 
+# -c: run every test even after a failure, so a red run still reports all of them.
 stage_test() {
   godot_run test --headless --path "$ROOT" \
-    -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd --ignoreHeadlessMode -rd out/reports -a res://test \
+    -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd --ignoreHeadlessMode -c -rd out/reports -a res://test \
     || fail test
   echo "loop: tests ok"
 }

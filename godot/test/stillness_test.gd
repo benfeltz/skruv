@@ -11,9 +11,20 @@ const FLOOR_TOLERANCE_M := 0.002
 
 
 func test_dropped_item_lands_stands_and_sleeps() -> void:
+	await _drop_and_assert(false)
+
+
+## Tuning attempt 3 (step 5): the same parts fused into one body, no joints. It separates what
+## the joints do from what Jolt, the floor and the drop do.
+func test_compound_control_lands_stands_and_sleeps() -> void:
+	await _drop_and_assert(true)
+
+
+func _drop_and_assert(compound: bool) -> void:
+	print("stillness: %s" % ("compound control" if compound else "jointed"))
 	var room: Room = auto_free(Room.new())
 	add_child(room)
-	var item: Item = auto_free(Item.new())
+	var item: Item = auto_free(Item.new(null, compound))
 	add_child(item)
 	var hz := Engine.physics_ticks_per_second
 	var steps := int(SETTLE_S * hz)

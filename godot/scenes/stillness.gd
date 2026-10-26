@@ -1,6 +1,6 @@
 class_name Stillness
 extends RefCounted
-## One measurement of how still the item is, against its assembled pose: the fastest body, the
+## One measurement of how still the item is, against its assembled pose (Item.pose_of, so the compound control reads the same way): the fastest body, the
 ## farthest any body sits from its assembled position, the largest turn away from its assembled
 ## rotation, how many bodies sleep, and the lowest point of any body. Reads bodies, moves nothing.
 
@@ -20,16 +20,17 @@ static func measure(item: Item, time_s: float) -> Stillness:
 	s.lowest_y = INF
 	for inst: ItemData.Instance in item.data.instances:
 		var body: RigidBody3D = item.bodies[inst.id]
-		var basis := body.global_transform.basis
+		var pose := item.pose_of(inst.id)
+		var basis := pose.basis
 		s.bodies += 1
 		if body.sleeping:
 			s.asleep += 1
 		s.max_speed = maxf(s.max_speed, body.linear_velocity.length())
 		s.max_angular_speed = maxf(s.max_angular_speed, body.angular_velocity.length())
-		s.max_offset = maxf(s.max_offset, body.global_position.distance_to(inst.position))
+		s.max_offset = maxf(s.max_offset, pose.origin.distance_to(inst.position))
 		var turn := rad_to_deg(basis.get_rotation_quaternion().angle_to(inst.rotation))
 		s.max_turn_deg = maxf(s.max_turn_deg, turn)
-		s.lowest_y = minf(s.lowest_y, body.global_position.y - _half_height(basis, item.data.type_of(inst).size))
+		s.lowest_y = minf(s.lowest_y, pose.origin.y - _half_height(basis, item.data.type_of(inst).size))
 	return s
 
 
@@ -53,9 +54,9 @@ func line() -> String:
 static func movers(item: Item, max_offset: float, max_turn_deg: float) -> PackedStringArray:
 	var out: PackedStringArray = []
 	for inst: ItemData.Instance in item.data.instances:
-		var body: RigidBody3D = item.bodies[inst.id]
-		var offset := body.global_position.distance_to(inst.position)
-		var turn := rad_to_deg(body.global_transform.basis.get_rotation_quaternion().angle_to(inst.rotation))
+		var pose := item.pose_of(inst.id)
+		var offset := pose.origin.distance_to(inst.position)
+		var turn := rad_to_deg(pose.basis.get_rotation_quaternion().angle_to(inst.rotation))
 		if offset > max_offset or turn > max_turn_deg:
-			out.append("moved: %s offset=%.1fmm turn=%.2fdeg dy=%.1fmm" % [inst.id, offset * 1000.0, turn, (body.global_position.y - inst.position.y) * 1000.0])
+			out.append("moved: %s offset=%.1fmm turn=%.2fdeg dy=%.1fmm" % [inst.id, offset * 1000.0, turn, (pose.origin.y - inst.position.y) * 1000.0])
 	return out
