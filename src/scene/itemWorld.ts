@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { DRAWN_EPSILON, FAN, LAYOUT, PICK, RESET, ROOM } from '../constants.js';
-import { createAssembly, restoreJoints } from '../game/assembly.js';
+import { createAssembly, relativePose, restoreJoints } from '../game/assembly.js';
 import { EVENT, recoveryEvent, resetEvent } from '../game/events.js';
 import { CUE, homeCue } from '../game/haptics.js';
 import { ASSEMBLED, IDENTITY, ITEM_ID, PART_TYPES } from '../game/item.js';
 import { localTravel } from '../game/slideMath.js';
+import { KIND } from '../../tools/validate/lib/vocabulary.js';
 import { preferredRelatives } from '../game/panelFit.js';
 import { createPartMesh } from '../game/partMesh.js';
 import { hasEscaped } from '../game/dragMath.js';
@@ -203,7 +204,15 @@ function buildItemWorld({ scene, camera, domElement, physics, cameraControls, ev
     const travel = localTravel(part);
     if (travel) travelById.set(part.id, travel);
   }
-  const assembly = createAssembly((id) => typeById.get(id)!, (id) => travelById.get(id) ?? null);
+  // A slide's rotation as assembled, so a drawer seated at a tilt squares up on its runners:
+  // asked of the pairs the pack joins by a slide only.
+  const assembledById = new Map(ASSEMBLED.parts.map((part) => [part.id, part]));
+  const slidePairs = new Set(ASSEMBLED.joints.filter((j) => j.kind === KIND.SLIDE).map((j) => `${j.hardware}|${j.host}`));
+  const restOf = (hardware: PartId, host: PartId) => {
+    const [h, o] = [assembledById.get(hardware), assembledById.get(host)];
+    return h && o && slidePairs.has(`${hardware}|${host}`) ? relativePose(o, h).rotation : null;
+  };
+  const assembly = createAssembly((id) => typeById.get(id)!, (id) => travelById.get(id) ?? null, restOf);
   // Manipulation goes through these seams: a fastened compound moves as one, and while a
   // finger is on the elevation line its part is held in mid-air at the line's height.
   const hold = createLiftHold(createCompoundPhysics(physics, parts, assembly));

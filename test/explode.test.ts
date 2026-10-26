@@ -127,6 +127,38 @@ describe('installStep', () => {
   });
 });
 
+describe('installStep with slide hosts', () => {
+  const slide = (hardware: string, host: string): Joint => ({ ...joint(hardware, 0, host, 0, host), kind: 'slide' as Joint['kind'] });
+  const held = BOOKLET.explode.assembly;
+  // A side that slides open along -x, on a runner the plate stands in for.
+  const sliding: ExplodeLayout = {
+    parts: [at('plate', 'plate', [0, 0, 0]), { ...at('side', 'side', [0, 0.06, 0]), open: { position: [-0.15, 0.06, 0] as Vec3, rotation: ID } }],
+    joints: [slide('plate', 'side')],
+  };
+  const install = { name: 'drawer', members: ['side'] };
+
+  it('holds the members off along the slide hosts\' travel, the arrow along it', () => {
+    const { offsets, arrow } = installStep({ install, joints: [0] }, sliding, partTypes);
+    expect(offsets.get('side')).toEqual([expect.closeTo(-held), expect.closeTo(0), expect.closeTo(0)]);
+    expect(arrow![0][0]).toBeLessThan(arrow![1][0]);
+    expect(arrow![0][0] - arrow![1][0]).toBeCloseTo(-held);
+  });
+
+  it('keeps +z on a page with no slide joint', () => {
+    const { offsets } = installStep({ install, joints: [] }, sliding, partTypes);
+    expect(offsets.get('side')).toEqual([0, 0, held]);
+  });
+
+  it('leaves a slide joint\'s mover alone in separation while a dowel joint on the same page still floats', () => {
+    const both: ExplodeLayout = { parts: [...sliding.parts, at('d1', 'dowel', [0.1, 0.01, 0])], joints: [...sliding.joints, joint('d1', 0, 'plate', 0, 'd1')] };
+    const { offsets, leaders, pulled } = separation({ joints: [0, 1], pose: 'upright', shown: ['plate', 'side', 'd1'], install }, both, partTypes);
+    expect(offsets.has('side')).toBe(false);
+    expect(pulled).toEqual([]);
+    expect(offsets.has('d1')).toBe(true);
+    expect(leaders).toHaveLength(1);
+  });
+});
+
 describe('explodeStep', () => {
   it('draws every shown part at its pose plus its offset', () => {
     const { items } = explodeStep({ joints: [0, 2], pose: 'upright', shown }, layout, partTypes);

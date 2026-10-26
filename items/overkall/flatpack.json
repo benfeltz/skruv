@@ -27,7 +27,9 @@
       "screwThread",
       "wrenchTip",
       "driveSlot",
-      "screwdriverTip"
+      "screwdriverTip",
+      "railEnd",
+      "railGroove"
     ],
     "fasteners": [
       "dowel",
@@ -35,6 +37,7 @@
       "bolt",
       "cam",
       "screw",
+      "slide",
       "tool"
     ]
   },
@@ -127,6 +130,62 @@
             0.008,
             0.217,
             0.0
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "screwPilot-1",
+          "type": "screwPilot",
+          "position": [
+            0.008,
+            -0.078,
+            -0.1
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "screwPilot-2",
+          "type": "screwPilot",
+          "position": [
+            0.008,
+            -0.078,
+            0.1
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-5",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            -0.078,
+            -0.05
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-6",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            -0.078,
+            0.05
           ],
           "axis": [
             1,
@@ -330,6 +389,89 @@
         }
       ]
     },
+    "runner": {
+      "partNumber": "30104",
+      "box": [
+        0.016,
+        0.02,
+        0.3
+      ],
+      "mass": 0.12,
+      "color": "partPanel",
+      "quantity": 2,
+      "connectors": [
+        {
+          "id": "railEnd-1",
+          "type": "railEnd",
+          "position": [
+            -0.008,
+            0.0,
+            0.0
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "screwHole-1",
+          "type": "screwHole",
+          "position": [
+            -0.0048,
+            0.0,
+            -0.109
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "screwHole-2",
+          "type": "screwHole",
+          "position": [
+            -0.0048,
+            0.0,
+            0.091
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-1",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            0.0,
+            -0.059
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-2",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            0.0,
+            0.041
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        }
+      ]
+    },
     "drawerFront": {
       "partNumber": "30201",
       "box": [
@@ -345,7 +487,7 @@
           "id": "screwHole-1",
           "type": "screwHole",
           "position": [
-            -0.172,
+            -0.16,
             0.05,
             0.004
           ],
@@ -359,7 +501,7 @@
           "id": "screwHole-2",
           "type": "screwHole",
           "position": [
-            0.172,
+            0.16,
             0.05,
             0.004
           ],
@@ -373,7 +515,7 @@
           "id": "screwHole-3",
           "type": "screwHole",
           "position": [
-            -0.172,
+            -0.16,
             -0.05,
             0.004
           ],
@@ -387,7 +529,7 @@
           "id": "screwHole-4",
           "type": "screwHole",
           "position": [
-            0.172,
+            0.16,
             -0.05,
             0.004
           ],
@@ -401,7 +543,7 @@
           "id": "dowelHole-1",
           "type": "dowelHole",
           "position": [
-            -0.172,
+            -0.16,
             0.025,
             -0.008
           ],
@@ -415,7 +557,7 @@
           "id": "dowelHole-2",
           "type": "dowelHole",
           "position": [
-            0.172,
+            0.16,
             0.025,
             -0.008
           ],
@@ -429,7 +571,7 @@
           "id": "dowelHole-3",
           "type": "dowelHole",
           "position": [
-            -0.172,
+            -0.16,
             -0.025,
             -0.008
           ],
@@ -443,7 +585,7 @@
           "id": "dowelHole-4",
           "type": "dowelHole",
           "position": [
-            0.172,
+            0.16,
             -0.025,
             -0.008
           ],
@@ -647,13 +789,27 @@
             0,
             -1
           ]
+        },
+        {
+          "id": "railGroove-1",
+          "type": "railGroove",
+          "position": [
+            0.008,
+            0.0,
+            0.0
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
         }
       ]
     },
     "drawerBack": {
       "partNumber": "30203",
       "box": [
-        0.36,
+        0.334,
         0.16,
         0.016
       ],
@@ -665,7 +821,7 @@
           "id": "screwHole-1",
           "type": "screwHole",
           "position": [
-            -0.172,
+            -0.16,
             0.05,
             -0.008
           ],
@@ -679,7 +835,7 @@
           "id": "screwHole-2",
           "type": "screwHole",
           "position": [
-            0.172,
+            0.16,
             0.05,
             -0.008
           ],
@@ -693,7 +849,7 @@
           "id": "screwHole-3",
           "type": "screwHole",
           "position": [
-            -0.172,
+            -0.16,
             -0.05,
             -0.008
           ],
@@ -707,7 +863,7 @@
           "id": "screwHole-4",
           "type": "screwHole",
           "position": [
-            0.172,
+            0.16,
             -0.05,
             -0.008
           ],
@@ -749,7 +905,7 @@
           "id": "dowelHole-1",
           "type": "dowelHole",
           "position": [
-            -0.172,
+            -0.16,
             0.025,
             0.008
           ],
@@ -763,7 +919,7 @@
           "id": "dowelHole-2",
           "type": "dowelHole",
           "position": [
-            0.172,
+            0.16,
             0.025,
             0.008
           ],
@@ -777,7 +933,7 @@
           "id": "dowelHole-3",
           "type": "dowelHole",
           "position": [
-            -0.172,
+            -0.16,
             -0.025,
             0.008
           ],
@@ -791,7 +947,7 @@
           "id": "dowelHole-4",
           "type": "dowelHole",
           "position": [
-            0.172,
+            0.16,
             -0.025,
             0.008
           ],
@@ -834,7 +990,7 @@
     "drawerBottom": {
       "partNumber": "30204",
       "box": [
-        0.328,
+        0.304,
         0.012,
         0.3
       ],
@@ -846,7 +1002,7 @@
           "id": "dowelHole-1",
           "type": "dowelHole",
           "position": [
-            -0.164,
+            -0.152,
             0.0,
             -0.05
           ],
@@ -860,7 +1016,7 @@
           "id": "dowelHole-2",
           "type": "dowelHole",
           "position": [
-            -0.164,
+            -0.152,
             0.0,
             0.05
           ],
@@ -874,7 +1030,7 @@
           "id": "dowelHole-3",
           "type": "dowelHole",
           "position": [
-            0.164,
+            0.152,
             0.0,
             -0.05
           ],
@@ -888,7 +1044,7 @@
           "id": "dowelHole-4",
           "type": "dowelHole",
           "position": [
-            0.164,
+            0.152,
             0.0,
             0.05
           ],
@@ -930,7 +1086,7 @@
           "id": "screwPilot-1",
           "type": "screwPilot",
           "position": [
-            -0.164,
+            -0.152,
             0.0,
             -0.1
           ],
@@ -944,7 +1100,7 @@
           "id": "screwPilot-2",
           "type": "screwPilot",
           "position": [
-            -0.164,
+            -0.152,
             0.0,
             0.1
           ],
@@ -958,7 +1114,7 @@
           "id": "screwPilot-3",
           "type": "screwPilot",
           "position": [
-            0.164,
+            0.152,
             0.0,
             -0.1
           ],
@@ -972,7 +1128,7 @@
           "id": "screwPilot-4",
           "type": "screwPilot",
           "position": [
-            0.164,
+            0.152,
             0.0,
             0.1
           ],
@@ -1048,7 +1204,7 @@
       ],
       "mass": 0.0015,
       "color": "partDowel",
-      "quantity": 22,
+      "quantity": 26,
       "spares": 2,
       "connectors": [
         {
@@ -1200,7 +1356,7 @@
       ],
       "mass": 0.003,
       "color": "partMetal",
-      "quantity": 15,
+      "quantity": 19,
       "spares": 2,
       "connectors": [
         {
@@ -1369,7 +1525,7 @@
       "role": "drawerFront",
       "position": [
         0.0,
-        0.146,
+        0.147,
         0.167
       ],
       "rotation": [
@@ -1383,8 +1539,8 @@
       "id": "drawerSide-1",
       "role": "drawerSide",
       "position": [
-        -0.172,
-        0.146,
+        -0.16,
+        0.147,
         0.009
       ],
       "rotation": [
@@ -1392,14 +1548,70 @@
         1,
         0.0,
         0.0
-      ]
+      ],
+      "open": {
+        "position": [
+          -0.16,
+          0.147,
+          0.159
+        ],
+        "rotation": [
+          0.0,
+          1,
+          0.0,
+          0.0
+        ]
+      }
     },
     {
       "id": "drawerSide-2",
       "role": "drawerSide",
       "position": [
-        0.172,
-        0.146,
+        0.16,
+        0.147,
+        0.009
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1
+      ],
+      "open": {
+        "position": [
+          0.16,
+          0.147,
+          0.159
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1
+        ]
+      }
+    },
+    {
+      "id": "runner-1",
+      "role": "runner",
+      "position": [
+        -0.176,
+        0.147,
+        0.009
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        1,
+        0.0
+      ]
+    },
+    {
+      "id": "runner-2",
+      "role": "runner",
+      "position": [
+        0.176,
+        0.147,
         0.009
       ],
       "rotation": [
@@ -1414,7 +1626,7 @@
       "role": "drawerBack",
       "position": [
         0.0,
-        0.146,
+        0.147,
         -0.149
       ],
       "rotation": [
@@ -1429,7 +1641,7 @@
       "role": "drawerBottom",
       "position": [
         0.0,
-        0.072,
+        0.073,
         0.009
       ],
       "rotation": [
@@ -1444,7 +1656,7 @@
       "role": "knob",
       "position": [
         0.0,
-        0.146,
+        0.147,
         0.185
       ],
       "rotation": [
@@ -1578,8 +1790,8 @@
       "id": "dowel-9",
       "role": "hardware",
       "position": [
-        -0.164,
-        0.072,
+        -0.152,
+        0.073,
         -0.041
       ],
       "rotation": [
@@ -1593,8 +1805,8 @@
       "id": "dowel-10",
       "role": "hardware",
       "position": [
-        -0.164,
-        0.072,
+        -0.152,
+        0.073,
         0.059
       ],
       "rotation": [
@@ -1608,8 +1820,8 @@
       "id": "dowel-11",
       "role": "hardware",
       "position": [
-        0.164,
-        0.072,
+        0.152,
+        0.073,
         -0.041
       ],
       "rotation": [
@@ -1623,8 +1835,8 @@
       "id": "dowel-12",
       "role": "hardware",
       "position": [
-        0.164,
-        0.072,
+        0.152,
+        0.073,
         0.059
       ],
       "rotation": [
@@ -1639,7 +1851,7 @@
       "role": "hardware",
       "position": [
         -0.05,
-        0.072,
+        0.073,
         -0.141
       ],
       "rotation": [
@@ -1654,7 +1866,7 @@
       "role": "hardware",
       "position": [
         0.05,
-        0.072,
+        0.073,
         -0.141
       ],
       "rotation": [
@@ -1668,8 +1880,8 @@
       "id": "dowel-15",
       "role": "hardware",
       "position": [
-        -0.172,
-        0.171,
+        -0.16,
+        0.172,
         -0.141
       ],
       "rotation": [
@@ -1683,8 +1895,8 @@
       "id": "dowel-16",
       "role": "hardware",
       "position": [
-        -0.172,
-        0.121,
+        -0.16,
+        0.122,
         -0.141
       ],
       "rotation": [
@@ -1698,8 +1910,8 @@
       "id": "dowel-17",
       "role": "hardware",
       "position": [
+        0.16,
         0.172,
-        0.171,
         -0.141
       ],
       "rotation": [
@@ -1713,8 +1925,8 @@
       "id": "dowel-18",
       "role": "hardware",
       "position": [
-        0.172,
-        0.121,
+        0.16,
+        0.122,
         -0.141
       ],
       "rotation": [
@@ -1728,8 +1940,8 @@
       "id": "dowel-19",
       "role": "hardware",
       "position": [
-        -0.172,
-        0.171,
+        -0.16,
+        0.172,
         0.159
       ],
       "rotation": [
@@ -1743,8 +1955,8 @@
       "id": "dowel-20",
       "role": "hardware",
       "position": [
-        -0.172,
-        0.121,
+        -0.16,
+        0.122,
         0.159
       ],
       "rotation": [
@@ -1758,8 +1970,8 @@
       "id": "dowel-21",
       "role": "hardware",
       "position": [
+        0.16,
         0.172,
-        0.171,
         0.159
       ],
       "rotation": [
@@ -1773,8 +1985,8 @@
       "id": "dowel-22",
       "role": "hardware",
       "position": [
-        0.172,
-        0.121,
+        0.16,
+        0.122,
         0.159
       ],
       "rotation": [
@@ -1998,8 +2210,8 @@
       "id": "screw-1",
       "role": "hardware",
       "position": [
-        -0.172,
-        0.196,
+        -0.16,
+        0.197,
         -0.146
       ],
       "rotation": [
@@ -2013,8 +2225,8 @@
       "id": "screw-2",
       "role": "hardware",
       "position": [
-        0.172,
-        0.196,
+        0.16,
+        0.197,
         -0.146
       ],
       "rotation": [
@@ -2028,8 +2240,8 @@
       "id": "screw-3",
       "role": "hardware",
       "position": [
-        -0.172,
-        0.096,
+        -0.16,
+        0.097,
         -0.146
       ],
       "rotation": [
@@ -2043,8 +2255,8 @@
       "id": "screw-4",
       "role": "hardware",
       "position": [
-        0.172,
-        0.096,
+        0.16,
+        0.097,
         -0.146
       ],
       "rotation": [
@@ -2058,8 +2270,8 @@
       "id": "screw-5",
       "role": "hardware",
       "position": [
-        -0.169,
-        0.072,
+        -0.157,
+        0.073,
         0.109
       ],
       "rotation": [
@@ -2073,8 +2285,8 @@
       "id": "screw-6",
       "role": "hardware",
       "position": [
-        -0.169,
-        0.072,
+        -0.157,
+        0.073,
         -0.091
       ],
       "rotation": [
@@ -2088,8 +2300,8 @@
       "id": "screw-7",
       "role": "hardware",
       "position": [
-        0.169,
-        0.072,
+        0.157,
+        0.073,
         -0.091
       ],
       "rotation": [
@@ -2103,8 +2315,8 @@
       "id": "screw-8",
       "role": "hardware",
       "position": [
-        0.169,
-        0.072,
+        0.157,
+        0.073,
         0.109
       ],
       "rotation": [
@@ -2119,7 +2331,7 @@
       "role": "hardware",
       "position": [
         -0.1,
-        0.072,
+        0.073,
         -0.146
       ],
       "rotation": [
@@ -2134,7 +2346,7 @@
       "role": "hardware",
       "position": [
         0.1,
-        0.072,
+        0.073,
         -0.146
       ],
       "rotation": [
@@ -2148,8 +2360,8 @@
       "id": "screw-11",
       "role": "hardware",
       "position": [
-        -0.172,
-        0.196,
+        -0.16,
+        0.197,
         0.16
       ],
       "rotation": [
@@ -2163,8 +2375,8 @@
       "id": "screw-12",
       "role": "hardware",
       "position": [
-        0.172,
-        0.196,
+        0.16,
+        0.197,
         0.16
       ],
       "rotation": [
@@ -2178,8 +2390,8 @@
       "id": "screw-13",
       "role": "hardware",
       "position": [
-        -0.172,
-        0.096,
+        -0.16,
+        0.097,
         0.16
       ],
       "rotation": [
@@ -2193,8 +2405,8 @@
       "id": "screw-14",
       "role": "hardware",
       "position": [
-        0.172,
-        0.096,
+        0.16,
+        0.097,
         0.16
       ],
       "rotation": [
@@ -2209,13 +2421,133 @@
       "role": "hardware",
       "position": [
         0.0,
-        0.146,
+        0.147,
         0.184
       ],
       "rotation": [
         0.7071067812,
         0.0,
         0.0,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-16",
+      "role": "hardware",
+      "position": [
+        -0.1822,
+        0.147,
+        -0.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-17",
+      "role": "hardware",
+      "position": [
+        -0.1822,
+        0.147,
+        0.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-18",
+      "role": "hardware",
+      "position": [
+        0.1822,
+        0.147,
+        -0.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "screw-19",
+      "role": "hardware",
+      "position": [
+        0.1822,
+        0.147,
+        0.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-23",
+      "role": "hardware",
+      "position": [
+        -0.184,
+        0.147,
+        -0.05
+      ],
+      "rotation": [
+        0,
+        0,
+        0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-24",
+      "role": "hardware",
+      "position": [
+        -0.184,
+        0.147,
+        0.05
+      ],
+      "rotation": [
+        0,
+        0,
+        0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-25",
+      "role": "hardware",
+      "position": [
+        0.184,
+        0.147,
+        -0.05
+      ],
+      "rotation": [
+        0,
+        0,
+        -0.7071067812,
+        0.7071067812
+      ]
+    },
+    {
+      "id": "dowel-26",
+      "role": "hardware",
+      "position": [
+        0.184,
+        0.147,
+        0.05
+      ],
+      "rotation": [
+        0,
+        0,
+        -0.7071067812,
         0.7071067812
       ]
     }
@@ -2310,6 +2642,80 @@
       {
         "kind": "step",
         "number": 3,
+        "pose": "parts",
+        "parts": [
+          "runner-1",
+          "runner-2"
+        ],
+        "fasten": [
+          [
+            "dowel-23/dowelEnd-1",
+            "runner-1/dowelHole-1"
+          ],
+          [
+            "dowel-24/dowelEnd-1",
+            "runner-1/dowelHole-2"
+          ],
+          [
+            "dowel-25/dowelEnd-1",
+            "runner-2/dowelHole-1"
+          ],
+          [
+            "dowel-26/dowelEnd-1",
+            "runner-2/dowelHole-2"
+          ]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 4,
+        "pose": "lying",
+        "fasten": [
+          [
+            "dowel-23/dowelEnd-2",
+            "sidePanel-1/dowelHole-5"
+          ],
+          [
+            "dowel-24/dowelEnd-2",
+            "sidePanel-1/dowelHole-6"
+          ],
+          [
+            "dowel-25/dowelEnd-2",
+            "sidePanel-2/dowelHole-6"
+          ],
+          [
+            "dowel-26/dowelEnd-2",
+            "sidePanel-2/dowelHole-5"
+          ]
+        ]
+      },
+      {
+        "kind": "step",
+        "number": 5,
+        "pose": "lying",
+        "fasten": [
+          [
+            "screw-16/screwThread-1",
+            "runner-1/screwHole-1"
+          ],
+          [
+            "screw-17/screwThread-1",
+            "runner-1/screwHole-2"
+          ],
+          [
+            "screw-18/screwThread-1",
+            "runner-2/screwHole-1"
+          ],
+          [
+            "screw-19/screwThread-1",
+            "runner-2/screwHole-2"
+          ]
+        ],
+        "tool": "screwdriver"
+      },
+      {
+        "kind": "step",
+        "number": 6,
         "pose": "lying",
         "fasten": [
           [
@@ -2332,7 +2738,7 @@
       },
       {
         "kind": "step",
-        "number": 4,
+        "number": 7,
         "pose": "lying",
         "fasten": [
           [
@@ -2347,7 +2753,7 @@
       },
       {
         "kind": "step",
-        "number": 5,
+        "number": 8,
         "pose": "lying",
         "turn": [
           [
@@ -2363,7 +2769,7 @@
       },
       {
         "kind": "step",
-        "number": 6,
+        "number": 9,
         "pose": "lying",
         "fasten": [
           [
@@ -2386,7 +2792,7 @@
       },
       {
         "kind": "step",
-        "number": 7,
+        "number": 10,
         "pose": "lying",
         "fasten": [
           [
@@ -2412,7 +2818,7 @@
       },
       {
         "kind": "step",
-        "number": 8,
+        "number": 11,
         "pose": "faceDown",
         "parts": [
           "backPanel-1"
@@ -2420,7 +2826,7 @@
       },
       {
         "kind": "step",
-        "number": 9,
+        "number": 12,
         "pose": "faceDown",
         "fasten": [
           [
@@ -2451,13 +2857,13 @@
       },
       {
         "kind": "special",
-        "number": 10,
+        "number": 13,
         "pose": "upright",
         "special": "tipUpright"
       },
       {
         "kind": "step",
-        "number": 11,
+        "number": 14,
         "pose": "upright",
         "assembly": "drawer",
         "parts": [
@@ -2484,7 +2890,7 @@
       },
       {
         "kind": "step",
-        "number": 12,
+        "number": 15,
         "pose": "upright",
         "assembly": "drawer",
         "parts": [
@@ -2512,7 +2918,7 @@
       },
       {
         "kind": "step",
-        "number": 13,
+        "number": 16,
         "pose": "upright",
         "assembly": "drawer",
         "fasten": [
@@ -2544,7 +2950,7 @@
       },
       {
         "kind": "step",
-        "number": 14,
+        "number": 17,
         "pose": "upright",
         "assembly": "drawer",
         "parts": [
@@ -2579,7 +2985,7 @@
       },
       {
         "kind": "step",
-        "number": 15,
+        "number": 18,
         "pose": "upright",
         "assembly": "drawer",
         "fasten": [
@@ -2628,7 +3034,7 @@
       },
       {
         "kind": "step",
-        "number": 16,
+        "number": 19,
         "pose": "upright",
         "assembly": "drawer",
         "fasten": [
@@ -2652,7 +3058,7 @@
       },
       {
         "kind": "step",
-        "number": 17,
+        "number": 20,
         "pose": "upright",
         "assembly": "drawer",
         "parts": [
@@ -2679,7 +3085,7 @@
       },
       {
         "kind": "step",
-        "number": 18,
+        "number": 21,
         "pose": "upright",
         "assembly": "drawer",
         "fasten": [
@@ -2704,7 +3110,7 @@
       },
       {
         "kind": "step",
-        "number": 19,
+        "number": 22,
         "pose": "upright",
         "assembly": "drawer",
         "parts": [
@@ -2720,9 +3126,19 @@
       },
       {
         "kind": "step",
-        "number": 20,
+        "number": 23,
         "pose": "upright",
-        "install": "drawer"
+        "install": "drawer",
+        "fasten": [
+          [
+            "runner-1/railEnd-1",
+            "drawerSide-1/railGroove-1"
+          ],
+          [
+            "runner-2/railEnd-1",
+            "drawerSide-2/railGroove-1"
+          ]
+        ]
       },
       {
         "kind": "back"
@@ -3207,7 +3623,7 @@
         ]
       },
       {
-        "id": "dowel-23",
+        "id": "dowel-27",
         "position": [
           0.085,
           0.065,
@@ -3221,7 +3637,7 @@
         ]
       },
       {
-        "id": "dowel-24",
+        "id": "dowel-28",
         "position": [
           0.119,
           0.065,
@@ -3702,6 +4118,146 @@
           0.06,
           0.072,
           -0.209
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-18",
+        "position": [
+          0.144,
+          0.0635,
+          -0.2605
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-19",
+        "position": [
+          0.176,
+          0.0635,
+          -0.2605
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-20",
+        "position": [
+          0.16,
+          0.0635,
+          -0.2695
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "screw-21",
+        "position": [
+          0.192,
+          0.0635,
+          -0.2695
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "runner-1",
+        "position": [
+          -0.1,
+          0.08,
+          0.225
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1
+        ]
+      },
+      {
+        "id": "runner-2",
+        "position": [
+          0.1,
+          0.08,
+          0.225
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1
+        ]
+      },
+      {
+        "id": "dowel-23",
+        "position": [
+          -0.119,
+          0.065,
+          -0.335
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-24",
+        "position": [
+          -0.085,
+          0.065,
+          -0.335
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-25",
+        "position": [
+          -0.051,
+          0.065,
+          -0.335
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067812,
+          0.7071067812
+        ]
+      },
+      {
+        "id": "dowel-26",
+        "position": [
+          -0.017,
+          0.065,
+          -0.335
         ],
         "rotation": [
           0.0,

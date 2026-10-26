@@ -43,28 +43,34 @@ describe('AC2: the carcass is JOHNNY\'s vocabulary; the drawer is built with scr
   const carcass = ['sidePanel', 'topBottomPanel', 'backPanel'];
   const typeOf = new Map(item.manifest.map((p) => [p.id, p.type]));
 
-  it('uses only connector types JOHNNY\'s carcass uses on the carcass panels', () => {
+  it('uses only connector types JOHNNY\'s carcass uses on the carcass panels, plus the side panels\' screwPilot', () => {
     const used = (file: FlatpackFile) => new Set(carcass.flatMap((t) => file.parts[t].connectors.map((c) => c.type)));
-    for (const type of used(OVERKALL)) expect(used(JOHNNY), type).toContain(type);
+    expect([...used(OVERKALL)].filter((type) => !used(JOHNNY).has(type))).toEqual(['screwPilot']);
+    expect(OVERKALL.parts.sidePanel.connectors.filter((c) => c.type === 'screwPilot')).toHaveLength(2);
+    expect(OVERKALL.parts.runner.connectors.map((c) => c.type)).toEqual(['railEnd', 'screwHole', 'screwHole', 'dowelHole', 'dowelHole']);
     for (const t of ['dowel', 'camLockBolt', 'camLock', 'backFitting']) {
       expect(OVERKALL.parts[t].connectors.map((c) => c.type), t).toEqual(JOHNNY.parts[t].connectors.map((c) => c.type));
     }
   });
 
-  it('builds the drawer with dowels to line it up and 15 screws to fix it, and no other fastener', () => {
-    const drawerJoints = item.assembled.joints.filter((j) => !carcass.includes(typeOf.get(j.host)!));
-    expect(drawerJoints.every((j) => j.kind === KIND.SCREW || j.kind === KIND.DOWEL)).toBe(true);
+  it('builds the drawer with dowels to line it up and 15 screws to fix it, and no other fastener but its two slides', () => {
+    const drawerJoints = item.assembled.joints.filter((j) => !carcass.includes(typeOf.get(j.host)!) && typeOf.get(j.host) !== 'runner');
+    expect(drawerJoints.filter((j) => j.kind !== KIND.SLIDE).every((j) => j.kind === KIND.SCREW || j.kind === KIND.DOWEL)).toBe(true);
     expect(drawerJoints.filter((j) => j.kind === KIND.SCREW)).toHaveLength(15);
     // 14 dowels, an end in each of two drawer parts.
     expect(drawerJoints.filter((j) => j.kind === KIND.DOWEL)).toHaveLength(28);
+    expect(drawerJoints.filter((j) => j.kind === KIND.SLIDE)).toHaveLength(2);
+    expect(drawerJoints).toHaveLength(45);
   });
 
-  it('sets the drawer into the cavity with no joint between it and the carcass', () => {
+  it('sets the drawer into the cavity on its runners: exactly two joints span drawer and carcass, both slides', () => {
     const drawer = (id: string) => ['drawerFront', 'drawerSide', 'drawerBack', 'drawerBottom', 'knob'].includes(typeOf.get(id)!);
-    for (const j of item.assembled.joints) {
+    // The runner is screwed to the carcass, so it stands on the carcass side of a slide.
+    const spanning = item.assembled.joints.filter((j) => {
       const ids = [j.hardware, j.host, j.through].filter((id): id is string => id !== null);
       const sides = new Set(ids.filter((id) => !['dowel', 'camLockBolt', 'camLock', 'backFitting', 'screw'].includes(typeOf.get(id)!)).map(drawer));
-      expect(sides.size, `${j.hardware} spans drawer and carcass`).toBeLessThanOrEqual(1);
-    }
+      return sides.size > 1;
+    });
+    expect(spanning.map((j) => [j.kind, typeOf.get(j.hardware), typeOf.get(j.host)])).toEqual([[KIND.SLIDE, 'runner', 'drawerSide'], [KIND.SLIDE, 'runner', 'drawerSide']]);
   });
 });

@@ -8,6 +8,7 @@
 
 import type { ConnectorName, DrawingPose, GamePartType, InstanceId, Joint, ManifestEntry, PageFields, Resolver } from './item.js';
 import type { Scheme } from './controlsPage.js';
+import { KIND } from '../../tools/validate/lib/vocabulary.js';
 import type { FastenerKind } from '../../tools/validate/lib/vocabulary.js';
 
 /** The assembled item the booklet draws: its parts and derived joints (item.ts ASSEMBLED). */
@@ -118,6 +119,8 @@ export function createBuildSteps(
       const turns = jointIndices(page.turn, layout, resolve);
       const fresh = [...new Set(joints.map((i) => layout.joints[i].hardware))].filter((id) => !counted.has(id));
       for (const id of fresh) counted.add(id);
+      // A runner is furniture, not the page's hardware: a slide's rail end is never counted.
+      const slideOnly = (id: InstanceId) => joints.filter((i) => layout.joints[i].hardware === id).every((i) => layout.joints[i].kind === KIND.SLIDE);
       const acted = [...joints, ...turns].flatMap((i) => [layout.joints[i].hardware, layout.joints[i].host]);
       const types = new Set([...parts, ...acted].map(typeOf));
       if (page.tool) types.add(page.tool);
@@ -128,7 +131,7 @@ export function createBuildSteps(
         parts,
         joints,
         turns,
-        hardware: countHardware(fresh, typeOf, partTypes),
+        hardware: countHardware(fresh.filter((id) => !slideOnly(id)), typeOf, partTypes),
         types: [...types],
         tool: page.tool ?? null,
         tip: page.special === 'tipUpright',

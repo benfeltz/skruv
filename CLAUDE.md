@@ -27,7 +27,7 @@ web/
 items/
   johnny/flatpack.json  an item: parts, assembled poses, booklet pages, packing (Flatpack format 1)
   blank/flatpack.json   the second item: a side table of box legs and double-ended studs
-  overkall/flatpack.json  the third item: a nightstand whose drawer is a dowelled, screwed box
+  overkall/flatpack.json  the third item: a nightstand whose dowelled, screwed drawer runs on two screwed-in runners
   somnlos/flatpack.json  the fourth item: a bed frame, built flat on its panels
 tools/
   validate/      Flatpack schema + validator CLI (adds ajv); lib/ is the one pack implementation and owns the Flatpack types

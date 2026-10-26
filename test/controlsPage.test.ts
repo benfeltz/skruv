@@ -105,7 +105,8 @@ describe('rowsFor', () => {
     const rows = rowsFor(scheme, kinds(KIND.SLIDE, KIND.DOWEL));
     expect(rows.map((row) => [row.pictogram, row.label])).toContainEqual(['slide', 'Pull to open']);
     expect(rows.findIndex((row) => row.pictogram === 'slide')).toBe(rows.findIndex((row) => row.pictogram === 'pullApart') + 1);
-    for (const id of ['johnny', 'blank', 'overkall'] as const) expect(rowsFor(scheme, itemById(id).kinds).map((row) => row.pictogram)).not.toContain('slide');
+    for (const id of ['johnny', 'blank', 'somnlos'] as const) expect(rowsFor(scheme, itemById(id).kinds).map((row) => row.pictogram)).not.toContain('slide');
+    expect(rowsFor(scheme, itemById('overkall').kinds).map((row) => [row.pictogram, row.label])).toContainEqual(['slide', 'Pull to open']);
   });
 
   it('labels the new row in three words with no mouse in it, and BLANK shows it', () => {
