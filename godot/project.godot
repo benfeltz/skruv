@@ -19,6 +19,9 @@ gdscript/warnings/untyped_declaration=2
 
 ; Jolt, set explicitly, so the stillness result is about Jolt and not whatever the default is.
 3d/physics_engine="Jolt Physics"
+; Tuning attempt 1 (step 5): solver iterations, from Jolt's 10 and 2.
+jolt_physics_3d/simulation/velocity_steps=100
+jolt_physics_3d/simulation/position_steps=20
 
 [editor_plugins]
 
