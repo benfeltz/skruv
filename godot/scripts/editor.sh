@@ -8,7 +8,8 @@
 #
 # The editor rewrites project.godot on load (same values, every comment stripped; 4.7.2), so
 # start keeps the hand-written file in godot/out/project.godot.hand and puts it back once the
-# server is up, and stop puts it back again. The log is godot/out/editor.log. The server listens on the port in project.godot
+# server is up. stop never restores (that snapshot may predate edits made while the editor ran);
+# it only warns if the editor's header is back. The log is godot/out/editor.log. The server listens on the port in project.godot
 # (godot_mcp/server/port); its bearer token is in godot/.godot/godot_mcp/headers.json.
 set -euo pipefail
 
@@ -62,7 +63,9 @@ case "${1:-}" in
       echo "editor: not running"
     fi
     rm -f "$PID"
-    restore_project
+    if head -1 "$ROOT/project.godot" | grep -q '^; Engine configuration file'; then
+      echo "editor: WARNING project.godot carries the editor's header again; check git diff" >&2
+    fi
     ;;
   status)
     if running; then echo "editor: running (pid $(cat "$PID"))"; else echo "editor: not running"; exit 1; fi
