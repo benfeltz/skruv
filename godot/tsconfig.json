@@ -1,0 +1,8 @@
+{
+  // Typechecks the exporter with the repo's own settings; the root tsconfig doesn't reach godot/.
+  // Run: npx tsc -p godot/tsconfig.json
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "typeRoots": ["../node_modules/@types"], "types": ["node"] },
+  // vite-env.d.ts types import.meta.env, which src/constants.ts reads.
+  "include": ["tools", "../src/vite-env.d.ts"]
+}
