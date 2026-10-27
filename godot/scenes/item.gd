@@ -1,3 +1,4 @@
+@tool
 class_name Item
 extends Node3D
 ## The item built from ItemData: one RigidBody3D (box shape and box mesh) per assembled instance

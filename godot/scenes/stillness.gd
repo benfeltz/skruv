@@ -1,3 +1,4 @@
+@tool
 class_name Stillness
 extends RefCounted
 ## One measurement of how still the item is, against its assembled pose (Item.pose_of, so the compound control reads the same way): the fastest body, the

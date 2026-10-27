@@ -1,3 +1,4 @@
+@tool
 class_name Room
 extends Node3D
 ## A bare room: a floor that bodies land on, three walls, a sun, ambient light and a camera

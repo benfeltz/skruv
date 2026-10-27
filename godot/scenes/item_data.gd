@@ -1,3 +1,4 @@
+@tool
 class_name ItemData
 extends RefCounted
 ## The resolved item, read from the json godot/tools/export-item.ts writes from the pack.

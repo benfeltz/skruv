@@ -1,12 +1,14 @@
 ; Written by hand, never by the editor. Imported with `godot --headless --path godot --import`.
-; There is no main scene on purpose: scenes are built in GDScript, and the project always
-; starts through `-s res://main.gd`. Running it bare pops a native "no main scene" alert.
+; The main scene is scenes/world.tscn, a container whose one node runs world.gd: the room and
+; JOHNNY are still built in code (JOHNNY from items/johnny.json), so the editor can open and
+; Play it. The loop still starts through `-s res://main.gd`.
 
 config_version=5
 
 [application]
 
 config/name="Skruv"
+run/main_scene="res://scenes/world.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
 [debug]
