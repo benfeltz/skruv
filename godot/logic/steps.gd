@@ -12,12 +12,20 @@ extends RefCounted
 ## horizontal turned end for end, a dowel from the other end of the box, or the other side panel
 ## still turns the page; a part in a hole the manual never uses for it does not.
 ##
+## A page that lays a panel in on the build (the back panel, the shelves) is complete once it lies
+## where it goes, as the play says (Play.is_placed).
+##
 ## A page the loop does not play is `auto`: the loop fastens it on arrival and lists it.
 
-const DOWEL := "dowel"
+## The kinds a player fastens by hand here; a page with any other is fastened by the loop.
+const PLAYED_KINDS: Array[String] = ["dowel", "pin", "fitting"]
+## The poses a page shows the build in; "parts" is the box laid out, no build yet.
+const BOX := "parts"
 
 var data: ItemData
 var index := 0
+## A page that turns the build (its pose differs from the page before) is played by hand: not yet.
+var turns_played := false
 
 
 func _init(item_data: ItemData) -> void:
@@ -37,14 +45,35 @@ func is_done() -> bool:
 	return index >= data.steps.size()
 
 
-## True for a page the loop fastens itself: anything but a page of dowels alone.
+## True for a page the loop fastens itself: one that turns the build while turning is not played,
+## one that locks cams, or one with a joint of a kind not played by hand.
 func is_auto(step: ItemData.Step) -> bool:
-	if step.joints.is_empty() or not step.turns.is_empty():
+	if turns_build(step) and not turns_played:
+		return true
+	if not step.turns.is_empty():
 		return true
 	for i: int in step.joints:
-		if data.joints[i].kind != DOWEL:
+		if not PLAYED_KINDS.has(data.joints[i].kind):
 			return true
 	return false
+
+
+## True when the page shows the build in another pose than the page before (lying to face down,
+## face down to upright): the build is turned over by hand.
+func turns_build(step: ItemData.Step) -> bool:
+	var at := data.steps.find(step)
+	if at <= 0 or step.pose == BOX:
+		return false
+	var before := data.steps[at - 1].pose
+	return before != BOX and before != step.pose
+
+
+## The panels a page lays in on the build (not out of the box): each must end up where it goes.
+func laid_in(step: ItemData.Step) -> Array[String]:
+	var out: Array[String] = []
+	if step.pose != BOX:
+		out.assign(step.parts)
+	return out
 
 
 ## Every part a page is about: the panels it brings in, and both sides of every joint it seats or
@@ -115,8 +144,9 @@ func _held(bonds: Bonds) -> Dictionary[String, Vector3i]:
 	return out
 
 
-## True when the build has caught up with page `step` (see the header).
-func complete(step: ItemData.Step, bonds: Bonds) -> bool:
+## True when the build has caught up with page `step` (see the header); `placed(id)` says whether a
+## panel the page lays in is where it goes.
+func complete(step: ItemData.Step, bonds: Bonds, placed: Callable = Callable()) -> bool:
 	var at := data.steps.find(step)
 	var held := _held(bonds)
 	var needed := _needed(at)
@@ -128,6 +158,10 @@ func complete(step: ItemData.Step, bonds: Bonds) -> bool:
 	for id: String in step.parts:
 		if not bonds.poses.has(id):
 			return false
+	if placed.is_valid():
+		for id: String in laid_in(step):
+			if not bool(placed.call(id)):
+				return false
 	return true
 
 
@@ -185,9 +219,9 @@ func done_count(step: ItemData.Step, bonds: Bonds) -> int:
 
 
 ## Turns the page when the open one is complete. True if it turned.
-func advance(bonds: Bonds) -> bool:
+func advance(bonds: Bonds, placed: Callable = Callable()) -> bool:
 	var step := current()
-	if step == null or not complete(step, bonds):
+	if step == null or not complete(step, bonds, placed):
 		return false
 	index += 1
 	return true

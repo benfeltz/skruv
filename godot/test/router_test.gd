@@ -89,16 +89,39 @@ func test_a_seated_dowel_dragged_away_leaves_its_seat() -> void:
 	assert_object(play.bonds.joint_for_spec(i)).override_failure_message("still seated once dragged").is_null()
 
 
-func test_a_pressed_dowel_is_no_drag_away_it_moves_its_compound() -> void:
+func test_a_pressed_dowel_pulled_along_its_axis_comes_out_and_carries_on_free() -> void:
+	var router := _router()
+	var play := router.play
+	var i := play.open_joints()[0]
+	var spec := data.joints[i]
+	var joint := _seat(play, i)
+	play.tap(spec.hardware)
+	assert_str(joint.fastener.state).is_equal(Fastener.PRESSED)
+	var at := _grab(router, spec.hardware, 0)
+	assert_str(router.drag.mode).is_equal(Router.PULL)
+	# Across the axis: nothing. Along it, past the pull distance: out to seated, then free.
+	var axis: Vector2 = router.drag.pull_axes[0].normalized()
+	var across := Vector2(-axis.y, axis.x)
+	router.motion(at + across * (Constants.FASTENER.pullDistance + 10.0))
+	assert_str(joint.fastener.state).is_equal(Fastener.PRESSED)
+	router.motion(at + axis * (Constants.FASTENER.pullDistance + 5.0))
+	assert_str(joint.fastener.state).is_equal(Fastener.SEATED)
+	assert_str(router.drag.mode).is_equal(Router.MOVE)
+	assert_object(play.bonds.joint_for_spec(i)).override_failure_message("still seated once pulled free").is_null()
+
+
+func test_a_pressed_dowel_held_by_a_locked_cam_is_no_pull_it_moves_its_compound() -> void:
 	var router := _router()
 	var play := router.play
 	var i := play.open_joints()[0]
 	var spec := data.joints[i]
 	_seat(play, i)
 	play.tap(spec.hardware)
-	_grab(router, spec.hardware, 0)
-	assert_str(router.drag.mode).is_equal(Router.COMPOUND)
-	assert_bool(router.carried().has(spec.host)).is_true()
+	# Its own pull is the only way out; a bolt partway in is not pullable, so this is the web's
+	# compound drag: grab the plinth (no pull: its dowels are the movers) and it all comes along.
+	_grab(router, spec.host, 0)
+	assert_str(router.drag.mode).is_equal(Router.MOVE)
+	assert_bool(router.carried().has(spec.hardware)).is_true()
 
 
 func test_the_wheel_lifts_a_dragged_part_and_the_floor_stops_it() -> void:
@@ -153,3 +176,25 @@ func test_a_part_let_go_with_no_seat_comes_down_onto_the_floor() -> void:
 	at = _carry_to(router, Vector3(1.5, 0, -1.5))
 	router.release(Router.LEFT, at, 2000)
 	assert_float(router.play.bonds.poses[dowel].origin.y).is_equal_approx(floor_y, 1e-6)
+
+
+## A side panel pressed onto a dowel is pulled back off it along the dowel, and carried on free.
+func test_a_panel_pressed_onto_its_dowel_pulls_off_along_it() -> void:
+	var router := _router()
+	var play := router.play
+	var into := _seat(play, 0)
+	play.tap(into.hardware)
+	var spec := data.joints[1]
+	assert_str(spec.mover).is_equal("sidePanel-1")
+	var home: Transform3D = play.goal("sidePanel-1", 1)
+	var hole_axis := Transform3D(home.basis, home.origin) * data.type_of(data.instance("sidePanel-1")).connectors[spec.host_connector].axis - home.origin
+	play.bonds.poses["sidePanel-1"] = Transform3D(home.basis, home.origin + hole_axis.normalized() * data.sink_depth["dowel"])
+	var joint := play.bonds.seat(spec.hardware, spec.hardware_connector, spec.host, spec.host_connector, spec.mover, 1)
+	play.tap("sidePanel-1")
+	assert_str(joint.fastener.state).is_equal(Fastener.PRESSED)
+	var at := _grab(router, "sidePanel-1", 0)
+	assert_str(router.drag.mode).is_equal(Router.PULL)
+	router.motion(at + router.drag.pull_axes[0].normalized() * (Constants.FASTENER.pullDistance + 5.0))
+	assert_str(joint.fastener.state).is_equal(Fastener.SEATED)
+	assert_str(router.drag.mode).is_equal(Router.MOVE)
+	assert_bool(play.bonds.joints.has(joint)).override_failure_message("still seated on the dowel once pulled off").is_false()

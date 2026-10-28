@@ -23,8 +23,11 @@ const SETTLED_M := 1e-5
 const SETTLED_RAD := 1e-4
 ## The camera the hand frames each move from: this far from what it looks at, from this direction.
 const VIEW_DISTANCE := 1.4
-const VIEW_FROM: Array[Vector3] = [Vector3(0.0, 1.0, 1.0), Vector3(1.0, 1.0, 0.0), Vector3(-1.0, 1.0, 0.0), Vector3(0.0, 1.0, -1.0)]
+const VIEW_DISTANCES: Array[float] = [1.4, 2.4, 3.4]
+const VIEW_FROM: Array[Vector3] = [Vector3(0.0, 1.0, 1.0), Vector3(1.0, 1.0, 1.0), Vector3(-1.0, 1.0, 1.0), Vector3(1.0, 1.0, 0.0), Vector3(-1.0, 1.0, 0.0), Vector3(0.0, 1.0, -1.0)]
 const FRAME_MS := 16
+## How far above where it goes the hand carries a panel it lays in, before letting it come down (m).
+const LAY_CLEAR := 0.02
 const TAP_MS := 80
 
 var router: Router
@@ -98,6 +101,11 @@ static func tap_target(p: Play, spec: int) -> String:
 
 func _plan() -> void:
 	var i := next_joint(play)
+	var laid := play.unplaced()
+	if i < 0 and not laid.is_empty():
+		var id: String = laid.keys()[0]
+		_plan_place(id, laid[id])
+		return
 	if i < 0:
 		# Every seat in; whatever is still only seated gets clicked home.
 		for joint: Bonds.Joint in play.bonds.joints:
@@ -115,15 +123,27 @@ func _fail(message: String) -> void:
 	_queue.clear()
 
 
-## Frames the camera on `point` from the first direction that lets a press at `id` pick it; returns
-## that screen point, or (-1, -1).
-func _look_at(id: String, point: Vector3) -> Vector2:
-	for from: Vector3 in VIEW_FROM:
-		router.camera.frame(point + from.normalized() * VIEW_DISTANCE, point)
-		var at := router.point_on(id)
-		if at.x >= 0.0:
-			return at
+## Frames the camera on `point` from the first direction (and distance) that lets a press pick `id`
+## and shows `also` on screen (where the part is going); returns the press's screen point, or
+## (-1, -1).
+func _look_at(id: String, point: Vector3, also: Vector3 = point) -> Vector2:
+	for distance: float in VIEW_DISTANCES:
+		for from: Vector3 in VIEW_FROM:
+			router.camera.frame(point + from.normalized() * distance, point)
+			if not _on_screen(also):
+				continue
+			var at := router.point_on(id)
+			if at.x >= 0.0:
+				return at
 	return Vector2(-1, -1)
+
+
+func _on_screen(p: Vector3) -> bool:
+	var v := router.view()
+	if (p - v.eye).dot(v.forward()) <= 0.0:
+		return false
+	var s := v.project(p)
+	return s.x >= 0.0 and s.y >= 0.0 and s.x <= v.size.x and s.y <= v.size.y
 
 
 func _plan_carry(id: String, i: int) -> void:
@@ -135,7 +155,7 @@ func _plan_carry(id: String, i: int) -> void:
 	var seat: Transform3D = goal
 	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO, "frame": 0}
 	_queue.append(func() -> void:
-		var at := _look_at(id, play.bonds.poses[id].origin.lerp(seat.origin, 0.5))
+		var at := _look_at(id, play.bonds.poses[id].origin.lerp(seat.origin, 0.5), seat.origin)
 		if at.x < 0.0:
 			_fail("page %d: no screen point picks %s" % [page, id])
 			return
@@ -157,6 +177,43 @@ func _plan_carry(id: String, i: int) -> void:
 			if router.drag != null:
 				router.motion(Vector2(state["from"]).lerp(Vector2(state["to"]), k)))
 	_queue.append(func() -> void: _hold_for_seat(id, i, page, 0))
+
+
+## Lays a panel in where it goes (a shelf on its pins): lifted clear, carried over its place, let go;
+## it comes down onto what it rests on.
+func _plan_place(id: String, place: Transform3D) -> void:
+	var page := play.steps.current().number
+	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO}
+	_queue.append(func() -> void:
+		var at := _look_at(id, play.bonds.poses[id].origin.lerp(place.origin, 0.5), place.origin)
+		if at.x < 0.0:
+			_fail("page %d: no screen point picks %s" % [page, id])
+			return
+		state["at"] = at
+		router.press(Router.LEFT, at, t))
+	_queue.append(func() -> void:
+		var at: Vector2 = state["at"] + Vector2(Constants.GESTURE.tapMaxDistance + 2.0, 0.0)
+		router.motion(at)
+		if router.drag == null or router.drag.part != id:
+			_fail("page %d: pressing %s began no carry" % [page, id])
+			return
+		state["from"] = at
+		router.wheel(-(place.origin.y + LAY_CLEAR - router.drag.height) / Constants.GESTURE.desktopLiftRate, at)
+		state["to"] = router.screen_for(place.origin))
+	for n: int in range(1, GLIDE_FRAMES + 1):
+		var k := float(n) / GLIDE_FRAMES
+		_queue.append(func() -> void:
+			if router.drag != null:
+				router.motion(Vector2(state["from"]).lerp(Vector2(state["to"]), k)))
+	_queue.append(func() -> void:
+		if router.drag == null:
+			_fail("page %d: the drag of %s ended by itself" % [page, id])
+			return
+		router.release(Router.LEFT, router.drag.pointer, t)
+		if not play.is_placed(id):
+			_fail("page %d: %s let go at %s is not where it goes (%s)" % [page, id, play.bonds.poses[id].origin, place.origin])
+			return
+		lines.append("page %d: %s laid in" % [page, id]))
 
 
 ## Holds still until a seat is on offer and the part has glided into it, then lets go.

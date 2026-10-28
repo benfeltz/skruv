@@ -15,6 +15,9 @@ extends RefCounted
 ##             rest rides along rigidly, and it looks for a seat
 ##   move      a part nothing holds: it leaves what it was seated on (drag-away unseat) and looks
 ##             for a seat
+##   pull      a part pushed into fastened seats (a dowel pressed home, a panel pressed onto its
+##             dowels): dragged FASTENER.pullDistance px along their axis on screen they come
+##             back to seated, and once nothing holds it the drag carries on free
 ##   compound  a part bonded into a compound: it all comes along, looking for nothing
 ## A drag rides `hoverLift` above where it was, on a level plane through the grab point; the wheel
 ## lifts it (GESTURE.desktopLiftRate a px), and Shift + scroll is the elevation line's lift: the
@@ -27,6 +30,9 @@ const RIGHT := 2
 
 const MOVE := "move"
 const COMPOUND := "compound"
+const PULL := "pull"
+## A pull is judged along this much (m) of the joint's axis projected to the screen.
+const PULL_AXIS_PROBE := 0.05
 
 
 ## The drag in progress (the web's Drag, the plane drag's fields).
@@ -50,6 +56,10 @@ class Drag:
 	var has_held := false
 	## What rides along: the part, where it was when the drag began, every rider with its pose then.
 	var carry := Play.Carry.new()
+	## A pull: where the pointer went down, and each joint pulled with its axis on screen.
+	var start_screen: Vector2
+	var pulls: Array[Bonds.Joint] = []
+	var pull_axes: Array[Vector2] = []
 
 
 var play: Play
@@ -231,10 +241,12 @@ func _apply(effect: Gesture.Effect) -> void:
 			if id != "" and play.can_drag(id):
 				_begin_drag(id, effect.hit["point"], Vector2(effect.x, effect.y))
 		Gesture.DRAG_MOVE:
-			if drag != null:
+			if drag != null and drag.mode == PULL:
+				_pull_to(Vector2(effect.x, effect.y))
+			elif drag != null:
 				_update_drag(Vector2(effect.x, effect.y))
 		Gesture.LIFT:
-			if drag != null:
+			if drag != null and drag.mode != PULL:
 				_lift_drag(effect.dy, Constants.GESTURE.desktopLiftRate)
 		Gesture.DRAG_END:
 			if drag != null:
@@ -253,8 +265,11 @@ func _tap(id: String) -> void:
 # --- drags --------------------------------------------------------------------------------
 
 
-## The web's beginDrag: carry, move or compound (above).
+## The web's beginDrag: pull, carry, move or compound (above).
 func _begin_drag(id: String, point: Vector3, at: Vector2) -> void:
+	if not play.bonds.pullable(id).is_empty():
+		_begin_pull(id, at)
+		return
 	var carried_parts := _carry_of(id)
 	if not carried_parts.is_empty():
 		_take_up(id, carried_parts)
@@ -394,8 +409,69 @@ func _raise(h: float) -> void:
 	_update_drag(drag.pointer)
 
 
+# --- pull: a part pushed into fastened seats comes back out along their axis ---
+
+
+## The pull's fields (beginPull): each pullable joint's axis on screen, out of the hole for
+## hardware, off the fastener for a panel pushed onto it.
+func _begin_pull(id: String, at: Vector2) -> void:
+	drag = Drag.new()
+	drag.mode = PULL
+	drag.part = id
+	drag.start_screen = at
+	drag.pointer = at
+	for joint: Bonds.Joint in play.bonds.pullable(id):
+		var other := joint.host != id
+		var c := play.bonds.world_connector(joint.host if other else joint.hardware, joint.host_connector if other else joint.hardware_connector)
+		var from := screen_of(c.position)
+		var to := screen_of(c.position + c.axis * PULL_AXIS_PROBE)
+		drag.pulls.append(joint)
+		drag.pull_axes.append(to - from)
+
+
+## The pull is judged on the pointer; past FASTENER.pullDistance along a joint's axis it comes back
+## to seated, and once nothing holds the part the drag carries on free (pullTo, continueFree).
+func _pull_to(at: Vector2) -> void:
+	drag.pointer = at
+	var pulled := false
+	for n: int in range(drag.pulls.size() - 1, -1, -1):
+		if DragMath.pull_along(drag.start_screen, at, drag.pull_axes[n]) >= Constants.FASTENER.pullDistance and play.bonds.apply(drag.pulls[n], Fastener.PULL):
+			drag.pulls.remove_at(n)
+			drag.pull_axes.remove_at(n)
+			pulled = true
+	if pulled:
+		_continue_free(drag.part, at)
+
+
+## A part let off its seats by a pull carries on from the pointer as a normal drag: a panel with
+## what it carries, else the part alone; still pushed home somewhere, the pull goes on.
+func _continue_free(id: String, at: Vector2) -> void:
+	var carried_parts: Array[String] = []
+	if play.bonds.pullable(id).is_empty():
+		carried_parts = _carry_of(id)
+	var free := not carried_parts.is_empty() or play.bonds.can_release(id)
+	if not free:
+		return
+	var pose := play.bonds.poses[id]
+	var v := view()
+	var grab: Variant = DragMath.intersect_drag_plane(v.eye, v.ray(at), pose.origin.y)
+	var point: Vector3 = grab if grab != null else pose.origin
+	drag = null
+	if not carried_parts.is_empty():
+		_take_up(id, carried_parts)
+		_begin_move(id, point, at, MOVE, carried_parts)
+	else:
+		for joint: Bonds.Joint in play.bonds.joints_of(id):
+			play.bonds.unseat(joint)
+		_begin_move(id, point, at, MOVE, [])
+
+
 ## Lets go: on the seat on offer it seats; else it comes down.
 func _end_drag() -> void:
+	if drag.mode == PULL:
+		drag = null
+		play.turn_pages()
+		return
 	var id := drag.part
 	var offer := drag.snapped
 	if offer != null:
@@ -413,9 +489,13 @@ func _end_drag() -> void:
 	drag = null
 	if not lifted:
 		_drop(members)
+	play.turn_pages()
 
 
 func _cancel_drag() -> void:
+	if drag.mode == PULL:
+		drag = null
+		return
 	var members := carried()
 	drag = null
 	_drop(members)

@@ -29,6 +29,11 @@ const LAY_GAP := 0.06
 const LAY_HARDWARE_GAP := 0.03
 ## How far a let-go part may already overlap what it rests on (m), and still rest on it.
 const SETTLE_EPSILON := 1e-4
+## A panel laid in (not seated: it has no fastener of its own, the back panel before its fittings, a
+## shelf on its pins) lies where it goes within this far (m) and this turn (rad). Not the web's: its
+## booklet never checks; these are the Godot booklet's.
+const PLACE_REACH := 0.03
+const PLACE_TURN := (10.0 * PI) / 180.0
 
 var data: ItemData
 var bonds: Bonds
@@ -117,7 +122,7 @@ func open_page() -> void:
 					lay(id)
 			return
 		_auto(step)
-		var turned := steps.advance(bonds)
+		var turned := steps.advance(bonds, is_placed)
 		assert(turned, "auto page %d did not complete" % step.number)
 
 
@@ -551,8 +556,72 @@ func behind(joint: Bonds.Joint) -> String:
 
 ## Turns every complete page and opens the next.
 func turn_pages() -> void:
-	while not steps.is_done() and steps.advance(bonds):
+	while not steps.is_done() and steps.advance(bonds, is_placed):
 		open_page()
+
+
+# --- panels laid in -----------------------------------------------------------------------
+
+
+## How the build stands: the move taking the finished item onto the build as it lies now, read off
+## the part it hangs together on.
+func build_frame() -> Transform3D:
+	var ref := _anchor()
+	return bonds.poses[ref] * assembled(ref).affine_inverse()
+
+
+## Where a part of `id`'s type goes in the build as it stands: each finished place of its type.
+func places_of(id: String) -> Array[Transform3D]:
+	var frame := build_frame()
+	var out: Array[Transform3D] = []
+	for inst: ItemData.Instance in data.instances:
+		if inst.type == type_of(id):
+			out.append(Bonds.orthonormal(frame * assembled(inst.id)))
+	return out
+
+
+## True when `id` lies at one of its type's places in the build, within PLACE_REACH and PLACE_TURN
+## (either way round, for a part that is the same turned).
+func is_placed(id: String) -> bool:
+	if not bonds.poses.has(id):
+		return false
+	var pose := bonds.poses[id]
+	for place: Transform3D in places_of(id):
+		if pose.origin.distance_to(place.origin) > PLACE_REACH:
+			continue
+		var turns: Array[Basis] = [place.basis]
+		for sym: Bonds.Symmetry in bonds.symmetries(type_of(id)):
+			turns.append(place.basis * sym.turn.inverse())
+		for b: Basis in turns:
+			if pose.basis.get_rotation_quaternion().angle_to(b.get_rotation_quaternion()) <= PLACE_TURN:
+				return true
+	return false
+
+
+## The page's panels still to lay in, each with where the hand puts it: its type's free place
+## nearest it.
+func unplaced() -> Dictionary[String, Transform3D]:
+	var out: Dictionary[String, Transform3D] = {}
+	var step := steps.current()
+	if step == null or steps.is_auto(step):
+		return out
+	var taken: Array[Transform3D] = []
+	for id: String in steps.laid_in(step):
+		if is_placed(id):
+			continue
+		for place: Transform3D in places_of(id):
+			var free := true
+			for other: String in bonds.poses:
+				if other != id and type_of(other) == type_of(id) and bonds.poses[other].origin.distance_to(place.origin) <= PLACE_REACH:
+					free = false
+			for t: Transform3D in taken:
+				if t.origin.distance_to(place.origin) <= PLACE_REACH:
+					free = false
+			if free:
+				out[id] = place
+				taken.append(place)
+				break
+	return out
 
 
 ## A part a whole fit seats: it has connectors, every one a hole (isPanelType).

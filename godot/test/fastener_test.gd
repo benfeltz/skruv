@@ -112,3 +112,33 @@ func test_a_panel_tapped_onto_its_dowel_comes_down_on_it() -> void:
 	assert_vector(bonds.poses["sidePanel-1"].origin).is_equal_approx(_assembled("sidePanel-1").origin, Vector3.ONE * EPS)
 	# The dowel and plinth stayed where they were.
 	assert_vector(bonds.poses["dowel-1"].origin).is_equal_approx(_assembled("dowel-1").origin, Vector3.ONE * EPS)
+
+
+func test_every_press_kind_goes_home_on_a_tap_and_back_on_a_pull() -> void:
+	for kind: String in ["dowel", "pin", "fitting"]:
+		var pressed := Fastener.transition(Fastener.create(kind), Fastener.TAP)
+		assert_str(pressed.state).is_equal(Fastener.PRESSED)
+		assert_str(Fastener.transition(pressed, Fastener.PULL).state).is_equal(Fastener.SEATED)
+
+
+## A back fitting pressed home through the back panel lands in the side panel behind it, and lets
+## go of it when pulled back; its depth follows the machine.
+func test_a_back_fitting_pressed_home_lands_in_the_panel_behind_and_a_pull_lets_go() -> void:
+	var play := Play.new(data)
+	var i := -1
+	for n: int in data.joints.size():
+		if data.joints[n].kind == "fitting":
+			i = n
+			break
+	var spec := data.joints[i]
+	for id: String in [spec.host, spec.through]:
+		play.bonds.poses[id] = _assembled(id)
+	play.bonds.poses[spec.hardware] = _assembled(spec.hardware).translated(spec.axis * data.sink_depth["fitting"])
+	var joint := play.bonds.seat(spec.hardware, spec.hardware_connector, spec.host, spec.host_connector, spec.hardware, i)
+	assert_str(play.behind(joint)).is_equal(spec.through)
+	assert_int(play.tap(spec.hardware).size()).is_equal(1)
+	assert_str(joint.through).is_equal(spec.through)
+	assert_vector(play.bonds.poses[spec.hardware].origin).is_equal_approx(_assembled(spec.hardware).origin, Vector3.ONE * EPS)
+	assert_bool(play.bonds.apply(joint, Fastener.PULL)).is_true()
+	assert_str(joint.through).is_equal("")
+	assert_float(play.bonds.depth(joint)).is_equal_approx(0.0, EPS)

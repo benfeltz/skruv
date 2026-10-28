@@ -17,6 +17,9 @@ const MAX_TURN_DEG := 0.5
 const DT := 1.0 / 60.0
 ## Frames the whole manual may take before the test calls it stuck.
 const MAX_FRAMES := 60000
+## The pages the loop still fastens itself (2.0.4.4 step 4: the cranks' pages 2, 4, 5 and 7, the
+## face-down turn of page 8 and the tip of page 10). The plan's count: 9 → 6 → 1 → 0.
+const AUTO_PAGES: Array[int] = [2, 4, 5, 7, 8, 10]
 
 var data: ItemData
 
@@ -51,6 +54,12 @@ func _assert_built(hand: Hand, label: String) -> void:
 		label, hand.frames, hand.seats, hand.presses, play.auto_log.size(), fastened, data.joints.size(),
 		float(worst["offset"]) * 1000.0, worst["offset_id"], rad_to_deg(float(worst["turn"])), worst["turn_id"]])
 	assert_array(hand.errors).override_failure_message("%s: %s" % [label, "\n".join(hand.errors)]).is_empty()
+	var auto_pages: Array[int] = []
+	for step: ItemData.Step in data.steps:
+		if play.steps.is_auto(step):
+			auto_pages.append(step.number)
+	assert_array(auto_pages).override_failure_message("%s: auto pages %s" % [label, auto_pages]).is_equal(AUTO_PAGES)
+	assert_int(play.auto_log.size()).is_equal(AUTO_PAGES.size())
 	assert_bool(play.steps.is_done()).override_failure_message("%s: the manual did not end (page %s)" % [label, play.steps.current().number if play.steps.current() != null else -1]).is_true()
 	assert_int(fastened).is_equal(data.joints.size())
 	assert_int(play.bonds.joints.size()).is_equal(data.joints.size())
