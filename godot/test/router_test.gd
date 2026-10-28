@@ -198,3 +198,60 @@ func test_a_panel_pressed_onto_its_dowel_pulls_off_along_it() -> void:
 	assert_str(joint.fastener.state).is_equal(Fastener.SEATED)
 	assert_str(router.drag.mode).is_equal(Router.MOVE)
 	assert_bool(play.bonds.joints.has(joint)).override_failure_message("still seated on the dowel once pulled off").is_false()
+
+
+## A bolt seated, the wrench let go on its head: a sweep round the dial the tightening way screws
+## it home and the wrench comes off by itself; a tap on a seated tool takes it off.
+func test_a_wrench_on_a_seated_bolt_cranks_it_home_and_comes_off() -> void:
+	var play := Play.new(data)
+	play.open_page()
+	var router := Router.new(play)
+	var spec := data.joints[28]
+	play.bonds.poses[spec.host] = _assembled_at(spec.host)
+	var home := _assembled_at(spec.hardware)
+	var axis := play.bonds.world_connector(spec.host, spec.host_connector).axis
+	play.bonds.poses[spec.hardware] = Transform3D(home.basis, home.origin + axis * data.sink_depth["bolt"])
+	var bolt := play.bonds.seat(spec.hardware, spec.hardware_connector, spec.host, spec.host_connector, spec.hardware, 28)
+	# The wrench straight on the head, as a release on an offer leaves it.
+	var head := play.bonds.world_connector(spec.hardware, 1)
+	var tip := data.types["allenWrench"].connectors[0]
+	var r := Assist.aimed_rotation(Basis(), tip.axis, head.axis)
+	play.bonds.poses["allenWrench-1"] = Transform3D(r, head.position - r * tip.position)
+	var tool := play.bonds.seat("allenWrench-1", 0, spec.hardware, 1, "allenWrench-1")
+	router.tool_grips["allenWrench-1"] = play.bonds.relative_pose(spec.hardware, "allenWrench-1")
+	var turn := play.bonds.turn_of("allenWrench-1")
+	assert_object(turn).is_not_null()
+	assert_object(turn.joints[0]).is_same(bolt)
+	router.camera.frame(head.position + Vector3(0.3, 0.6, 0.5), head.position)
+	var centre := router.screen_of(router.turn_centre(turn))
+	var sign := Crank.tighten_sign(router.turn_axis(turn), router.turn_centre(turn) - router.view().eye)
+	var rr := Constants.TURN_RING.radius
+	router.press(Router.LEFT, centre + Vector2(rr, 0), 0)
+	assert_str(String(router.gesture.owner)).is_equal(Gesture.DRAG_PART)
+	var angle := 0.0
+	for n: int in 60:
+		angle += sign * PI / 9.0
+		router.motion(centre + Vector2(cos(angle), sin(angle)) * rr)
+	router.release(Router.LEFT, centre, 2000)
+	assert_str(bolt.fastener.state).is_equal(Fastener.SCREWED)
+	assert_bool(play.bonds.joints.has(tool)).override_failure_message("the wrench stayed on at home").is_false()
+	# Put back on, a tap takes it off; a sweep the other way backs the bolt out (it is no cam's).
+	play.bonds.poses["allenWrench-1"] = Transform3D(r, play.bonds.world_connector(spec.hardware, 1).position - r * tip.position)
+	tool = play.bonds.seat("allenWrench-1", 0, spec.hardware, 1, "allenWrench-1")
+	router.press(Router.LEFT, centre + Vector2(rr, 0), 3000)
+	angle = 0.0
+	for n: int in 10:
+		angle -= sign * PI / 9.0
+		router.motion(centre + Vector2(cos(angle), sin(angle)) * rr)
+	router.release(Router.LEFT, centre, 5000)
+	assert_float(bolt.fastener.progress).is_less(1.0)
+	assert_str(bolt.fastener.state).is_equal(Fastener.SCREWED)
+	var on := router.point_on("allenWrench-1")
+	router.press(Router.LEFT, on, 6000)
+	router.release(Router.LEFT, on, 6050)
+	assert_bool(play.bonds.joints.has(tool)).is_false()
+
+
+func _assembled_at(id: String) -> Transform3D:
+	var inst := data.instance(id)
+	return Transform3D(Basis(inst.rotation), inst.position)

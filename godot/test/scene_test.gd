@@ -21,7 +21,8 @@ func test_the_loop_arrives_at_runtime_with_the_box_laid_out() -> void:
 	assert_object(world.room).is_not_null()
 	assert_object(world.item).is_null()
 	assert_object(world.loop).is_not_null()
-	assert_int(world.loop.bodies.size()).is_equal(data.instances.size())
+	# The whole box: the assembled parts, the spares and the tools.
+	assert_int(world.loop.bodies.size()).is_equal(data.box().size())
 	# The web's open snap (pageGating off, the default): the whole box is out from the start.
 	assert_bool(world.loop.play.gating).is_false()
 	for id: String in world.loop.bodies:

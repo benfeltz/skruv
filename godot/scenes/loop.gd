@@ -9,7 +9,10 @@ extends Node3D
 ## Mouse: left drag on empty space orbits, right drag pans, middle drag or the wheel zooms toward
 ## the cursor. Left drag on a part carries it; the wheel mid-drag lifts it; Shift + scroll lifts
 ## the dragged or selected part on the elevation line, and it stays up while Shift is held.
-## Near its seat a ghost shows where it goes; letting go seats it. A click taps a part home.
+## Near its seat a ghost shows where it goes; letting go seats it. A click taps a part home; a drag
+## on something pressed home pulls it back out. A tool let go on a bolt head or cam slot sits there
+## with a dial round it: circle the dial (or the tool) to turn it, or hold the tool still to drive
+## it home; a click takes it off.
 ##
 ## `autoplay` plays the manual itself with logic/hand.gd (the playthrough's hand), one move at a
 ## time, and with `shots` set saves a PNG mid-page-3 and one when done, then quits: the loop's
@@ -45,6 +48,7 @@ var _page_label: Label
 var _auto_label: Label
 var _done_label: Label
 var _line: Control
+var _ring: TurnRing
 var _ghost: Node3D
 # Autoplay
 var _hand: Hand
@@ -63,7 +67,7 @@ func _ready() -> void:
 		data = ItemData.load_file(ItemData.JOHNNY_PATH)
 	play = Play.new(data)
 	router = Router.new(play)
-	for inst: ItemData.Instance in data.instances:
+	for inst: ItemData.Instance in data.box():
 		var body := _make_body(inst)
 		bodies[inst.id] = body
 		add_child(body)
@@ -137,13 +141,14 @@ func _sync() -> void:
 	_show_ghost()
 	_update_labels()
 	_line.queue_redraw()
+	_ring.show_dials(router.dials())
 	if play.steps.is_done() and not done:
 		_finish()
 
 
-## Where a part is drawn: its pose.
+## Where a part is drawn: its pose, turned by its crank's progress (the router's drawTurned).
 func _shown(id: String) -> Transform3D:
-	return play.bonds.poses[id]
+	return router.drawn(id)
 
 
 func _show_ghost() -> void:
@@ -175,7 +180,7 @@ func _update_labels() -> void:
 	if step == null:
 		_page_label.text = "Manual done: %d of %d pages" % [play.steps.page_count(), play.steps.page_count()]
 	else:
-		_page_label.text = "Page %d of %d: %d of %d joints done\nDrag a part to its seat (wheel lifts it, Shift + scroll holds it up), click to tap it home.\nEmpty space: left drag orbits, right drag pans, wheel zooms." % [
+		_page_label.text = "Page %d of %d: %d of %d joints done\nDrag a part to its seat (wheel lifts it, Shift + scroll holds it up), click to tap it home, drag it out to pull.\nTools: let go on a head, circle its dial or hold it still to turn; click to take it off.\nEmpty space: left drag orbits, right drag pans, wheel zooms." % [
 			step.number, play.steps.page_count(), play.steps.done_count(step, play.bonds), step.joints.size()]
 	var lines: PackedStringArray = ["Fastened by the loop (not played):"]
 	for line: String in play.auto_log:
@@ -272,7 +277,7 @@ func _make_ui() -> void:
 	_page_label.position = Vector2(UI_MARGIN, UI_MARGIN)
 	layer.add_child(_page_label)
 	_auto_label = _label(LABEL_FONT_SIZE - 4)
-	_auto_label.position = Vector2(UI_MARGIN, UI_MARGIN + 5.0 * LABEL_FONT_SIZE)
+	_auto_label.position = Vector2(UI_MARGIN, UI_MARGIN + 6.0 * LABEL_FONT_SIZE)
 	layer.add_child(_auto_label)
 	_done_label = _label(DONE_FONT_SIZE)
 	_done_label.text = "Done: JOHNNY stands"
@@ -285,6 +290,8 @@ func _make_ui() -> void:
 	_line.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_line.draw.connect(_draw_line)
 	layer.add_child(_line)
+	_ring = TurnRing.new()
+	layer.add_child(_ring)
 
 
 func _label(size: int) -> Label:

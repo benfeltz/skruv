@@ -31,6 +31,7 @@ const RIGHT := 2
 const MOVE := "move"
 const COMPOUND := "compound"
 const PULL := "pull"
+const CRANK := "crank"
 ## A pull is judged along this much (m) of the joint's axis projected to the screen.
 const PULL_AXIS_PROBE := 0.05
 
@@ -60,6 +61,16 @@ class Drag:
 	var start_screen: Vector2
 	var pulls: Array[Bonds.Joint] = []
 	var pull_axes: Array[Vector2] = []
+	## A crank: the sweep so far.
+	var crank: Crank = null
+
+
+## A press on a turn's grip not yet a drag: how long it has been held still (ms), and whether it has
+## been held past a tap and so drives.
+class Press:
+	var grip: String
+	var ms := 0.0
+	var held := false
 
 
 var play: Play
@@ -70,6 +81,13 @@ var lift := Lift.new()
 ## The part tapped last, if any (the gizmo's, once there is one; the lift line's).
 var selected := ""
 var shift := false
+## Each seated tool's pose in the frame of the hardware it sits on, so it turns along (toolGrips).
+var tool_grips: Dictionary[String, Transform3D] = {}
+## A still press on a seated tool, maybe a hold-to-drive.
+var press_on: Press = null
+## Grip id → whether its turn was home last frame, and → ms of home flash left on its dial.
+var _dialed: Dictionary[String, bool] = {}
+var _dial_flashes: Dictionary[String, float] = {}
 
 
 func _init(p: Play, orbit: OrbitCamera = null) -> void:
@@ -88,6 +106,12 @@ func press(button: int, at: Vector2, t: int, hit: Dictionary = {}) -> void:
 	_apply(gesture.down(0, at.x, at.y, t, hit, button))
 	_sync_camera()
 	camera.press(button, at)
+	press_on = null
+	if gesture.owner == Gesture.DRAG_PART and not hit.is_empty():
+		var turn := play.bonds.turn_of(String(hit["id"]))
+		if turn != null and not turn.joints.is_empty():
+			press_on = Press.new()
+			press_on.grip = String(hit["id"])
 
 
 func motion(at: Vector2) -> void:
@@ -97,7 +121,12 @@ func motion(at: Vector2) -> void:
 
 func release(button: int, at: Vector2, t: int) -> void:
 	camera.release(button)
-	_apply(gesture.up(0, at.x, at.y, t))
+	var effect := gesture.up(0, at.x, at.y, t)
+	# A press held past a tap drove its turn: letting go is never a tap, so a tool stays on.
+	var held := press_on != null and press_on.held
+	press_on = null
+	if not (held and effect != null and effect.type == Gesture.TAP):
+		_apply(effect)
 	_sync_camera()
 
 
@@ -148,10 +177,13 @@ func update(delta: float) -> void:
 				_raise(lift.height)
 		else:
 			_hold_at(lift.part, lift.height)
+	_drive_held(delta)
 	if drag != null and drag.mode == MOVE:
 		_aim_hardware(delta)
 		_aim_panel(_panel_goal(), delta)
 		_assist(delta)
+	_follow_tools()
+	_flash_dials(delta)
 
 
 # --- what the scene and the hand read ---------------------------------------------------
@@ -173,6 +205,14 @@ func boxes() -> Array[Pick.Box]:
 func hit_at(at: Vector2) -> Dictionary:
 	var v := view()
 	var hit := Pick.pick(v.eye, v.ray(at), boxes())
+	var picked := hit.part if hit != null else ""
+	# A press on a dial's band is its tool's crank, but never over a part with a turn of its own
+	# (dialUnder).
+	if picked == "" or play.bonds.turn_of(picked) == null:
+		var all := dials()
+		var n := Crank.pick_dial(at, all)
+		if n >= 0:
+			return {"kind": "part", "id": all[n]["grip"], "point": Vector3.ZERO, "dial": true}
 	if hit == null:
 		return {}
 	return {"kind": "part", "id": hit.part, "point": hit.point}
@@ -238,15 +278,19 @@ func _apply(effect: Gesture.Effect) -> void:
 			elif Lift.selects_during_hold(id, lift.part):
 				_tap(id)
 		Gesture.DRAG_START:
-			if id != "" and play.can_drag(id):
+			if id != "" and bool(effect.hit.get("dial", false)):
+				_begin_crank(id, Vector2(effect.x, effect.y))
+			elif id != "" and play.can_drag(id):
 				_begin_drag(id, effect.hit["point"], Vector2(effect.x, effect.y))
 		Gesture.DRAG_MOVE:
-			if drag != null and drag.mode == PULL:
+			if drag != null and drag.mode == CRANK:
+				_crank_to(Vector2(effect.x, effect.y))
+			elif drag != null and drag.mode == PULL:
 				_pull_to(Vector2(effect.x, effect.y))
 			elif drag != null:
 				_update_drag(Vector2(effect.x, effect.y))
 		Gesture.LIFT:
-			if drag != null and drag.mode != PULL:
+			if drag != null and (drag.mode == MOVE or drag.mode == COMPOUND):
 				_lift_drag(effect.dy, Constants.GESTURE.desktopLiftRate)
 		Gesture.DRAG_END:
 			if drag != null:
@@ -256,7 +300,13 @@ func _apply(effect: Gesture.Effect) -> void:
 				_cancel_drag()
 
 
+## A tap: a seated tool comes off (the escape for a tool put on by mistake); else the part's
+## fasteners go home; else it is selected (tapPart).
 func _tap(id: String) -> void:
+	var turn := play.bonds.turn_of(id)
+	if turn != null:
+		_take_off(turn.tool)
+		return
 	var pressed := play.tap(id)
 	if pressed.is_empty():
 		selected = id
@@ -265,8 +315,12 @@ func _tap(id: String) -> void:
 # --- drags --------------------------------------------------------------------------------
 
 
-## The web's beginDrag: pull, carry, move or compound (above).
+## The web's beginDrag: crank, pull, carry, move or compound (above).
 func _begin_drag(id: String, point: Vector3, at: Vector2) -> void:
+	var turn := play.bonds.turn_of(id)
+	if turn != null and not turn.joints.is_empty():
+		_begin_crank(id, at)
+		return
 	if not play.bonds.pullable(id).is_empty():
 		_begin_pull(id, at)
 		return
@@ -294,6 +348,10 @@ func _carry_of(id: String) -> Array[String]:
 	if not play.is_panel(id):
 		return out
 	var members := play.bonds.compound_of(id)
+	for m: String in members:
+		for joint: Bonds.Joint in play.bonds.joints_of(m):
+			if joint.kind == Fastener.TOOL:
+				return out
 	for m: String in members:
 		if m != id:
 			out.append(m)
@@ -466,8 +524,184 @@ func _continue_free(id: String, at: Vector2) -> void:
 		_begin_move(id, point, at, MOVE, [])
 
 
+# --- crank: a drag on a seated tool turns what it sits on ---
+
+
+func _begin_crank(id: String, at: Vector2) -> void:
+	drag = Drag.new()
+	drag.mode = CRANK
+	drag.part = id
+	drag.pointer = at
+	drag.crank = Crank.new()
+	_crank_to(at)
+
+
+## The turn's centre on screen; the sweep about it, signed by which way the camera looks along the
+## into-the-hole axis, turns the joints with turn left that way (crankTo).
+func _crank_to(at: Vector2) -> void:
+	drag.pointer = at
+	var turn := play.bonds.turn_of(drag.part)
+	if turn == null or turn.joints.is_empty():
+		return
+	var centre := turn_centre(turn)
+	var delta := drag.crank.move(screen_of(centre), at)
+	if delta == 0.0:
+		return
+	var radians := Crank.tighten_sign(turn_axis(turn), centre - view().eye) * delta
+	_turn_joints(turn, Bonds.advancing(turn, 1 if radians > 0.0 else -1), radians)
+
+
+## Where a turn turns: the head its tool sits on (centreOf).
+func turn_centre(turn: Bonds.Turn) -> Vector3:
+	return play.bonds.world_connector(turn.part, turn.connector).position
+
+
+## Which way a turn tightens, in the world: clockwise seen along this (axisOf).
+func turn_axis(turn: Bonds.Turn) -> Vector3:
+	return play.bonds.world_connector(turn.part, turn.connector).axis * float(turn.sense)
+
+
+## Joints turned by `radians` (positive tightens), a cam told what bolt it would catch; a tool that
+## took its fastener home comes off, and one that backed it all the way out comes off with it
+## (turnJoints, dropToolAfter). True if anything turned.
+func _turn_joints(turn: Bonds.Turn, joints: Array[Bonds.Joint], radians: float) -> bool:
+	var turned := false
+	for joint: Bonds.Joint in joints:
+		var before := joint.fastener
+		if not play.bonds.apply(joint, Fastener.CRANK, radians, play.captured_for(joint)):
+			continue
+		turned = true
+		var after := joint.fastener
+		if not Fastener.is_home(before) and Fastener.is_home(after) and Crank.is_turn_home(turn):
+			_take_off(turn.tool)
+		elif Fastener.is_fastened(before) and not Fastener.is_fastened(after) and after.progress == 0.0:
+			play.bonds.unseat(joint)
+			_take_off(turn.tool)
+	if turned:
+		play.turn_pages()
+	return turned
+
+
+## A tool off what it sits on: its seat goes, and it drops.
+func _take_off(tool: Bonds.Joint) -> void:
+	if not play.bonds.joints.has(tool):
+		return
+	play.bonds.unseat(tool)
+	tool_grips.erase(tool.hardware)
+	if drag != null and drag.part == tool.hardware and drag.mode == CRANK:
+		drag = null
+	var members: Dictionary[String, bool] = {tool.hardware: true}
+	_drop(members)
+
+
+## Hold-to-drive: a press on a turn's grip held still past a tap drives it home in
+## FASTENER.driveSeconds, tightening only (driveHeld).
+func _drive_held(delta: float) -> void:
+	if press_on == null:
+		return
+	if gesture.phase() != "pending":
+		press_on = null
+		return
+	press_on.ms += delta * 1000.0
+	if press_on.ms <= Constants.GESTURE.tapMaxMs:
+		return
+	press_on.held = true
+	var turn := play.bonds.turn_of(press_on.grip)
+	if turn == null:
+		return
+	var joints := Bonds.advancing(turn, 1)
+	if not joints.is_empty():
+		_turn_joints(turn, joints, Crank.drive_radians(Fastener.span_of(joints[0].kind), Constants.FASTENER.driveSeconds, delta))
+
+
+## A seated tool goes where what it sits on goes (toolGrips).
+func _follow_tools() -> void:
+	for tool: String in tool_grips:
+		var turn := play.bonds.turn_of(tool)
+		if turn != null:
+			play.bonds.poses[tool] = Bonds.orthonormal(play.bonds.poses[turn.part] * tool_grips[tool])
+
+
+## Where a part is drawn: its pose, turned about its head by how far its turn has gone (a bolt
+## twisting in, its wrench with it); the poses carry no twist (drawTurned).
+func drawn(id: String) -> Transform3D:
+	var pose := play.bonds.poses[id]
+	var host := id
+	if tool_grips.has(id):
+		var turn := play.bonds.turn_of(id)
+		if turn != null:
+			host = turn.part
+	var twist := _twist_of(host)
+	if host != id:
+		return Bonds.orthonormal(twist * play.bonds.poses[host] * tool_grips[id])
+	return Bonds.orthonormal(twist * pose)
+
+
+## The world turn a part's crank joint has drawn on it: about its head's line, progress × span.
+func _twist_of(id: String) -> Transform3D:
+	for joint: Bonds.Joint in play.bonds.joints:
+		if joint.hardware != id or not Fastener.is_crank_kind(joint.kind):
+			continue
+		var connectors := play.data.type_of(play.data.instance(id)).connectors
+		for i: int in connectors.size():
+			if Tools.is_tool_target(connectors[i].type):
+				var head := play.bonds.world_connector(id, i)
+				var angle := joint.fastener.progress * Fastener.span_of(joint.kind)
+				var turn := Basis(-head.axis, angle)
+				return Transform3D(turn, head.position - turn * head.position)
+	return Transform3D.IDENTITY
+
+
+# --- the turn ring: a dial round what each seated tool turns ---
+
+
+## Every dial to draw: one per seated tool with something to turn, round its head on screen, its arc
+## at the turn's progress, flashing as it goes home. (The web draws a tool's dial beside its detail
+## inset; with no inset here it sits round the head.)
+func dials() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for turn: Bonds.Turn in play.bonds.turns():
+		if turn.joints.is_empty():
+			continue
+		var centre := turn_centre(turn)
+		out.append({
+			"grip": turn.tool.hardware,
+			"centre": screen_of(centre),
+			"progress": Crank.turn_progress(turn),
+			"clockwise": Crank.tightens_clockwise(turn_axis(turn), centre - view().eye),
+			"flashing": _dial_flashes.has(turn.tool.hardware),
+			"stalled": Crank.is_turn_stalled(turn),
+			"home": Crank.is_turn_home(turn),
+		})
+	return out
+
+
+func _flash_dials(delta: float) -> void:
+	var seen: Dictionary[String, bool] = {}
+	for turn: Bonds.Turn in play.bonds.turns():
+		if turn.joints.is_empty():
+			continue
+		var id := turn.tool.hardware
+		var home := Crank.is_turn_home(turn)
+		if home and _dialed.get(id, true) == false:
+			_dial_flashes[id] = Constants.TURN_RING.flashMs
+		elif not home:
+			_dial_flashes.erase(id)
+		seen[id] = home
+	for id: String in _dial_flashes.keys():
+		var left := _dial_flashes[id] - delta * 1000.0
+		if not seen.has(id) or left <= 0.0:
+			_dial_flashes.erase(id)
+		else:
+			_dial_flashes[id] = left
+	_dialed = seen
+
+
 ## Lets go: on the seat on offer it seats; else it comes down.
 func _end_drag() -> void:
+	if drag.mode == CRANK:
+		drag = null
+		return
 	if drag.mode == PULL:
 		drag = null
 		play.turn_pages()
@@ -483,7 +717,9 @@ func _end_drag() -> void:
 			lift.end()
 		_hold(offer.pose)
 		drag = null
-		play.seat(offer, members)
+		for joint: Bonds.Joint in play.seat(offer, members):
+			if joint.kind == Fastener.TOOL:
+				tool_grips[joint.hardware] = play.bonds.relative_pose(joint.host, joint.hardware)
 		play.turn_pages()
 		return
 	drag = null
@@ -493,7 +729,7 @@ func _end_drag() -> void:
 
 
 func _cancel_drag() -> void:
-	if drag.mode == PULL:
+	if drag.mode == PULL or drag.mode == CRANK:
 		drag = null
 		return
 	var members := carried()

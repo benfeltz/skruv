@@ -142,3 +142,68 @@ func test_a_back_fitting_pressed_home_lands_in_the_panel_behind_and_a_pull_lets_
 	assert_bool(play.bonds.apply(joint, Fastener.PULL)).is_true()
 	assert_str(joint.through).is_equal("")
 	assert_float(play.bonds.depth(joint)).is_equal_approx(0.0, EPS)
+
+
+func test_a_bolt_screws_home_on_its_span_and_backs_out_the_same_way() -> void:
+	var span := Fastener.span_of("bolt")
+	var f := Fastener.create("bolt")
+	f = Fastener.transition(f, Fastener.CRANK, span / 2.0)
+	assert_str(f.state).is_equal(Fastener.SEATED)
+	assert_float(f.progress).is_equal_approx(0.5, EPS)
+	assert_bool(Fastener.is_engaged(f)).is_true()
+	f = Fastener.transition(f, Fastener.CRANK, span)
+	assert_str(f.state).is_equal(Fastener.SCREWED)
+	assert_float(f.progress).is_equal(1.0)
+	# Backed off partway it still holds (hysteresis); all the way out it lets go.
+	f = Fastener.transition(f, Fastener.CRANK, -span / 2.0)
+	assert_str(f.state).is_equal(Fastener.SCREWED)
+	f = Fastener.transition(f, Fastener.CRANK, -span)
+	assert_str(f.state).is_equal(Fastener.SEATED)
+	assert_float(f.progress).is_equal(0.0)
+	assert_bool(Fastener.fastens_on(Fastener.create("bolt"), span)).is_true()
+	assert_bool(Fastener.fastens_on(Fastener.create("bolt"), span / 2.0)).is_false()
+
+
+func test_a_cam_locks_only_on_a_captured_bolt_and_opens_again() -> void:
+	var quarter := Fastener.span_of("cam")
+	var open := Fastener.transition(Fastener.create("cam"), Fastener.CRANK, quarter)
+	assert_str(open.state).is_equal(Fastener.SEATED)
+	assert_bool(Crank.is_turn_stalled(_turn_of(open))).is_true()
+	var locked := Fastener.transition(Fastener.create("cam"), Fastener.CRANK, quarter, true)
+	assert_str(locked.state).is_equal(Fastener.LOCKED)
+	# Turned onto a bolt that only now came in reach: pressed on at the end stop, it catches.
+	assert_str(Fastener.transition(open, Fastener.CRANK, 0.1, true).state).is_equal(Fastener.LOCKED)
+	assert_str(Fastener.transition(locked, Fastener.CRANK, -quarter).state).is_equal(Fastener.SEATED)
+	assert_bool(Fastener.binds_rigidly(locked)).is_true()
+
+
+func test_a_bolt_a_locked_cam_holds_cannot_back_out() -> void:
+	var screwed := Fastener.transition(Fastener.create("bolt"), Fastener.CRANK, Fastener.span_of("bolt"))
+	assert_object(Fastener.transition(screwed, Fastener.CRANK, -1.0, false, true)).is_same(screwed)
+
+
+func _turn_of(f: Fastener) -> Bonds.Turn:
+	var joint := Bonds.Joint.new()
+	joint.fastener = f
+	var turn := Bonds.Turn.new()
+	turn.joints.append(joint)
+	return turn
+
+
+## Only seated hardware takes a tool, and only a head a tool could turn lights.
+func test_a_tool_seats_only_on_seated_hardware_and_a_cam_lights_with_a_bolt_in_reach() -> void:
+	var bonds := Bonds.new(data)
+	var hex := Snap.WorldConnector.new("hexSocket", Vector3.ZERO, Vector3.UP, "camLockBolt-1", 1)
+	var hole := Snap.WorldConnector.new("dowelHole", Vector3.ZERO, Vector3.UP, "plinth-1", 0)
+	assert_bool(Tools.is_seat_target(hex, Tools.seated_hardware(bonds))).is_false()
+	assert_bool(Tools.is_seat_target(hole, Tools.seated_hardware(bonds))).is_true()
+	var spec := data.joints[28]
+	assert_str(spec.kind).is_equal("bolt")
+	bonds.poses[spec.host] = _assembled(spec.host)
+	bonds.poses[spec.hardware] = _assembled(spec.hardware)
+	bonds.seat(spec.hardware, spec.hardware_connector, spec.host, spec.host_connector, spec.hardware, 28)
+	assert_bool(Tools.is_seat_target(hex, Tools.seated_hardware(bonds))).is_true()
+	assert_bool(Tools.is_workable(hex, bonds, func(_cam: String) -> String: return "")).is_true()
+	var heads: Dictionary[String, Vector3] = {"camLockBolt-1": Vector3(0.01, 0, 0)}
+	assert_str(Tools.capture(Vector3.ZERO, heads)).is_equal("camLockBolt-1")
+	assert_str(Tools.capture(Vector3(1, 0, 0), heads)).is_equal("")

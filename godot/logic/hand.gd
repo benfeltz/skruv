@@ -28,6 +28,14 @@ const VIEW_FROM: Array[Vector3] = [Vector3(0.0, 1.0, 1.0), Vector3(1.0, 1.0, 1.0
 const FRAME_MS := 16
 ## How far above where it goes the hand carries a panel it lays in, before letting it come down (m).
 const LAY_CLEAR := 0.02
+## One pointer step round a dial (rad), and the most steps or frames a turn may take.
+const CRANK_STEP := PI / 9.0
+## How far out of a head along its axis the hand brings a tool's tip before letting self-aim turn it in.
+const TIP_CLEAR := 0.03
+## Frames between the hand's corrections of a tool it holds with no seat on offer.
+const CORRECT_EVERY := 20
+const CRANK_STEPS_MAX := 200
+const DRIVE_FRAMES_MAX := 300
 const TAP_MS := 80
 
 var router: Router
@@ -38,6 +46,8 @@ var errors: PackedStringArray = []
 var lines: PackedStringArray = []
 var seats := 0
 var presses := 0
+var cranks := 0
+var drives := 0
 var frames := 0
 var t := 0
 var _queue: Array[Callable] = []
@@ -101,6 +111,14 @@ static func tap_target(p: Play, spec: int) -> String:
 
 func _plan() -> void:
 	var i := next_joint(play)
+	if i < 0:
+		# Every seat in: cams the page turns, still open, get their screwdriver.
+		var step := play.steps.current()
+		for n: int in step.turns:
+			var joint := play.bonds.joint_for_spec(n)
+			if joint != null and joint.fastener.state != Fastener.LOCKED:
+				_plan_tool(joint.hardware)
+				return
 	var laid := play.unplaced()
 	if i < 0 and not laid.is_empty():
 		var id: String = laid.keys()[0]
@@ -168,14 +186,12 @@ func _plan_carry(id: String, i: int) -> void:
 			_fail("page %d: pressing %s began no carry (%s)" % [page, id, "none" if router.drag == null else router.drag.mode])
 			return
 		state["from"] = at
-		# Up to the seat's height first, so the glide goes in level.
-		router.wheel(-(seat.origin.y - router.drag.height) / Constants.GESTURE.desktopLiftRate, at)
 		state["to"] = router.screen_for(seat.origin + OFFSET))
-	for n: int in range(1, GLIDE_FRAMES + 1):
-		var k := float(n) / GLIDE_FRAMES
-		_queue.append(func() -> void:
-			if router.drag != null:
-				router.motion(Vector2(state["from"]).lerp(Vector2(state["to"]), k)))
+	_glide(state)
+	# Over the seat, up (or down) to its height with the wheel; the lift keeps x and z.
+	_queue.append(func() -> void:
+		if router.drag != null:
+			router.wheel(-(seat.origin.y - router.drag.height) / Constants.GESTURE.desktopLiftRate, router.drag.pointer))
 	_queue.append(func() -> void: _hold_for_seat(id, i, page, 0))
 
 
@@ -198,13 +214,11 @@ func _plan_place(id: String, place: Transform3D) -> void:
 			_fail("page %d: pressing %s began no carry" % [page, id])
 			return
 		state["from"] = at
-		router.wheel(-(place.origin.y + LAY_CLEAR - router.drag.height) / Constants.GESTURE.desktopLiftRate, at)
 		state["to"] = router.screen_for(place.origin))
-	for n: int in range(1, GLIDE_FRAMES + 1):
-		var k := float(n) / GLIDE_FRAMES
-		_queue.append(func() -> void:
-			if router.drag != null:
-				router.motion(Vector2(state["from"]).lerp(Vector2(state["to"]), k)))
+	_glide(state)
+	_queue.append(func() -> void:
+		if router.drag != null:
+			router.wheel(-(place.origin.y + LAY_CLEAR - router.drag.height) / Constants.GESTURE.desktopLiftRate, router.drag.pointer))
 	_queue.append(func() -> void:
 		if router.drag == null:
 			_fail("page %d: the drag of %s ended by itself" % [page, id])
@@ -238,7 +252,156 @@ func _hold_for_seat(id: String, i: int, page: int, held: int) -> void:
 		return
 	seats += pairs
 	lines.append("page %d: %s seated, %d pairs" % [page, id, pairs])
-	_plan_tap(joint.mover)
+	if Fastener.is_tap_kind(joint.kind):
+		_plan_tap(joint.mover)
+	elif joint.kind == Fastener.BOLT:
+		_plan_tool(joint.hardware)
+
+
+## The page's tool onto `hardware`'s head or slot, then turned home: a wrench by circling its dial,
+## a screwdriver by holding still (hold-to-drive); it comes off by itself at home.
+func _plan_tool(hardware: String) -> void:
+	var step := play.steps.current()
+	var page := step.number
+	var tools := play.tools_of(step)
+	if tools.is_empty():
+		_fail("page %d: no %s in the box for %s" % [page, step.tool, hardware])
+		return
+	var tool := tools[0]
+	var head := _head_of(hardware)
+	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO, "centre": Vector3.ZERO}
+	_queue.append(func() -> void:
+		head = _head_of(hardware)
+		var at := _look_at(tool, play.bonds.poses[tool].origin.lerp(head.position, 0.5), head.position)
+		if at.x < 0.0:
+			_fail("page %d: no screen point picks %s" % [page, tool])
+			return
+		state["at"] = at
+		router.press(Router.LEFT, at, t))
+	_queue.append(func() -> void:
+		var at: Vector2 = state["at"] + Vector2(Constants.GESTURE.tapMaxDistance + 2.0, 0.0)
+		router.motion(at)
+		if router.drag == null or router.drag.part != tool or router.drag.mode != Router.MOVE:
+			_fail("page %d: pressing %s began no carry" % [page, tool])
+			return
+		state["from"] = at
+		# The tip to just outside the head, however the tool lies: self-aim turns it in about the tip.
+		var centre := head.position + head.axis * TIP_CLEAR - router.drag.rotation * _tip_of(tool).position
+		state["centre"] = centre
+		state["to"] = router.screen_for(centre))
+	_glide(state)
+	_queue.append(func() -> void:
+		if router.drag != null:
+			router.wheel(-(Vector3(state["centre"]).y - router.drag.height) / Constants.GESTURE.desktopLiftRate, router.drag.pointer))
+	_queue.append(func() -> void: _hold_tool_on(tool, hardware, page, 0))
+
+
+## The pointer slid from `state.from` to `state.to` over GLIDE_FRAMES frames.
+func _glide(state: Dictionary) -> void:
+	for n: int in range(1, GLIDE_FRAMES + 1):
+		var k := float(n) / GLIDE_FRAMES
+		_queue.append(func() -> void:
+			if router.drag != null:
+				router.motion(Vector2(state["from"]).lerp(Vector2(state["to"]), k)))
+
+
+func _tip_of(tool: String) -> ItemData.Connector:
+	for c: ItemData.Connector in play.data.type_of(play.data.instance(tool)).connectors:
+		if Tools.is_tool_tip(c.type):
+			return c
+	return null
+
+
+## The tool's tip and the hardware's head or slot it goes on, world.
+func _head_of(hardware: String) -> Snap.WorldConnector:
+	var connectors := play.data.type_of(play.data.instance(hardware)).connectors
+	for i: int in connectors.size():
+		if Tools.is_tool_target(connectors[i].type):
+			return play.bonds.world_connector(hardware, i)
+	return null
+
+
+func _hold_tool_on(tool: String, hardware: String, page: int, held: int) -> void:
+	if router.drag == null:
+		_fail("page %d: the drag of %s ended by itself" % [page, tool])
+		return
+	var offer := router.drag.snapped
+	var in_seat := offer != null and router.drag.held.origin.distance_to(offer.pose.origin) < SETTLED_M
+	if offer == null and held > 0 and held % CORRECT_EVERY == 0:
+		# Self-aim turned it about its tip and the floor lifted it: bring the tip back to the head,
+		# with the wheel and the pointer, as a player would.
+		var head := _head_of(hardware)
+		var centre := head.position + head.axis * TIP_CLEAR - router.drag.rotation * _tip_of(tool).position
+		router.wheel(-(centre.y - router.drag.height) / Constants.GESTURE.desktopLiftRate, router.drag.pointer)
+		router.motion(router.screen_for(centre))
+	if not in_seat and held < HOLD_FRAMES:
+		_queue.push_front(func() -> void: _hold_tool_on(tool, hardware, page, held + 1))
+		return
+	router.release(Router.LEFT, router.drag.pointer, t)
+	var turn := play.bonds.turn_of(tool)
+	if turn == null or turn.joints.is_empty() or turn.joints[0].hardware != hardware:
+		_fail("page %d: %s let go is not on %s but %s (offer %s)" % [page, tool, hardware, "nothing" if turn == null else turn.part, "none" if offer == null else offer.key])
+		return
+	var joint := turn.joints[0]
+	if joint.kind == Fastener.CAM:
+		_queue.push_front(func() -> void: _drive(tool, joint, page))
+	else:
+		_queue.push_front(func() -> void: _crank(tool, joint, page))
+
+
+## Circles the tool's dial on screen the tightening way until its joint is home.
+func _crank(tool: String, joint: Bonds.Joint, page: int) -> void:
+	var turn := play.bonds.turn_of(tool)
+	var centre_world := router.turn_centre(turn)
+	_look_at_point(centre_world)
+	var centre := router.screen_of(centre_world)
+	var sign := Crank.tighten_sign(router.turn_axis(turn), centre_world - router.view().eye)
+	var r := Constants.TURN_RING.radius
+	var state := {"angle": 0.0, "steps": 0}
+	router.press(Router.LEFT, centre + Vector2(r, 0.0), t)
+	if router.gesture.owner != Gesture.DRAG_PART:
+		_fail("page %d: a press on %s's dial took nothing" % [page, tool])
+		return
+	var sweep := func(again: Callable) -> void:
+		state["angle"] = float(state["angle"]) + float(sign) * CRANK_STEP
+		state["steps"] = int(state["steps"]) + 1
+		router.motion(centre + Vector2(cos(state["angle"]), sin(state["angle"])) * r)
+		if Fastener.is_home(joint.fastener) or int(state["steps"]) > CRANK_STEPS_MAX:
+			router.release(Router.LEFT, router.drag.pointer if router.drag != null else centre, t)
+			if not Fastener.is_home(joint.fastener):
+				_fail("page %d: %s cranked %d steps, %s at %.2f" % [page, joint.hardware, state["steps"], joint.fastener.state, joint.fastener.progress])
+				return
+			cranks += 1
+			lines.append("page %d: %s %s by %s, %d crank steps" % [page, joint.hardware, joint.fastener.state, tool, state["steps"]])
+			return
+		_queue.push_front(func() -> void: again.call(again))
+	_queue.push_front(func() -> void: sweep.call(sweep))
+
+
+## Holds the tool still: past a tap the press drives its joint home.
+func _drive(tool: String, joint: Bonds.Joint, page: int) -> void:
+	var at := _look_at(tool, play.bonds.poses[tool].origin)
+	if at.x < 0.0:
+		_fail("page %d: no screen point picks %s to drive" % [page, tool])
+		return
+	router.press(Router.LEFT, at, t)
+	var state := {"frames": 0}
+	var hold := func(again: Callable) -> void:
+		state["frames"] = int(state["frames"]) + 1
+		if Fastener.is_home(joint.fastener) or int(state["frames"]) > DRIVE_FRAMES_MAX:
+			router.release(Router.LEFT, at, t)
+			if not Fastener.is_home(joint.fastener):
+				_fail("page %d: %s held %d frames, %s at %.2f" % [page, joint.hardware, state["frames"], joint.fastener.state, joint.fastener.progress])
+				return
+			drives += 1
+			lines.append("page %d: %s %s by %s held still, %d frames" % [page, joint.hardware, joint.fastener.state, tool, state["frames"]])
+			return
+		_queue.push_front(func() -> void: again.call(again))
+	_queue.push_front(func() -> void: hold.call(hold))
+
+
+func _look_at_point(p: Vector3) -> void:
+	router.camera.frame(p + VIEW_FROM[0].normalized() * VIEW_DISTANCE, p)
 
 
 func _plan_tap(id: String) -> void:

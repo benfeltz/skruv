@@ -111,13 +111,13 @@ func type_of(id: String) -> String:
 ## player builds is open or the manual ends.
 func open_page() -> void:
 	if not gating:
-		for inst: ItemData.Instance in data.instances:
+		for inst: ItemData.Instance in data.box():
 			if not bonds.poses.has(inst.id):
 				lay(inst.id)
 	while not steps.is_done():
 		var step := steps.current()
 		if not steps.is_auto(step):
-			for id: String in steps.parts_on(step):
+			for id: String in steps.parts_on(step) + tools_of(step):
 				if not bonds.poses.has(id):
 					lay(id)
 			return
@@ -153,6 +153,15 @@ func lay(id: String) -> void:
 	_row_depth = maxf(_row_depth, depth)
 
 
+## The box's parts of the page's tool type.
+func tools_of(step: ItemData.Step) -> Array[String]:
+	var out: Array[String] = []
+	for inst: ItemData.Instance in data.extras:
+		if inst.type == step.tool:
+			out.append(inst.id)
+	return out
+
+
 ## The open page's joints not seated by name yet (the hand's list).
 func open_joints() -> Array[int]:
 	var out: Array[int] = []
@@ -186,10 +195,13 @@ func can_drag(id: String) -> bool:
 ## ones and `exclude`.
 func seats_for(carry: Carry, exclude: Dictionary[String, bool] = {}) -> Array[Snap.WorldConnector]:
 	var out: Array[Snap.WorldConnector] = []
+	var seated := Tools.seated_hardware(bonds)
 	for id: String in bonds.poses:
 		if carry.has(id) or exclude.has(id):
 			continue
-		out.append_array(bonds.free_connectors(id))
+		for c: Snap.WorldConnector in bonds.free_connectors(id):
+			if Tools.is_seat_target(c, seated):
+				out.append(c)
 	return out
 
 
@@ -236,7 +248,10 @@ func snap_candidate(carry: Carry, pose: Transform3D, current: Offer, exclude: Di
 		return FitRank.held_offer(current, fit_candidate(carry, pose, seats), pose)
 	var dragged := bonds.free_connectors(carry.part)
 	var moved: Array[Snap.WorldConnector] = []
+	var seated := Tools.seated_hardware(bonds)
 	for c: Snap.WorldConnector in dragged:
+		if not Tools.is_seat_target(c, seated):
+			continue
 		var local := connector_local(c)
 		moved.append(Snap.in_world(c.type, local.position, local.axis, pose, c.part, c.index))
 	var best: Snap.Offer = null
@@ -281,6 +296,20 @@ func fit_candidate(carry: Carry, pose: Transform3D, seats: Array[Snap.WorldConne
 			offer.pairs.append(_pair(p.hole, p.end, carry.part, carry))
 		return offer
 	return null
+
+
+## The bolt a cam's recess would catch now: the nearest screwed bolt head within captureRadius, any
+## bolt, or "" (the router's crankContext, capture over screwedHeads).
+func captured_for(joint: Bonds.Joint) -> String:
+	if joint.kind != Fastener.CAM:
+		return ""
+	var heads: Dictionary[String, Vector3] = {}
+	for bolt: Bonds.Joint in bonds.screwed_bolts():
+		var connectors := data.type_of(data.instance(bolt.hardware)).connectors
+		for i: int in connectors.size():
+			if connectors[i].type == "hexSocket":
+				heads[bolt.hardware] = bonds.world_connector(bolt.hardware, i).position
+	return Tools.capture(bonds.world_connector(joint.host, joint.host_connector).position, heads)
 
 
 ## True when a fit's pairs all lie on one line along their axis: nothing in them sets its spin
@@ -365,7 +394,7 @@ func name_seats(fresh: Array[Bonds.Joint], carried: Dictionary[String, bool] = {
 			movers.erase(id)
 	for panel: String in movers:
 		var others: Array[String] = [panel]
-		for inst: ItemData.Instance in data.instances:
+		for inst: ItemData.Instance in data.box():
 			if inst.type == type_of(panel) and inst.id != panel and not others.has(inst.id):
 				others.append(inst.id)
 		for as_name: String in others:
@@ -459,6 +488,9 @@ func _restore(saved: Dictionary) -> void:
 func allows(a: Snap.WorldConnector, b: Snap.WorldConnector) -> bool:
 	var hardware := a if data.compatible.has(a.type) else b
 	var host := b if hardware == a else a
+	if Tools.is_tool_tip(hardware.type):
+		var step := steps.current()
+		return step != null and type_of(hardware.part) == step.tool
 	return steps.wants(Steps.key(type_of(host.part), host.index, type_of(hardware.part)), bonds)
 
 

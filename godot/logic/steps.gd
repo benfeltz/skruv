@@ -18,7 +18,7 @@ extends RefCounted
 ## A page the loop does not play is `auto`: the loop fastens it on arrival and lists it.
 
 ## The kinds a player fastens by hand here; a page with any other is fastened by the loop.
-const PLAYED_KINDS: Array[String] = ["dowel", "pin", "fitting"]
+const PLAYED_KINDS: Array[String] = ["dowel", "pin", "fitting", "bolt", "cam"]
 ## The poses a page shows the build in; "parts" is the box laid out, no build yet.
 const BOX := "parts"
 
@@ -46,11 +46,9 @@ func is_done() -> bool:
 
 
 ## True for a page the loop fastens itself: one that turns the build while turning is not played,
-## one that locks cams, or one with a joint of a kind not played by hand.
+## or one with a joint of a kind not played by hand.
 func is_auto(step: ItemData.Step) -> bool:
 	if turns_build(step) and not turns_played:
-		return true
-	if not step.turns.is_empty():
 		return true
 	for i: int in step.joints:
 		if not PLAYED_KINDS.has(data.joints[i].kind):
@@ -193,6 +191,10 @@ func wanted_types(bonds: Bonds) -> Dictionary[String, bool]:
 			out[data.instance(data.joints[i].hardware).type] = true
 	for id: String in step.parts:
 		out[data.instance(id).type] = true
+	if step.tool != "":
+		out[step.tool] = true
+		for i: int in step.joints + step.turns:
+			out[data.instance(data.joints[i].hardware).type] = true
 	return out
 
 

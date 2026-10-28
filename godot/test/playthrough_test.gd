@@ -17,9 +17,10 @@ const MAX_TURN_DEG := 0.5
 const DT := 1.0 / 60.0
 ## Frames the whole manual may take before the test calls it stuck.
 const MAX_FRAMES := 60000
-## The pages the loop still fastens itself (2.0.4.4 step 4: the cranks' pages 2, 4, 5 and 7, the
-## face-down turn of page 8 and the tip of page 10). The plan's count: 9 → 6 → 1 → 0.
-const AUTO_PAGES: Array[int] = [2, 4, 5, 7, 8, 10]
+## The pages the loop still fastens itself (2.0.4.4 step 5: the face-down turn of page 8 and the tip
+## of page 10). The plan's count was 9 → 6 → 1 → 0; page 8's turn is the tip's gesture, so 9 → 6 →
+## 2 → 0.
+const AUTO_PAGES: Array[int] = [8, 10]
 
 var data: ItemData
 
@@ -50,8 +51,8 @@ func _assert_built(hand: Hand, label: String) -> void:
 		if Fastener.is_fastened(joint.fastener):
 			fastened += 1
 	var worst := play.worst_error()
-	print("playthrough: %s %d frames; %d pairs seated, %d joints pressed by a click; %d auto pages; %d of %d joints fastened; worst offset %.4f mm (%s), worst turn %.4f deg (%s)" % [
-		label, hand.frames, hand.seats, hand.presses, play.auto_log.size(), fastened, data.joints.size(),
+	print("playthrough: %s %d frames; %d pairs seated, %d joints pressed by a click, %d cranked, %d driven; %d auto pages; %d of %d joints fastened; worst offset %.4f mm (%s), worst turn %.4f deg (%s)" % [
+		label, hand.frames, hand.seats, hand.presses, hand.cranks, hand.drives, play.auto_log.size(), fastened, data.joints.size(),
 		float(worst["offset"]) * 1000.0, worst["offset_id"], rad_to_deg(float(worst["turn"])), worst["turn_id"]])
 	assert_array(hand.errors).override_failure_message("%s: %s" % [label, "\n".join(hand.errors)]).is_empty()
 	var auto_pages: Array[int] = []
