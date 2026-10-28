@@ -1,8 +1,43 @@
 {
-  "format": 1,
+  "format": 2,
   "source": "items/johnny/flatpack.json",
   "generator": "godot/tools/export-item.ts",
   "product": "JOHNNY",
+  "vocabulary": {
+    "compatible": {
+      "dowelEnd": "dowelHole",
+      "boltThread": "camBoltHole",
+      "camLockBody": "camLockRecess",
+      "pinTip": "shelfPinHole",
+      "backFittingTip": "backFittingHole",
+      "wrenchTip": "hexSocket",
+      "screwdriverTip": "driveSlot",
+      "studEnd": "studHole",
+      "screwThread": "screwHole",
+      "railEnd": "railGroove"
+    },
+    "kinds": {
+      "dowelEnd": "dowel",
+      "boltThread": "bolt",
+      "camLockBody": "cam",
+      "pinTip": "pin",
+      "backFittingTip": "fitting",
+      "wrenchTip": "tool",
+      "screwdriverTip": "tool",
+      "studEnd": "stud",
+      "screwThread": "screw",
+      "railEnd": "slide"
+    },
+    "sinkDepth": {
+      "dowel": 0.015,
+      "pin": 0.008,
+      "fitting": 0.012,
+      "bolt": 0.011,
+      "cam": 0.012,
+      "stud": 0.02,
+      "screw": 0.025
+    }
+  },
   "types": {
     "sidePanel": {
       "size": [
@@ -12,7 +47,233 @@
       ],
       "color": "#f1eee6",
       "mass": 6,
-      "hardware": false
+      "hardware": false,
+      "connectors": [
+        {
+          "id": "dowelHole-1",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            -0.942,
+            -0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-2",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            -0.942,
+            0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "camBoltHole-1",
+          "type": "camBoltHole",
+          "position": [
+            0.008,
+            -0.942,
+            0
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-3",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            0,
+            -0.11
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-4",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            0,
+            0.11
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "camBoltHole-2",
+          "type": "camBoltHole",
+          "position": [
+            0.008,
+            0,
+            -0.04
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "camBoltHole-3",
+          "type": "camBoltHole",
+          "position": [
+            0.008,
+            0,
+            0.04
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-5",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            1.002,
+            -0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-6",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            1.002,
+            0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "camBoltHole-4",
+          "type": "camBoltHole",
+          "position": [
+            0.008,
+            1.002,
+            0
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "shelfPinHole-1",
+          "type": "shelfPinHole",
+          "position": [
+            0.008,
+            -0.512,
+            -0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "shelfPinHole-2",
+          "type": "shelfPinHole",
+          "position": [
+            0.008,
+            -0.512,
+            0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "shelfPinHole-3",
+          "type": "shelfPinHole",
+          "position": [
+            0.008,
+            0.488,
+            -0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "shelfPinHole-4",
+          "type": "shelfPinHole",
+          "position": [
+            0.008,
+            0.488,
+            0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-7",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            -0.98,
+            0.132
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-8",
+          "type": "dowelHole",
+          "position": [
+            0.008,
+            -0.98,
+            -0.132
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        }
+      ]
     },
     "topBottomPanel": {
       "size": [
@@ -22,7 +283,93 @@
       ],
       "color": "#f1eee6",
       "mass": 2.3,
-      "hardware": false
+      "hardware": false,
+      "connectors": [
+        {
+          "id": "dowelHole-1",
+          "type": "dowelHole",
+          "position": [
+            -0.384,
+            0,
+            -0.09
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-2",
+          "type": "dowelHole",
+          "position": [
+            -0.384,
+            0,
+            0.09
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "camLockRecess-1",
+          "type": "camLockRecess",
+          "position": [
+            -0.35,
+            -0.008,
+            0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-3",
+          "type": "dowelHole",
+          "position": [
+            0.384,
+            0,
+            -0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-4",
+          "type": "dowelHole",
+          "position": [
+            0.384,
+            0,
+            0.09
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "camLockRecess-2",
+          "type": "camLockRecess",
+          "position": [
+            0.35,
+            -0.008,
+            0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        }
+      ]
     },
     "fixedShelf": {
       "size": [
@@ -32,7 +379,121 @@
       ],
       "color": "#f1eee6",
       "mass": 2.3,
-      "hardware": false
+      "hardware": false,
+      "connectors": [
+        {
+          "id": "dowelHole-1",
+          "type": "dowelHole",
+          "position": [
+            -0.384,
+            0,
+            -0.11
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-2",
+          "type": "dowelHole",
+          "position": [
+            -0.384,
+            0,
+            0.11
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "camLockRecess-1",
+          "type": "camLockRecess",
+          "position": [
+            -0.35,
+            -0.008,
+            -0.04
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "camLockRecess-2",
+          "type": "camLockRecess",
+          "position": [
+            -0.35,
+            -0.008,
+            0.04
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-3",
+          "type": "dowelHole",
+          "position": [
+            0.384,
+            0,
+            -0.11
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-4",
+          "type": "dowelHole",
+          "position": [
+            0.384,
+            0,
+            0.11
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "camLockRecess-3",
+          "type": "camLockRecess",
+          "position": [
+            0.35,
+            -0.008,
+            -0.04
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "camLockRecess-4",
+          "type": "camLockRecess",
+          "position": [
+            0.35,
+            -0.008,
+            0.04
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        }
+      ]
     },
     "adjustableShelf": {
       "size": [
@@ -42,7 +503,8 @@
       ],
       "color": "#f1eee6",
       "mass": 2.1,
-      "hardware": false
+      "hardware": false,
+      "connectors": []
     },
     "plinth": {
       "size": [
@@ -52,7 +514,37 @@
       ],
       "color": "#f1eee6",
       "mass": 0.6,
-      "hardware": false
+      "hardware": false,
+      "connectors": [
+        {
+          "id": "dowelHole-1",
+          "type": "dowelHole",
+          "position": [
+            -0.384,
+            0,
+            0
+          ],
+          "axis": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dowelHole-2",
+          "type": "dowelHole",
+          "position": [
+            0.384,
+            0,
+            0
+          ],
+          "axis": [
+            1,
+            0,
+            0
+          ]
+        }
+      ]
     },
     "backPanel": {
       "size": [
@@ -62,7 +554,121 @@
       ],
       "color": "#9c8466",
       "mass": 4.3,
-      "hardware": false
+      "hardware": false,
+      "connectors": [
+        {
+          "id": "backFittingHole-1",
+          "type": "backFittingHole",
+          "position": [
+            -0.387,
+            -0.952,
+            -0.0015
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "backFittingHole-2",
+          "type": "backFittingHole",
+          "position": [
+            0.387,
+            -0.952,
+            -0.0015
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "backFittingHole-3",
+          "type": "backFittingHole",
+          "position": [
+            -0.387,
+            0.992,
+            -0.0015
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "backFittingHole-4",
+          "type": "backFittingHole",
+          "position": [
+            0.387,
+            0.992,
+            -0.0015
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "backFittingHole-5",
+          "type": "backFittingHole",
+          "position": [
+            -0.387,
+            -0.010000000000000009,
+            -0.0015
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "backFittingHole-6",
+          "type": "backFittingHole",
+          "position": [
+            0.387,
+            -0.010000000000000009,
+            -0.0015
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "backFittingHole-7",
+          "type": "backFittingHole",
+          "position": [
+            0,
+            -0.952,
+            -0.0015
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "backFittingHole-8",
+          "type": "backFittingHole",
+          "position": [
+            0,
+            0.992,
+            -0.0015
+          ],
+          "axis": [
+            0,
+            0,
+            -1
+          ]
+        }
+      ]
     },
     "dowel": {
       "size": [
@@ -72,7 +678,37 @@
       ],
       "color": "#d8b27a",
       "mass": 0.0015,
-      "hardware": true
+      "hardware": true,
+      "connectors": [
+        {
+          "id": "dowelEnd-1",
+          "type": "dowelEnd",
+          "position": [
+            0,
+            -0.015,
+            0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "dowelEnd-2",
+          "type": "dowelEnd",
+          "position": [
+            0,
+            0.015,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ]
+        }
+      ]
     },
     "camLockBolt": {
       "size": [
@@ -82,7 +718,37 @@
       ],
       "color": "#a7adb3",
       "mass": 0.004,
-      "hardware": true
+      "hardware": true,
+      "connectors": [
+        {
+          "id": "boltThread-1",
+          "type": "boltThread",
+          "position": [
+            0,
+            -0.0175,
+            0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "hexSocket-1",
+          "type": "hexSocket",
+          "position": [
+            0,
+            0.0175,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ]
+        }
+      ]
     },
     "camLock": {
       "size": [
@@ -92,7 +758,37 @@
       ],
       "color": "#a7adb3",
       "mass": 0.005,
-      "hardware": true
+      "hardware": true,
+      "connectors": [
+        {
+          "id": "camLockBody-1",
+          "type": "camLockBody",
+          "position": [
+            0,
+            -0.006,
+            0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "driveSlot-1",
+          "type": "driveSlot",
+          "position": [
+            0,
+            0.006,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ]
+        }
+      ]
     },
     "shelfPin": {
       "size": [
@@ -102,7 +798,23 @@
       ],
       "color": "#a7adb3",
       "mass": 0.001,
-      "hardware": true
+      "hardware": true,
+      "connectors": [
+        {
+          "id": "pinTip-1",
+          "type": "pinTip",
+          "position": [
+            0,
+            -0.008,
+            0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        }
+      ]
     },
     "backFitting": {
       "size": [
@@ -112,7 +824,23 @@
       ],
       "color": "#5d5853",
       "mass": 0.001,
-      "hardware": true
+      "hardware": true,
+      "connectors": [
+        {
+          "id": "backFittingTip-1",
+          "type": "backFittingTip",
+          "position": [
+            0,
+            -0.008,
+            0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        }
+      ]
     },
     "allenWrench": {
       "size": [
@@ -122,7 +850,23 @@
       ],
       "color": "#2f3136",
       "mass": 0.015,
-      "hardware": true
+      "hardware": true,
+      "connectors": [
+        {
+          "id": "wrenchTip-1",
+          "type": "wrenchTip",
+          "position": [
+            0.035,
+            0,
+            0.0125
+          ],
+          "axis": [
+            0,
+            0,
+            1
+          ]
+        }
+      ]
     },
     "screwdriver": {
       "size": [
@@ -132,7 +876,23 @@
       ],
       "color": "#d9a21b",
       "mass": 0.08,
-      "hardware": true
+      "hardware": true,
+      "connectors": [
+        {
+          "id": "screwdriverTip-1",
+          "type": "screwdriverTip",
+          "position": [
+            0,
+            -0.1,
+            0
+          ],
+          "axis": [
+            0,
+            -1,
+            0
+          ]
+        }
+      ]
     }
   },
   "instances": [
@@ -1022,6 +1782,9 @@
       "host": "plinth-1",
       "hardware": "dowel-1",
       "kind": "dowel",
+      "hostConnector": 0,
+      "hardwareConnector": 0,
+      "mover": "dowel-1",
       "through": null,
       "captured": null,
       "position": [
@@ -1039,6 +1802,9 @@
       "host": "sidePanel-1",
       "hardware": "dowel-1",
       "kind": "dowel",
+      "hostConnector": 14,
+      "hardwareConnector": 1,
+      "mover": "sidePanel-1",
       "through": null,
       "captured": null,
       "position": [
@@ -1056,6 +1822,9 @@
       "host": "plinth-1",
       "hardware": "dowel-2",
       "kind": "dowel",
+      "hostConnector": 1,
+      "hardwareConnector": 0,
+      "mover": "dowel-2",
       "through": null,
       "captured": null,
       "position": [
@@ -1073,6 +1842,9 @@
       "host": "sidePanel-2",
       "hardware": "dowel-2",
       "kind": "dowel",
+      "hostConnector": 15,
+      "hardwareConnector": 1,
+      "mover": "sidePanel-2",
       "through": null,
       "captured": null,
       "position": [
@@ -1090,6 +1862,9 @@
       "host": "topBottomPanel-1",
       "hardware": "dowel-3",
       "kind": "dowel",
+      "hostConnector": 0,
+      "hardwareConnector": 0,
+      "mover": "dowel-3",
       "through": null,
       "captured": null,
       "position": [
@@ -1107,6 +1882,9 @@
       "host": "sidePanel-2",
       "hardware": "dowel-3",
       "kind": "dowel",
+      "hostConnector": 1,
+      "hardwareConnector": 1,
+      "mover": "sidePanel-2",
       "through": null,
       "captured": null,
       "position": [
@@ -1124,6 +1902,9 @@
       "host": "topBottomPanel-1",
       "hardware": "dowel-4",
       "kind": "dowel",
+      "hostConnector": 1,
+      "hardwareConnector": 0,
+      "mover": "dowel-4",
       "through": null,
       "captured": null,
       "position": [
@@ -1141,6 +1922,9 @@
       "host": "sidePanel-2",
       "hardware": "dowel-4",
       "kind": "dowel",
+      "hostConnector": 0,
+      "hardwareConnector": 1,
+      "mover": "sidePanel-2",
       "through": null,
       "captured": null,
       "position": [
@@ -1158,6 +1942,9 @@
       "host": "topBottomPanel-1",
       "hardware": "dowel-5",
       "kind": "dowel",
+      "hostConnector": 3,
+      "hardwareConnector": 0,
+      "mover": "dowel-5",
       "through": null,
       "captured": null,
       "position": [
@@ -1175,6 +1962,9 @@
       "host": "sidePanel-1",
       "hardware": "dowel-5",
       "kind": "dowel",
+      "hostConnector": 0,
+      "hardwareConnector": 1,
+      "mover": "sidePanel-1",
       "through": null,
       "captured": null,
       "position": [
@@ -1192,6 +1982,9 @@
       "host": "topBottomPanel-1",
       "hardware": "dowel-6",
       "kind": "dowel",
+      "hostConnector": 4,
+      "hardwareConnector": 0,
+      "mover": "dowel-6",
       "through": null,
       "captured": null,
       "position": [
@@ -1209,6 +2002,9 @@
       "host": "sidePanel-1",
       "hardware": "dowel-6",
       "kind": "dowel",
+      "hostConnector": 1,
+      "hardwareConnector": 1,
+      "mover": "sidePanel-1",
       "through": null,
       "captured": null,
       "position": [
@@ -1226,6 +2022,9 @@
       "host": "fixedShelf-1",
       "hardware": "dowel-7",
       "kind": "dowel",
+      "hostConnector": 0,
+      "hardwareConnector": 0,
+      "mover": "dowel-7",
       "through": null,
       "captured": null,
       "position": [
@@ -1243,6 +2042,9 @@
       "host": "sidePanel-1",
       "hardware": "dowel-7",
       "kind": "dowel",
+      "hostConnector": 3,
+      "hardwareConnector": 1,
+      "mover": "sidePanel-1",
       "through": null,
       "captured": null,
       "position": [
@@ -1260,6 +2062,9 @@
       "host": "fixedShelf-1",
       "hardware": "dowel-8",
       "kind": "dowel",
+      "hostConnector": 1,
+      "hardwareConnector": 0,
+      "mover": "dowel-8",
       "through": null,
       "captured": null,
       "position": [
@@ -1277,6 +2082,9 @@
       "host": "sidePanel-1",
       "hardware": "dowel-8",
       "kind": "dowel",
+      "hostConnector": 4,
+      "hardwareConnector": 1,
+      "mover": "sidePanel-1",
       "through": null,
       "captured": null,
       "position": [
@@ -1294,6 +2102,9 @@
       "host": "fixedShelf-1",
       "hardware": "dowel-9",
       "kind": "dowel",
+      "hostConnector": 4,
+      "hardwareConnector": 0,
+      "mover": "dowel-9",
       "through": null,
       "captured": null,
       "position": [
@@ -1311,6 +2122,9 @@
       "host": "sidePanel-2",
       "hardware": "dowel-9",
       "kind": "dowel",
+      "hostConnector": 4,
+      "hardwareConnector": 1,
+      "mover": "sidePanel-2",
       "through": null,
       "captured": null,
       "position": [
@@ -1328,6 +2142,9 @@
       "host": "fixedShelf-1",
       "hardware": "dowel-10",
       "kind": "dowel",
+      "hostConnector": 5,
+      "hardwareConnector": 0,
+      "mover": "dowel-10",
       "through": null,
       "captured": null,
       "position": [
@@ -1345,6 +2162,9 @@
       "host": "sidePanel-2",
       "hardware": "dowel-10",
       "kind": "dowel",
+      "hostConnector": 3,
+      "hardwareConnector": 1,
+      "mover": "sidePanel-2",
       "through": null,
       "captured": null,
       "position": [
@@ -1362,6 +2182,9 @@
       "host": "topBottomPanel-2",
       "hardware": "dowel-11",
       "kind": "dowel",
+      "hostConnector": 0,
+      "hardwareConnector": 0,
+      "mover": "dowel-11",
       "through": null,
       "captured": null,
       "position": [
@@ -1379,6 +2202,9 @@
       "host": "sidePanel-1",
       "hardware": "dowel-11",
       "kind": "dowel",
+      "hostConnector": 7,
+      "hardwareConnector": 1,
+      "mover": "sidePanel-1",
       "through": null,
       "captured": null,
       "position": [
@@ -1396,6 +2222,9 @@
       "host": "topBottomPanel-2",
       "hardware": "dowel-12",
       "kind": "dowel",
+      "hostConnector": 1,
+      "hardwareConnector": 0,
+      "mover": "dowel-12",
       "through": null,
       "captured": null,
       "position": [
@@ -1413,6 +2242,9 @@
       "host": "sidePanel-1",
       "hardware": "dowel-12",
       "kind": "dowel",
+      "hostConnector": 8,
+      "hardwareConnector": 1,
+      "mover": "sidePanel-1",
       "through": null,
       "captured": null,
       "position": [
@@ -1430,6 +2262,9 @@
       "host": "topBottomPanel-2",
       "hardware": "dowel-13",
       "kind": "dowel",
+      "hostConnector": 3,
+      "hardwareConnector": 0,
+      "mover": "dowel-13",
       "through": null,
       "captured": null,
       "position": [
@@ -1447,6 +2282,9 @@
       "host": "sidePanel-2",
       "hardware": "dowel-13",
       "kind": "dowel",
+      "hostConnector": 8,
+      "hardwareConnector": 1,
+      "mover": "sidePanel-2",
       "through": null,
       "captured": null,
       "position": [
@@ -1464,6 +2302,9 @@
       "host": "topBottomPanel-2",
       "hardware": "dowel-14",
       "kind": "dowel",
+      "hostConnector": 4,
+      "hardwareConnector": 0,
+      "mover": "dowel-14",
       "through": null,
       "captured": null,
       "position": [
@@ -1481,6 +2322,9 @@
       "host": "sidePanel-2",
       "hardware": "dowel-14",
       "kind": "dowel",
+      "hostConnector": 7,
+      "hardwareConnector": 1,
+      "mover": "sidePanel-2",
       "through": null,
       "captured": null,
       "position": [
@@ -1498,6 +2342,9 @@
       "host": "sidePanel-1",
       "hardware": "camLockBolt-1",
       "kind": "bolt",
+      "hostConnector": 2,
+      "hardwareConnector": 0,
+      "mover": "camLockBolt-1",
       "through": null,
       "captured": null,
       "position": [
@@ -1515,6 +2362,9 @@
       "host": "sidePanel-1",
       "hardware": "camLockBolt-2",
       "kind": "bolt",
+      "hostConnector": 5,
+      "hardwareConnector": 0,
+      "mover": "camLockBolt-2",
       "through": null,
       "captured": null,
       "position": [
@@ -1532,6 +2382,9 @@
       "host": "sidePanel-1",
       "hardware": "camLockBolt-3",
       "kind": "bolt",
+      "hostConnector": 6,
+      "hardwareConnector": 0,
+      "mover": "camLockBolt-3",
       "through": null,
       "captured": null,
       "position": [
@@ -1549,6 +2402,9 @@
       "host": "sidePanel-1",
       "hardware": "camLockBolt-4",
       "kind": "bolt",
+      "hostConnector": 9,
+      "hardwareConnector": 0,
+      "mover": "camLockBolt-4",
       "through": null,
       "captured": null,
       "position": [
@@ -1566,6 +2422,9 @@
       "host": "sidePanel-2",
       "hardware": "camLockBolt-5",
       "kind": "bolt",
+      "hostConnector": 2,
+      "hardwareConnector": 0,
+      "mover": "camLockBolt-5",
       "through": null,
       "captured": null,
       "position": [
@@ -1583,6 +2442,9 @@
       "host": "sidePanel-2",
       "hardware": "camLockBolt-6",
       "kind": "bolt",
+      "hostConnector": 5,
+      "hardwareConnector": 0,
+      "mover": "camLockBolt-6",
       "through": null,
       "captured": null,
       "position": [
@@ -1600,6 +2462,9 @@
       "host": "sidePanel-2",
       "hardware": "camLockBolt-7",
       "kind": "bolt",
+      "hostConnector": 6,
+      "hardwareConnector": 0,
+      "mover": "camLockBolt-7",
       "through": null,
       "captured": null,
       "position": [
@@ -1617,6 +2482,9 @@
       "host": "sidePanel-2",
       "hardware": "camLockBolt-8",
       "kind": "bolt",
+      "hostConnector": 9,
+      "hardwareConnector": 0,
+      "mover": "camLockBolt-8",
       "through": null,
       "captured": null,
       "position": [
@@ -1634,6 +2502,9 @@
       "host": "topBottomPanel-1",
       "hardware": "camLock-1",
       "kind": "cam",
+      "hostConnector": 2,
+      "hardwareConnector": 0,
+      "mover": "camLock-1",
       "through": null,
       "captured": "camLockBolt-5",
       "position": [
@@ -1651,6 +2522,9 @@
       "host": "topBottomPanel-1",
       "hardware": "camLock-2",
       "kind": "cam",
+      "hostConnector": 5,
+      "hardwareConnector": 0,
+      "mover": "camLock-2",
       "through": null,
       "captured": "camLockBolt-1",
       "position": [
@@ -1668,6 +2542,9 @@
       "host": "fixedShelf-1",
       "hardware": "camLock-3",
       "kind": "cam",
+      "hostConnector": 2,
+      "hardwareConnector": 0,
+      "mover": "camLock-3",
       "through": null,
       "captured": "camLockBolt-2",
       "position": [
@@ -1685,6 +2562,9 @@
       "host": "fixedShelf-1",
       "hardware": "camLock-4",
       "kind": "cam",
+      "hostConnector": 3,
+      "hardwareConnector": 0,
+      "mover": "camLock-4",
       "through": null,
       "captured": "camLockBolt-3",
       "position": [
@@ -1702,6 +2582,9 @@
       "host": "fixedShelf-1",
       "hardware": "camLock-5",
       "kind": "cam",
+      "hostConnector": 6,
+      "hardwareConnector": 0,
+      "mover": "camLock-5",
       "through": null,
       "captured": "camLockBolt-7",
       "position": [
@@ -1719,6 +2602,9 @@
       "host": "fixedShelf-1",
       "hardware": "camLock-6",
       "kind": "cam",
+      "hostConnector": 7,
+      "hardwareConnector": 0,
+      "mover": "camLock-6",
       "through": null,
       "captured": "camLockBolt-6",
       "position": [
@@ -1736,6 +2622,9 @@
       "host": "topBottomPanel-2",
       "hardware": "camLock-7",
       "kind": "cam",
+      "hostConnector": 2,
+      "hardwareConnector": 0,
+      "mover": "camLock-7",
       "through": null,
       "captured": "camLockBolt-4",
       "position": [
@@ -1753,6 +2642,9 @@
       "host": "topBottomPanel-2",
       "hardware": "camLock-8",
       "kind": "cam",
+      "hostConnector": 5,
+      "hardwareConnector": 0,
+      "mover": "camLock-8",
       "through": null,
       "captured": "camLockBolt-8",
       "position": [
@@ -1770,6 +2662,9 @@
       "host": "sidePanel-1",
       "hardware": "shelfPin-1",
       "kind": "pin",
+      "hostConnector": 10,
+      "hardwareConnector": 0,
+      "mover": "shelfPin-1",
       "through": null,
       "captured": null,
       "position": [
@@ -1787,6 +2682,9 @@
       "host": "sidePanel-1",
       "hardware": "shelfPin-2",
       "kind": "pin",
+      "hostConnector": 11,
+      "hardwareConnector": 0,
+      "mover": "shelfPin-2",
       "through": null,
       "captured": null,
       "position": [
@@ -1804,6 +2702,9 @@
       "host": "sidePanel-1",
       "hardware": "shelfPin-3",
       "kind": "pin",
+      "hostConnector": 12,
+      "hardwareConnector": 0,
+      "mover": "shelfPin-3",
       "through": null,
       "captured": null,
       "position": [
@@ -1821,6 +2722,9 @@
       "host": "sidePanel-1",
       "hardware": "shelfPin-4",
       "kind": "pin",
+      "hostConnector": 13,
+      "hardwareConnector": 0,
+      "mover": "shelfPin-4",
       "through": null,
       "captured": null,
       "position": [
@@ -1838,6 +2742,9 @@
       "host": "sidePanel-2",
       "hardware": "shelfPin-5",
       "kind": "pin",
+      "hostConnector": 10,
+      "hardwareConnector": 0,
+      "mover": "shelfPin-5",
       "through": null,
       "captured": null,
       "position": [
@@ -1855,6 +2762,9 @@
       "host": "sidePanel-2",
       "hardware": "shelfPin-6",
       "kind": "pin",
+      "hostConnector": 11,
+      "hardwareConnector": 0,
+      "mover": "shelfPin-6",
       "through": null,
       "captured": null,
       "position": [
@@ -1872,6 +2782,9 @@
       "host": "sidePanel-2",
       "hardware": "shelfPin-7",
       "kind": "pin",
+      "hostConnector": 12,
+      "hardwareConnector": 0,
+      "mover": "shelfPin-7",
       "through": null,
       "captured": null,
       "position": [
@@ -1889,6 +2802,9 @@
       "host": "sidePanel-2",
       "hardware": "shelfPin-8",
       "kind": "pin",
+      "hostConnector": 13,
+      "hardwareConnector": 0,
+      "mover": "shelfPin-8",
       "through": null,
       "captured": null,
       "position": [
@@ -1906,6 +2822,9 @@
       "host": "backPanel-1",
       "hardware": "backFitting-1",
       "kind": "fitting",
+      "hostConnector": 0,
+      "hardwareConnector": 0,
+      "mover": "backFitting-1",
       "through": "sidePanel-1",
       "captured": null,
       "position": [
@@ -1923,6 +2842,9 @@
       "host": "backPanel-1",
       "hardware": "backFitting-2",
       "kind": "fitting",
+      "hostConnector": 1,
+      "hardwareConnector": 0,
+      "mover": "backFitting-2",
       "through": "sidePanel-2",
       "captured": null,
       "position": [
@@ -1940,6 +2862,9 @@
       "host": "backPanel-1",
       "hardware": "backFitting-3",
       "kind": "fitting",
+      "hostConnector": 2,
+      "hardwareConnector": 0,
+      "mover": "backFitting-3",
       "through": "sidePanel-1",
       "captured": null,
       "position": [
@@ -1957,6 +2882,9 @@
       "host": "backPanel-1",
       "hardware": "backFitting-4",
       "kind": "fitting",
+      "hostConnector": 3,
+      "hardwareConnector": 0,
+      "mover": "backFitting-4",
       "through": "sidePanel-2",
       "captured": null,
       "position": [
@@ -1974,6 +2902,9 @@
       "host": "backPanel-1",
       "hardware": "backFitting-5",
       "kind": "fitting",
+      "hostConnector": 4,
+      "hardwareConnector": 0,
+      "mover": "backFitting-5",
       "through": "sidePanel-1",
       "captured": null,
       "position": [
@@ -1991,6 +2922,9 @@
       "host": "backPanel-1",
       "hardware": "backFitting-6",
       "kind": "fitting",
+      "hostConnector": 5,
+      "hardwareConnector": 0,
+      "mover": "backFitting-6",
       "through": "sidePanel-2",
       "captured": null,
       "position": [
@@ -2008,6 +2942,9 @@
       "host": "backPanel-1",
       "hardware": "backFitting-7",
       "kind": "fitting",
+      "hostConnector": 6,
+      "hardwareConnector": 0,
+      "mover": "backFitting-7",
       "through": "topBottomPanel-1",
       "captured": null,
       "position": [
@@ -2025,6 +2962,9 @@
       "host": "backPanel-1",
       "hardware": "backFitting-8",
       "kind": "fitting",
+      "hostConnector": 7,
+      "hardwareConnector": 0,
+      "mover": "backFitting-8",
       "through": "topBottomPanel-2",
       "captured": null,
       "position": [
@@ -2037,6 +2977,195 @@
         0,
         -1
       ]
+    }
+  ],
+  "steps": [
+    {
+      "number": 1,
+      "pose": "parts",
+      "parts": [
+        "plinth-1",
+        "topBottomPanel-1",
+        "fixedShelf-1",
+        "topBottomPanel-2"
+      ],
+      "joints": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26
+      ],
+      "turns": [],
+      "tip": false
+    },
+    {
+      "number": 2,
+      "pose": "parts",
+      "parts": [
+        "sidePanel-1",
+        "sidePanel-2"
+      ],
+      "joints": [
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35
+      ],
+      "turns": [],
+      "tip": false
+    },
+    {
+      "number": 3,
+      "pose": "lying",
+      "parts": [],
+      "joints": [
+        1,
+        9,
+        11,
+        13,
+        15,
+        21,
+        23
+      ],
+      "turns": [],
+      "tip": false
+    },
+    {
+      "number": 4,
+      "pose": "lying",
+      "parts": [],
+      "joints": [
+        37,
+        38,
+        39,
+        42
+      ],
+      "turns": [],
+      "tip": false
+    },
+    {
+      "number": 5,
+      "pose": "lying",
+      "parts": [],
+      "joints": [],
+      "turns": [
+        37,
+        38,
+        39,
+        42
+      ],
+      "tip": false
+    },
+    {
+      "number": 6,
+      "pose": "lying",
+      "parts": [],
+      "joints": [
+        3,
+        5,
+        7,
+        17,
+        19,
+        25,
+        27
+      ],
+      "turns": [],
+      "tip": false
+    },
+    {
+      "number": 7,
+      "pose": "lying",
+      "parts": [],
+      "joints": [
+        36,
+        40,
+        41,
+        43
+      ],
+      "turns": [
+        36,
+        40,
+        41,
+        43
+      ],
+      "tip": false
+    },
+    {
+      "number": 8,
+      "pose": "faceDown",
+      "parts": [
+        "backPanel-1"
+      ],
+      "joints": [],
+      "turns": [],
+      "tip": false
+    },
+    {
+      "number": 9,
+      "pose": "faceDown",
+      "parts": [],
+      "joints": [
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59
+      ],
+      "turns": [],
+      "tip": false
+    },
+    {
+      "number": 10,
+      "pose": "upright",
+      "parts": [],
+      "joints": [],
+      "turns": [],
+      "tip": true
+    },
+    {
+      "number": 11,
+      "pose": "upright",
+      "parts": [],
+      "joints": [
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51
+      ],
+      "turns": [],
+      "tip": false
+    },
+    {
+      "number": 12,
+      "pose": "upright",
+      "parts": [
+        "adjustableShelf-1",
+        "adjustableShelf-2"
+      ],
+      "joints": [],
+      "turns": [],
+      "tip": false
     }
   ]
 }

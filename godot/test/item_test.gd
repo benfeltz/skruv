@@ -7,6 +7,8 @@ const PACK_PATH := "res://../items/johnny/flatpack.json"
 ## deriveJoints(items/johnny) — the validator's and the web build's count.
 const JOHNNY_JOINTS := 60
 const JOHNNY_TYPES := 13
+## The manual's step and special pages.
+const JOHNNY_BUILD_PAGES := 12
 
 
 func _item() -> ItemData:
@@ -45,6 +47,31 @@ func test_every_joint_names_two_instances() -> void:
 		assert_object(item.instance(joint.host)).override_failure_message("no host %s" % joint.host).is_not_null()
 		assert_object(item.instance(joint.hardware)).override_failure_message("no hardware %s" % joint.hardware).is_not_null()
 		assert_bool(joint.host != joint.hardware).is_true()
+
+
+func test_page_count_matches_the_pack() -> void:
+	var build_pages := 0
+	for page: Dictionary in _pack()["manual"]["pages"]:
+		if page["kind"] in ["step", "special"]:
+			build_pages += 1
+	assert_int(build_pages).is_equal(JOHNNY_BUILD_PAGES)
+	assert_int(_item().steps.size()).is_equal(build_pages)
+
+
+func test_every_page_joint_is_a_joint() -> void:
+	var item := _item()
+	for step: ItemData.Step in item.steps:
+		for i: int in step.joints + step.turns:
+			assert_bool(i >= 0 and i < item.joints.size()).override_failure_message("page %d joint %d" % [step.number, i]).is_true()
+
+
+func test_every_joint_names_its_connectors() -> void:
+	var item := _item()
+	for joint: ItemData.JointSpec in item.joints:
+		var hw := item.type_of(item.instance(joint.hardware)).connectors[joint.hardware_connector]
+		var hole := item.type_of(item.instance(joint.host)).connectors[joint.host_connector]
+		assert_str(item.compatible[hw.type]).is_equal(hole.type)
+		assert_str(item.kinds[hw.type]).is_equal(joint.kind)
 
 
 func test_every_instance_has_a_type() -> void:

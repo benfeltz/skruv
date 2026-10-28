@@ -6,14 +6,22 @@
 //   npx tsx godot/tools/export-item.ts items/johnny godot/items/johnny.json          # write
 //   npx tsx godot/tools/export-item.ts items/johnny godot/items/johnny.json --check  # exit 1 on drift
 //
-// Output (format 1):
-//   types     { <type>: { size: [x,y,z] m, color: "#rrggbb", mass: kg, hardware: bool } }, every
-//             part type in the pack, the tools included (the assembled item uses none of them)
+// Output (format 2):
+//   vocabulary { compatible: { <end type>: <hole type> }, kinds: { <end type>: <kind> },
+//                sinkDepth: { <kind>: m } }: the lib's COMPATIBLE, kindOf and CONTRACT.sinkDepth,
+//              so GDScript never keeps a second copy of the vocabulary
+//   types     { <type>: { size: [x,y,z] m, color: "#rrggbb", mass: kg, hardware: bool,
+//             connectors: [{ id, type, position, axis }] } }, every part type in the pack, the
+//             tools included (the assembled item uses none of them); connectors in the part's
+//             local frame, in file order (joints name them by index)
 //   instances [{ id, type, role, position: [x,y,z], rotation: [x,y,z,w] }] in assembled order
-//   joints    [{ host, hardware, kind, through, captured, position, axis }]: `position` is the
-//             hardware's seated end in world space (the hole it sits in), `axis` the hole's world
-//             axis; `through` (a fitting's or screw's far panel) and `captured` (a cam's bolt)
-//             are the lib's, or null
+//   joints    [{ host, hardware, kind, hostConnector, hardwareConnector, mover, through,
+//             captured, position, axis }]: `position` is the hardware's seated end in world
+//             space (the hole it sits in), `axis` the hole's world axis; `through` (a fitting's
+//             or screw's far panel) and `captured` (a cam's bolt) are the lib's, or null
+//   steps     [{ number, pose, parts, joints, turns, tip }]: the manual's build pages, from
+//             src/game/bookletModel.ts createBuildSteps, the booklet's own; `joints` and `turns`
+//             index `joints` above
 // World positions are rounded to ROUND_M; every other number is the pack's own.
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -24,8 +32,11 @@ import type { Vec3 } from '../../tools/validate/lib/geometry.js';
 import { deriveJoints, isHardwareType } from '../../tools/validate/lib/joints.js';
 import { loadPack } from '../../tools/validate/lib/pack.js';
 import type { FlatpackFile } from '../../tools/validate/lib/pack.js';
+import { COMPATIBLE, CONTRACT, kindOf } from '../../tools/validate/lib/vocabulary.js';
+import type { ConnectorType } from '../../tools/validate/lib/vocabulary.js';
+import { createBuildSteps } from '../../src/game/bookletModel.js';
 
-const FORMAT = 1;
+const FORMAT = 2;
 /** Derived world positions are rounded to a micrometre, so float noise never churns the file. */
 const ROUND_M = 1e-6;
 
@@ -42,13 +53,33 @@ export function exportItem(file: FlatpackFile, source: string) {
   const pack = loadPack(file);
   const joints = deriveJoints(pack);
   const byId = new Map(pack.assembled.map((inst) => [inst.id, inst]));
+  const ends = Object.keys(COMPATIBLE) as ConnectorType[];
+  const steps = createBuildSteps(pack.manual.pages, {
+    layout: { parts: pack.assembled, joints },
+    partTypes: pack.partTypes,
+    resolve: pack.resolve,
+  });
   return {
     format: FORMAT,
     source,
     generator: 'godot/tools/export-item.ts',
     product: pack.identity.product,
+    vocabulary: {
+      compatible: COMPATIBLE,
+      kinds: Object.fromEntries(ends.map((end) => [end, kindOf(end)])),
+      sinkDepth: CONTRACT.sinkDepth,
+    },
     types: Object.fromEntries(
-      Object.entries(pack.partTypes).map(([type, t]) => [type, { size: t.size, color: colorOf(t.color), mass: t.mass, hardware: isHardwareType(t) }]),
+      Object.entries(pack.partTypes).map(([type, t]) => [
+        type,
+        {
+          size: t.size,
+          color: colorOf(t.color),
+          mass: t.mass,
+          hardware: isHardwareType(t),
+          connectors: t.connectors.map(({ id, type: connectorType, position, axis }) => ({ id, type: connectorType, position, axis })),
+        },
+      ]),
     ),
     instances: pack.assembled.map(({ id, type, role, position, rotation }) => ({ id, type, role, position, rotation })),
     joints: joints.map((j) => {
@@ -60,12 +91,16 @@ export function exportItem(file: FlatpackFile, source: string) {
         host: j.host,
         hardware: j.hardware,
         kind: j.kind,
+        hostConnector: j.hostConnector,
+        hardwareConnector: j.hardwareConnector,
+        mover: j.mover,
         through: j.through,
         captured: j.captured,
         position: roundVec(end.position),
         axis: roundVec(hole.axis),
       };
     }),
+    steps: steps.map(({ number, pose, parts, joints: fasten, turns, tip }) => ({ number, pose, parts, joints: fasten, turns, tip })),
   };
 }
 
