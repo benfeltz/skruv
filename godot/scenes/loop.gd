@@ -24,10 +24,7 @@ const LABEL_FONT_SIZE := 18
 const DONE_FONT_SIZE := 48
 const UI_MARGIN := 16.0
 const LINE_COLOR := Color(1, 1, 1, 0.8)
-## Autoplay: frames to glide a part to where the hand lets go, frames between moves, and frames
-## of physics after "done" before the last shot.
-const GLIDE_FRAMES := 6
-const PAUSE_FRAMES := 2
+## Autoplay: frames of physics after "done" before the last shot.
 const SETTLE_FRAMES := 40
 ## Autoplay's mid-build shot: on this page, once this many of its joints are pressed.
 const SHOT_PAGE := 3
@@ -50,13 +47,7 @@ var _done_label: Label
 var _line: Control
 var _ghost: Node3D
 # Autoplay
-var _auto_state := "choose"
-var _auto_frame := 0
-var _auto_id := ""
-var _auto_from: Transform3D
-var _auto_to: Transform3D
-var _auto_offer: Play.Offer = null
-var _auto_tap := ""
+var _hand: Hand
 var _shot_page_taken := false
 var _settled := 0
 
@@ -125,10 +116,11 @@ func _notification(what: int) -> void:
 
 func _process(delta: float) -> void:
 	router.camera.viewport = get_viewport().get_visible_rect().size
-	router.update(delta)
-	_camera.follow()
 	if autoplay:
-		_autoplay_step()
+		_autoplay_step(delta)
+	else:
+		router.update(delta)
+	_camera.follow()
 	_sync()
 
 
@@ -149,17 +141,9 @@ func _sync() -> void:
 		_finish()
 
 
-## Where a part is drawn: its pose, or carried by the autoplay's glide.
+## Where a part is drawn: its pose.
 func _shown(id: String) -> Transform3D:
-	var pose := play.bonds.poses[id]
-	if _auto_id != "" and play.bonds.compound(_auto_id, false).has(id):
-		return _auto_carry() * pose
-	return pose
-
-
-func _auto_carry() -> Transform3D:
-	var k := minf(1.0, float(_auto_frame) / GLIDE_FRAMES) if _auto_state == "glide" else 1.0
-	return _auto_from.interpolate_with(_auto_to, k) * play.bonds.poses[_auto_id].affine_inverse()
+	return play.bonds.poses[id]
 
 
 func _show_ghost() -> void:
@@ -172,10 +156,6 @@ func _show_ghost() -> void:
 		offer = router.drag.snapped
 		id = router.drag.part
 		members = router.carried()
-	elif _auto_offer != null:
-		offer = _auto_offer
-		id = _auto_id
-		members = play.bonds.compound(id, false)
 	if offer == null:
 		return
 	var to_seat := offer.pose * _shown(id).affine_inverse()
@@ -292,7 +272,7 @@ func _make_ui() -> void:
 	_page_label.position = Vector2(UI_MARGIN, UI_MARGIN)
 	layer.add_child(_page_label)
 	_auto_label = _label(LABEL_FONT_SIZE - 4)
-	_auto_label.position = Vector2(UI_MARGIN, UI_MARGIN + 4.0 * LABEL_FONT_SIZE)
+	_auto_label.position = Vector2(UI_MARGIN, UI_MARGIN + 5.0 * LABEL_FONT_SIZE)
 	layer.add_child(_auto_label)
 	_done_label = _label(DONE_FONT_SIZE)
 	_done_label.text = "Done: JOHNNY stands"
@@ -317,52 +297,26 @@ func _label(size: int) -> Label:
 	return label
 
 
-## One autoplay move per call: choose the next seat, glide the part to where the hand lets go,
-## seat it on the offer, tap it home; the shots; quit when done and settled.
-func _autoplay_step() -> void:
+## One autoplay frame: the hand's next move (it runs the router's frame); the shots; quit when
+## done and settled.
+func _autoplay_step(delta: float) -> void:
 	if done:
+		router.update(delta)
 		_settled += 1
 		if shots != "" and _settled == SETTLE_FRAMES:
 			print("loop: settled %d frames after done; worst body %s" % [SETTLE_FRAMES, _worst_body()])
 			await _save_shot("loop-done.png")
 			get_tree().quit()
 		return
-	_auto_frame += 1
-	match _auto_state:
-		"choose":
-			var i := Hand.next_joint(play)
-			if i < 0:
-				return
-			var id := Hand.carried(play, i)
-			var seat: Transform3D = play.goal(id, i)
-			_auto_id = id
-			_auto_from = play.bonds.poses[id]
-			_auto_to = Hand.hold(play, id, Hand.off_seat(seat))
-			_auto_frame = 0
-			_auto_state = "glide"
-		"glide":
-			if _auto_frame >= GLIDE_FRAMES:
-				_auto_offer = play.offer_for(_auto_id, _auto_to)
-				_auto_frame = 0
-				_auto_state = "offer"
-		"offer":
-			if _auto_frame >= PAUSE_FRAMES:
-				var id := _auto_id
-				_auto_id = ""
-				_auto_tap = ""
-				if _auto_offer != null:
-					play.seat(id, _auto_offer)
-					_auto_tap = Hand.tap_target(play, _auto_offer.pairs[0].spec)
-				_auto_offer = null
-				_auto_frame = 0
-				_auto_state = "tap"
-		"tap":
-			if _auto_frame >= PAUSE_FRAMES:
-				if _auto_tap != "":
-					play.tap(_auto_tap)
-				_auto_frame = 0
-				_auto_state = "choose"
-				_maybe_shoot_page()
+	if _hand == null:
+		_hand = Hand.new(router)
+	_hand.step(delta)
+	if not _hand.errors.is_empty():
+		push_error("loop: the hand is stuck: %s" % "; ".join(_hand.errors))
+		if shots != "":
+			get_tree().quit(1)
+		return
+	_maybe_shoot_page()
 
 
 func _maybe_shoot_page() -> void:

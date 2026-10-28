@@ -1,22 +1,29 @@
 class_name Play
 extends RefCounted
-## The build as the loop plays it: the booklet (Steps), the graph and poses (Bonds), the loose
-## parts laid on the floor, the snap on offer for a part dragged to a pose, seating it, tapping
-## dowels home and turning pages. Pure: the mouse loop (scenes/loop.gd) and the headless
-## playthrough (test/playthrough_test.gd) drive this same code, one with a mouse, one with numbers.
+## The build as it is played: the booklet (Steps), the graph and poses (Bonds), the loose parts on
+## the floor, the seat on offer for a part held at a pose, seating it, tapping it home and turning
+## pages. Pure: the router (logic/router.gd) drives it for the mouse and the headless hand alike.
 ##
-## The web's router, slimmed to the dowel loop (src/scene/gestureRouter.ts snapCandidate,
-## endDrag, seatFit, moverOf, tap). Where it differs:
-##   - the snap offers only the open page's own pairs. The web offers any type-compatible pair and
-##     leaves right and wrong to the player; here the page has to know when it is done. A loose
-##     piece of hardware stands in for any loose one of its type (a dowel is a dowel).
-##   - a dragged compound is a rigid set of poses, not physics bodies; the bodies follow the poses.
-##   - auto pages (Steps.is_auto) are fastened here on arrival, at the export's poses, and logged.
+## The snap is the web's (src/scene/gestureRouter.ts snapCandidate, fitCandidate, settled,
+## seatFit, moverOf): any type-compatible pair of free connectors seats. Hardware seats by one end
+## (Snap.find_snap in the SNAP window); a panel by a whole fit of its holes and its carried
+## hardware's ends (PanelFit in the PANEL window), ranked where it goes first (FitRank), the offer
+## held against one as good (FitRank.held_offer). A seat that would hold a part through the floor
+## or a wall is refused. The booklet only advises: a page turns once its joints are in.
+##
+## With Constants.knobs.pageGating on, 2.0.4.3's rule instead: a pair seats only if it is one the
+## open page still wants (by type, so any dowel stands in for the one named), only parts of the
+## types it wants can be picked up, and a page's loose parts come out only when it opens. Off, the
+## whole box is out from the start.
+##
+## The booklet goes by type (Steps.key_of): a page is done once the build holds as many seats of each
+## (host type, hole, hardware type) as the manual asks for by then, whichever instances they are, so
+## a horizontal turned end for end, its dowels swapped, still turns the page.
 
 ## Where loose parts are laid: rows across the front of the room, clear of JOHNNY's spot at the
-## origin. Metres, in the room's frame (floor top at y = 0, room 5 m square).
-const LAY_X_MIN := -1.25
-const LAY_X_MAX := 1.25
+## origin. Metres, in the room's frame (floor top at y = 0).
+const LAY_X_MIN := -2.2
+const LAY_X_MAX := 2.2
 const LAY_Z_START := 0.45
 const LAY_GAP := 0.06
 const LAY_HARDWARE_GAP := 0.03
@@ -26,6 +33,9 @@ const SETTLE_EPSILON := 1e-4
 var data: ItemData
 var bonds: Bonds
 var steps: Steps
+var relatives: FitRank.Relatives
+## Constants.knobs.pageGating when the build began.
+var gating: bool
 ## One line per auto page, in page order.
 var auto_log: Array[String] = []
 var _lay_x := LAY_X_MIN
@@ -33,27 +43,48 @@ var _lay_z := LAY_Z_START
 var _row_depth := 0.0
 
 
-## What a release seats: the dragged part's pose at the seat, every pair, and the loose dowel the
-## dragged one stands in for ("" when none).
+## A seat on offer: the pose it holds the dragged part at and every pair it seats; for a panel's
+## fit which pairs (`key`), whether it is where the panel goes, and where the finger had the panel
+## when it was first offered (`taken`).
 class Offer:
 	var pose: Transform3D
 	var pairs: Array[Pair] = []
-	var stand_in: String = ""
+	var key: String = ""
+	var preferred: bool = false
+	var taken: Transform3D
+	var has_taken: bool = false
 
 
+## One pair a release seats: the carried side's connector on the other's, and the part that moves.
 class Pair:
-	var spec: int
-	var hardware: String
-	var hardware_connector: int
-	var host: String
-	var host_connector: int
+	var a: String
+	var a_index: int
+	var b: String
+	var b_index: int
 	var mover: String
 
 
-func _init(item_data: ItemData) -> void:
+## What a drag carries: the part, where it was when the drag began, and each rider with where it
+## was then (the router's carry).
+class Carry:
+	var part: String
+	var start: Transform3D
+	var riders: Dictionary[String, Transform3D] = {}
+
+	## Where every carried part is with `part` at `pose`.
+	func pose_of(id: String, pose: Transform3D) -> Transform3D:
+		return pose if id == part else Bonds.carry_pose(start, pose, riders[id])
+
+	func has(id: String) -> bool:
+		return id == part or riders.has(id)
+
+
+func _init(item_data: ItemData, gate: bool = Constants.knobs.pageGating) -> void:
 	data = item_data
+	gating = gate
 	bonds = Bonds.new(data)
 	steps = Steps.new(data)
+	relatives = FitRank.preferred_relatives(data, is_panel)
 
 
 ## The assembled (finished, upright) pose of an instance, from the export.
@@ -66,9 +97,18 @@ func is_hardware(id: String) -> bool:
 	return data.type_of(data.instance(id)).hardware
 
 
-## Opens the current page: lays its loose parts on the floor; an auto page is fastened and the
-## booklet turns, until a page the player builds is open or the manual ends.
+func type_of(id: String) -> String:
+	return data.instance(id).type
+
+
+## Opens the current page. Gated, its loose parts are laid on the floor as it opens; else the whole
+## box is out from the first page. An auto page is fastened and the booklet turns, until a page the
+## player builds is open or the manual ends.
 func open_page() -> void:
+	if not gating:
+		for inst: ItemData.Instance in data.instances:
+			if not bonds.poses.has(inst.id):
+				lay(inst.id)
 	while not steps.is_done():
 		var step := steps.current()
 		if not steps.is_auto(step):
@@ -108,7 +148,7 @@ func lay(id: String) -> void:
 	_row_depth = maxf(_row_depth, depth)
 
 
-## The open page's joints not seated yet.
+## The open page's joints not seated by name yet (the hand's list).
 func open_joints() -> Array[int]:
 	var out: Array[int] = []
 	var step := steps.current()
@@ -120,151 +160,349 @@ func open_joints() -> Array[int]:
 	return out
 
 
-## True when the part can be picked up: something joined to it still has a seat to make on the
-## open page.
+## True when the part can be picked up: any part in the room; gated, only one with something on
+## the open page (it, or what is joined to it, or a loose part of a type the page wants).
 func can_drag(id: String) -> bool:
 	if not bonds.poses.has(id):
 		return false
-	var members := bonds.compound(id, false)
-	for i: int in open_joints():
-		var spec := data.joints[i]
-		if members.has(spec.host) or members.has(spec.hardware) or _stands_in(id, spec):
+	if not gating:
+		return true
+	var wanted := steps.wanted_types(bonds)
+	for member: String in bonds.compound(id, false):
+		if wanted.has(type_of(member)):
 			return true
 	return false
 
 
-## Where the dragged part goes for the nearest open seat it could make, with every pose as it is
-## now: its home pose against the part it seats on. Null when it has none.
-func goal_for(id: String, pose: Transform3D) -> Variant:
-	var i := _nearest_joint(id, pose)
-	return null if i < 0 else goal(id, i)
+# --- seats ------------------------------------------------------------------------------
 
 
-## Self-aim and panel magnetism (src/game/toolAim.ts aimWeight/aimStep, the router's aimHardware
-## and aimPanel): within a zone of where it goes, the carried part turns toward it, harder the
-## nearer it is. Lone hardware turns only its end's axis onto the seat's (AIM.zone, AIM.rate);
-## anything else turns to where it goes whole (PANEL.zone, PANEL.rate). Turns about the part's
-## centre (the web turns hardware about its end). Returns the new pose.
-func aim(id: String, pose: Transform3D, delta: float) -> Transform3D:
-	var i := _nearest_joint(id, pose)
-	if i < 0:
-		return pose
-	var home: Transform3D = goal(id, i)
-	var lone := bonds.compound(id, false).size() == 1 and is_hardware(id)
-	var zone := Constants.AIM.zone if lone else Constants.PANEL.zone
-	var rate := Constants.AIM.rate if lone else Constants.PANEL.rate
-	var t := clampf(1.0 - home.origin.distance_to(pose.origin) / zone, 0.0, 1.0)
-	var weight := t * t * (3.0 - 2.0 * t)
-	if weight <= 0.0:
-		return pose
-	var current := pose.basis.get_rotation_quaternion()
-	var aimed := home.basis.get_rotation_quaternion()
-	if lone:
-		var axis := data.type_of(data.instance(id)).connectors[data.joints[i].hardware_connector].axis
-		var turn := Snap.rotation_between(current * axis, aimed * axis)
-		if turn.get_angle() < Constants.AIM.settled:
-			return pose
-		aimed = (turn * current).normalized()
-	var eased := current.slerp(aimed, 1.0 - exp(-rate * weight * delta)).normalized()
-	return Transform3D(Basis(eased), pose.origin)
-
-
-## The open joint whose goal for `id` is nearest `pose`, or -1.
-func _nearest_joint(id: String, pose: Transform3D) -> int:
-	var best := -1
-	var best_d := INF
-	for i: int in open_joints():
-		var home: Variant = goal(id, i)
-		if home == null:
+## Every free connector a carried part could seat on: on every part in the room but the carried
+## ones and `exclude`.
+func seats_for(carry: Carry, exclude: Dictionary[String, bool] = {}) -> Array[Snap.WorldConnector]:
+	var out: Array[Snap.WorldConnector] = []
+	for id: String in bonds.poses:
+		if carry.has(id) or exclude.has(id):
 			continue
-		var d := (home as Transform3D).origin.distance_to(pose.origin)
-		if d < best_d:
-			best_d = d
-			best = i
-	return best
+		out.append_array(bonds.free_connectors(id))
+	return out
 
 
-## The seat on offer with `id` dragged to `pose` (its compound carried rigidly), or null. Lone
-## hardware snaps one end by find_snap in the SNAP window; anything else is a panel fit in the
-## PANEL window, seating every pair it lands at once.
-func offer_for(id: String, pose: Transform3D) -> Offer:
-	var members := bonds.compound(id, false)
-	var carry := pose * bonds.poses[id].affine_inverse()
-	var lone_hardware := members.size() == 1 and is_hardware(id)
-	var carried: Array[Snap.WorldConnector] = []
-	var seats: Array[Snap.WorldConnector] = []
-	var specs: Dictionary[String, int] = {}
-	var stand_ins: Dictionary[String, String] = {}
-	for i: int in open_joints():
-		var spec := data.joints[i]
-		var hardware := spec.hardware
-		var stand_in := ""
-		if lone_hardware and spec.hardware != id and _stands_in(id, spec):
-			hardware = id
-			stand_in = spec.hardware
-		var hw_in := members.has(hardware)
-		var host_in := members.has(spec.host)
-		if hw_in == host_in:
+## What a carried panel seats by with it at `pose`: its free holes and those of every panel it
+## carries, and the free fastener ends of the hardware it carries (carriedConnectors).
+func carried_connectors(carry: Carry, pose: Transform3D) -> Array[Snap.WorldConnector]:
+	var out: Array[Snap.WorldConnector] = []
+	for id: String in [carry.part] + carry.riders.keys():
+		var at := carry.pose_of(id, pose)
+		var connectors := data.type_of(data.instance(id)).connectors
+		for i: int in connectors.size():
+			if bonds.is_taken(id, i):
+				continue
+			var c := connectors[i]
+			if id != carry.part and not is_panel(id) and not data.compatible.has(c.type):
+				continue
+			out.append(Snap.in_world(c.type, c.position, c.axis, at, id, i))
+	return out
+
+
+## Where `panel` goes on each part in the room it meets in the finished item, as they lie now; and
+## where it goes when any panel it carries goes on one (preferredFor).
+func preferred_for(carry: Carry) -> Array[Transform3D]:
+	var out: Array[Transform3D] = []
+	for host: String in bonds.poses:
+		if carry.has(host):
 			continue
-		var moving_part := hardware if hw_in else spec.host
-		var moving_index := spec.hardware_connector if hw_in else spec.host_connector
-		var fixed_part := spec.host if hw_in else spec.hardware
-		var fixed_index := spec.host_connector if hw_in else spec.hardware_connector
-		if not bonds.poses.has(fixed_part) or bonds.is_taken(moving_part, moving_index) or bonds.is_taken(fixed_part, fixed_index):
-			continue
-		var from := bonds.world_connector(moving_part, moving_index)
-		from = Snap.WorldConnector.new(from.type, carry * from.position, (carry.basis * from.axis).normalized(), from.part, from.index)
-		var to := bonds.world_connector(fixed_part, fixed_index)
-		carried.append(from)
-		seats.append(to)
-		var key := _key(from, to)
-		specs[key] = i
-		stand_ins[key] = stand_in
-	if carried.is_empty():
-		return null
-	var offer := Offer.new()
-	if lone_hardware:
-		var best: Snap.Offer = null
-		for n: int in carried.size():
-			var one := Snap.find_snap(_one(carried[n]), _one(seats[n]), Constants.SNAP.maxDistance, Constants.SNAP.maxAngle, data.compatible)
+		var at := bonds.poses[host]
+		out.append_array(FitRank.preferred_poses(relatives, type_of(host), at, type_of(carry.part)))
+		for member: String in carry.riders:
+			if not is_panel(member):
+				continue
+			for pose: Transform3D in FitRank.preferred_poses(relatives, type_of(host), at, type_of(member)):
+				out.append(FitRank.preferred_through(pose, carry.riders[member], carry.start))
+	return out
+
+
+## The seat on offer with the carried part held at `pose` (snapCandidate): a panel's best whole
+## fit, held against `current` (hysteresis); for anything else the nearest compatible free pair.
+## Null when none, or when the seat would hold it through the floor or a wall.
+func snap_candidate(carry: Carry, pose: Transform3D, current: Offer, exclude: Dictionary[String, bool] = {}) -> Offer:
+	var seats := seats_for(carry, exclude)
+	if is_panel(carry.part):
+		return FitRank.held_offer(current, fit_candidate(carry, pose, seats), pose)
+	var dragged := bonds.free_connectors(carry.part)
+	var moved: Array[Snap.WorldConnector] = []
+	for c: Snap.WorldConnector in dragged:
+		var local := connector_local(c)
+		moved.append(Snap.in_world(c.type, local.position, local.axis, pose, c.part, c.index))
+	var best: Snap.Offer = null
+	for from: Snap.WorldConnector in moved:
+		for to: Snap.WorldConnector in seats:
+			if gating and not allows(from, to):
+				continue
+			var one := Snap.find_snap(_one(from), _one(to), Constants.SNAP.maxDistance, Constants.SNAP.maxAngle, data.compatible)
 			if one != null and (best == null or one.distance < best.distance or (one.distance == best.distance and one.angle < best.angle)):
 				best = one
-		if best == null:
-			return null
-		offer.pose = Snap.apply_transform(best.transform, pose)
-		var key := _key(best.from, best.to)
-		offer.stand_in = stand_ins[key]
-		offer.pairs.append(_pair(specs[key], best.from, best.to, id, members))
-		return offer
-	var page_pair := func(a: Snap.WorldConnector, b: Snap.WorldConnector) -> bool: return specs.has(_key(a, b))
-	var fits := PanelFit.find_fits(carried, pose, seats, PanelFit.FitWindow.panel(), data.compatible, page_pair)
-	var chosen: PanelFit.Fit = null
-	for fit: PanelFit.Fit in fits:
-		if chosen == null or fit.pairs.size() > chosen.pairs.size() or (fit.pairs.size() == chosen.pairs.size() and fit.distance < chosen.distance):
-			chosen = fit
-	if chosen == null:
+	if best == null:
 		return null
-	offer.pose = chosen.pose
-	for p: PanelFit.Pair in chosen.pairs:
-		offer.pairs.append(_pair(specs[_key(p.hole, p.end)], p.hole, p.end, id, members))
+	var offer := Offer.new()
+	offer.pose = Snap.apply_transform(best.transform, pose)
+	if not Assist.fits_room(offer.pose, data.type_of(data.instance(carry.part)).size):
+		return null
+	offer.pairs.append(_pair(best.from, best.to, carry.part))
+	offer.key = _key(best.from, best.to)
 	return offer
 
 
-## Lets go on an offer: the dragged part (and its compound) to the seat, every pair seated.
-## Returns the dragged part's id, which is the stand-in's when one stood in.
-func seat(id: String, offer: Offer) -> String:
-	var dragged := id
-	if offer.stand_in != "":
-		# The picked dowel becomes the one the page names; the named one takes the picked one's
-		# spot on the floor.
-		bonds.swap_ids(id, offer.stand_in)
-		dragged = offer.stand_in
-	bonds.move_compound(dragged, offer.pose)
+## A carried panel's best whole fit on `seats` with it at `pose`, where it goes first, kept in the
+## room; `accept(key, preferred)` narrows which fits it takes (fitCandidate).
+func fit_candidate(carry: Carry, pose: Transform3D, seats: Array[Snap.WorldConnector], accept: Callable = Callable()) -> Offer:
+	var allowed := Callable()
+	if gating:
+		allowed = allows
+	var fits := PanelFit.find_fits(carried_connectors(carry, pose), pose, seats, PanelFit.FitWindow.panel(), data.compatible, allowed)
+	for ranked: FitRank.Ranked in FitRank.rank_fits(fits, preferred_for(carry)):
+		var key := _fit_key(ranked.fit)
+		if accept.is_valid() and not bool(accept.call(key, ranked.preferred)):
+			continue
+		if not _carry_fits_room(carry, ranked.fit.pose):
+			continue
+		var offer := Offer.new()
+		offer.pose = ranked.fit.pose
+		if ranked.preferred and _spin_free(ranked.fit):
+			offer.pose = _spun_where_it_goes(ranked.fit, pose, carry)
+		offer.key = key
+		offer.preferred = ranked.preferred
+		for p: PanelFit.Pair in ranked.fit.pairs:
+			offer.pairs.append(_pair(p.hole, p.end, carry.part, carry))
+		return offer
+	return null
+
+
+## True when a fit's pairs all lie on one line along their axis: nothing in them sets its spin
+## about that axis (a plinth on one dowel).
+static func _spin_free(fit: PanelFit.Fit) -> bool:
+	var first := fit.pairs[0].end
+	for p: PanelFit.Pair in fit.pairs:
+		var off := p.end.position - first.position
+		if (off - first.axis * off.dot(first.axis)).length() > Constants.PANEL.matchTolerance:
+			return false
+	return true
+
+
+## A spin-free fit where it goes (not in the web: there it seats at whatever spin the panel had,
+## up to PANEL.matchAngle off, since magnetism stops once the fit is where it goes): the spin taken
+## from where it goes, the seed pair still seated where the fit seats it.
+func _spun_where_it_goes(fit: PanelFit.Fit, pose: Transform3D, carry: Carry) -> Transform3D:
+	var best: Transform3D = fit.pose
+	var best_turn := INF
+	for p: Transform3D in preferred_for(carry):
+		var turn := p.basis.get_rotation_quaternion().angle_to(fit.pose.basis.get_rotation_quaternion())
+		if turn < best_turn:
+			best_turn = turn
+			best = p
+	if best_turn > Constants.PANEL.matchAngle:
+		return fit.pose
+	var hole := fit.pairs[0].hole
+	var landed := fit.transform * hole.position
+	var local := pose.affine_inverse() * hole.position
+	return Transform3D(best.basis, landed - best.basis * local)
+
+
+## A panel's fit on offer as it stands at release, searched again from where the panel is held:
+## the same pairs if they are still there, else as many of them as still line up (never a pair it
+## did not offer, and where it goes only if it was), else none (settled).
+func settled(carry: Carry, held: Transform3D, offer: Offer, exclude: Dictionary[String, bool] = {}) -> Offer:
+	if not is_panel(carry.part):
+		return offer
+	var seats := seats_for(carry, exclude)
+	var same := fit_candidate(carry, held, seats, func(key: String, _preferred: bool) -> bool: return key == offer.key)
+	if same != null:
+		return same
+	var offered := offer.key.split(",")
+	return fit_candidate(carry, held, seats, func(key: String, preferred: bool) -> bool:
+		for pair: String in key.split(","):
+			if not offered.has(pair):
+				return false
+		return preferred or not offer.preferred)
+
+
+## Lets go on an offer: the carried parts are already at its pose (the router moved them); every
+## pair is seated and named. Returns the joints.
+func seat(offer: Offer, carried: Dictionary[String, bool] = {}) -> Array[Bonds.Joint]:
+	var out: Array[Bonds.Joint] = []
 	for p: Pair in offer.pairs:
-		var hardware := offer.stand_in if p.hardware == id and offer.stand_in != "" else p.hardware
-		var mover := offer.stand_in if p.mover == id and offer.stand_in != "" else p.mover
-		bonds.seat(hardware, p.hardware_connector, p.host, p.host_connector, mover, p.spec)
-	return dragged
+		var joint := bonds.seat(p.a, p.a_index, p.b, p.b_index, p.mover)
+		if joint != null:
+			out.append(joint)
+	name_seats(out, carried)
+	return out
+
+
+## Names `fresh` seats for the export's joints they are (the booklet itself goes by type, but the
+## names say which instance is which). When a seat is not exactly the manual's, a part of the
+## moving side is re-expressed by one of its symmetries (a horizontal turned end for end) or swaps
+## names with another of its type, and the hardware seated in it takes the names the manual gives
+## those holes; the first relabeling that names every fresh seat without unnaming one is kept.
+## Nothing physical changes.
+func name_seats(fresh: Array[Bonds.Joint], carried: Dictionary[String, bool] = {}) -> void:
+	var named := _name_all()
+	if _all_named(fresh):
+		return
+	# Only what moved is relabeled: the build it seated on keeps its names.
+	var movers: Dictionary[String, bool] = {}
+	for joint: Bonds.Joint in fresh:
+		if carried.is_empty():
+			movers[joint.mover] = true
+	for id: String in carried:
+		movers[id] = true
+	for id: String in movers.keys():
+		if not is_panel(id):
+			movers.erase(id)
+	for panel: String in movers:
+		var others: Array[String] = [panel]
+		for inst: ItemData.Instance in data.instances:
+			if inst.type == type_of(panel) and inst.id != panel and not others.has(inst.id):
+				others.append(inst.id)
+		for as_name: String in others:
+			var syms: Array = [null]
+			syms.append_array(bonds.symmetries(type_of(panel)))
+			for sym: Variant in syms:
+				if as_name == panel and sym == null:
+					continue
+				var saved := _snapshot()
+				var at := panel
+				if as_name != panel:
+					bonds.swap_ids(panel, as_name)
+					at = as_name
+				if sym != null:
+					bonds.apply_symmetry(at, sym as Bonds.Symmetry)
+				_rename_hardware_in(at)
+				if as_name != panel:
+					_rename_hardware_in(panel)
+				var now := _name_all()
+				if now >= named + _unnamed(fresh) and _all_named(fresh):
+					return
+				_restore(saved)
+	_name_all()
+
+
+## Every joint named afresh by exact match; returns how many are named.
+func _name_all() -> int:
+	for joint: Bonds.Joint in bonds.joints:
+		joint.spec = -1
+	var n := 0
+	for joint: Bonds.Joint in bonds.joints:
+		for i: int in data.joints.size():
+			var s := data.joints[i]
+			if s.host == joint.host and s.host_connector == joint.host_connector and s.hardware == joint.hardware and bonds.joint_for_spec(i) == null:
+				joint.spec = i
+				n += 1
+				break
+	return n
+
+
+func _all_named(fresh: Array[Bonds.Joint]) -> bool:
+	for joint: Bonds.Joint in fresh:
+		if bonds.joints.has(joint) and joint.spec < 0:
+			return false
+	return true
+
+
+func _unnamed(fresh: Array[Bonds.Joint]) -> int:
+	var n := 0
+	for joint: Bonds.Joint in fresh:
+		if joint.spec < 0:
+			n += 1
+	return n
+
+
+## The hardware in `panel`'s holes takes the names the manual gives those holes.
+func _rename_hardware_in(panel: String) -> void:
+	for joint: Bonds.Joint in bonds.joints_of(panel).duplicate():
+		if joint.host != panel:
+			continue
+		for s: ItemData.JointSpec in data.joints:
+			if s.host == panel and s.host_connector == joint.host_connector and type_of(s.hardware) == type_of(joint.hardware):
+				bonds.swap_ids(joint.hardware, s.hardware)
+				break
+
+
+## The graph's names and poses, to put back.
+func _snapshot() -> Dictionary:
+	var rows: Array = []
+	for joint: Bonds.Joint in bonds.joints:
+		rows.append([joint, joint.hardware, joint.hardware_connector, joint.host, joint.host_connector, joint.mover, joint.through, joint.captured, joint.spec])
+	return {"poses": bonds.poses.duplicate(), "rows": rows}
+
+
+func _restore(saved: Dictionary) -> void:
+	bonds.poses.assign(saved["poses"])
+	for row: Array in saved["rows"]:
+		var joint: Bonds.Joint = row[0]
+		joint.hardware = row[1]
+		joint.hardware_connector = row[2]
+		joint.host = row[3]
+		joint.host_connector = row[4]
+		joint.mover = row[5]
+		joint.through = row[6]
+		joint.captured = row[7]
+		joint.spec = row[8]
+
+
+## Gated: whether connector `a` may seat on `b`: the pair, by type, is one the open page still
+## wants (either way round; any part of the type the page names stands in for it).
+func allows(a: Snap.WorldConnector, b: Snap.WorldConnector) -> bool:
+	var hardware := a if data.compatible.has(a.type) else b
+	var host := b if hardware == a else a
+	return steps.wants(Steps.key(type_of(host.part), host.index, type_of(hardware.part)), bonds)
+
+
+func connector_local(c: Snap.WorldConnector) -> ItemData.Connector:
+	return bonds.connector_of(c.part, c.index)
+
+
+## The carried part that moves for a pair: a panel's hole is the panel's; a carried piece of
+## hardware's end, the carried panel it sits in; lone hardware moves itself (moverOf).
+func _pair(from: Snap.WorldConnector, to: Snap.WorldConnector, dragged: String, carry: Carry = null) -> Pair:
+	var p := Pair.new()
+	p.a = from.part
+	p.a_index = from.index
+	p.b = to.part
+	p.b_index = to.index
+	p.mover = from.part
+	if carry != null and not is_panel(from.part):
+		for joint: Bonds.Joint in bonds.joints_of(from.part):
+			if joint.hardware == from.part and carry.has(joint.host):
+				p.mover = joint.host
+				break
+	elif from.part != dragged and carry == null:
+		p.mover = dragged
+	return p
+
+
+## The carried set fits in the room at the dragged part's `pose`.
+func _carry_fits_room(carry: Carry, pose: Transform3D) -> bool:
+	for id: String in [carry.part] + carry.riders.keys():
+		if not Assist.fits_room(carry.pose_of(id, pose), data.type_of(data.instance(id)).size):
+			return false
+	return true
+
+
+static func _key(a: Snap.WorldConnector, b: Snap.WorldConnector) -> String:
+	return "%s#%d>%s#%d" % [a.part, a.index, b.part, b.index]
+
+
+static func _fit_key(fit: PanelFit.Fit) -> String:
+	var keys: PackedStringArray = []
+	for p: PanelFit.Pair in fit.pairs:
+		keys.append(_key(p.hole, p.end))
+	keys.sort()
+	return ",".join(keys)
+
+
+static func _one(c: Snap.WorldConnector) -> Array[Snap.WorldConnector]:
+	var out: Array[Snap.WorldConnector] = [c]
+	return out
 
 
 ## A tap on a part: every seated tap-kind joint touching it pushed home, and, for a panel, those
@@ -392,6 +630,11 @@ func worst_error() -> Dictionary:
 			# its turn is how far that axis is off.
 			var axis := data.type_of(inst).connectors[0].axis
 			turn = (pose.basis * axis).angle_to(Basis(inst.rotation) * axis)
+			# A part whose two ends are alike (a dowel) is the same either way round.
+			for sym: Bonds.Symmetry in bonds.symmetries(inst.type):
+				if (sym.turn * axis).dot(axis) < -0.5:
+					turn = minf(turn, PI - turn)
+					break
 		if offset > float(worst["offset"]):
 			worst["offset"] = offset
 			worst["offset_id"] = inst.id
@@ -406,10 +649,9 @@ func _auto(step: ItemData.Step) -> void:
 		var ref := _anchor()
 		bonds.move_compound(ref, assembled(ref))
 	for id: String in step.parts:
-		if bonds.poses.has(id):
-			continue
 		if step.pose == "parts":
-			lay(id)
+			if not bonds.poses.has(id):
+				lay(id)
 		else:
 			var ref := _anchor()
 			bonds.poses[id] = bonds.poses[ref] * assembled(ref).affine_inverse() * assembled(id)
@@ -463,8 +705,6 @@ func goal(id: String, i: int) -> Variant:
 	var spec := data.joints[i]
 	var members := bonds.compound(id, false)
 	var hardware := spec.hardware
-	if members.size() == 1 and is_hardware(id) and _stands_in(id, spec):
-		hardware = id
 	var hw_in := members.has(hardware)
 	if hw_in == members.has(spec.host):
 		return null
@@ -476,7 +716,7 @@ func goal(id: String, i: int) -> Variant:
 	# so its own spin says nothing about where its panel goes.
 	var fixed_ref := _panel_of(fixed)
 	var moving_ref := _panel_of(id)
-	var moving_named := spec.hardware if moving == hardware and moving_ref == id else moving_ref
+	var moving_named := spec.hardware if moving == hardware and moving_ref == id and is_hardware(id) else moving_ref
 	var ref_home := bonds.poses[fixed_ref] * assembled(fixed_ref).affine_inverse() * assembled(moving_named)
 	return ref_home * bonds.relative_pose(moving_ref, id)
 
@@ -493,47 +733,3 @@ func _panel_of(id: String) -> String:
 	return id
 
 
-## True when lone loose hardware `id` can stand in for the joint's hardware: the same type, both
-## loose, neither seated.
-func _stands_in(id: String, spec: ItemData.JointSpec) -> bool:
-	if id == spec.hardware:
-		return true
-	if not is_hardware(id) or bonds.is_seated(id) or bonds.is_seated(spec.hardware):
-		return false
-	return data.instance(id).type == data.instance(spec.hardware).type and bonds.poses.has(spec.hardware)
-
-
-func _pair(spec: int, from: Snap.WorldConnector, to: Snap.WorldConnector, dragged: String, members: Dictionary[String, bool]) -> Pair:
-	var s := data.joints[spec]
-	var p := Pair.new()
-	p.spec = spec
-	var hardware_end := from if from.type in data.compatible else to
-	var hole := to if hardware_end == from else from
-	p.hardware = hardware_end.part
-	p.hardware_connector = hardware_end.index
-	p.host = hole.part
-	p.host_connector = hole.index
-	assert(p.host == s.host and p.host_connector == s.host_connector, "pair is not export joint %d" % spec)
-	# The mover (moverOf): the moving side's panel; for a carried dowel's end, the carried panel
-	# it sits in; lone hardware moves itself.
-	var moving := from.part
-	if moving == dragged and members.size() == 1:
-		p.mover = moving
-	elif not is_hardware(moving):
-		p.mover = moving
-	else:
-		p.mover = moving
-		for joint: Bonds.Joint in bonds.joints:
-			if joint.hardware == moving and members.has(joint.host) and not is_hardware(joint.host):
-				p.mover = joint.host
-				break
-	return p
-
-
-static func _key(a: Snap.WorldConnector, b: Snap.WorldConnector) -> String:
-	return "%s#%d>%s#%d" % [a.part, a.index, b.part, b.index]
-
-
-static func _one(c: Snap.WorldConnector) -> Array[Snap.WorldConnector]:
-	var out: Array[Snap.WorldConnector] = [c]
-	return out

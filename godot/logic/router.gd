@@ -46,10 +46,10 @@ class Drag:
 	var finger: Vector3
 	var pointer: Vector2
 	var snapped: Play.Offer = null
-	## Every other part that rides along, each with where it was when the drag began, and where
-	## the dragged part was then.
-	var start: Transform3D
-	var riders: Dictionary[String, Transform3D] = {}
+	## No pose held yet: the first move puts the part where the finger says, offer or not.
+	var has_held := false
+	## What rides along: the part, where it was when the drag began, every rider with its pose then.
+	var carry := Play.Carry.new()
 
 
 var play: Play
@@ -139,11 +139,9 @@ func update(delta: float) -> void:
 		else:
 			_hold_at(lift.part, lift.height)
 	if drag != null and drag.mode == MOVE:
-		var aimed := play.aim(drag.part, drag.held, delta)
-		if not aimed.is_equal_approx(drag.held):
-			drag.rotation = aimed.basis
-			_hold(aimed)
-		drag.snapped = play.offer_for(drag.part, drag.held)
+		_aim_hardware(delta)
+		_aim_panel(_panel_goal(), delta)
+		_assist(delta)
 
 
 # --- what the scene and the hand read ---------------------------------------------------
@@ -203,9 +201,17 @@ func carried() -> Dictionary[String, bool]:
 	if drag == null:
 		return out
 	out[drag.part] = true
-	for id: String in drag.riders:
+	for id: String in drag.carry.riders:
 		out[id] = true
 	return out
+
+
+## What the elevation line holds up outside this drag: none of it is a seat (heldUp).
+func held_up() -> Dictionary[String, bool]:
+	if not lift.is_holding() or (drag != null and drag.part == lift.part):
+		var none: Dictionary[String, bool] = {}
+		return none
+	return play.bonds.compound(lift.part, false)
 
 
 # --- the gesture machine's effects --------------------------------------------------------
@@ -318,9 +324,10 @@ func _begin_move(id: String, point: Vector3, at: Vector2, mode: String, riders: 
 	drag.centre = box.get_center() - pose.origin
 	drag.rotation = pose.basis
 	drag.held = pose
-	drag.start = pose
+	drag.carry.part = id
+	drag.carry.start = pose
 	for r: String in riders:
-		drag.riders[r] = play.bonds.poses[r]
+		drag.carry.riders[r] = play.bonds.poses[r]
 	drag.pointer = at
 	if lift.is_holding() and lift.part == id:
 		drag.height = lift.height
@@ -339,17 +346,25 @@ func _update_drag(at: Vector2) -> void:
 	var clamped := DragMath.clamp_to_room(Vector3(p.x + drag.offset.x + c.x, drag.height, p.z + drag.offset.y + c.z), drag.half, DragMath.room(), Constants.GESTURE.wallMargin)
 	var target := Vector3(clamped.x - c.x, drag.height, clamped.z - c.z)
 	drag.finger = target
+	_refresh_offer(target)
+	# With a seat on offer the part is where seat assist has it; else exactly where the finger puts it.
+	if drag.snapped != null and drag.has_held:
+		return
 	_hold(Transform3D(drag.rotation, target))
-	if drag.mode == MOVE:
-		drag.snapped = play.offer_for(drag.part, drag.held)
+
+
+## The seat on offer with the part at `target` (refreshOffer); a compound looks for none.
+func _refresh_offer(target: Vector3) -> void:
+	drag.snapped = play.snap_candidate(drag.carry, Transform3D(drag.rotation, target), drag.snapped, held_up()) if drag.mode == MOVE else null
 
 
 ## The part (and what rides with it) held at `pose`.
 func _hold(pose: Transform3D) -> void:
 	drag.held = pose
+	drag.has_held = true
 	play.bonds.poses[drag.part] = pose
-	for r: String in drag.riders:
-		play.bonds.poses[r] = Bonds.carry_pose(drag.start, pose, drag.riders[r])
+	for r: String in drag.carry.riders:
+		play.bonds.poses[r] = drag.carry.pose_of(r, pose)
 
 
 ## The lift raises the part and its plane together, and the line with it for the part it holds
@@ -383,15 +398,20 @@ func _raise(h: float) -> void:
 func _end_drag() -> void:
 	var id := drag.part
 	var offer := drag.snapped
-	var members := carried()
-	var held_up := lift.is_holding() and lift.part == id
-	drag = null
 	if offer != null:
-		if held_up:
+		offer = play.settled(drag.carry, drag.held, offer, held_up())
+	var members := carried()
+	var lifted := lift.is_holding() and lift.part == id
+	if offer != null:
+		if lifted:
 			lift.end()
-		play.seat(id, offer)
+		_hold(offer.pose)
+		drag = null
+		play.seat(offer, members)
 		play.turn_pages()
-	elif not held_up:
+		return
+	drag = null
+	if not lifted:
 		_drop(members)
 
 
@@ -404,6 +424,188 @@ func _cancel_drag() -> void:
 ## Let go of: down onto what is under it (no physics yet).
 func _drop(members: Dictionary[String, bool]) -> void:
 	play.settle(members)
+
+
+# --- the feel rules (update) --------------------------------------------------------------
+
+
+## One fastener end of the carried part and the seats that take it (CarriedEnd).
+class End:
+	var index: int
+	var connector: ItemData.Connector
+	var seats: Array[Snap.WorldConnector] = []
+
+
+## The carried hardware's fastener ends, each with its seats, or none for a panel or a part with no
+## ends (carriedEnds).
+func _carried_ends() -> Array[End]:
+	var out: Array[End] = []
+	if play.is_panel(drag.part) or not drag.has_held:
+		return out
+	var connectors := play.data.type_of(play.data.instance(drag.part)).connectors
+	var seats := play.seats_for(drag.carry, held_up())
+	for i: int in connectors.size():
+		var c := connectors[i]
+		if not play.data.compatible.has(c.type) or play.bonds.is_taken(drag.part, i):
+			continue
+		var end := End.new()
+		end.index = i
+		end.connector = c
+		for seat: Snap.WorldConnector in seats:
+			if not Snap.are_compatible(c.type, seat.type, play.data.compatible):
+				continue
+			if play.gating and not play.allows(Snap.in_world(c.type, c.position, c.axis, drag.held, drag.part, i), seat):
+				continue
+			end.seats.append(seat)
+		out.append(end)
+	return out
+
+
+## Self-aim (aimHardware): carried hardware whose end nears a seat turns that end into it, harder
+## the nearer, about the end; once a seat is in the snap window, the offer is looked for.
+func _aim_hardware(delta: float) -> void:
+	if drag.snapped != null:
+		return
+	var ends := _carried_ends()
+	if ends.is_empty():
+		return
+	var tool := false
+	for end: End in ends:
+		if Tools.is_tool_tip(end.connector.type):
+			tool = true
+	var zone := Constants.AIM.toolZone if tool else Constants.AIM.zone
+	var rate := Constants.AIM.toolRate if tool else Constants.AIM.rate
+	# Of the ends, the one whose nearest seat needs the least turn (aimEnd).
+	var best_end: End = null
+	var best_target: Snap.WorldConnector = null
+	var best_turn := INF
+	for end: End in ends:
+		var tip := drag.held * end.connector.position
+		var target := Assist.nearest_target(tip, end.seats, zone)
+		if target == null:
+			continue
+		var turn := Assist.aim_angle(drag.rotation, end.connector.axis, target.axis)
+		if turn < best_turn:
+			best_turn = turn
+			best_end = end
+			best_target = target
+	if best_end == null or best_turn < Constants.AIM.settled:
+		return
+	var distance := best_target.position.distance_to(drag.held * best_end.connector.position)
+	var aimed := Assist.aimed_rotation(drag.rotation, best_end.connector.axis, best_target.axis)
+	var rotation := Assist.aim_step(drag.rotation, aimed, Assist.aim_weight(distance, zone), rate, delta)
+	var position := _turn_about(best_end, rotation)
+	_hold(Transform3D(rotation, position))
+	for end: End in ends:
+		var from := Snap.in_world(end.connector.type, end.connector.position, end.connector.axis, drag.held, drag.part, end.index)
+		if Snap.find_snap(Play._one(from), end.seats, Constants.SNAP.maxDistance, Constants.SNAP.maxAngle, play.data.compatible) != null:
+			_refresh_offer(position)
+			return
+
+
+## The carried part turned to `rotation` about `end`, so aiming never swings the end off its seat:
+## the turned footprint kept inside the room, the grab and the height rebased, the line moved with
+## it (turnAbout). Returns the new position.
+func _turn_about(end: End, rotation: Basis) -> Vector3:
+	var tip := drag.held * end.connector.position
+	var local := rotation * end.connector.position
+	var half := DragMath.rotated_half_extents(play.data.type_of(play.data.instance(drag.part)).size / 2.0, rotation)
+	drag.half = Vector2(half.x, half.z)
+	drag.half_height = half.y
+	var c := drag.centre
+	var b := DragMath.clamp_to_room(Vector3(tip.x - local.x + c.x, 0.0, tip.z - local.z + c.z), drag.half, DragMath.room(), Constants.GESTURE.wallMargin)
+	var y := DragMath.clamp_lift(tip.y - local.y + c.y, half.y, Constants.ROOM.height, Constants.GESTURE.ceilingMargin) - c.y
+	if lift.is_holding() and lift.part == drag.part:
+		var goal := lift.goal + y - lift.height
+		lift.jump(y)
+		y = lift.height
+		lift.target(goal)
+	var position := Vector3(b.x - c.x, y, b.z - c.z)
+	drag.offset += Vector2(position.x - drag.held.origin.x, position.z - drag.held.origin.z)
+	drag.height = y
+	drag.rotation = rotation
+	return position
+
+
+## Where a carried panel goes near it: the pose, how far, and the free ends there (PanelGoal).
+class Goal:
+	var pose: Transform3D
+	var distance: float
+	var ends: Array[Snap.WorldConnector] = []
+	var turn: float
+
+
+## The carried panel's nearest place where it goes inside PANEL.zone with a free end there for it
+## to go on, the lesser turn of two as near; null for anything but a carried panel (panelGoal).
+func _panel_goal() -> Goal:
+	if not play.is_panel(drag.part) or not drag.has_held:
+		return null
+	var seats := play.seats_for(drag.carry, held_up())
+	var best: Goal = null
+	for pose: Transform3D in play.preferred_for(drag.carry):
+		var distance := pose.origin.distance_to(drag.held.origin)
+		if distance >= Constants.PANEL.zone or (best != null and distance > best.distance + Constants.PANEL.matchTolerance):
+			continue
+		var turn := drag.held.basis.get_rotation_quaternion().angle_to(pose.basis.get_rotation_quaternion())
+		if best != null and distance >= best.distance - Constants.PANEL.matchTolerance and turn >= best.turn:
+			continue
+		var ends := FitRank.preferred_targets(play.carried_connectors(drag.carry, pose), seats, play.data.compatible)
+		if not ends.is_empty():
+			best = Goal.new()
+			best.pose = pose
+			best.distance = distance
+			best.ends = ends
+			best.turn = turn
+	return best
+
+
+## Panel magnetism (aimPanel): near where it goes, with no fit there on offer, the panel turns
+## toward it, harder the nearer; the finger keeps the position (a turn into the floor lifts it).
+func _aim_panel(goal: Goal, delta: float) -> void:
+	if goal == null or (drag.snapped != null and drag.snapped.preferred):
+		return
+	var rotation := Assist.aim_step(drag.rotation, goal.pose.basis, Assist.aim_weight(goal.distance, Constants.PANEL.zone), Constants.PANEL.rate, delta)
+	_clamp_carried(rotation)
+	drag.rotation = rotation
+	if drag.snapped != null:
+		_refresh_offer(drag.finger)
+		return
+	var lifted := DragMath.clamp_lift(drag.height + drag.centre.y, drag.half_height, Constants.ROOM.height, Constants.GESTURE.ceilingMargin) - drag.centre.y
+	if lifted != drag.height:
+		_lift_drag(0.0, 0.0)
+		if drag.snapped == null:
+			return
+		_hold(Transform3D(rotation, Vector3(drag.held.origin.x, drag.height, drag.held.origin.z)))
+		return
+	_hold(Transform3D(rotation, drag.held.origin))
+	var carried_now := play.carried_connectors(drag.carry, drag.held)
+	for c: Snap.WorldConnector in carried_now:
+		if Snap.find_snap(Play._one(c), goal.ends, Constants.PANEL.maxDistance, Constants.PANEL.maxAngle, play.data.compatible) != null:
+			_refresh_offer(drag.held.origin)
+			return
+
+
+## The carried set's reach turned to `rotation`, kept on the drag (clampCarried, reachOf).
+func _clamp_carried(rotation: Basis) -> void:
+	var at := Transform3D(rotation, Vector3.ZERO)
+	var lo := Vector3.ONE * INF
+	var hi := -Vector3.ONE * INF
+	for id: String in [drag.part] + drag.carry.riders.keys():
+		var pose := drag.carry.pose_of(id, at)
+		var half := DragMath.rotated_half_extents(play.data.type_of(play.data.instance(id)).size / 2.0, pose.basis)
+		lo = lo.min(pose.origin - half)
+		hi = hi.max(pose.origin + half)
+	drag.centre = (lo + hi) / 2.0
+	var half_all := (hi - lo) / 2.0
+	drag.half = Vector2(half_all.x, half_all.z)
+	drag.half_height = half_all.y
+
+
+## Seat assist: only while a seat is on offer, the held part glides toward it.
+func _assist(delta: float) -> void:
+	if drag.snapped == null or not drag.has_held:
+		return
+	_hold(DragMath.ease_toward(drag.held, drag.snapped.pose, Constants.SNAP.assistStrength, delta))
 
 
 # --- the elevation line (Shift held) ------------------------------------------------------

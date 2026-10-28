@@ -1,54 +1,209 @@
 class_name Hand
 extends RefCounted
-## A scripted player for Play: which part to carry for the next open seat, and where a hand leaves
-## it before the snap takes it. The headless playthrough (test/playthrough_test.gd) and the
-## windowed autoplay (scenes/loop.gd, for the screenshots) both play through this, so the film
-## shows the moves the test proves.
+## A scripted player that builds JOHNNY through the router with screen points, as a mouse does:
+## for each seat the open page still wants it frames the camera on the part, presses on it (a
+## screen point that picks it), drags it past the tap distance, lifts it with the wheel to its
+## seat's height, carries it to a few centimetres off its seat in a glide of pointer moves, holds
+## still while self-aim, magnetism and seat assist do their work, lets go, and clicks the seat's
+## mover home. The headless playthrough (test/playthrough_test.gd) and the windowed autoplay
+## (scenes/loop.gd) both play through this, one frame per step(), so the film shows the moves the
+## test proves.
+##
+## The hand knows the manual: which part goes where (Play.goal, the export's joints). Nothing it
+## does reaches past the router: no pose is set, no seat is made but by letting go on an offer.
 
-## How far off its seat the hand lets go of a part: a few centimetres along each axis and a few
-## degrees about a tilted axis, inside SNAP and PANEL's windows.
-const OFFSET := Vector3(0.02, -0.015, 0.012)
-const TURN_DEG := 8.0
-const TURN_AXIS := Vector3(0.3, 1.0, 0.2)
-## The hand holds the part there this long while self-aim and panel magnetism (Play.aim) turn it
-## toward where it goes, in this many steps.
-const AIM_SECONDS := 1.0
-const AIM_FRAMES := 60
+## How far off its seat the hand lets go of the pointer: a few centimetres.
+const OFFSET := Vector3(0.02, 0.0, 0.015)
+## Frames to glide the pointer from the pick-up to the drop, and the most to hold still there for
+## a seat to be offered and taken.
+const GLIDE_FRAMES := 12
+const HOLD_FRAMES := 90
+## A held seat is taken once the part is this close to it (m) and turned this little (rad).
+const SETTLED_M := 1e-5
+const SETTLED_RAD := 1e-4
+## The camera the hand frames each move from: this far from what it looks at, from this direction.
+const VIEW_DISTANCE := 1.4
+const VIEW_FROM: Array[Vector3] = [Vector3(0.0, 1.0, 1.0), Vector3(1.0, 1.0, 0.0), Vector3(-1.0, 1.0, 0.0), Vector3(0.0, 1.0, -1.0)]
+const FRAME_MS := 16
+const TAP_MS := 80
+
+var router: Router
+var play: Play
+## What went wrong, one line each; the playthrough asserts it empty.
+var errors: PackedStringArray = []
+## One line per move, for the log.
+var lines: PackedStringArray = []
+var seats := 0
+var presses := 0
+var frames := 0
+var t := 0
+var _queue: Array[Callable] = []
+
+
+func _init(r: Router) -> void:
+	router = r
+	play = r.play
+
+
+## True once the manual has ended or the hand is stuck.
+func finished() -> bool:
+	return play.steps.is_done() or not errors.is_empty()
+
+
+## One frame: the next action, then the router's frame. False once finished.
+func step(delta: float) -> bool:
+	if finished():
+		return false
+	frames += 1
+	t += FRAME_MS
+	if _queue.is_empty():
+		_plan()
+	if not _queue.is_empty():
+		var action: Callable = _queue.pop_front()
+		action.call()
+	router.update(delta)
+	return not finished()
 
 
 ## The open page's next seat to make (an export joint index), or -1.
-static func next_joint(play: Play) -> int:
-	var open := play.open_joints()
+static func next_joint(p: Play) -> int:
+	var open := p.open_joints()
 	return open[0] if not open.is_empty() else -1
 
 
-## Which side of export joint `i` the hand carries: the smaller compound (a loose dowel to its
-## panel; a horizontal, dowels and all, onto the side panel), the lib's mover on a tie.
-static func carried(play: Play, i: int) -> String:
-	var spec := play.data.joints[i]
-	var hw := play.bonds.compound(spec.hardware, false).size()
-	var host := play.bonds.compound(spec.host, false).size()
-	if hw != host:
-		return spec.hardware if hw < host else spec.host
-	return spec.mover
+## Which part the hand grabs for export joint `i`: the smaller side's panel (a horizontal by
+## itself, dowels and all, onto the side panel), or lone hardware itself; the lib's mover's side on
+## a tie.
+static func carried(p: Play, i: int) -> String:
+	var spec := p.data.joints[i]
+	var hw := p.bonds.compound(spec.hardware, false)
+	var host := p.bonds.compound(spec.host, false)
+	var side := spec.hardware if hw.size() < host.size() else spec.host if host.size() < hw.size() else spec.mover
+	return _panel_in(p, p.bonds.compound(side, false), side)
 
 
-## What the hand taps once a seat is made: the seat's mover (a lone dowel itself; a panel carried
+static func _panel_in(p: Play, members: Dictionary[String, bool], fallback: String) -> String:
+	for inst: ItemData.Instance in p.data.instances:
+		if members.has(inst.id) and p.is_panel(inst.id):
+			return inst.id
+	return fallback
+
+
+## What the hand clicks once a seat is made: the seat's mover (a lone dowel itself; a panel carried
 ## in on its dowels, whose tap pushes all of them home).
-static func tap_target(play: Play, spec: int) -> String:
-	var joint := play.bonds.joint_for_spec(spec)
+static func tap_target(p: Play, spec: int) -> String:
+	var joint := p.bonds.joint_for_spec(spec)
 	return joint.mover if joint != null else ""
 
 
-## Off its seat as a hand would leave it: shifted, and turned about the part's own centre.
-static func off_seat(seat: Transform3D) -> Transform3D:
-	var turn := Basis(TURN_AXIS.normalized(), deg_to_rad(TURN_DEG))
-	return Transform3D(turn * seat.basis, seat.origin + OFFSET)
+func _plan() -> void:
+	var i := next_joint(play)
+	if i < 0:
+		# Every seat in; whatever is still only seated gets clicked home.
+		for joint: Bonds.Joint in play.bonds.joints:
+			if Fastener.is_tap_kind(joint.kind) and not Fastener.is_fastened(joint.fastener):
+				_plan_tap(joint.mover)
+				return
+		errors.append("page %d open with nothing left to do" % play.steps.current().number)
+		return
+	var id := carried(play, i)
+	_plan_carry(id, i)
 
 
-## Holds `pose` while Play.aim turns it for AIM_SECONDS. Returns where it ends up.
-static func hold(play: Play, id: String, pose: Transform3D) -> Transform3D:
-	var held := pose
-	for frame: int in AIM_FRAMES:
-		held = play.aim(id, held, AIM_SECONDS / AIM_FRAMES)
-	return held
+func _fail(message: String) -> void:
+	errors.append(message)
+	_queue.clear()
+
+
+## Frames the camera on `point` from the first direction that lets a press at `id` pick it; returns
+## that screen point, or (-1, -1).
+func _look_at(id: String, point: Vector3) -> Vector2:
+	for from: Vector3 in VIEW_FROM:
+		router.camera.frame(point + from.normalized() * VIEW_DISTANCE, point)
+		var at := router.point_on(id)
+		if at.x >= 0.0:
+			return at
+	return Vector2(-1, -1)
+
+
+func _plan_carry(id: String, i: int) -> void:
+	var page := play.steps.current().number
+	var goal: Variant = play.goal(id, i)
+	if goal == null:
+		_fail("page %d: no goal for %s at joint %d" % [page, id, i])
+		return
+	var seat: Transform3D = goal
+	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO, "frame": 0}
+	_queue.append(func() -> void:
+		var at := _look_at(id, play.bonds.poses[id].origin.lerp(seat.origin, 0.5))
+		if at.x < 0.0:
+			_fail("page %d: no screen point picks %s" % [page, id])
+			return
+		state["at"] = at
+		router.press(Router.LEFT, at, t))
+	_queue.append(func() -> void:
+		var at: Vector2 = state["at"] + Vector2(Constants.GESTURE.tapMaxDistance + 2.0, 0.0)
+		router.motion(at)
+		if router.drag == null or router.drag.part != id or router.drag.mode != Router.MOVE:
+			_fail("page %d: pressing %s began no carry (%s)" % [page, id, "none" if router.drag == null else router.drag.mode])
+			return
+		state["from"] = at
+		# Up to the seat's height first, so the glide goes in level.
+		router.wheel(-(seat.origin.y - router.drag.height) / Constants.GESTURE.desktopLiftRate, at)
+		state["to"] = router.screen_for(seat.origin + OFFSET))
+	for n: int in range(1, GLIDE_FRAMES + 1):
+		var k := float(n) / GLIDE_FRAMES
+		_queue.append(func() -> void:
+			if router.drag != null:
+				router.motion(Vector2(state["from"]).lerp(Vector2(state["to"]), k)))
+	_queue.append(func() -> void: _hold_for_seat(id, i, page, 0))
+
+
+## Holds still until a seat is on offer and the part has glided into it, then lets go.
+func _hold_for_seat(id: String, i: int, page: int, held: int) -> void:
+	if router.drag == null:
+		_fail("page %d: the drag of %s ended by itself" % [page, id])
+		return
+	var offer := router.drag.snapped
+	var in_seat := offer != null and router.drag.held.origin.distance_to(offer.pose.origin) < SETTLED_M and router.drag.held.basis.get_rotation_quaternion().angle_to(offer.pose.basis.get_rotation_quaternion()) < SETTLED_RAD
+	if not in_seat and held < HOLD_FRAMES:
+		_queue.push_front(func() -> void: _hold_for_seat(id, i, page, held + 1))
+		return
+	if offer == null:
+		_fail("page %d: no seat offered for %s at joint %d (held %s, seat %s)" % [page, id, i, router.drag.held.origin, play.goal(id, i)])
+		router.release(Router.LEFT, router.drag.pointer, t)
+		return
+	var pairs := offer.pairs.size()
+	router.release(Router.LEFT, router.drag.pointer, t)
+	var joint := play.bonds.joint_for_spec(i)
+	if joint == null:
+		_fail("page %d: letting go of %s seated %d pairs, not joint %d" % [page, id, pairs, i])
+		return
+	seats += pairs
+	lines.append("page %d: %s seated, %d pairs" % [page, id, pairs])
+	_plan_tap(joint.mover)
+
+
+func _plan_tap(id: String) -> void:
+	var page := play.steps.current().number if play.steps.current() != null else 0
+	_queue.append(func() -> void:
+		var at := _look_at(id, play.bonds.poses[id].origin)
+		if at.x < 0.0:
+			_fail("page %d: no screen point picks %s to click" % [page, id])
+			return
+		var before := _fastened()
+		router.press(Router.LEFT, at, t)
+		router.release(Router.LEFT, at, t + TAP_MS)
+		var pressed := _fastened() - before
+		if pressed <= 0:
+			_fail("page %d: a click on %s pressed nothing" % [page, id])
+			return
+		presses += pressed)
+
+
+func _fastened() -> int:
+	var n := 0
+	for joint: Bonds.Joint in play.bonds.joints:
+		if Fastener.is_fastened(joint.fastener):
+			n += 1
+	return n

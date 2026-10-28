@@ -1,13 +1,18 @@
 class_name Steps
 extends RefCounted
-## The booklet's build pages as the loop plays them: which page is open, which parts and joints
-## are on it, when it is complete, and turning it. The pages are the export's (bookletModel.ts
+## The booklet's build pages as the loop plays them: which page is open, which parts and joints are
+## on it, when it is complete, and turning it. The pages are the export's (bookletModel.ts
 ## createBuildSteps through godot/tools/export-item.ts); nothing here lists a page.
 ##
-## The web's booklet is reference only: nothing there checks a build against it. Here the page
-## gates the build, since the loop has to know when JOHNNY is done. A page the loop does not play
-## (any joint not a dowel, or no joint at all: a tip, a panel laid on, shelves set on pins) is
-## `auto`: the loop fastens it on arrival and lists it, never hides it.
+## The web's booklet is reference only: nothing there checks a build against it. Here a page turns
+## by itself once the build has caught up with it, judged by type, never by instance: each joint is
+## a key (host type, hole index, hardware type), and a page is complete when the build holds at
+## least as many seats of each key as the manual asks for by that page (fastened, but for a cam a
+## later page turns), every cam turned by then is locked, and the page's panels are out. So a
+## horizontal turned end for end, a dowel from the other end of the box, or the other side panel
+## still turns the page; a part in a hole the manual never uses for it does not.
+##
+## A page the loop does not play is `auto`: the loop fastens it on arrival and lists it.
 
 const DOWEL := "dowel"
 
@@ -56,18 +61,69 @@ func parts_on(step: ItemData.Step) -> Array[String]:
 	return out
 
 
-## True when every joint the page seats is in (and fastened, but for a cam a later page turns),
-## and every cam it turns is locked.
+## A joint's key: what kind of seat it is, whichever instances.
+static func key(host_type: String, host_index: int, hardware_type: String) -> String:
+	return "%s#%d<%s" % [host_type, host_index, hardware_type]
+
+
+func key_of(i: int) -> String:
+	var s := data.joints[i]
+	return key(data.instance(s.host).type, s.host_connector, data.instance(s.hardware).type)
+
+
+func joint_key(joint: Bonds.Joint) -> String:
+	return key(data.instance(joint.host).type, joint.host_connector, data.instance(joint.hardware).type)
+
+
+## What the manual asks for by page `upto` (an index), by key: [seated, fastened, locked] counts.
+func _needed(upto: int) -> Dictionary[String, Vector3i]:
+	var turned: Dictionary[int, bool] = {}
+	for p: int in range(0, upto + 1):
+		for i: int in data.steps[p].turns:
+			turned[i] = true
+	var out: Dictionary[String, Vector3i] = {}
+	for p: int in range(0, upto + 1):
+		for i: int in data.steps[p].joints:
+			var k := key_of(i)
+			var n: Vector3i = out.get(k, Vector3i.ZERO)
+			n.x += 1
+			if data.joints[i].kind != Fastener.CAM or turned.has(i):
+				n.y += 1
+			out[k] = n
+		for i: int in data.steps[p].turns:
+			var k := key_of(i)
+			var n: Vector3i = out.get(k, Vector3i.ZERO)
+			n.z += 1
+			out[k] = n
+	return out
+
+
+## What the build holds, by key: [seated, fastened, locked] counts.
+func _held(bonds: Bonds) -> Dictionary[String, Vector3i]:
+	var out: Dictionary[String, Vector3i] = {}
+	for joint: Bonds.Joint in bonds.joints:
+		if joint.kind == Fastener.TOOL:
+			continue
+		var k := joint_key(joint)
+		var n: Vector3i = out.get(k, Vector3i.ZERO)
+		n.x += 1
+		if Fastener.is_fastened(joint.fastener):
+			n.y += 1
+		if joint.kind == Fastener.CAM and joint.fastener.state == Fastener.LOCKED:
+			n.z += 1
+		out[k] = n
+	return out
+
+
+## True when the build has caught up with page `step` (see the header).
 func complete(step: ItemData.Step, bonds: Bonds) -> bool:
-	for i: int in step.joints:
-		var joint := bonds.joint_for_spec(i)
-		if joint == null:
-			return false
-		if data.joints[i].kind != "cam" and not Fastener.is_fastened(joint.fastener):
-			return false
-	for i: int in step.turns:
-		var joint := bonds.joint_for_spec(i)
-		if joint == null or not Fastener.is_fastened(joint.fastener):
+	var at := data.steps.find(step)
+	var held := _held(bonds)
+	var needed := _needed(at)
+	for k: String in needed:
+		var h: Vector3i = held.get(k, Vector3i.ZERO)
+		var n: Vector3i = needed[k]
+		if h.x < n.x or h.y < n.y or h.z < n.z:
 			return false
 	for id: String in step.parts:
 		if not bonds.poses.has(id):
@@ -75,13 +131,56 @@ func complete(step: ItemData.Step, bonds: Bonds) -> bool:
 	return true
 
 
-## How many of the page's joints are done, for the page label.
+## True while the open page still wants a seat of key `k` (gated snaps).
+func wants(k: String, bonds: Bonds) -> bool:
+	var step := current()
+	if step == null:
+		return false
+	var on_page := false
+	for i: int in step.joints:
+		if key_of(i) == k:
+			on_page = true
+	if not on_page:
+		return false
+	var h: Vector3i = _held(bonds).get(k, Vector3i.ZERO)
+	return h.x < _needed(index)[k].x
+
+
+## The part types the open page still wants a seat for, either side (gated picking).
+func wanted_types(bonds: Bonds) -> Dictionary[String, bool]:
+	var out: Dictionary[String, bool] = {}
+	var step := current()
+	if step == null:
+		return out
+	for i: int in step.joints:
+		var k := key_of(i)
+		if wants(k, bonds):
+			out[data.instance(data.joints[i].host).type] = true
+			out[data.instance(data.joints[i].hardware).type] = true
+	for id: String in step.parts:
+		out[data.instance(id).type] = true
+	return out
+
+
+## How many of the open page's joints the build has done, for the page label: of the page's own
+## keys, those fastened beyond what earlier pages asked for.
 func done_count(step: ItemData.Step, bonds: Bonds) -> int:
+	var at := data.steps.find(step)
+	var held := _held(bonds)
+	var before: Dictionary[String, Vector3i] = {}
+	if at > 0:
+		before = _needed(at - 1)
+	var counted: Dictionary[String, int] = {}
 	var n := 0
 	for i: int in step.joints:
-		var joint := bonds.joint_for_spec(i)
-		if joint != null and Fastener.is_fastened(joint.fastener):
+		var k := key_of(i)
+		var have: Vector3i = held.get(k, Vector3i.ZERO)
+		var prior: Vector3i = before.get(k, Vector3i.ZERO)
+		var used: int = counted.get(k, 0)
+		var fastened := data.joints[i].kind != Fastener.CAM
+		if (have.y if fastened else have.x) - (prior.y if fastened else prior.x) > used:
 			n += 1
+		counted[k] = used + 1
 	return n
 
 
@@ -94,7 +193,7 @@ func advance(bonds: Bonds) -> bool:
 	return true
 
 
-## One line saying what an auto page did, e.g. "page 2: 8 bolts fastened by the loop".
+## One line saying what an auto page did, e.g. "page 2: 8 bolt fastened by the loop".
 func auto_line(step: ItemData.Step) -> String:
 	var counts: Dictionary[String, int] = {}
 	for i: int in step.joints:

@@ -57,6 +57,9 @@ class Turn:
 	var sense: int = -1
 
 
+## Two connector positions or axes this close are the same (m).
+const SYMMETRY_EPSILON := 1e-6
+
 var data: ItemData
 var poses: Dictionary[String, Transform3D] = {}
 var joints: Array[Joint] = []
@@ -523,6 +526,68 @@ func swap_ids(a: String, b: String) -> void:
 		joint.mover = _swapped(joint.mover, a, b)
 		joint.through = _swapped(joint.through, a, b)
 		joint.captured = _swapped(joint.captured, a, b)
+
+
+## A part type's symmetries: each axis-aligned turn S (other than none) that maps its box and its
+## connectors onto themselves, each connector onto one of the same type, with `map[i]` the
+## connector S carries connector i onto. Found once per type.
+class Symmetry:
+	var turn: Basis
+	var map: Array[int] = []
+
+
+var _symmetries: Dictionary[String, Array] = {}
+
+
+func symmetries(type: String) -> Array[Symmetry]:
+	if not _symmetries.has(type):
+		_symmetries[type] = _find_symmetries(data.types[type])
+	var out: Array[Symmetry] = []
+	out.assign(_symmetries[type])
+	return out
+
+
+func _find_symmetries(part: ItemData.PartType) -> Array[Symmetry]:
+	var out: Array[Symmetry] = []
+	var axes: Array[Vector3] = [Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN, Vector3.BACK, Vector3.FORWARD]
+	for x: Vector3 in axes:
+		for y: Vector3 in axes:
+			if absf(x.dot(y)) > 0.5:
+				continue
+			var turn := Basis(x, y, x.cross(y))
+			if turn.is_equal_approx(Basis.IDENTITY):
+				continue
+			if not (DragMath.rotated_half_extents(part.size, turn) - part.size).is_zero_approx():
+				continue
+			var map: Array[int] = []
+			for c: ItemData.Connector in part.connectors:
+				var found := -1
+				for j: int in part.connectors.size():
+					var o := part.connectors[j]
+					if o.type == c.type and (turn * c.position).distance_to(o.position) < SYMMETRY_EPSILON and (turn * c.axis).distance_to(o.axis) < SYMMETRY_EPSILON:
+						found = j
+				if found < 0:
+					break
+				map.append(found)
+			if map.size() == part.connectors.size():
+				var sym := Symmetry.new()
+				sym.turn = turn
+				sym.map = map
+				out.append(sym)
+	return out
+
+
+## Re-expresses `part`'s pose by one of its symmetries: the same box in the same place, its
+## connectors renumbered, every joint on it following. Nothing physical changes.
+func apply_symmetry(part: String, sym: Symmetry) -> void:
+	# With pose' = pose · S⁻¹, connector map[i] of the new frame is where connector i was:
+	# pose' · p(map[i]) = pose · S⁻¹ · S · p(i).
+	poses[part] = orthonormal(poses[part] * Transform3D(sym.turn.inverse(), Vector3.ZERO))
+	for joint: Joint in joints:
+		if joint.host == part:
+			joint.host_connector = sym.map[joint.host_connector]
+		if joint.hardware == part:
+			joint.hardware_connector = sym.map[joint.hardware_connector]
 
 
 static func _swapped(id: String, a: String, b: String) -> String:

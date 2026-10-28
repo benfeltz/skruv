@@ -22,8 +22,19 @@ func _router() -> Router:
 	return router
 
 
+## Seats export joint `i` straight in the graph: the hardware at its hole's mouth, seated.
+func _seat(play: Play, i: int) -> Bonds.Joint:
+	var spec := data.joints[i]
+	var home: Transform3D = play.goal(spec.hardware, i)
+	var axis := play.bonds.world_connector(spec.host, spec.host_connector).axis
+	play.bonds.poses[spec.hardware] = Transform3D(home.basis, home.origin + axis * data.sink_depth[spec.kind])
+	return play.bonds.seat(spec.hardware, spec.hardware_connector, spec.host, spec.host_connector, spec.mover, i)
+
+
 ## Press on `id`, move past the tap distance: a drag of it begins.
 func _grab(router: Router, id: String, t: int) -> Vector2:
+	var centre := router.play.bonds.poses[id].origin
+	router.camera.frame(centre + Vector3(0.0, 1.0, 1.0).normalized() * Hand.VIEW_DISTANCE, centre)
 	var at := router.point_on(id)
 	assert_bool(at.x >= 0.0).override_failure_message("no screen point picks %s" % id).is_true()
 	router.press(Router.LEFT, at, t)
@@ -72,8 +83,7 @@ func test_a_seated_dowel_dragged_away_leaves_its_seat() -> void:
 	var play := router.play
 	var i := play.open_joints()[0]
 	var spec := data.joints[i]
-	var offer := play.offer_for(spec.hardware, Hand.off_seat(play.goal(spec.hardware, i)))
-	play.seat(spec.hardware, offer)
+	_seat(play, i)
 	assert_object(play.bonds.joint_for_spec(i)).is_not_null()
 	_grab(router, spec.hardware, 0)
 	assert_object(play.bonds.joint_for_spec(i)).override_failure_message("still seated once dragged").is_null()
@@ -84,7 +94,7 @@ func test_a_pressed_dowel_is_no_drag_away_it_moves_its_compound() -> void:
 	var play := router.play
 	var i := play.open_joints()[0]
 	var spec := data.joints[i]
-	play.seat(spec.hardware, play.offer_for(spec.hardware, Hand.off_seat(play.goal(spec.hardware, i))))
+	_seat(play, i)
 	play.tap(spec.hardware)
 	_grab(router, spec.hardware, 0)
 	assert_str(router.drag.mode).is_equal(Router.COMPOUND)
@@ -108,7 +118,7 @@ func test_shift_holds_a_part_up_after_the_drag_and_lets_it_down_after() -> void:
 	var floor_y := router.play.bonds.poses[dowel].origin.y
 	var at := _grab(router, dowel, 0)
 	# Clear of every hole, so letting go seats nothing.
-	at = _carry_to(router, Vector3(-1.5, 0, 1.8))
+	at = _carry_to(router, Vector3(1.5, 0, -1.5))
 	router.set_shift(true)
 	router.wheel(-80.0, at)
 	var up := router.drag.height
@@ -125,7 +135,7 @@ func test_a_panel_carries_the_dowel_seated_in_it() -> void:
 	var play := router.play
 	var i := play.open_joints()[0]
 	var spec := data.joints[i]
-	play.seat(spec.hardware, play.offer_for(spec.hardware, Hand.off_seat(play.goal(spec.hardware, i))))
+	_seat(play, i)
 	var rel := play.bonds.relative_pose(spec.host, spec.hardware)
 	_grab(router, spec.host, 0)
 	assert_bool(router.carried().has(spec.hardware)).is_true()
@@ -140,6 +150,6 @@ func test_a_part_let_go_with_no_seat_comes_down_onto_the_floor() -> void:
 	var floor_y := router.play.bonds.poses[dowel].origin.y
 	var at := _grab(router, dowel, 0)
 	router.wheel(-200.0, at)
-	at = _carry_to(router, Vector3(-1.5, 0, 1.8))
+	at = _carry_to(router, Vector3(1.5, 0, -1.5))
 	router.release(Router.LEFT, at, 2000)
 	assert_float(router.play.bonds.poses[dowel].origin.y).is_equal_approx(floor_y, 1e-6)
