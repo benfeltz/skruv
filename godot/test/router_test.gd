@@ -324,3 +324,14 @@ func test_quarter_turns_find_how_to_stand_a_build_as_a_page_has_it() -> void:
 	for m: Vector4 in turns:
 		b = Basis(Vector3(m.x, m.y, m.z), m.w * PI / 2.0) * b
 	assert_bool(Steps.stands_as("faceDown", b)).is_true()
+
+
+## The whole box starts on the floor, inside the walls.
+func test_the_box_is_laid_out_on_the_floor() -> void:
+	var play := Play.new(data, false)
+	play.open_page()
+	var room := DragMath.room()
+	for id: String in play.bonds.poses:
+		var box := play.box_of(id)
+		assert_float(box.position.y).is_equal_approx(0.0, 1e-6)
+		assert_bool(absf(box.position.x) <= room.x / 2.0 and absf(box.end.x) <= room.x / 2.0 and absf(box.position.z) <= room.z / 2.0 and absf(box.end.z) <= room.z / 2.0).override_failure_message("%s off the floor: %s" % [id, box]).is_true()

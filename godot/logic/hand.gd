@@ -12,8 +12,10 @@ extends RefCounted
 ## The hand knows the manual: which part goes where (Play.goal, the export's joints). Nothing it
 ## does reaches past the router: no pose is set, no seat is made but by letting go on an offer.
 
-## How far off its seat, out along the seat's axis, the hand holds a part for the assist (m).
+## How far off its seat, out along the seat's axis, the hand holds a part for the assist (m), and
+## how far out along it the hand first brings it, outside the snap window (SNAP.maxDistance).
 const BACK_OFF := 0.03
+const APPROACH := 0.1
 ## Frames to glide the pointer from the pick-up to the drop, and the most to hold still there for
 ## a seat to be offered and taken.
 const GLIDE_FRAMES := 12
@@ -24,10 +26,23 @@ const SETTLED_RAD := 1e-4
 ## The camera the hand frames each move from: this far from what it looks at, from this direction.
 const VIEW_DISTANCE := 1.4
 const VIEW_DISTANCES: Array[float] = [1.4, 2.4, 3.4]
-## How far above both its pick-up and its seat the hand carries a part across (m).
+## How far above what lies on its way the hand carries a part across (m), and how wide that way is.
 const CARRY_CLEAR := 0.05
-## The most frames the hand waits for something let go to come down.
+const CORRIDOR := 0.1
+## Room a part needs round it to turn where it lies (m), and the grid the hand looks for it on.
+const TURN_ROOM := 0.05
+const SPOT_STEP := 0.1
+## The way in: checked every ENTRY_STEP m with the carried box shrunk by ENTRY_SLACK (a part may
+## graze what it slides past); the build is the parts larger than ENTRY_LARGE across, and the hand
+## comes in from ENTRY_MARGIN beyond it.
+const ENTRY_STEP := 0.01
+const ENTRY_SLACK := 0.002
+const ENTRY_LARGE := 0.3
+const ENTRY_MARGIN := 0.15
+## The most frames the hand waits for something let go to come down, and how long it lets a part
+## turned with the rings settle before planning again.
 const SETTLE_FRAMES := 180
+const TURN_SETTLE_FRAMES := 30
 ## How far above where a part goes the hand's eye must be, so the drag's plane stays below it (m).
 const EYE_ABOVE := 0.3
 ## The rise of the hand's lower views, per unit across (about 22° up).
@@ -46,7 +61,9 @@ const CRANK_STEPS_MAX := 200
 const DRIVE_FRAMES_MAX := 300
 ## A ring's quarter turn in this many pointer steps, seen from this far.
 const RING_STEPS := 12
-const RING_VIEW_DISTANCE := 4.0
+## The hand looks at a ring from this many of its radii away, and no nearer than RING_VIEW_MIN (m).
+const RING_VIEW_PER_RADIUS := 3.5
+const RING_VIEW_MIN := 0.5
 const TAP_MS := 80
 
 var router: Router
@@ -65,9 +82,16 @@ var t := 0
 var _queue: Array[Callable] = []
 
 
+## Where each tool lay in the box: the hand puts it back there after use.
+var _tool_home: Dictionary[String, Transform3D] = {}
+
+
 func _init(r: Router) -> void:
 	router = r
 	play = r.play
+	for inst: ItemData.Instance in play.data.extras:
+		if play.bonds.poses.has(inst.id):
+			_tool_home[inst.id] = play.bonds.poses[inst.id]
 
 
 ## True once the manual has ended or the hand is stuck.
@@ -198,10 +222,24 @@ func _plan_carry(id: String, i: int) -> void:
 		_fail("page %d: no goal for %s at joint %d" % [page, id, i])
 		return
 	var seat: Transform3D = goal
+	# A panel far off how it goes is turned over with the rings first, where it lies: magnetism
+	# turning a long panel near the build would sweep it through the build.
+	# Exactly as it goes, not an equivalent turned by its symmetry: "where it goes" ranks exact poses.
+	if play.is_panel(id) and not _same_turn(play.bonds.poses[id].basis, seat.basis, ""):
+		var turns := quarter_turns_until(play.bonds.poses[id].basis, func(b: Basis) -> bool: return _same_turn(b, seat.basis, ""))
+		if not turns.is_empty():
+			_queue_turns(id, turns, page)
+			turnings += turns.size()
+			lines.append("page %d: %s turned with the rings first, %d quarter turns" % [page, id, turns.size()])
+			# Planned again once it has come down: its goal moves with it.
+			_queue.append(func() -> void: _queue.push_front(func() -> void: _wait_still(id, 0)))
+			return
 	var back := _back_off(id, i)
-	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO, "frame": 0}
+	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO, "frame": 0, "clear": 0.0, "entry": Vector3.ZERO}
 	_queue.append(func() -> void:
-		var at := _look_at(id, play.bonds.poses[id].origin.lerp(seat.origin, 0.5), seat.origin, seat.origin.y + EYE_ABOVE)
+		var clear := _clear_height(id, play.bonds.poses[id].origin, seat.origin + back.normalized() * APPROACH)
+		state["clear"] = clear
+		var at := _look_at(id, play.bonds.poses[id].origin.lerp(seat.origin, 0.5), seat.origin, clear + EYE_ABOVE)
 		if at.x < 0.0:
 			_fail("page %d: no screen point picks %s" % [page, id])
 			return
@@ -214,11 +252,23 @@ func _plan_carry(id: String, i: int) -> void:
 			_fail("page %d: pressing %s began no carry (%s)" % [page, id, "none" if router.drag == null else router.drag.mode])
 			return
 		state["from"] = at
-		# Up clear of the floor's parts first, then across, then onto the seat's height.
-		router.wheel(-(maxf(seat.origin.y + back.y, router.drag.height) + CARRY_CLEAR - router.drag.height) / Constants.GESTURE.desktopLiftRate, at)
+		# Up clear of the floor's parts, then across to a point out along the seat's axis, down to
+		# its height, then in along the axis to just off the seat: the seat assist never cuts
+		# through the part it seats on.
+		var far := seat.origin + back.normalized() * APPROACH
+		var entry := _entry(id, far, maxf(float(state["clear"]), far.y))
+		state["entry"] = entry
+		router.wheel(-(maxf(float(state["clear"]), far.y) - router.drag.height) / Constants.GESTURE.desktopLiftRate, at)
+		state["to"] = router.screen_for(entry))
+	_glide(state)
+	_come_in(state, func() -> Vector3: return seat.origin + back.normalized() * APPROACH)
+	_queue.append(func() -> void:
+		if router.drag == null:
+			return
+		state["from"] = router.drag.pointer
 		state["to"] = router.screen_for(seat.origin + back))
 	_glide(state)
-	# Over the seat, down (or up) to its height with the wheel; the lift keeps x and z.
+	# Onto the seat's height (an axis that is not level) with the wheel; the lift keeps x and z.
 	_queue.append(func() -> void:
 		if router.drag != null:
 			router.wheel(-(seat.origin.y + back.y - router.drag.height) / Constants.GESTURE.desktopLiftRate, router.drag.pointer))
@@ -238,9 +288,11 @@ func _plan_place(id: String, place: Transform3D) -> void:
 		_queue_turns(id, turns, page)
 		turnings += turns.size()
 		lines.append("page %d: %s turned with the rings, %d quarter turns" % [page, id, turns.size()])
-	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO}
+	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO, "clear": 0.0, "entry": Vector3.ZERO}
 	_queue.append(func() -> void:
-		var at := _look_at(id, play.bonds.poses[id].origin.lerp(place.origin, 0.5), place.origin, place.origin.y + EYE_ABOVE)
+		var clear := _clear_height(id, play.bonds.poses[id].origin, place.origin)
+		state["clear"] = clear
+		var at := _look_at(id, play.bonds.poses[id].origin.lerp(place.origin, 0.5), place.origin, clear + EYE_ABOVE)
 		if at.x < 0.0:
 			_fail("page %d: no screen point picks %s" % [page, id])
 			return
@@ -253,17 +305,25 @@ func _plan_place(id: String, place: Transform3D) -> void:
 			_fail("page %d: pressing %s began no carry" % [page, id])
 			return
 		state["from"] = at
-		state["to"] = router.screen_for(place.origin))
+		var over := place.origin + Vector3.UP * LAY_CLEAR
+		var entry := _entry(id, over, maxf(float(state["clear"]), over.y))
+		state["entry"] = entry
+		router.wheel(-(maxf(float(state["clear"]), over.y) - router.drag.height) / Constants.GESTURE.desktopLiftRate, at)
+		state["to"] = router.screen_for(entry))
 	_glide(state)
-	_queue.append(func() -> void:
-		if router.drag != null:
-			router.wheel(-(place.origin.y + LAY_CLEAR - router.drag.height) / Constants.GESTURE.desktopLiftRate, router.drag.pointer))
+	_come_in(state, func() -> Vector3: return place.origin + Vector3.UP * LAY_CLEAR)
 	_queue.append(func() -> void:
 		if router.drag == null:
 			_fail("page %d: the drag of %s ended by itself" % [page, id])
 			return
 		router.release(Router.LEFT, router.drag.pointer, t)
 		_queue.push_front(func() -> void: _wait_placed(id, place, page, 0)))
+
+
+## Waits a moment for a part let go to come down before the hand plans again.
+func _wait_still(id: String, waited: int) -> void:
+	if waited < TURN_SETTLE_FRAMES:
+		_queue.push_front(func() -> void: _wait_still(id, waited + 1))
 
 
 ## Waits while a panel let go comes down (the simulation drops it), then checks it lies where it goes.
@@ -275,6 +335,72 @@ func _wait_placed(id: String, place: Transform3D, page: int, waited: int) -> voi
 		_fail("page %d: %s let go at %s is not where it goes (%s)" % [page, id, play.bonds.poses[id].origin, place.origin])
 		return
 	lines.append("page %d: %s laid in" % [page, id])
+
+
+## The height (of the carried part's centre) that clears everything lying along the way from `from`
+## to `to`: the top of every other part whose box comes within CORRIDOR across, plus CARRY_CLEAR
+## and the carried part's own half height. A held part pushed into another drags it along.
+func _clear_height(id: String, from: Vector3, to: Vector3) -> float:
+	var carried := play.bonds.compound(id, false)
+	var reach := play.box_of_set(carried)
+	var half := reach.size / 2.0
+	var lo := Vector2(minf(from.x, to.x), minf(from.z, to.z)) - Vector2(half.x, half.z) - Vector2.ONE * CORRIDOR
+	var hi := Vector2(maxf(from.x, to.x), maxf(from.z, to.z)) + Vector2(half.x, half.z) + Vector2.ONE * CORRIDOR
+	var top := maxf(from.y, to.y) - half.y
+	for other: String in play.bonds.poses:
+		if carried.has(other):
+			continue
+		var box := play.box_of(other)
+		if box.end.x < lo.x or box.position.x > hi.x or box.end.z < lo.y or box.position.z > hi.y:
+			continue
+		top = maxf(top, box.end.y)
+	return top + CARRY_CLEAR + half.y + (play.bonds.poses[id].origin.y - reach.get_center().y)
+
+
+## Where the carried part comes in to `target` from: straight down from `clear` when that way is
+## free of every other part's box, else level from outside the build along one of the four sides
+## that is (into a bay of the carcass through its open side). The way is checked with the carried
+## part's box swept along it. Returns the point to come down to, outside, at the target's height
+## (or above it, for straight down).
+func _entry(id: String, target: Vector3, clear: float) -> Vector3:
+	var carried := play.bonds.compound(id, false)
+	var reach := play.box_of_set(carried)
+	var offset := reach.get_center() - play.bonds.poses[id].origin
+	var half := reach.size / 2.0 - Vector3.ONE * ENTRY_SLACK
+	var others: Array[AABB] = []
+	var outer := AABB(target, Vector3.ZERO)
+	for other: String in play.bonds.poses:
+		if carried.has(other):
+			continue
+		var box := play.box_of(other)
+		others.append(box)
+		if box.size.length() > ENTRY_LARGE:
+			outer = outer.merge(box)
+	var above := Vector3(target.x, clear, target.z)
+	if _way_free(above, target, offset, half, others):
+		return above
+	var distance := outer.size.length() + ENTRY_MARGIN
+	for dir: Vector3 in [Vector3.RIGHT, Vector3.LEFT, Vector3.BACK, Vector3.FORWARD]:
+		var outside := target + dir * distance
+		if _way_free(outside, target, offset, half, others):
+			# Only as far out as the build reaches that way, plus a margin.
+			var near := outside
+			var step := 0.05
+			while near.distance_to(target) > step and _way_free(near - dir * step, target, offset, half, others) and not outer.grow(ENTRY_MARGIN / 2.0).has_point(near - dir * step):
+				near -= dir * step
+			return near
+	return above
+
+
+func _way_free(from: Vector3, to: Vector3, offset: Vector3, half: Vector3, others: Array[AABB]) -> bool:
+	var n := maxi(1, ceili(from.distance_to(to) / ENTRY_STEP))
+	for k: int in n + 1:
+		var p := from.lerp(to, float(k) / n) + offset
+		var box := AABB(p - half, half * 2.0)
+		for other: AABB in others:
+			if box.intersects(other):
+				return false
+	return true
 
 
 ## Where the hand leaves a part for joint `i`: backed off its seat along the seat's axis, out of the
@@ -332,11 +458,28 @@ func _plan_tool(hardware: String) -> void:
 		_fail("page %d: no %s in the box for %s" % [page, step.tool, hardware])
 		return
 	var tool := tools[0]
+	if not _tool_home.has(tool):
+		_tool_home[tool] = play.bonds.poses[tool]
 	var head := _head_of(hardware)
-	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO, "centre": Vector3.ZERO}
+	# A tool far off pointing into the head is turned with the rings first, where it lies: self-aim
+	# swinging a screwdriver about its tip near the build would sweep it through the build.
+	var tip_axis := _tip_of(tool).axis
+	var into := -head.axis
+	if (play.bonds.poses[tool].basis * tip_axis).angle_to(into) > Play.PLACE_TURN:
+		var turns := quarter_turns_until(play.bonds.poses[tool].basis, func(b: Basis) -> bool: return (b * tip_axis).angle_to(into) <= Play.PLACE_TURN)
+		if not turns.is_empty():
+			_queue_turns(tool, turns, page)
+			turnings += turns.size()
+			lines.append("page %d: %s turned with the rings first, %d quarter turns" % [page, tool, turns.size()])
+			_queue.append(func() -> void: _queue.push_front(func() -> void: _wait_still(tool, 0)))
+			_queue.append(func() -> void: _plan_tool(hardware))
+			return
+	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO, "centre": Vector3.ZERO, "clear": 0.0, "entry": Vector3.ZERO}
 	_queue.append(func() -> void:
 		head = _head_of(hardware)
-		var at := _look_at(tool, play.bonds.poses[tool].origin.lerp(head.position, 0.5), head.position, head.position.y + EYE_ABOVE)
+		var clear := _clear_height(tool, play.bonds.poses[tool].origin, head.position + head.axis * APPROACH)
+		state["clear"] = clear
+		var at := _look_at(tool, play.bonds.poses[tool].origin.lerp(head.position, 0.5), head.position, clear + EYE_ABOVE)
 		if at.x < 0.0:
 			_fail("page %d: no screen point picks %s" % [page, tool])
 			return
@@ -352,12 +495,89 @@ func _plan_tool(hardware: String) -> void:
 		# The tip to just outside the head, however the tool lies: self-aim turns it in about the tip.
 		var centre := head.position + head.axis * TIP_CLEAR - router.drag.rotation * _tip_of(tool).position
 		state["centre"] = centre
-		state["to"] = router.screen_for(centre))
+		var entry := _entry(tool, centre, maxf(float(state["clear"]), centre.y))
+		state["entry"] = entry
+		router.wheel(-(maxf(float(state["clear"]), centre.y) - router.drag.height) / Constants.GESTURE.desktopLiftRate, at)
+		state["to"] = router.screen_for(entry))
+	_glide(state)
+	_come_in(state, func() -> Vector3: return Vector3(state["centre"]))
+	_queue.append(func() -> void: _hold_tool_on(tool, hardware, page, 0))
+
+
+## From above the way in (`state.entry`), down to its height, then level in to `target()`.
+func _come_in(state: Dictionary, target: Callable) -> void:
+	_queue.append(func() -> void:
+		if router.drag == null:
+			return
+		var entry: Vector3 = state["entry"]
+		router.wheel(-(entry.y - router.drag.height) / Constants.GESTURE.desktopLiftRate, router.drag.pointer)
+		state["from"] = router.drag.pointer
+		state["to"] = router.screen_for(target.call() as Vector3))
 	_glide(state)
 	_queue.append(func() -> void:
 		if router.drag != null:
-			router.wheel(-(Vector3(state["centre"]).y - router.drag.height) / Constants.GESTURE.desktopLiftRate, router.drag.pointer))
-	_queue.append(func() -> void: _hold_tool_on(tool, hardware, page, 0))
+			router.wheel(-((target.call() as Vector3).y - router.drag.height) / Constants.GESTURE.desktopLiftRate, router.drag.pointer))
+
+
+## The nearest spot on the floor where `id` can turn any way round without touching anything: its
+## own spot if that is clear. Its centre at the height it rests at now.
+func _free_spot(id: String) -> Vector3:
+	var pose := play.bonds.poses[id]
+	var r := play.data.type_of(play.data.instance(id)).size.length() / 2.0 + TURN_ROOM
+	var room := DragMath.room()
+	var best := pose.origin
+	var best_d := INF
+	var x := -room.x / 2.0 + r + Constants.GESTURE.wallMargin
+	while x <= room.x / 2.0 - r - Constants.GESTURE.wallMargin:
+		var z := -room.z / 2.0 + r + Constants.GESTURE.wallMargin
+		while z <= room.z / 2.0 - r - Constants.GESTURE.wallMargin:
+			var spot := Vector3(x, pose.origin.y, z)
+			var d := spot.distance_to(pose.origin)
+			if d < best_d and _room_at(id, spot, r):
+				best = spot
+				best_d = d
+			z += SPOT_STEP
+		x += SPOT_STEP
+	if _room_at(id, pose.origin, r):
+		return pose.origin
+	return best
+
+
+func _room_at(id: String, spot: Vector3, r: float) -> bool:
+	var area := AABB(Vector3(spot.x - r, 0.0, spot.z - r), Vector3(2.0 * r, 2.0 * r, 2.0 * r))
+	for other: String in play.bonds.poses:
+		if other != id and play.box_of(other).intersects(area):
+			return false
+	return true
+
+
+## Carries `id` to `spot` on the floor and lets it down there.
+func _plan_move_to(id: String, spot: Vector3, page: int) -> void:
+	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO, "clear": 0.0}
+	_queue.append(func() -> void:
+		var clear := _clear_height(id, play.bonds.poses[id].origin, spot)
+		state["clear"] = clear
+		var at := _look_at(id, play.bonds.poses[id].origin.lerp(spot, 0.5), spot, clear + EYE_ABOVE)
+		if at.x < 0.0:
+			_fail("page %d: no screen point picks %s to move it clear" % [page, id])
+			return
+		state["at"] = at
+		router.press(Router.LEFT, at, t))
+	_queue.append(func() -> void:
+		var at: Vector2 = state["at"] + Vector2(Constants.GESTURE.tapMaxDistance + 2.0, 0.0)
+		router.motion(at)
+		if router.drag == null or router.drag.part != id:
+			_fail("page %d: pressing %s to move it clear began no carry" % [page, id])
+			return
+		state["from"] = at
+		router.wheel(-(float(state["clear"]) - router.drag.height) / Constants.GESTURE.desktopLiftRate, at)
+		state["to"] = router.screen_for(spot))
+	_glide(state)
+	_queue.append(func() -> void:
+		if router.drag != null:
+			router.wheel(-(spot.y + LAY_CLEAR - router.drag.height) / Constants.GESTURE.desktopLiftRate, router.drag.pointer)
+			router.release(Router.LEFT, router.drag.pointer, t))
+	_queue.append(func() -> void: _queue.push_front(func() -> void: _wait_still(id, 0)))
 
 
 ## The pointer slid from `state.from` to `state.to` over GLIDE_FRAMES frames.
@@ -437,6 +657,7 @@ func _crank(tool: String, joint: Bonds.Joint, page: int) -> void:
 				return
 			cranks += 1
 			lines.append("page %d: %s %s by %s, %d crank steps" % [page, joint.hardware, joint.fastener.state, tool, state["steps"]])
+			_queue.push_front(func() -> void: _plan_park(tool))
 			return
 		_queue.push_front(func() -> void: again.call(again))
 	_queue.push_front(func() -> void: sweep.call(sweep))
@@ -459,6 +680,7 @@ func _drive(tool: String, joint: Bonds.Joint, page: int) -> void:
 				return
 			drives += 1
 			lines.append("page %d: %s %s by %s held still, %d frames" % [page, joint.hardware, joint.fastener.state, tool, state["frames"]])
+			_queue.push_front(func() -> void: _plan_park(tool))
 			return
 		_queue.push_front(func() -> void: again.call(again))
 	_queue.push_front(func() -> void: hold.call(hold))
@@ -523,8 +745,13 @@ func _wait_stands(step: ItemData.Step, count: int, waited: int) -> void:
 	lines.append("page %d: the build turned %s, %d quarter turns" % [step.number, step.pose, count])
 
 
-## Selects `panel` with a tap, then each quarter turn a sweep along its ring.
+## Selects `panel` with a tap, then each quarter turn a sweep along its ring; first, if it has no
+## room to turn where it lies, it is carried to the nearest clear spot on the floor.
 func _queue_turns(panel: String, turns: Array[Vector4], page: int) -> void:
+	if play.bonds.compound(panel, false).size() == 1:
+		var spot := _free_spot(panel)
+		if spot != play.bonds.poses[panel].origin:
+			_plan_move_to(panel, spot, page)
 	_queue.append(func() -> void:
 		var at := _look_at(panel, play.bonds.poses[panel].origin)
 		if at.x < 0.0:
@@ -548,11 +775,12 @@ func _queue_turns(panel: String, turns: Array[Vector4], page: int) -> void:
 		_fail("page %d: no empty space to tap the rings away" % page))
 
 
-## True when `b` is `goal` or `goal` re-expressed by one of `type`'s symmetries.
+## True when `b` is `goal` or ("" `type`: exactly) `goal` re-expressed by one of `type`'s symmetries.
 func _same_turn(b: Basis, goal: Basis, type: String) -> bool:
 	var turns: Array[Basis] = [goal]
-	for sym: Bonds.Symmetry in play.bonds.symmetries(type):
-		turns.append(goal * sym.turn.inverse())
+	if type != "":
+		for sym: Bonds.Symmetry in play.bonds.symmetries(type):
+			turns.append(goal * sym.turn.inverse())
 	for g: Basis in turns:
 		if b.get_rotation_quaternion().angle_to(g.get_rotation_quaternion()) <= Play.PLACE_TURN:
 			return true
@@ -568,7 +796,7 @@ func _sweep_ring(panel: String, axis: Vector3, sign: float, page: int) -> void:
 			name = n
 	var f := router.ring_frame()
 	var centre_world := Vector3(f.x, f.y, f.z)
-	router.camera.frame(centre_world + VIEW_FROM[1].normalized() * RING_VIEW_DISTANCE, centre_world)
+	router.camera.frame(centre_world + VIEW_FROM[1].normalized() * maxf(RING_VIEW_MIN, f.w * RING_VIEW_PER_RADIUS), centre_world)
 	var start := Vector2(-1, -1)
 	var u := axis.cross(Vector3.UP if absf(axis.y) < 0.9 else Vector3.RIGHT).normalized()
 	var w := axis.cross(u)
@@ -605,6 +833,45 @@ func _sweep_ring(panel: String, axis: Vector3, sign: float, page: int) -> void:
 	steps.reverse()
 	for n: int in range(steps.size() - 1, -1, -1):
 		_queue.push_front(steps[n])
+
+
+## Puts a tool that came off back where it lay in the box, clear of the build.
+func _plan_park(tool: String) -> void:
+	if not _tool_home.has(tool) or play.bonds.turn_of(tool) != null:
+		return
+	var home := _tool_home[tool]
+	var page := play.steps.current().number if play.steps.current() != null else 0
+	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO, "clear": 0.0}
+	var steps_: Array[Callable] = []
+	steps_.append(func() -> void:
+		var clear := _clear_height(tool, play.bonds.poses[tool].origin, home.origin)
+		state["clear"] = clear
+		var at := _look_at(tool, play.bonds.poses[tool].origin.lerp(home.origin, 0.5), home.origin, clear + EYE_ABOVE)
+		if at.x < 0.0:
+			_fail("page %d: no screen point picks %s to put it back" % [page, tool])
+			return
+		state["at"] = at
+		router.press(Router.LEFT, at, t))
+	steps_.append(func() -> void:
+		var at: Vector2 = state["at"] + Vector2(Constants.GESTURE.tapMaxDistance + 2.0, 0.0)
+		router.motion(at)
+		if router.drag == null or router.drag.part != tool:
+			_fail("page %d: pressing %s to put it back began no carry" % [page, tool])
+			return
+		state["from"] = at
+		router.wheel(-(float(state["clear"]) - router.drag.height) / Constants.GESTURE.desktopLiftRate, at)
+		state["to"] = router.screen_for(home.origin))
+	for n: int in range(1, GLIDE_FRAMES + 1):
+		var k := float(n) / GLIDE_FRAMES
+		steps_.append(func() -> void:
+			if router.drag != null:
+				router.motion(Vector2(state["from"]).lerp(Vector2(state["to"]), k)))
+	steps_.append(func() -> void:
+		if router.drag != null:
+			router.wheel(-(home.origin.y + LAY_CLEAR - router.drag.height) / Constants.GESTURE.desktopLiftRate, router.drag.pointer)
+			router.release(Router.LEFT, router.drag.pointer, t))
+	for n: int in range(steps_.size() - 1, -1, -1):
+		_queue.push_front(steps_[n])
 
 
 func _look_at_point(p: Vector3) -> void:

@@ -178,3 +178,18 @@ class GIZMO:
 	const arrowLength := 0.14
 	const arrowRadius := 0.05
 	const arrowAngle := PI / 4.0
+
+
+## src/constants.ts `PHYSICS` (src/physics/world.ts). Godot's tick is physics_ticks_per_second (60,
+## the timestep here); maxStepsPerFrame is Godot's own max_physics_steps_per_frame (8). The room's
+## colliders are scenes/room.gd's slabs.
+class PHYSICS:
+	const gravity := Vector3(0.0, -9.81, 0.0)
+	const timestep := 1.0 / 60.0
+	const maxStepsPerFrame := 4
+	const linearDamping := 0.1
+	const angularDamping := 0.3
+	const friction := 0.6
+	const restitution := 0.0
+	const minBodyMass := 0.2
+	const roomColliderThickness := 0.5

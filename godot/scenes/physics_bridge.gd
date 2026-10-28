@@ -15,11 +15,11 @@ extends Node3D
 ## web's PHYSICS.timestep): Godot already runs whole fixed steps, so the web's accumulator
 ## (src/physics/stepping.ts) is the engine's own here.
 ##
-## Tuning (step 7): `MIN_BODY_MASS` is the web's PHYSICS.minBodyMass, off (0) until an attempt
-## turns it on.
+## Tuning (step 7), one attempt a commit:
+##   1. MIN_BODY_MASS: the web's PHYSICS.minBodyMass (0.2 kg) on every body.
 
 ## No body simulates lighter than this (kg); 0 keeps the true masses (the 2.0.4.2 setting).
-const MIN_BODY_MASS := 0.0
+const MIN_BODY_MASS := Constants.PHYSICS.minBodyMass
 ## A pose the logic moved by more than this since the bridge last wrote it is put on the body.
 const MOVED_M := 1e-7
 

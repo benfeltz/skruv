@@ -24,8 +24,8 @@ extends RefCounted
 ## origin. Metres, in the room's frame (floor top at y = 0).
 const LAY_X_MIN := -2.2
 const LAY_X_MAX := 2.2
-const LAY_Z_START := 0.45
-const LAY_GAP := 0.12
+const LAY_Z_START := -0.5
+const LAY_GAP := 0.3
 const LAY_HARDWARE_GAP := 0.03
 ## How far a let-go part may already overlap what it rests on (m), and still rest on it.
 const SETTLE_EPSILON := 1e-4
@@ -153,6 +153,15 @@ func lay(id: String) -> void:
 	_row_depth = maxf(_row_depth, depth)
 
 
+## A tool (a part with a tool's tip): gated, it can always be picked up, to be put away; it seats
+## only on its own page.
+func is_tool(id: String) -> bool:
+	for c: ItemData.Connector in data.type_of(data.instance(id)).connectors:
+		if Tools.is_tool_tip(c.type):
+			return true
+	return false
+
+
 ## The box's parts of the page's tool type.
 func tools_of(step: ItemData.Step) -> Array[String]:
 	var out: Array[String] = []
@@ -175,11 +184,11 @@ func open_joints() -> Array[int]:
 
 
 ## True when the part can be picked up: any part in the room; gated, only one with something on
-## the open page (it, or what is joined to it, or a loose part of a type the page wants).
+## the open page (it, or what is joined to it, or a loose part of a type the page wants), or a tool.
 func can_drag(id: String) -> bool:
 	if not bonds.poses.has(id):
 		return false
-	if not gating:
+	if not gating or is_tool(id):
 		return true
 	var wanted := steps.wanted_types(bonds)
 	for member: String in bonds.compound(id, false):
