@@ -5,7 +5,7 @@ extends RefCounted
 ## Typed accessors only: no item numbers live here, and nothing here derives a joint.
 ## Plain data, no nodes, so the headless tests read it directly.
 
-const FORMAT := 2
+const FORMAT := 3
 const JOHNNY_PATH := "res://items/johnny.json"
 
 
@@ -68,6 +68,8 @@ class Step:
 	var turns: Array[int] = []
 	## The page tips the carcass upright.
 	var tip: bool
+	## The part type the page puts in hand (a tool), or "".
+	var tool: String
 
 
 var product: String
@@ -79,6 +81,8 @@ var steps: Array[Step] = []
 var source: String
 var types: Dictionary[String, PartType] = {}
 var instances: Array[Instance] = []
+## What else the box holds: the spares and the tools (no assembled pose; position and rotation zero).
+var extras: Array[Instance] = []
 var joints: Array[JointSpec] = []
 
 
@@ -135,6 +139,13 @@ static func load_file(path: String) -> ItemData:
 		var q: Array = raw["rotation"]
 		inst.rotation = Quaternion(q[0], q[1], q[2], q[3]).normalized()
 		item.instances.append(inst)
+	for raw: Dictionary in d["extras"]:
+		var extra := Instance.new()
+		extra.id = raw["id"]
+		extra.type = raw["type"]
+		extra.role = ""
+		extra.rotation = Quaternion.IDENTITY
+		item.extras.append(extra)
 	for raw: Dictionary in d["joints"]:
 		var joint := JointSpec.new()
 		joint.host = raw["host"]
@@ -159,6 +170,7 @@ static func load_file(path: String) -> ItemData:
 		for i: float in raw["turns"]:
 			step.turns.append(int(i))
 		step.tip = raw["tip"]
+		step.tool = "" if raw["tool"] == null else String(raw["tool"])
 		item.steps.append(step)
 	return item
 
@@ -167,7 +179,18 @@ func instance(id: String) -> Instance:
 	for inst: Instance in instances:
 		if inst.id == id:
 			return inst
+	for inst: Instance in extras:
+		if inst.id == id:
+			return inst
 	return null
+
+
+## Everything in the box: the assembled parts, then the spares and the tools.
+func box() -> Array[Instance]:
+	var out: Array[Instance] = []
+	out.append_array(instances)
+	out.append_array(extras)
+	return out
 
 
 func type_of(inst: Instance) -> PartType:

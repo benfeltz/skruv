@@ -19,9 +19,9 @@
 //             captured, position, axis }]: `position` is the hardware's seated end in world
 //             space (the hole it sits in), `axis` the hole's world axis; `through` (a fitting's
 //             or screw's far panel) and `captured` (a cam's bolt) are the lib's, or null
-//   steps     [{ number, pose, parts, joints, turns, tip }]: the manual's build pages, from
+//   steps     [{ number, pose, parts, joints, turns, tip, tool }]: the manual's build pages, from
 //             src/game/bookletModel.ts createBuildSteps, the booklet's own; `joints` and `turns`
-//             index `joints` above
+//             index `joints` above; `tool` the part type the page puts in hand, or null
 // World positions are rounded to ROUND_M; every other number is the pack's own.
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -36,7 +36,7 @@ import { COMPATIBLE, CONTRACT, kindOf } from '../../tools/validate/lib/vocabular
 import type { ConnectorType } from '../../tools/validate/lib/vocabulary.js';
 import { createBuildSteps } from '../../src/game/bookletModel.js';
 
-const FORMAT = 2;
+const FORMAT = 3;
 /** Derived world positions are rounded to a micrometre, so float noise never churns the file. */
 const ROUND_M = 1e-6;
 
@@ -82,6 +82,7 @@ export function exportItem(file: FlatpackFile, source: string) {
       ]),
     ),
     instances: pack.assembled.map(({ id, type, role, position, rotation }) => ({ id, type, role, position, rotation })),
+    extras: pack.manifest.filter(({ id }) => !byId.has(id)).map(({ id, type }) => ({ id, type })),
     joints: joints.map((j) => {
       const hardware = byId.get(j.hardware)!;
       const host = byId.get(j.host)!;
@@ -100,7 +101,7 @@ export function exportItem(file: FlatpackFile, source: string) {
         axis: roundVec(hole.axis),
       };
     }),
-    steps: steps.map(({ number, pose, parts, joints: fasten, turns, tip }) => ({ number, pose, parts, joints: fasten, turns, tip })),
+    steps: steps.map(({ number, pose, parts, joints: fasten, turns, tip, tool }) => ({ number, pose, parts, joints: fasten, turns, tip, tool })),
   };
 }
 

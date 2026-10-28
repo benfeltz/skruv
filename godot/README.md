@@ -1,9 +1,11 @@
-# Skruv in Godot (spikes 2.0.4.1, 2.0.4.2, 2.0.4.3)
+# Skruv in Godot (spikes 2.0.4.1 to 2.0.4.4)
 
 A Godot project an agent builds and checks from the CLI. 2.0.4.1 made the loop; 2.0.4.2 puts
 a bare room and a fully assembled, fully physical JOHNNY in it, read from the pack; 2.0.4.3
 ports the first slice of the design layer and plays JOHNNY's whole manual on it, the dowel the
-one fastener played by hand. Spike branch only. It stays off main.
+one fastener played by hand; 2.0.4.4 ports the rest of the web build's interaction and assembly
+layer, so JOHNNY is built by hand with a mouse from page 1 to 12, every fastener with its tool,
+in Jolt as it is built. Spike branch only. It stays off main.
 
 - **Godot:** 4.7.2.stable.official.ed1daf0bf, at `/opt/homebrew/bin/godot`. Pinned. Don't install another.
 - **Physics:** Jolt, set explicitly in `project.godot`.
@@ -16,6 +18,129 @@ one fastener played by hand. Spike branch only. It stays off main.
   (`test/scene_test.gd` pins it). The scene scripts are `@tool`, so the editor builds the
   room and JOHNNY in its viewport too. Physics and the stillness log run only on Play. 2.0.4.1's one native alert ("no main scene defined")
   came from a bare `godot --path` run in a scratch project; the loop can't trigger it.
+
+## 2.0.4.4 results: the full JOHNNY build
+
+The whole manual by hand, with a mouse: orbit, pan and zoom; lift, drag, snap and seat; tap,
+pull; the wrench circled on a bolt, the screwdriver held still on a cam; the build turned over and
+tipped upright on the rings. Every part is a Jolt body as it is built: held while carried or waiting
+at a seat, the simulation's once its fastener holds it.
+
+| Question | Answer |
+|---|---|
+| Does the whole manual play by hand? | **Yes, with zero auto pages.** `test/playthrough_test.gd` has the scripted hand (`logic/hand.gd`) play all 12 pages through the router with screen points, as a mouse does: 60 pairs seated, 44 joints pressed by a click, 8 bolts cranked with the wrench, 8 cams driven with the screwdriver, 26 quarter turns on the rings; **60 of 60 joints fastened**, every part within **0.0011 mm** and **0.000°** of the finished item (in the build's own frame). Played twice, open snap (the default) and gated: both pass. |
+| Can the web build's rules be carried over by an agent? | **Yes, and they mostly hold up under a real hand.** The router's flow, the camera, picking, ranking and hysteresis, seat assist, self-aim, pull, the crank and hold-to-drive, the rotate gizmo and the web's bond shapes are ported as behaviours; the web specs' test ideas pass (camera limits, preferHit, rankFits, heldOffer, toolAim, crank, every machine both ways). Of #96's 14 departures, 10 are closed, 1 is closed in part and 3 are kept, out of scope by name (below). This step adds 9 small Godot rules of its own, listed. |
+| Does an assembly built joint by joint hold in Jolt? | **The carcass does; a shelf does not. RED, with numbers.** `test_physics/build_test.gd` (`loop.sh build`) has the same hand build JOHNNY with every part a Jolt body: 0 errors, 60 of 60 joints fastened on 58 physics joints, zero auto pages, the build's shape within **0.36 mm** of the finished item at every page until the shelves. Over 5 s after "done" the carcass holds within **0.040°**; **adjustableShelf-2 moves 21.39 mm** (it came to rest 29.5 mm off its place on its pins). 2.0.4.2's all-at-once build sagged 19.66 mm / 2.48° on the same Jolt settings. |
+| What did porting the router cost? | About two hours of agent time from claiming the note (23:05) to the last tuning commit (00:55), most of it in step 7. `logic/` grew from 1,500 to 5,790 lines of pure GDScript (`router.gd` 1,188, `play.gd` 873, `bonds.gd` 646, `hand.gd` 903), plus 644 lines of scene code (`loop.gd`, `physics_bridge.gd`, `camera_rig.gd`, `turn_ring.gd`) and 1,179 lines of new tests. The router is the bulk: the web's 2,338-line `gestureRouter.ts` became 1,188 lines here, being pure, with the physics seam reduced to one question (`Router.kinematic()`). The hand is nearly as big again: a careful player is a lot of code once things are physical. |
+| Did the editor or a human get involved? | **No.** Zero editor interactions. `scenes/world.tscn` is untouched; the build is inserted at runtime. Nothing outside `godot/` changed but the exporter (`godot/tools/export-item.ts`). |
+
+### #96's 14 departures: closed or kept
+
+| # | 2.0.4.3 departure | Now |
+|---|---|---|
+| 1 | The snap offered only the open page's pairs | **Closed.** Any type-compatible pair of free connectors seats (`Play.snap_candidate`, `fit_candidate`). `Constants.knobs.pageGating` (off) puts #96's rule back: a pair seats only if the open page still wants one of its kind, only parts of the types it wants can be picked up (and tools, to put them away), and a page's loose parts come out as it opens. `--gating` in the windowed loop. Both tested end to end. |
+| 2 | The page gated the build | **Closed in part.** The booklet no longer decides what seats. It still turns by itself, once the build has caught up with a page, because the loop has to know when JOHNNY is done; the web's booklet never checks. Pages are judged by type (`Steps.key`: host type, hole, hardware type), so a horizontal turned end for end still turns its page. |
+| 3 | No "where it goes" ranking or hysteresis | **Closed.** `logic/fit_rank.gd`: preferredRelatives, preferredPoses, preferredThrough, isPreferred, rankFits, preferredTargets, heldOffer; fits searched again at release (`Play.settled`). |
+| 4 | Self-aim about the part's centre, no room clamp | **Closed.** The router's turnAbout: hardware turns its fastener end into the seat about that end, its footprint kept inside the walls, its height off the floor (`logic/assist.gd`, `drag_math.gd`). Panel magnetism turns toward where it goes, from the relatives. |
+| 5 | Goals measured through a panel, not a dowel | Kept, and not a web rule: it is the scripted hand's answer key (`Play.goal`), never the player's. |
+| 6 | No seat assist | **Closed.** With a seat on offer the held part glides into it at `SNAP.assistStrength` and the finger no longer moves it. |
+| 7 | Every part kinematic until "done" | **Closed.** `scenes/physics_bridge.gd`: held while carried, placed at a seat until its first fastener engages and its joints hold it, held still under a fit on offer, lifted, turning on a ring, or a tool on a head; the simulation's otherwise, its pose read back. Results above and in "Physics as you build". |
+| 8 | Hardware locked to every host | **Closed.** `Bonds.bonds()` is the web's: embed in the first host (a shelf pin rigid), bridges between hosts sharing hardware (play while only dowels hold, rigid once a cam locks; play is 0°, so every bridge is a locked joint, as the web makes it). |
+| 9 | No pull, no unseat by dragging | **Closed.** A part pushed into fastened seats, dragged `FASTENER.pullDistance` px along their axis on screen, comes back to seated and carries on free (beginPull, pullTo, continueFree); a seated, unfastened part dragged away leaves its seat. |
+| 10 | Bolt, cam, stud, screw and slide machines | **Closed for JOHNNY's kinds.** `fastener.gd` is the web's machine whole (stud, screw and slide rows included). Bolt and cam are played with their tools: a tool seats only on seated hardware, a drag on it (or its dial) cranks, a still press drives, it comes off at home or on a tap, a cam locks only on a screwed bolt in reach. Hand turns of studs and the slide's prismatic joint are not ported (JOHNNY has none; out of scope by name). |
+| 11 | No camera, gizmo, lift line, Shift hold; touch | **Closed for the mouse; touch kept.** Camera orbit/pan/zoom under the router's seam (`logic/camera.gd`, `camera_rig.gd`); the rotate gizmo's rings (detents on, `Constants.knobs.ringDetents`); the wheel lifts mid-drag; Shift + scroll is the elevation line, which holds the part up while Shift is down (drawn as a readout, not a draggable knob). The second finger and touch are out of scope by name. |
+| 12 | Picking a ray against each body | **Closed.** `logic/pick.gd` ports pickMath.ts (rayBoxReach, preferHit, the angular finger radius) and casts against the parts' boxes, which are their meshes here. |
+| 13 | No feedback | **Kept, out of scope by name.** No drop guide, target rings, hole glow, seat flash or haptics. There are the ghost, the turn ring's dial and flash, the gizmo's rings and the labels. |
+| 14 | The box laid in rows on the floor | **Kept.** The web unpacks a box. Here the whole box (spares and tools included, from the export's `extras`) is laid in rows on the floor at the start, 0.3 m between panels; gated, a page's parts as it opens. |
+
+### Rules this step adds (not the web's)
+
+1. **A spin-free fit where it goes takes its spin from where it goes.** A fit whose pairs all lie on
+   one line (the plinth on one dowel) says nothing about its spin, and the web's magnetism stops
+   once the fit counts as where it goes, so the web seats the plinth up to `PANEL.matchAngle` (5°)
+   off. Here the offer takes the spin of where it goes. Without it the plinth seated 4.85° off.
+2. **The booklet goes by type**, as above; a panel laid in (the back panel, a shelf) is where it goes
+   within `Play.PLACE_REACH` 30 mm and `PLACE_TURN` 10°; a page that turns the build is complete
+   once it stands as the page has it (`Steps.POSES`, the web booklet's own orientations from
+   `bookletPages.ts`, any heading; within 10°).
+3. **Seats are named for the manual's joints** (bookkeeping only): a loose piece of hardware seated in
+   a hole the manual gives another of its type takes that one's name, and a moved panel is re-expressed
+   by one of its box symmetries (`Bonds.symmetries`) or swaps names with another of its type.
+4. **The tool's dial sits round its head.** The web draws a tool's dial beside the detail inset, which
+   is out of scope; a press on the dial's band is the tool's crank, as the web's dialUnder has it.
+5. **Gated, a tool can always be picked up** (to be put away after its page); it seats only on its page.
+6. **The rings lift the whole build clear of the floor** while turning (the web lifts the part's own box).
+7. **Detents on by default** (`knobs.ringDetents`); the web's rotate is free unless the snap-rotate toggle
+   is on. Free rotation leaves a hand-turned build crooked.
+8. **A turned fastener's body stays at its hole's mouth until it fastens**; its sink is drawn
+   (`Router.drawn`), as the web's drawTurned draws it. This is the web's rule, but #96's poses had
+   moved hardware as it turned; a bolt's body sinking into its panel shoved the panel 10 cm.
+9. **With no physics (the pure playthrough), a part let go comes straight down** onto the top of what is
+   under it (`Play.settle`).
+
+### Physics as you build
+
+Measured by `test_physics/build_test.gd` (`loop.sh build`, headless, `--fixed-fps 60`: one frame, one
+tick). Godot's physics tick is fixed at 60 Hz (`physics_ticks_per_second`), the web's
+`PHYSICS.timestep`, so the web's accumulator (`stepping.ts`) is the engine's own here. Jolt as
+2.0.4.2 left it: 100 velocity / 20 position steps, 1 mm penetration slop, 2 mm speculative distance.
+Each row is a commit.
+
+| Commit | Setting | Result |
+|---|---|---|
+| baseline (763df81) | true masses | **Stops on page 3.** Shape within 0.02 mm when page 3 opens, then the second top panel seats on one dowel of two: its dowel-14 sits 38.4 mm out of its hole, dowel-12 5.5 mm, and the plinth leans 2.87° (14.8 mm). No done state. |
+| attempt 1 (77d586e) | the web's `PHYSICS.minBodyMass` 0.2 kg | Alone, no material change (no explosion, unlike 2.0.4.2's over-constrained locks). The page-3 stop was not sag: held bodies were shoving free ones (below). With the hand fixed: **through page 12**, 60 of 60 joints, shape within 0.51 mm; the shelves fall through their pins. |
+| attempt 2 (2bf73d0) | the web's body settings: CCD on every body, friction 0.6, restitution 0, damping 0.1 / 0.3 | **Done reached.** 0 errors, 60 of 60 joints, 58 physics joints, zero auto pages, shape within 0.36 mm until the shelves. 5 s stillness: carcass within **0.040°**; **adjustableShelf-2 21.39 mm** (at rest 29.5 mm off its place on its pins at "done"); asleep 0 of 55. **Kept.** |
+| attempt 3 (2360603) | speculative contact distance 2 → 20 mm (Jolt's default; 2.0.4.2 found it catches a shelf) | Worse: contacts reach 2 cm out, held parts push the build from there, and on page 6 the carcass turns about 52° under the side panel coming in. Stops on page 6. **Reverted** (b316a50). |
+
+The windowed film (`loop.sh screenshot`, 20 fps, three ticks a frame) builds it the same way and
+agrees: done, 60 joints, 58 physics joints; 40 frames after, adjustableShelf-2 has moved 21.46 mm.
+
+What the physics showed, beyond the numbers:
+
+- **A held body shoves a free one, and a jointed build gives way where it is pushed.** Every stop
+  before attempt 2 was this: seat assist easing a dowel through its panel's corner (the panel flew
+  24 cm and came down 25 mm off), a screwdriver glided and lowered through the build (a cam knocked
+  191 mm while the carcass held), a long panel turned near the build by magnetism (the carcass turned
+  52°), a part turned on the rings where it lay. Jolt's locked joints stretch locally rather than
+  moving the whole build. The web has the same rules (a kinematic Rapier body pushes; only a panel's
+  fit holds its target still), so a player on the phone brushing the build with a held part should
+  meet this too. The scripted hand avoids it the way a careful player would; that care is most of
+  `hand.gd`.
+- **Godot makes a joint's frames from where the bodies stand when it is made**, so bodies must take
+  the logic's poses first (a dowel pressed home was otherwise locked at its hole's mouth).
+- **Built joint by joint, on the web's bond shapes, the frame stays square**: 0.36 mm against the
+  finished item, 0.040° over 5 s. The sag 2.0.4.2 measured (all 76 locks at once, hardware locked to
+  every host) does not appear. The shelf on its pins is the one red left, as in 2.0.4.2.
+
+### Screenshots (windowed, `loop.sh screenshot`)
+
+`out/loop-wrench.png`, page 2: the allen wrench on a bolt head at the end of a lying side panel, the
+turn ring's dial round it, its arc about 40% round, arrowheads at three and nine. The label reads
+"Page 2 of 12: 0 of 8 joints done". `out/loop-cam.png`, page 5: the lying carcass from close in, the
+screwdriver on a cam at the foot of a standing panel, its dial half filled. `out/loop-tip.png`, page
+11 just opened: JOHNNY upright in the corner of the room, back panel on, fixed shelf and bottom panel
+in, no adjustable shelves yet, the gizmo's red, green and blue rings still round the side panel the
+hand turned it by. `out/loop-done.png`: JOHNNY standing, both adjustable shelves in; the upper one
+reads as a thin sloping line (adjustableShelf-2, slipped on its pins); "Done: JOHNNY stands".
+
+### Deviations from the 2.0.4.4 plan
+
+- **The auto pages fell 9 → 6 → 2 → 0, not 9 → 6 → 1 → 0.** Step 4 played pins, fittings and the
+  shelves (pages 9, 11, 12). Page 8 lays the back panel on the build turned face down: that turn is
+  the tip's gesture, so page 8 landed with page 10 in step 6.
+- **The router moved to `logic/router.gd`**, not `scenes/loop.gd`, so the headless hand plays the very
+  gestures a mouse does; `loop.gd` forwards the mouse and draws. Not in the plan's table:
+  `logic/router.gd`, `drag_math.gd`, `lift.gd`, `test_physics/build_test.gd` (apart from `test/` so it
+  runs at `--fixed-fps 60`), `loop.sh build`.
+- **The playthrough runs twice** (open and gated) without physics; physics as you build is
+  `loop.sh build`. The plan's Jolt stillness assertion is that stage's, and it is red (above).
+- **The export is format 3**: the box's `extras` (2 spare dowels, 2 spare cams, the allen wrench, the
+  screwdriver) and each page's `tool`.
+- **The room is the web's** (`Constants.ROOM`, 6 × 5 m floor); 2.0.4.2's was 5 × 5.
+- **One step needed three tuning attempts and a revert**, recorded one commit each.
+- `test/loop_mouse_test.gd` was red on 4c32b17 in this worktree (no seat on offer) and passes since
+  step 1; it may be timing-sensitive (it reads real milliseconds).
 
 ## 2.0.4.3 results: the dowel loop
 
@@ -228,27 +353,40 @@ nothing the CLI loop lacks. It's worth revisiting only for a server that reads t
 ```bash
 godot/scripts/loop.sh                  # exit 0 = every stage passed
 godot/scripts/loop.sh screenshot drop  # one or more named stages alone (e.g. while a test is red)
-godot --path godot -s res://main.gd    # play the dowel loop with the mouse (a window)
+godot --path godot -s res://main.gd    # build JOHNNY by hand with the mouse (a window), in Jolt
+godot --path godot -s res://main.gd -- --gating   # the same with 2.0.4.3's page-gated snap
 ```
+
+In the window: on empty space, left drag orbits, right drag pans, the wheel or a middle drag zooms
+toward the cursor. On a Mac trackpad, pinch zooms toward the cursor and a two-finger scroll is the
+wheel (zoom on empty space, lift mid-drag). On a part, left drag carries it; the wheel lifts it mid-drag; Shift + scroll
+lifts the dragged or clicked part on the elevation line and holds it up while Shift is down. Near
+its seat a ghost shows where it goes; let go to seat it. Click to press it home; drag something
+pressed home along its axis to pull it out. Let a tool go on a bolt head or cam slot: circle its
+dial (or the tool) the way the arrows point, or hold the tool still, to turn it; click it to take it
+off. Click a part with nothing to press for the rings: sweep one to turn the part and its build a
+quarter turn; click empty space to put them away.
 
 Needs `npm ci` at the repo root once (the export stage runs the TS exporter).
 
 | Stage | What it runs | Fails when |
 |---|---|---|
-| export | `npx tsc -p godot/tsconfig.json`, then `npx tsx godot/tools/export-item.ts items/johnny godot/items/johnny.json --check` | the exporter doesn't typecheck, or the committed json (format 2: vocabulary, connectors, joints with their connector indices and mover, the manual's steps) differs from its output |
+| export | `npx tsc -p godot/tsconfig.json`, then `npx tsx godot/tools/export-item.ts items/johnny godot/items/johnny.json --check` | the exporter doesn't typecheck, or the committed json (format 3: vocabulary, connectors, joints with their connector indices and mover, the box's extras, the manual's steps with their tools) differs from its output |
 | version | `godot --version` | the binary isn't 4.7.2.stable |
 | addons | copies gdUnit4 v6.2.2 into `addons/` from its GitHub tarball, sha256-checked. Skipped once present. | the checksum doesn't match |
 | import | `godot --headless --path godot --import` | nonzero exit |
 | check | `godot --headless -s res://scripts/check.gd` | a script won't compile, including an untyped declaration; or the run has no `check: ok` line |
 | test | gdUnit4's `GdUnitCmdTool.gd --ignoreHeadlessMode -c -a res://test` (`-c`: keep going after a failure) | a failed test (gdUnit exit 100) |
-| screenshot | windowed `-s res://main.gd --fixed-fps 20 -- --autoplay --shots=out`: the loop plays the manual itself (`logic/hand.gd`) and saves `out/loop-page3.png` and `out/loop-done.png` (also `screenshot.png`), then quits; prints its `loop: done` and `loop: settled` lines | nonzero exit, a `SCRIPT ERROR`, no `loop: done` line, or a missing PNG |
+| build | headless gdUnit4 on `res://test_physics` at `--fixed-fps 60`: the hand builds JOHNNY in Jolt, then the 5 s stillness; prints `build:` and `stillness:` lines | a failed test: **red now** (adjustableShelf-2 moves 21.39 mm) |
+| screenshot | windowed `-s res://main.gd --fixed-fps 20 -- --autoplay --shots=out`: the hand builds JOHNNY in Jolt (`logic/hand.gd`) and saves `out/loop-wrench.png`, `loop-cam.png`, `loop-tip.png` and `loop-done.png` (also `screenshot.png`), then quits; prints its `loop: done` and `loop: settled` lines | nonzero exit, a `SCRIPT ERROR`, no `loop: done` line, or a missing PNG |
 | drop | windowed `-- --assembled` with `--write-movie out/frame.png --fixed-fps 20 --quit-after 61`: 2.0.4.2's film; keeps `out/shot-0s.png`, `shot-1s.png`, `shot-3s.png` and prints the run's last `stillness:` line | nonzero exit, a `SCRIPT ERROR`, or a missing frame |
 
 Every Godot call has a 180 s wall-clock cap. Logs are in `godot/out/<stage>.log`, and
 gdUnit's HTML/XML reports are in `godot/out/reports/`. The loop reaches the test stage's
-end in about 15 s on this Mac (the two 5 s stillness runs dominate); the screenshots add about
-8 s and the film about 4 s. **It currently stops at
-the test stage**, because the jointed stillness test is red (above). The worker reads the
+end in about 50 s on this Mac (the two playthroughs and the two 5 s stillness runs dominate); the
+build adds about 45 s, the screenshots about 60 s and the film about 4 s. **It currently stops at
+the test stage**, because 2.0.4.2's jointed stillness test is red, and the build stage is red too
+(above); `loop.sh build screenshot drop` runs the rest. The worker reads the
 PNGs with its file reader and says what it sees.
 
 Verified red: a type error (`var wrong: int = "a string"`) fails at check, an untyped
@@ -261,7 +399,7 @@ back to PASS when reverted.
 project.godot          written by hand; no main scene; untyped declarations are errors; Jolt and
                        its tuning; gdUnit4 and godot_mcp enabled by path; MCP port 6550
 main.gd                loop entry point (extends SceneTree): starts World; user args --assembled,
-                       --autoplay, --shots=<dir>
+                       --autoplay, --shots=<dir>, --gating
 scenes/world.tscn      main scene: one World node, nothing else; open it in the editor and Play
 tools/export-item.ts   the exporter (TS, through tools/validate/lib); tsconfig.json typechecks it
 items/johnny.json      the exporter's output, committed; the only item data Godot reads
@@ -269,12 +407,18 @@ scenes/item_data.gd    ItemData: typed reader for items/johnny.json
 scenes/room.gd         Room: static floor (top at y = 0), three walls, sun, ambient, camera
 scenes/item.gd         Item: a body per instance, a locked joint per joint, the 2 cm drop; or the compound control
 scenes/stillness.gd    Stillness: one measurement of offset, turn, speed, sleep, lowest point
-scenes/world.gd        World: room + the dowel loop at runtime; start_assembled (and the editor):
+scenes/world.gd        World: room + the build at runtime; start_assembled (and the editor):
                        room + the standing item, a stillness: line each second
-scenes/loop.gd         Loop: the mouse loop (bodies follow Play's poses, picking, drag, ghost,
-                       tap, labels, the hand-off to Jolt at done, the autoplay and its shots)
-logic/                 pure, no nodes: constants, snap, panel_fit, fastener, bonds, steps,
-                       gesture, play (the build as played), hand (the scripted player)
+scenes/loop.gd         Loop: the mouse into the router, the drawn turns, ghost, gizmo rings, lift
+                       line, labels, the autoplay and its shots
+scenes/physics_bridge.gd  PhysicsBridge: every part a Jolt body, held or let go as the router says,
+                       poses read back, joints from Bonds.bonds()
+scenes/camera_rig.gd   CameraRig: the Camera3D, copying logic/camera.gd's orbit
+scenes/turn_ring.gd    TurnRing: the dial round each seated tool's head
+logic/                 pure, no nodes: constants, camera (orbit and limits), router (the gesture
+                       flow), pick, drag_math, lift, snap, panel_fit, fit_rank, assist, fastener,
+                       crank, tools, bonds (the assembly graph), steps (the booklet), gesture,
+                       play (the build as played), hand (the scripted player)
 scenes/hello.gd        2.0.4.1's trivial scene, still tested
 scripts/check.gd       the compile gate
 scripts/loop.sh        the loop
@@ -283,9 +427,11 @@ scripts/mcp.sh         call one MCP tool over HTTP
 scripts/bin/timeout    GNU timeout stand-in for the addon (macOS has none)
 addons/godot_mcp/      voidrot/godot-mcp @ 57715ac, a plain file copy, committed
 test/                  item_test (counts and pages vs the pack), room_test, scene_test, stillness_test,
-                       hello_test; snap_test, fastener_test, steps_test, gesture_test (the web
-                       specs' ideas); playthrough_test (the acceptance test); loop_mouse_test
-                       (real mouse events through the scene, headless)
+                       hello_test; snap_test, fastener_test, steps_test, gesture_test, camera_test,
+                       pick_test, fit_rank_test, assist_test, crank_test, router_test (the web
+                       specs' ideas); playthrough_test (open and gated, no physics);
+                       loop_mouse_test (real mouse events through the scene, headless)
+test_physics/          build_test: the hand builds JOHNNY in Jolt, and the stillness (loop.sh build)
 *.gd.uid               Godot 4.4+ script ids, generated by import, committed
 ```
 
@@ -350,6 +496,17 @@ Added in 2.0.4.3:
     and `InputEventMouseMotion` reaches `_unhandled_input`, and ray picking against bodies works
     in the headless physics space once a physics frame has passed. The mouse path is tested
     without a window.
+
+Added in 2.0.4.4:
+
+21. **A joint takes its bodies' frames from where they stand when it is made**, from the nodes'
+    transforms. A body moved in the same tick must be moved before the joint is made.
+22. **A kinematic body drags a jointed Jolt build apart where it pushes**, rather than moving it whole:
+    locked Generic6DOF joints stretch locally under a kinematic push (a cam left 191 mm from its panel,
+    the rest of the carcass within a millimetre).
+23. **`--fixed-fps 60` makes a headless gdUnit run step physics once a frame**, so a test that awaits
+    `physics_frame` thousands of times runs in seconds instead of real time. It lives apart from
+    `test/` so it doesn't change the other suites' physics (finding 18).
 
 ## Deviations from the 2.0.4.3 plan
 

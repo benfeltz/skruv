@@ -5,7 +5,9 @@ extends Node3D
 ## framing the item at the origin. Built in _ready(); no .tscn. The room's own sizes live here;
 ## the item's never do.
 
-const FLOOR_SIZE := Vector2(5.0, 5.0)
+## The web's stage floor (Constants.ROOM, 2.0.4.4): the clamps keep parts and the camera to the
+## room drawn.
+const FLOOR_SIZE := Vector2(Constants.ROOM.width, Constants.ROOM.depth)
 const FLOOR_THICKNESS := 0.1
 const WALL_HEIGHT := 2.6
 const WALL_THICKNESS := 0.1

@@ -6,6 +6,9 @@ extends RefCounted
 ## whole so a later slice finds it here. Two FASTENER rows are the Flatpack contract's
 ## (CONTRACT in tools/validate/lib/vocabulary.ts): sinkDepth comes through the export
 ## (ItemData.sink_depth), captureRadius is copied with that note.
+##
+## `knobs` is not the web's: it holds the switches this port adds so two rules can be compared by
+## feel (2.0.4.4). Each defaults to the web's behaviour.
 
 
 ## src/constants.ts `SNAP` (connector snapping, src/game/snapMath.ts).
@@ -41,6 +44,9 @@ class FASTENER:
 	## CONTRACT.captureRadius. (CONTRACT.sinkDepth, the web's FASTENER.sinkDepth, is
 	## ItemData.sink_depth: it comes through the export, never a second copy.)
 	const captureRadius := 0.015
+	## CONTRACT.mateTolerance (tools/validate/lib/vocabulary.ts): two connectors this close are
+	## at one spot (a stud's hex at its end). Copied with captureRadius.
+	const mateTolerance := 1e-6
 	const crankDeadzone := 12.0
 	const driveSeconds := 1.5
 	const ratchetRadians := PI / 4.0
@@ -81,3 +87,109 @@ class PICK:
 	const smallPartMax := 0.25
 	const proxyMinSize := 0.04
 	const fingerRadius := 0.025
+
+
+## src/constants.ts `CAMERA` (src/scene/cameraControls.ts). mobileStartScale is the phone's and
+## unused on the desktop loop; copied whole.
+class CAMERA:
+	const fov := 50.0
+	const near := 0.02
+	const far := 100.0
+	const startPosition := Vector3(2.0, 1.8, 2.4)
+	const startTarget := Vector3(0.0, 0.6, 0.0)
+	const mobileStartScale := 1.4
+	const pivotOnParts := 1
+
+
+## src/constants.ts `CAMERA_LIMITS` (src/scene/cameraLimits.ts). targetHeight is [low, high].
+class CAMERA_LIMITS:
+	const targetMargin := 0.6
+	const targetHeight := Vector2(0.0, 2.2)
+	const floorClearance := 0.05
+	const minDistance := 0.15
+	const maxDistance := 8.0
+	const panReference := 1.2
+	const maxPanBoost := 5.0
+	const minPolarAngle := (40.0 * PI) / 180.0
+	const maxPolarAngle := (80.0 * PI) / 180.0
+	const dampingFactor := 0.1
+
+
+## src/constants.ts `ROOM`: the stage's floor (centred on the origin) and the lift ceiling. The
+## room scene (scenes/room.gd) draws this floor; its walls are shorter than the ceiling, as the
+## web's are.
+class ROOM:
+	const width := 6.0
+	const depth := 5.0
+	const height := 3.0
+
+
+## src/constants.ts `LIFT_LINE` (src/ui/liftLine.ts, src/scene/liftHold.ts): the elevation line.
+## Screen fractions and CSS px; the desktop loop draws it as a readout.
+class LIFT_LINE:
+	const x := 0.08
+	const top := 0.22
+	const bottom := 0.78
+	const knobRadius := 22.0
+	const lineWidth := 4.0
+	const hitWidth := 48.0
+	const easeRate := 8.0
+
+
+## src/constants.ts `TURN_RING` (src/ui/turnRing.ts, src/game/turnRing.ts). CSS px.
+class TURN_RING:
+	const radius := 64.0
+	const band := 24.0
+	const flashMs := 400
+	const width := 4.0
+	const arcWidth := 6.0
+	const arrowSize := 14.0
+
+
+## src/constants.ts `RING` (target rings, src/game/toolTargets.ts ringStrengths). CSS px and m.
+class RING:
+	const screenRadius := 120.0
+	const hitRadius := 36.0
+	const maxDistance := 0.5
+	const radius := 0.012
+	const width := 0.004
+	const opacity := 0.9
+	const pool := 12
+
+
+## The switches this port adds (2.0.4.4), not the web's. Each defaults to the web's rule.
+class knobs:
+	## Off (the web's rule): any type-compatible pair seats and the booklet only advises. On:
+	## PR #96's dowel loop, where the snap offers only the open page's pairs and a page's loose
+	## parts come out only when it opens.
+	static var pageGating := false
+	## The rotate gizmo turns by GESTURE.detentStep (the web's snap-rotate toggle). Off: free.
+	static var ringDetents := true
+
+
+## src/constants.ts `GIZMO` (the rotate gizmo, src/scene/gizmo.ts): rings round the selected part,
+## fractions of its radius.
+class GIZMO:
+	const radiusPadding := 1.15
+	const minRadius := 0.08
+	const tube := 0.025
+	const hitTube := 0.12
+	const opacity := 0.85
+	const arrowLength := 0.14
+	const arrowRadius := 0.05
+	const arrowAngle := PI / 4.0
+
+
+## src/constants.ts `PHYSICS` (src/physics/world.ts). Godot's tick is physics_ticks_per_second (60,
+## the timestep here); maxStepsPerFrame is Godot's own max_physics_steps_per_frame (8). The room's
+## colliders are scenes/room.gd's slabs.
+class PHYSICS:
+	const gravity := Vector3(0.0, -9.81, 0.0)
+	const timestep := 1.0 / 60.0
+	const maxStepsPerFrame := 4
+	const linearDamping := 0.1
+	const angularDamping := 0.3
+	const friction := 0.6
+	const restitution := 0.0
+	const minBodyMass := 0.2
+	const roomColliderThickness := 0.5

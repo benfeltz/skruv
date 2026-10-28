@@ -1,20 +1,25 @@
 extends GdUnitTestSuite
-## The acceptance test: the whole manual played headless through code against the real export.
-## For each dowel page, for each open seat: the part is pressed and dragged (Gesture), carried to
-## within a few centimetres and degrees of its seat and held there a second while Play.aim turns
-## it (logic/hand.gd, the hand), offered a snap (Play.offer_for, the mouse loop's own call),
-## released onto it (Play.seat) and tapped home (Gesture tap, Play.tap). Auto pages fasten themselves. At the end every joint is fastened and every part of
-## JOHNNY is within MAX_OFFSET_M of its assembled pose.
+## The acceptance test: the whole manual played headless against the real export by the scripted
+## hand (logic/hand.gd), through the router with screen points as a mouse plays it: press on the
+## part, drag it, lift it with the wheel, carry it near its seat, hold still while self-aim,
+## magnetism and seat assist bring it in, let go, click it home. Auto pages fasten themselves. At
+## the end every joint is fastened and every part of JOHNNY is within MAX_OFFSET_M and MAX_TURN_DEG
+## of its assembled pose. Played twice: the web's open snap (Constants.knobs.pageGating off, the
+## default) and 2.0.4.3's page gating.
 ##
-## Prints a `playthrough:` line per page and a summary, so the run's log keeps its numbers.
+## Prints `playthrough:` lines (the hand's moves, the auto pages, a summary), so a run keeps its
+## numbers.
 
 ## Plan 2.0.4.3: every part within 2 mm of assembled.
 const MAX_OFFSET_M := 0.002
 ## And turned no more than this from it (the stillness test's bar).
 const MAX_TURN_DEG := 0.5
-## Pointer travel for a drag and the time a tap takes (px, ms), on either side of the thresholds.
-const DRAG_PX := 40.0
-const TAP_MS := 100
+const DT := 1.0 / 60.0
+## Frames the whole manual may take before the test calls it stuck.
+const MAX_FRAMES := 60000
+## The pages the loop still fastens itself: none (2.0.4.4 step 6). The plan's count was 9 → 6 → 1 →
+## 0; page 8's face-down turn is the tip's gesture, so it went 9 → 6 → 2 → 0.
+const AUTO_PAGES: Array[int] = []
 
 var data: ItemData
 
@@ -23,104 +28,76 @@ func before() -> void:
 	data = ItemData.load_file(ItemData.JOHNNY_PATH)
 
 
-func _drag(g: Gesture, id: String, t: int) -> void:
-	assert_object(g.down(1, 0.0, 0.0, t, {"kind": "part", "id": id})).is_null()
-	assert_str(g.move(1, DRAG_PX, 0.0).type).is_equal(Gesture.DRAG_START)
-	assert_str(g.up(1, DRAG_PX, 0.0, t + 1000).type).is_equal(Gesture.DRAG_END)
-
-
-func _tap(g: Gesture, id: String, t: int) -> String:
-	g.down(2, 0.0, 0.0, t, {"kind": "part", "id": id})
-	var e := g.up(2, 0.0, 0.0, t + TAP_MS)
-	assert_str(e.type).is_equal(Gesture.TAP)
-	return String(e.hit["id"])
-
-
-func test_the_whole_manual_plays_headless_and_johnny_stands() -> void:
-	var play := Play.new(data)
-	var g := Gesture.new()
+## Plays the manual with gating `gate`; returns the hand when done.
+func _play(gate: bool) -> Hand:
+	var play := Play.new(data, gate)
 	play.open_page()
-	var t := 0
-	var seats := 0
-	var offers_snapped := 0
-	var guard := 0
-	while not play.steps.is_done():
-		var step := play.steps.current()
-		assert_bool(play.steps.is_auto(step)).override_failure_message("page %d open but auto" % step.number).is_false()
-		var number := step.number
-		var pages_before := play.steps.index
-		for i: int in step.joints:
-			if play.bonds.joint_for_spec(i) != null:
-				continue
-			var id := Hand.carried(play, i)
-			assert_bool(play.can_drag(id)).override_failure_message("cannot drag %s" % id).is_true()
-			var seat: Variant = play.goal(id, i)
-			assert_object(seat).override_failure_message("no goal for %s on joint %d" % [id, i]).is_not_null()
-			_drag(g, id, t)
-			var held := Hand.hold(play, id, Hand.off_seat(seat))
-			var offer := play.offer_for(id, held)
-			assert_object(offer).override_failure_message("page %d: no snap for %s at joint %d" % [number, id, i]).is_not_null()
-			if offer == null:
-				return
-			var seated_specs: Array[int] = []
-			for p: Play.Pair in offer.pairs:
-				seated_specs.append(p.spec)
-			assert_bool(seated_specs.has(i)).override_failure_message("page %d: the snap for joint %d seats %s" % [number, i, seated_specs]).is_true()
-			var dragged := play.seat(id, offer)
-			seats += offer.pairs.size()
-			offers_snapped += 1
-			var pressed := play.tap(_tap(g, dragged, t + 2000))
-			assert_int(pressed.size()).override_failure_message("page %d: tap on %s pressed nothing" % [number, dragged]).is_greater(0)
-			t += 5000
-			if play.steps.index != pages_before:
-				break
-		print("playthrough: page %d played: %d joints pressed by tap" % [number, step.joints.size()])
-		guard += 1
-		assert_int(guard).override_failure_message("the booklet stopped turning").is_less(data.steps.size())
-		if guard >= data.steps.size():
-			return
+	var router := Router.new(play)
+	var hand := Hand.new(router)
+	while hand.step(DT) and hand.frames < MAX_FRAMES:
+		pass
+	return hand
+
+
+func _assert_built(hand: Hand, label: String) -> void:
+	var play := hand.play
+	for line: String in hand.lines:
+		print("playthrough: %s %s" % [label, line])
 	for line: String in play.auto_log:
-		print("playthrough: %s" % line)
+		print("playthrough: %s %s" % [label, line])
 	var fastened := 0
 	for joint: Bonds.Joint in play.bonds.joints:
 		if Fastener.is_fastened(joint.fastener):
 			fastened += 1
 	var worst := play.worst_error()
-	print("playthrough: %d snaps seated %d dowel joints; %d of %d joints fastened; worst offset %.4f mm (%s), worst turn %.4f deg (%s)" % [
-		offers_snapped, seats, fastened, data.joints.size(), float(worst["offset"]) * 1000.0, worst["offset_id"], rad_to_deg(float(worst["turn"])), worst["turn_id"]])
+	print("playthrough: %s %d frames; %d pairs seated, %d joints pressed by a click, %d cranked, %d driven, %d quarter turns; %d auto pages; %d of %d joints fastened; worst offset %.4f mm (%s), worst turn %.4f deg (%s)" % [
+		label, hand.frames, hand.seats, hand.presses, hand.cranks, hand.drives, hand.turnings, play.auto_log.size(), fastened, data.joints.size(),
+		float(worst["offset"]) * 1000.0, worst["offset_id"], rad_to_deg(float(worst["turn"])), worst["turn_id"]])
+	assert_array(hand.errors).override_failure_message("%s: %s" % [label, "\n".join(hand.errors)]).is_empty()
+	var auto_pages: Array[int] = []
+	for step: ItemData.Step in data.steps:
+		if play.steps.is_auto(step):
+			auto_pages.append(step.number)
+	assert_array(auto_pages).override_failure_message("%s: auto pages %s" % [label, auto_pages]).is_equal(AUTO_PAGES)
+	assert_int(play.auto_log.size()).is_equal(AUTO_PAGES.size())
+	assert_bool(play.steps.is_done()).override_failure_message("%s: the manual did not end (page %s)" % [label, play.steps.current().number if play.steps.current() != null else -1]).is_true()
 	assert_int(fastened).is_equal(data.joints.size())
 	assert_int(play.bonds.joints.size()).is_equal(data.joints.size())
 	for i: int in data.joints.size():
-		assert_object(play.bonds.joint_for_spec(i)).override_failure_message("joint %d never seated" % i).is_not_null()
-	assert_float(float(worst["offset"])).override_failure_message("%s is %.3f mm off" % [worst["offset_id"], float(worst["offset"]) * 1000.0]).is_less(MAX_OFFSET_M)
-	assert_float(rad_to_deg(float(worst["turn"]))).override_failure_message("%s is turned %.3f deg" % [worst["turn_id"], rad_to_deg(float(worst["turn"]))]).is_less(MAX_TURN_DEG)
+		assert_object(play.bonds.joint_for_spec(i)).override_failure_message("%s: joint %d never seated" % [label, i]).is_not_null()
+	assert_float(float(worst["offset"])).override_failure_message("%s: %s is %.3f mm off" % [label, worst["offset_id"], float(worst["offset"]) * 1000.0]).is_less(MAX_OFFSET_M)
+	assert_float(rad_to_deg(float(worst["turn"]))).override_failure_message("%s: %s is turned %.3f deg" % [label, worst["turn_id"], rad_to_deg(float(worst["turn"]))]).is_less(MAX_TURN_DEG)
 
 
-## A loose dowel stands in for any loose dowel: picking dowel-14 for dowel-1's hole seats it as
-## dowel-1, and dowel-14 takes the picked one's spot on the floor.
-func test_any_loose_dowel_fills_any_dowel_hole() -> void:
-	var play := Play.new(data)
+func test_the_whole_manual_plays_with_the_open_snap() -> void:
+	_assert_built(_play(false), "open")
+
+
+func test_the_whole_manual_plays_with_page_gating() -> void:
+	_assert_built(_play(true), "gated")
+
+
+## Gated, a dowel from the other end of the box seats where the page wants one: the booklet goes by
+## type.
+func test_gated_any_loose_dowel_fills_a_dowel_hole_the_page_wants() -> void:
+	var play := Play.new(data, true)
 	play.open_page()
 	var i := play.open_joints()[0]
 	var spec := data.joints[i]
-	assert_str(spec.hardware).is_equal("dowel-1")
-	var picked_spot := play.bonds.poses["dowel-14"]
-	var named_spot := play.bonds.poses["dowel-1"]
-	var seat: Variant = play.goal("dowel-14", i)
-	assert_object(seat).is_not_null()
-	var offer := play.offer_for("dowel-14", Hand.off_seat(seat))
-	assert_object(offer).is_not_null()
-	assert_str(offer.stand_in).is_equal("dowel-1")
-	assert_str(play.seat("dowel-14", offer)).is_equal("dowel-1")
-	assert_object(play.bonds.joint_for_spec(i)).is_not_null()
-	assert_bool(play.bonds.poses["dowel-14"].is_equal_approx(named_spot)).is_true()
-	assert_bool(play.bonds.poses["dowel-1"].is_equal_approx(picked_spot)).is_false()
+	var hole := play.bonds.world_connector(spec.host, spec.host_connector)
+	var end := Snap.WorldConnector.new("dowelEnd", hole.position, -hole.axis, "dowel-14", 0)
+	assert_bool(play.allows(end, hole)).is_true()
+	# A hole of a page not open yet is no seat.
+	var side := data.joints[1]
+	var other := Snap.WorldConnector.new("dowelHole", Vector3.ZERO, Vector3.UP, side.host, side.host_connector)
+	assert_bool(play.allows(end, other)).is_false()
 
 
 func test_a_part_far_from_any_seat_is_offered_nothing() -> void:
 	var play := Play.new(data)
 	play.open_page()
-	var i := play.open_joints()[0]
-	var spec := data.joints[i]
-	var far := play.bonds.poses[spec.hardware].translated(Vector3(0.0, 0.5, 0.0))
-	assert_object(play.offer_for(spec.hardware, far)).is_null()
+	var spec := data.joints[play.open_joints()[0]]
+	var carry := Play.Carry.new()
+	carry.part = spec.hardware
+	carry.start = play.bonds.poses[spec.hardware]
+	assert_object(play.snap_candidate(carry, carry.start.translated(Vector3(0.0, 0.5, 0.0)), null)).is_null()
