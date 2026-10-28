@@ -255,3 +255,72 @@ func test_a_wrench_on_a_seated_bolt_cranks_it_home_and_comes_off() -> void:
 func _assembled_at(id: String) -> Transform3D:
 	var inst := data.instance(id)
 	return Transform3D(Basis(inst.rotation), inst.position)
+
+
+## A tap selects a part and brings up its rings; a sweep along one turns the part (and what is
+## joined to it) a quarter turn about that world axis, lifted clear, and it comes down on release;
+## a tap on empty space puts the rings away.
+func test_a_ring_sweep_turns_the_part_a_quarter_turn_and_it_comes_down() -> void:
+	var router := _router()
+	var play := router.play
+	var id := "plinth-1"
+	var start := play.bonds.poses[id]
+	var on := router.point_on(id) if router.point_on(id).x >= 0.0 else Vector2(-1, -1)
+	var centre_world := start.origin
+	router.camera.frame(centre_world + Vector3(1, 1, 1).normalized() * 2.5, centre_world)
+	on = router.point_on(id)
+	router.press(Router.LEFT, on, 0)
+	router.release(Router.LEFT, on, 50)
+	assert_str(router.selected).is_equal(id)
+	var f := router.ring_frame()
+	assert_float(f.w).is_greater(0.0)
+	# A point on the y ring that presses it.
+	var at := Vector2(-1, -1)
+	for n: int in Router.RING_SAMPLES:
+		var a := TAU * n / Router.RING_SAMPLES
+		var p := centre_world + Vector3(cos(a), 0, sin(a)) * f.w
+		var s := router.screen_of(p)
+		var hit := router.hit_at(s)
+		if hit.get("kind", "") == "ring" and hit.get("axis", "") == "y":
+			at = s
+			break
+	assert_bool(at.x >= 0.0).override_failure_message("no point presses the y ring").is_true()
+	router.press(Router.LEFT, at, 100)
+	assert_str(String(router.gesture.owner)).is_equal(Gesture.GIZMO_RING)
+	var c := router.screen_of(centre_world)
+	var r := at.distance_to(c)
+	var phi0 := atan2(c.y - at.y, at.x - c.x)
+	for n: int in range(1, 13):
+		var phi := phi0 + (PI / 2.0) * n / 12.0
+		router.motion(c + Vector2(cos(phi), -sin(phi)) * r)
+	var lifted := play.bonds.poses[id].origin.y
+	assert_float(lifted).is_greater(start.origin.y)
+	router.release(Router.LEFT, c + Vector2(cos(phi0 + PI / 2.0), -sin(phi0 + PI / 2.0)) * r, 900)
+	var turned := start.basis.get_rotation_quaternion().angle_to(play.bonds.poses[id].basis.get_rotation_quaternion())
+	assert_float(turned).is_equal_approx(PI / 2.0, 1e-5)
+	# About the vertical: still up the same way, and back down on the floor.
+	assert_vector((play.bonds.poses[id].basis * start.basis.inverse()) * Vector3.UP).is_equal_approx(Vector3.UP, Vector3.ONE * 1e-5)
+	# Down onto what is under it (the floor, or the panel lying next to it).
+	assert_float(play.bonds.poses[id].origin.y).is_less(lifted)
+	assert_float(play.box_of(id).position.y).is_greater_equal(-1e-6)
+	# A tap on empty space: the rings go.
+	router.camera.frame(Vector3(0, 2.0, 2.4), Vector3(0, 2.6, -1))
+	var sky := Vector2(10, 10)
+	assert_bool(router.hit_at(sky).is_empty()).is_true()
+	router.press(Router.LEFT, sky, 2000)
+	router.release(Router.LEFT, sky, 2050)
+	assert_str(router.selected).is_equal("")
+
+
+func test_quarter_turns_find_how_to_stand_a_build_as_a_page_has_it() -> void:
+	var lying := Basis(Steps.POSES["lying"])
+	assert_bool(Steps.stands_as("lying", lying)).is_true()
+	assert_bool(Steps.stands_as("upright", lying)).is_false()
+	# Any heading about the vertical counts.
+	assert_bool(Steps.stands_as("lying", Basis(Vector3.UP, 0.7) * lying)).is_true()
+	var turns := Hand.quarter_turns(lying, "faceDown")
+	assert_int(turns.size()).is_between(1, 2)
+	var b := lying
+	for m: Vector4 in turns:
+		b = Basis(Vector3(m.x, m.y, m.z), m.w * PI / 2.0) * b
+	assert_bool(Steps.stands_as("faceDown", b)).is_true()

@@ -122,7 +122,7 @@ func open_page() -> void:
 					lay(id)
 			return
 		_auto(step)
-		var turned := steps.advance(bonds, is_placed)
+		var turned := steps.advance(bonds, is_placed, build_basis)
 		assert(turned, "auto page %d did not complete" % step.number)
 
 
@@ -588,7 +588,7 @@ func behind(joint: Bonds.Joint) -> String:
 
 ## Turns every complete page and opens the next.
 func turn_pages() -> void:
-	while not steps.is_done() and steps.advance(bonds, is_placed):
+	while not steps.is_done() and steps.advance(bonds, is_placed, build_basis):
 		open_page()
 
 
@@ -600,6 +600,10 @@ func turn_pages() -> void:
 func build_frame() -> Transform3D:
 	var ref := _anchor()
 	return bonds.poses[ref] * assembled(ref).affine_inverse()
+
+
+func build_basis() -> Basis:
+	return build_frame().basis
 
 
 ## Where a part of `id`'s type goes in the build as it stands: each finished place of its type.
@@ -717,13 +721,16 @@ func settle(members: Dictionary[String, bool]) -> void:
 
 
 ## How far the build is from the finished item: the worst offset (m) and turn (rad) of any
-## instance from its assembled pose, and which. A piece of hardware's turn is its end axis's.
+## instance from its assembled pose, in the build's own frame (the room position and heading are
+## the player's), and which. A piece of hardware's turn is its end axis's.
 func worst_error() -> Dictionary:
 	var worst := {"offset": 0.0, "turn": 0.0, "offset_id": "", "turn_id": ""}
+	# Measured in the build's own frame: where it stands in the room is the player's.
+	var frame := build_frame().affine_inverse()
 	for inst: ItemData.Instance in data.instances:
 		if not bonds.poses.has(inst.id):
 			return {"offset": INF, "turn": INF, "offset_id": inst.id, "turn_id": inst.id}
-		var pose := bonds.poses[inst.id]
+		var pose := Bonds.orthonormal(frame * bonds.poses[inst.id])
 		var offset := pose.origin.distance_to(inst.position)
 		var turn := pose.basis.get_rotation_quaternion().angle_to(inst.rotation)
 		if is_hardware(inst.id):

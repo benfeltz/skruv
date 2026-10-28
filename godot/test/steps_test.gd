@@ -2,9 +2,9 @@ extends GdUnitTestSuite
 ## logic/steps.gd against the export's pages: a page completes only when all its joints are
 ## pressed; non-dowel pages are auto and flagged; the booklet turns only on a complete page.
 
-## The pages played by hand (1-based): all but page 8's face-down turn and page 10's tip. Pinned so a
-## pack change that moves them is noticed.
-const PLAYED_PAGES: Array[int] = [1, 2, 3, 4, 5, 6, 7, 9, 11, 12]
+## The pages played by hand (1-based): every one. Pinned so a pack change that adds a kind not
+## played is noticed.
+const PLAYED_PAGES: Array[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
 var data: ItemData
 
@@ -13,7 +13,7 @@ func before() -> void:
 	data = ItemData.load_file(ItemData.JOHNNY_PATH)
 
 
-func test_the_played_pages_are_all_but_the_turns_of_the_build() -> void:
+func test_every_page_is_played_by_hand() -> void:
 	var steps := Steps.new(data)
 	var played: Array[int] = []
 	for step: ItemData.Step in data.steps:

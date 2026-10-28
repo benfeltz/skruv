@@ -165,3 +165,16 @@ class knobs:
 	static var pageGating := false
 	## The rotate gizmo turns by GESTURE.detentStep (the web's snap-rotate toggle). Off: free.
 	static var ringDetents := true
+
+
+## src/constants.ts `GIZMO` (the rotate gizmo, src/scene/gizmo.ts): rings round the selected part,
+## fractions of its radius.
+class GIZMO:
+	const radiusPadding := 1.15
+	const minRadius := 0.08
+	const tube := 0.025
+	const hitTube := 0.12
+	const opacity := 0.85
+	const arrowLength := 0.14
+	const arrowRadius := 0.05
+	const arrowAngle := PI / 4.0

@@ -65,6 +65,19 @@ class Drag:
 	var crank: Crank = null
 
 
+## The rotate gizmo's turn in progress (gizmo.ts Turning): about which world axis, which way a
+## sweep turns, the part's screen centre, the sweep so far, and the build's poses when it began.
+class Ring:
+	var axis: Vector3
+	var sign: float
+	var centre: Vector2
+	var last: Vector2
+	var swept := 0.0
+	var start: Transform3D
+	var members: Dictionary[String, Transform3D] = {}
+	var grabbed := false
+
+
 ## A press on a turn's grip not yet a drag: how long it has been held still (ms), and whether it has
 ## been held past a tap and so drives.
 class Press:
@@ -86,6 +99,10 @@ var tool_grips: Dictionary[String, Transform3D] = {}
 ## A still press on a seated tool, maybe a hold-to-drive.
 var press_on: Press = null
 ## Grip id → whether its turn was home last frame, and → ms of home flash left on its dial.
+var ring: Ring = null
+const RING_AXES: Dictionary[String, Vector3] = {"x": Vector3.RIGHT, "y": Vector3.UP, "z": Vector3.BACK}
+## Points round a ring the hit test samples.
+const RING_SAMPLES := 64
 var _dialed: Dictionary[String, bool] = {}
 var _dial_flashes: Dictionary[String, float] = {}
 
@@ -213,9 +230,105 @@ func hit_at(at: Vector2) -> Dictionary:
 		var n := Crank.pick_dial(at, all)
 		if n >= 0:
 			return {"kind": "part", "id": all[n]["grip"], "point": Vector3.ZERO, "dial": true}
+	# A ring nearer than the part (or with no part) is the ring's (resolveHit).
+	var on_ring := ring_hit(v.eye, v.ray(at))
+	if not on_ring.is_empty() and (hit == null or float(on_ring["distance"]) <= hit.distance):
+		return on_ring
 	if hit == null:
 		return {}
 	return {"kind": "part", "id": hit.part, "point": hit.point}
+
+
+# --- the rotate gizmo: three world-axis rings round the selected part (gizmo.ts) ---
+
+
+## The rings' centre and radius round the selected part, or radius 0 with none.
+func ring_frame() -> Vector4:
+	if selected == "" or not play.bonds.poses.has(selected):
+		return Vector4.ZERO
+	var size := play.data.type_of(play.data.instance(selected)).size
+	var radius := maxf(Constants.GIZMO.minRadius, size.length() / 2.0 * Constants.GIZMO.radiusPadding)
+	var c := play.bonds.poses[selected].origin
+	return Vector4(c.x, c.y, c.z, radius)
+
+
+## A pointer ray on a ring's hit band: {kind: "ring", axis, distance}, the nearest; {} for none.
+func ring_hit(origin: Vector3, direction: Vector3) -> Dictionary:
+	var f := ring_frame()
+	if f.w == 0.0:
+		return {}
+	var centre := Vector3(f.x, f.y, f.z)
+	var best: Dictionary = {}
+	for name: String in RING_AXES:
+		var axis := RING_AXES[name]
+		var u := axis.cross(Vector3.UP if absf(axis.y) < 0.9 else Vector3.RIGHT).normalized()
+		var w := axis.cross(u)
+		for n: int in RING_SAMPLES:
+			var a := TAU * n / RING_SAMPLES
+			var p := centre + (u * cos(a) + w * sin(a)) * f.w
+			var t := (p - origin).dot(direction)
+			if t <= 0.0:
+				continue
+			if (origin + direction * t).distance_to(p) > Constants.GIZMO.hitTube * f.w:
+				continue
+			if best.is_empty() or t < float(best["distance"]):
+				best = {"kind": "ring", "axis": name, "distance": t}
+	return best
+
+
+## A sweep starts on ring `axis` (gizmo start): the sign a counter-clockwise screen sweep turns by,
+## the part's screen centre, and the build it carries with its poses now.
+func _begin_ring(axis_name: String, at: Vector2) -> void:
+	var axis := RING_AXES[axis_name]
+	var centre := play.bonds.poses[selected].origin
+	ring = Ring.new()
+	ring.axis = axis
+	ring.sign = 1.0 if axis.dot(view().eye - centre) >= 0.0 else -1.0
+	ring.centre = screen_of(centre)
+	ring.last = at
+	ring.start = play.bonds.poses[selected]
+	for id: String in play.bonds.compound(selected, false):
+		ring.members[id] = play.bonds.poses[id]
+
+
+## The sweep turns the build by the angle swept, in detents of GESTURE.detentStep while
+## Constants.knobs.ringDetents is on, about the selected part's centre, lifted so its lowest point
+## clears the floor and kept inside the walls (gizmo move). Nothing moves until a detent is reached.
+func _move_ring(at: Vector2) -> void:
+	ring.swept += DragMath.arc_delta(ring.centre, ring.last, at)
+	ring.last = at
+	var angle := DragMath.quantize_angle(ring.sign * ring.swept, Constants.GESTURE.detentStep if Constants.knobs.ringDetents else 0.0)
+	if not ring.grabbed and angle == 0.0:
+		return
+	ring.grabbed = true
+	var turned := Transform3D(Basis(ring.axis, angle) * ring.start.basis, ring.start.origin)
+	for id: String in ring.members:
+		play.bonds.poses[id] = Bonds.carry_pose(ring.start, turned, ring.members[id])
+	var box := play.box_of_set(_ring_set())
+	var lift := maxf(0.0, -box.position.y) + Constants.GESTURE.hoverLift
+	var half := Vector2(box.size.x / 2.0, box.size.z / 2.0)
+	var middle := box.get_center()
+	var clamped := DragMath.clamp_to_room(Vector3(middle.x, 0.0, middle.z), half, DragMath.room(), Constants.GESTURE.wallMargin)
+	var shift := Vector3(clamped.x - middle.x, lift, clamped.z - middle.z)
+	for id: String in ring.members:
+		play.bonds.poses[id] = Transform3D(play.bonds.poses[id].basis, play.bonds.poses[id].origin + shift)
+
+
+## Let go of the ring: the build comes down where it is (gizmo end: back to the simulation).
+func _end_ring() -> void:
+	var members := _ring_set()
+	var grabbed := ring.grabbed
+	ring = null
+	if grabbed:
+		_drop(members)
+		play.turn_pages()
+
+
+func _ring_set() -> Dictionary[String, bool]:
+	var out: Dictionary[String, bool] = {}
+	for id: String in ring.members:
+		out[id] = true
+	return out
 
 
 ## A world point on screen.
@@ -270,9 +383,23 @@ func held_up() -> Dictionary[String, bool]:
 func _apply(effect: Gesture.Effect) -> void:
 	if effect == null:
 		return
+	if effect.owner == Gesture.GIZMO_RING:
+		match effect.type:
+			Gesture.DRAG_START:
+				_begin_ring(String(effect.hit["axis"]), Vector2(effect.x, effect.y))
+			Gesture.DRAG_MOVE:
+				if ring != null:
+					_move_ring(Vector2(effect.x, effect.y))
+			Gesture.DRAG_END, Gesture.DRAG_CANCEL:
+				if ring != null:
+					_end_ring()
+		return
 	var id := String(effect.hit.get("id", ""))
 	match effect.type:
 		Gesture.TAP:
+			# A ring is for turning: a tap on one does nothing.
+			if effect.hit.get("kind", "") == "ring":
+				return
 			if id == "":
 				selected = ""
 			elif Lift.selects_during_hold(id, lift.part):

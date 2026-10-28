@@ -12,7 +12,9 @@ extends Node3D
 ## Near its seat a ghost shows where it goes; letting go seats it. A click taps a part home; a drag
 ## on something pressed home pulls it back out. A tool let go on a bolt head or cam slot sits there
 ## with a dial round it: circle the dial (or the tool) to turn it, or hold the tool still to drive
-## it home; a click takes it off.
+## it home; a click takes it off. A click on a part with nothing to press brings up its rings: a
+## sweep along one turns it (and its whole build) a quarter turn about that axis; a click on empty
+## space puts them away.
 ##
 ## `autoplay` plays the manual itself with logic/hand.gd (the playthrough's hand), one move at a
 ## time, and with `shots` set saves a PNG mid-page-3 and one when done, then quits: the loop's
@@ -50,6 +52,7 @@ var _done_label: Label
 var _line: Control
 var _ring: TurnRing
 var _ghost: Node3D
+var _gizmo: MeshInstance3D
 # Autoplay
 var _hand: Hand
 var _shot_page_taken := false
@@ -76,6 +79,16 @@ func _ready() -> void:
 	_ghost = Node3D.new()
 	_ghost.name = "Ghost"
 	add_child(_ghost)
+	_gizmo = MeshInstance3D.new()
+	_gizmo.name = "Gizmo"
+	_gizmo.mesh = ImmediateMesh.new()
+	var ring_material := StandardMaterial3D.new()
+	ring_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring_material.vertex_color_use_as_albedo = true
+	ring_material.no_depth_test = true
+	ring_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_gizmo.material_override = ring_material
+	add_child(_gizmo)
 	play.open_page()
 	_sync()
 	print("loop: %d parts, %d joints, %d pages" % [data.instances.size(), data.joints.size(), data.steps.size()])
@@ -142,6 +155,7 @@ func _sync() -> void:
 	_update_labels()
 	_line.queue_redraw()
 	_ring.show_dials(router.dials())
+	_draw_gizmo()
 	if play.steps.is_done() and not done:
 		_finish()
 
@@ -180,12 +194,36 @@ func _update_labels() -> void:
 	if step == null:
 		_page_label.text = "Manual done: %d of %d pages" % [play.steps.page_count(), play.steps.page_count()]
 	else:
-		_page_label.text = "Page %d of %d: %d of %d joints done\nDrag a part to its seat (wheel lifts it, Shift + scroll holds it up), click to tap it home, drag it out to pull.\nTools: let go on a head, circle its dial or hold it still to turn; click to take it off.\nEmpty space: left drag orbits, right drag pans, wheel zooms." % [
+		_page_label.text = "Page %d of %d: %d of %d joints done\nDrag a part to its seat (wheel lifts it, Shift + scroll holds it up), click to tap it home, drag it out to pull.\nTools: let go on a head, circle its dial or hold it still to turn; click to take it off. Click a part for rings: sweep one to turn the build.\nEmpty space: left drag orbits, right drag pans, wheel zooms." % [
 			step.number, play.steps.page_count(), play.steps.done_count(step, play.bonds), step.joints.size()]
 	var lines: PackedStringArray = ["Fastened by the loop (not played):"]
 	for line: String in play.auto_log:
 		lines.append("  " + line)
 	_auto_label.text = "\n".join(lines) if not play.auto_log.is_empty() else ""
+
+
+## The rotate gizmo's three world-axis rings round the selected part (the web's x red, y green,
+## z blue), the one being swept brighter.
+func _draw_gizmo() -> void:
+	var mesh := _gizmo.mesh as ImmediateMesh
+	mesh.clear_surfaces()
+	var f := router.ring_frame()
+	if f.w == 0.0:
+		return
+	var centre := Vector3(f.x, f.y, f.z)
+	var colors: Dictionary[String, Color] = {"x": Color(0.9, 0.3, 0.3), "y": Color(0.3, 0.85, 0.35), "z": Color(0.3, 0.5, 0.95)}
+	for name: String in Router.RING_AXES:
+		var axis := Router.RING_AXES[name]
+		var u := axis.cross(Vector3.UP if absf(axis.y) < 0.9 else Vector3.RIGHT).normalized()
+		var w := axis.cross(u)
+		var color := colors[name]
+		color.a = 1.0 if router.ring != null and router.ring.axis == axis else Constants.GIZMO.opacity
+		mesh.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+		for n: int in Router.RING_SAMPLES + 1:
+			var a := TAU * n / Router.RING_SAMPLES
+			mesh.surface_set_color(color)
+			mesh.surface_add_vertex(centre + (u * cos(a) + w * sin(a)) * f.w)
+		mesh.surface_end()
 
 
 ## The elevation line, while it holds a part: a track at LIFT_LINE.x, the knob at the part's height.

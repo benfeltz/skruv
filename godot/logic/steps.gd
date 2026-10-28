@@ -17,6 +17,19 @@ extends RefCounted
 ##
 ## A page the loop does not play is `auto`: the loop fastens it on arrival and lists it.
 
+## How the build lies on a page (src/scene/bookletPages.ts ORIENTATION): on its left side a quarter
+## turn about z lays -x down; face down a quarter turn about x lays the front (+z) down, back up;
+## upside down a half turn about x. The finished item's frame turned by these, any heading about
+## the vertical.
+const POSES: Dictionary[String, Quaternion] = {
+	"lying": Quaternion(0.0, 0.0, sqrt(0.5), sqrt(0.5)),
+	"faceDown": Quaternion(sqrt(0.5), 0.0, 0.0, sqrt(0.5)),
+	"upright": Quaternion(0.0, 0.0, 0.0, 1.0),
+	"upsideDown": Quaternion(1.0, 0.0, 0.0, 0.0),
+}
+## A build stands as a page has it within this turn of the page's pose (rad).
+const STAND_TURN := (10.0 * PI) / 180.0
+
 ## The kinds a player fastens by hand here; a page with any other is fastened by the loop.
 const PLAYED_KINDS: Array[String] = ["dowel", "pin", "fitting", "bolt", "cam"]
 ## The poses a page shows the build in; "parts" is the box laid out, no build yet.
@@ -25,7 +38,7 @@ const BOX := "parts"
 var data: ItemData
 var index := 0
 ## A page that turns the build (its pose differs from the page before) is played by hand: not yet.
-var turns_played := false
+var turns_played := true
 
 
 func _init(item_data: ItemData) -> void:
@@ -54,6 +67,15 @@ func is_auto(step: ItemData.Step) -> bool:
 		if not PLAYED_KINDS.has(data.joints[i].kind):
 			return true
 	return false
+
+
+## True when a build whose frame (finished item to the build as it lies) is `frame` stands as `pose`
+## has it: the frame is the pose's turn and a heading about the vertical.
+static func stands_as(pose: String, frame: Basis) -> bool:
+	if not POSES.has(pose):
+		return true
+	var up := (frame * Basis(POSES[pose]).inverse()) * Vector3.UP
+	return up.angle_to(Vector3.UP) <= STAND_TURN
 
 
 ## True when the page shows the build in another pose than the page before (lying to face down,
@@ -143,8 +165,9 @@ func _held(bonds: Bonds) -> Dictionary[String, Vector3i]:
 
 
 ## True when the build has caught up with page `step` (see the header); `placed(id)` says whether a
-## panel the page lays in is where it goes.
-func complete(step: ItemData.Step, bonds: Bonds, placed: Callable = Callable()) -> bool:
+## panel the page lays in is where it goes, and `frame()` how the build lies (a page that turns it
+## is complete once it stands as the page has it).
+func complete(step: ItemData.Step, bonds: Bonds, placed: Callable = Callable(), frame: Callable = Callable()) -> bool:
 	var at := data.steps.find(step)
 	var held := _held(bonds)
 	var needed := _needed(at)
@@ -160,6 +183,8 @@ func complete(step: ItemData.Step, bonds: Bonds, placed: Callable = Callable()) 
 		for id: String in laid_in(step):
 			if not bool(placed.call(id)):
 				return false
+	if frame.is_valid() and turns_build(step) and not stands_as(step.pose, frame.call() as Basis):
+		return false
 	return true
 
 
@@ -221,9 +246,9 @@ func done_count(step: ItemData.Step, bonds: Bonds) -> int:
 
 
 ## Turns the page when the open one is complete. True if it turned.
-func advance(bonds: Bonds, placed: Callable = Callable()) -> bool:
+func advance(bonds: Bonds, placed: Callable = Callable(), frame: Callable = Callable()) -> bool:
 	var step := current()
-	if step == null or not complete(step, bonds, placed):
+	if step == null or not complete(step, bonds, placed, frame):
 		return false
 	index += 1
 	return true

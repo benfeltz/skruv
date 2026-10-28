@@ -24,6 +24,10 @@ const SETTLED_RAD := 1e-4
 ## The camera the hand frames each move from: this far from what it looks at, from this direction.
 const VIEW_DISTANCE := 1.4
 const VIEW_DISTANCES: Array[float] = [1.4, 2.4, 3.4]
+## How far above where a part goes the hand's eye must be, so the drag's plane stays below it (m).
+const EYE_ABOVE := 0.3
+## The rise of the hand's lower views, per unit across (about 22° up).
+const LOW_VIEW := 0.4
 const VIEW_FROM: Array[Vector3] = [Vector3(0.0, 1.0, 1.0), Vector3(1.0, 1.0, 1.0), Vector3(-1.0, 1.0, 1.0), Vector3(1.0, 1.0, 0.0), Vector3(-1.0, 1.0, 0.0), Vector3(0.0, 1.0, -1.0)]
 const FRAME_MS := 16
 ## How far above where it goes the hand carries a panel it lays in, before letting it come down (m).
@@ -36,6 +40,9 @@ const TIP_CLEAR := 0.03
 const CORRECT_EVERY := 20
 const CRANK_STEPS_MAX := 200
 const DRIVE_FRAMES_MAX := 300
+## A ring's quarter turn in this many pointer steps, seen from this far.
+const RING_STEPS := 12
+const RING_VIEW_DISTANCE := 4.0
 const TAP_MS := 80
 
 var router: Router
@@ -48,6 +55,7 @@ var seats := 0
 var presses := 0
 var cranks := 0
 var drives := 0
+var turnings := 0
 var frames := 0
 var t := 0
 var _queue: Array[Callable] = []
@@ -110,6 +118,10 @@ static func tap_target(p: Play, spec: int) -> String:
 
 
 func _plan() -> void:
+	var step0 := play.steps.current()
+	if play.steps.turns_build(step0) and not Steps.stands_as(step0.pose, play.build_basis()):
+		_plan_turn(step0)
+		return
 	var i := next_joint(play)
 	if i < 0:
 		# Every seat in: cams the page turns, still open, get their screwdriver.
@@ -144,11 +156,22 @@ func _fail(message: String) -> void:
 ## Frames the camera on `point` from the first direction (and distance) that lets a press pick `id`
 ## and shows `also` on screen (where the part is going); returns the press's screen point, or
 ## (-1, -1).
-func _look_at(id: String, point: Vector3, also: Vector3 = point) -> Vector2:
+func _look_at(id: String, point: Vector3, also: Vector3 = point, above: float = -INF) -> Vector2:
+	# The fixed directions, then lower ones, then from the build's own front (into the carcass).
+	var views: Array[Vector3] = []
+	views.append_array(VIEW_FROM)
+	for from: Vector3 in VIEW_FROM:
+		views.append(Vector3(from.x, LOW_VIEW, from.z))
+	var front := play.build_basis() * Vector3.BACK
+	views.append(Vector3(front.x, 1.0, front.z))
+	views.append(Vector3(front.x, LOW_VIEW, front.z))
 	for distance: float in VIEW_DISTANCES:
-		for from: Vector3 in VIEW_FROM:
+		for from: Vector3 in views:
+			if Vector2(from.x, from.z).length() < 1e-3:
+				continue
 			router.camera.frame(point + from.normalized() * distance, point)
-			if not _on_screen(also):
+			# A drag rides a level plane through the finger: the eye must look down onto it there.
+			if not _on_screen(also) or router.camera.eye().y < above:
 				continue
 			var at := router.point_on(id)
 			if at.x >= 0.0:
@@ -173,7 +196,7 @@ func _plan_carry(id: String, i: int) -> void:
 	var seat: Transform3D = goal
 	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO, "frame": 0}
 	_queue.append(func() -> void:
-		var at := _look_at(id, play.bonds.poses[id].origin.lerp(seat.origin, 0.5), seat.origin)
+		var at := _look_at(id, play.bonds.poses[id].origin.lerp(seat.origin, 0.5), seat.origin, seat.origin.y + EYE_ABOVE)
 		if at.x < 0.0:
 			_fail("page %d: no screen point picks %s" % [page, id])
 			return
@@ -199,9 +222,18 @@ func _plan_carry(id: String, i: int) -> void:
 ## it comes down onto what it rests on.
 func _plan_place(id: String, place: Transform3D) -> void:
 	var page := play.steps.current().number
+	var type := play.type_of(id)
+	if not _same_turn(play.bonds.poses[id].basis, place.basis, type):
+		var turns := quarter_turns_until(play.bonds.poses[id].basis, func(b: Basis) -> bool: return _same_turn(b, place.basis, type))
+		if turns.is_empty():
+			_fail("page %d: no quarter turns lay %s as it goes" % [page, id])
+			return
+		_queue_turns(id, turns, page)
+		turnings += turns.size()
+		lines.append("page %d: %s turned with the rings, %d quarter turns" % [page, id, turns.size()])
 	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO}
 	_queue.append(func() -> void:
-		var at := _look_at(id, play.bonds.poses[id].origin.lerp(place.origin, 0.5), place.origin)
+		var at := _look_at(id, play.bonds.poses[id].origin.lerp(place.origin, 0.5), place.origin, place.origin.y + EYE_ABOVE)
 		if at.x < 0.0:
 			_fail("page %d: no screen point picks %s" % [page, id])
 			return
@@ -272,7 +304,7 @@ func _plan_tool(hardware: String) -> void:
 	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO, "centre": Vector3.ZERO}
 	_queue.append(func() -> void:
 		head = _head_of(hardware)
-		var at := _look_at(tool, play.bonds.poses[tool].origin.lerp(head.position, 0.5), head.position)
+		var at := _look_at(tool, play.bonds.poses[tool].origin.lerp(head.position, 0.5), head.position, head.position.y + EYE_ABOVE)
 		if at.x < 0.0:
 			_fail("page %d: no screen point picks %s" % [page, tool])
 			return
@@ -398,6 +430,142 @@ func _drive(tool: String, joint: Bonds.Joint, page: int) -> void:
 			return
 		_queue.push_front(func() -> void: again.call(again))
 	_queue.push_front(func() -> void: hold.call(hold))
+
+
+## The quarter turns about world axes (each `Vector4(axis, sign)`) that stand the build as `pose`
+## has it, fewest first.
+static func quarter_turns(frame: Basis, pose: String) -> Array[Vector4]:
+	return quarter_turns_until(frame, func(b: Basis) -> bool: return Steps.stands_as(pose, b))
+
+
+## The fewest quarter turns about world axes taking `frame` to one `done(basis)` accepts (up to three).
+static func quarter_turns_until(frame: Basis, done: Callable) -> Array[Vector4]:
+	var moves: Array[Vector4] = []
+	for axis: Vector3 in [Vector3.RIGHT, Vector3.UP, Vector3.BACK]:
+		for sign: float in [1.0, -1.0]:
+			moves.append(Vector4(axis.x, axis.y, axis.z, sign))
+	var frontier: Array = [[frame, []]]
+	for depth: int in 3:
+		var next: Array = []
+		for entry: Array in frontier:
+			var b: Basis = entry[0]
+			if bool(done.call(b)):
+				var found: Array[Vector4] = []
+				found.assign(entry[1])
+				return found
+			for m: Vector4 in moves:
+				var path: Array = entry[1].duplicate()
+				path.append(m)
+				next.append([Basis(Vector3(m.x, m.y, m.z), m.w * PI / 2.0) * b, path])
+		frontier = next
+	for entry: Array in frontier:
+		if bool(done.call(entry[0])):
+			var found: Array[Vector4] = []
+			found.assign(entry[1])
+			return found
+	return []
+
+
+## Turns the build over as the page has it: a panel of it tapped to bring up the rings, then each
+## quarter turn a sweep along its ring.
+func _plan_turn(step: ItemData.Step) -> void:
+	var page := step.number
+	var turns := quarter_turns(play.build_basis(), step.pose)
+	if turns.is_empty():
+		_fail("page %d: no quarter turns stand the build %s" % [page, step.pose])
+		return
+	var panel := play._anchor()
+	_queue_turns(panel, turns, page)
+	_queue.append(func() -> void:
+		if not Steps.stands_as(step.pose, play.build_basis()):
+			_fail("page %d: turned, the build does not stand %s" % [page, step.pose])
+			return
+		turnings += turns.size()
+		lines.append("page %d: the build turned %s, %d quarter turns" % [page, step.pose, turns.size()]))
+
+
+## Selects `panel` with a tap, then each quarter turn a sweep along its ring.
+func _queue_turns(panel: String, turns: Array[Vector4], page: int) -> void:
+	_queue.append(func() -> void:
+		var at := _look_at(panel, play.bonds.poses[panel].origin)
+		if at.x < 0.0:
+			_fail("page %d: no screen point picks %s to select" % [page, panel])
+			return
+		router.press(Router.LEFT, at, t)
+		router.release(Router.LEFT, at, t + TAP_MS)
+		if router.selected != panel:
+			_fail("page %d: a tap on %s did not select it" % [page, panel]))
+	for m: Vector4 in turns:
+		_queue.append(func() -> void: _sweep_ring(panel, Vector3(m.x, m.y, m.z), m.w, page))
+	# Done turning: a tap on empty space puts the rings away.
+	_queue.append(func() -> void:
+		for y: float in [0.02, 0.1, 0.2]:
+			for x: float in [0.02, 0.5, 0.98]:
+				var at := router.view().size * Vector2(x, y)
+				if router.hit_at(at).is_empty():
+					router.press(Router.LEFT, at, t)
+					router.release(Router.LEFT, at, t + TAP_MS)
+					return
+		_fail("page %d: no empty space to tap the rings away" % page))
+
+
+## True when `b` is `goal` or `goal` re-expressed by one of `type`'s symmetries.
+func _same_turn(b: Basis, goal: Basis, type: String) -> bool:
+	var turns: Array[Basis] = [goal]
+	for sym: Bonds.Symmetry in play.bonds.symmetries(type):
+		turns.append(goal * sym.turn.inverse())
+	for g: Basis in turns:
+		if b.get_rotation_quaternion().angle_to(g.get_rotation_quaternion()) <= Play.PLACE_TURN:
+			return true
+	return false
+
+
+## One quarter turn of the selected part's build about world `axis`, the way `sign` says: a press on
+## that ring's band, then a sweep round the part's screen centre.
+func _sweep_ring(panel: String, axis: Vector3, sign: float, page: int) -> void:
+	var name := ""
+	for n: String in Router.RING_AXES:
+		if Router.RING_AXES[n] == axis:
+			name = n
+	var f := router.ring_frame()
+	var centre_world := Vector3(f.x, f.y, f.z)
+	router.camera.frame(centre_world + VIEW_FROM[1].normalized() * RING_VIEW_DISTANCE, centre_world)
+	var start := Vector2(-1, -1)
+	var u := axis.cross(Vector3.UP if absf(axis.y) < 0.9 else Vector3.RIGHT).normalized()
+	var w := axis.cross(u)
+	for n: int in Router.RING_SAMPLES:
+		var a := TAU * n / Router.RING_SAMPLES
+		var p := centre_world + (u * cos(a) + w * sin(a)) * f.w
+		if not _on_screen(p):
+			continue
+		var at := router.screen_of(p)
+		var hit := router.hit_at(at)
+		if hit.get("kind", "") == "ring" and hit.get("axis", "") == name:
+			start = at
+			break
+	if start.x < 0.0:
+		_fail("page %d: no screen point presses %s's %s ring" % [page, panel, name])
+		return
+	var centre := router.screen_of(centre_world)
+	var ring_sign := 1.0 if axis.dot(router.view().eye - centre_world) >= 0.0 else -1.0
+	var r := start.distance_to(centre)
+	var phi0 := atan2(centre.y - start.y, start.x - centre.x)
+	var swept := sign * ring_sign * PI / 2.0
+	router.press(Router.LEFT, start, t)
+	for n: int in range(1, RING_STEPS + 1):
+		var phi := phi0 + swept * float(n) / RING_STEPS
+		var k := n
+		_queue.push_front(func() -> void:
+			router.motion(centre + Vector2(cos(phi), -sin(phi)) * r)
+			if k == RING_STEPS:
+				router.release(Router.LEFT, centre + Vector2(cos(phi), -sin(phi)) * r, t))
+	# Queued in reverse: the first step first.
+	var steps: Array[Callable] = []
+	for n: int in RING_STEPS:
+		steps.append(_queue.pop_front())
+	steps.reverse()
+	for n: int in range(steps.size() - 1, -1, -1):
+		_queue.push_front(steps[n])
 
 
 func _look_at_point(p: Vector3) -> void:
