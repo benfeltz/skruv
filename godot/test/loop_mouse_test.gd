@@ -50,18 +50,16 @@ func test_a_dowel_dragged_with_the_mouse_seats_and_a_click_presses_it() -> void:
 	_button(from, true)
 	# Past the tap distance: the drag starts and the dowel rides the hover plane.
 	_motion(from + Vector2(Constants.GESTURE.tapMaxDistance + 5.0, 0.0))
-	assert_str(loop._drag_id).is_equal(dowel)
-	# Where the dowel's centre should cross the hover plane to sit over its seat.
+	assert_str(loop.router.drag.part).is_equal(dowel)
 	var seat: Transform3D = play.goal(dowel, i)
-	var over := Vector3(seat.origin.x, loop._drag_plane_y, seat.origin.z) - Vector3(loop._drag_grab.x, 0.0, loop._drag_grab.z)
-	var to := _screen(over)
+	var to := loop.router.screen_for(seat.origin)
 	for n: int in range(1, MOVE_STEPS + 1):
 		_motion(from.lerp(to, float(n) / MOVE_STEPS))
 	for frame: int in HOLD_FRAMES:
 		await get_tree().process_frame
-	assert_object(loop._offer).override_failure_message("no seat on offer with the dowel over its hole").is_not_null()
+	assert_object(loop.router.drag.snapped).override_failure_message("no seat on offer with the dowel over its hole").is_not_null()
 	_button(to, false)
-	assert_str(loop._drag_id).is_equal("")
+	assert_object(loop.router.drag).is_null()
 	var joint := play.bonds.joint_for_spec(i)
 	assert_object(joint).override_failure_message("release did not seat %s" % dowel).is_not_null()
 	assert_str(joint.fastener.state).is_equal(Fastener.SEATED)

@@ -33,6 +33,13 @@ static func carried(play: Play, i: int) -> String:
 	return spec.mover
 
 
+## What the hand taps once a seat is made: the seat's mover (a lone dowel itself; a panel carried
+## in on its dowels, whose tap pushes all of them home).
+static func tap_target(play: Play, spec: int) -> String:
+	var joint := play.bonds.joint_for_spec(spec)
+	return joint.mover if joint != null else ""
+
+
 ## Off its seat as a hand would leave it: shifted, and turned about the part's own centre.
 static func off_seat(seat: Transform3D) -> Transform3D:
 	var turn := Basis(TURN_AXIS.normalized(), deg_to_rad(TURN_DEG))

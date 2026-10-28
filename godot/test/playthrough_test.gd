@@ -66,11 +66,12 @@ func test_the_whole_manual_plays_headless_and_johnny_stands() -> void:
 			for p: Play.Pair in offer.pairs:
 				seated_specs.append(p.spec)
 			assert_bool(seated_specs.has(i)).override_failure_message("page %d: the snap for joint %d seats %s" % [number, i, seated_specs]).is_true()
-			var dragged := play.seat(id, offer)
+			play.seat(id, offer)
 			seats += offer.pairs.size()
 			offers_snapped += 1
-			var pressed := play.tap(_tap(g, dragged, t + 2000))
-			assert_int(pressed.size()).override_failure_message("page %d: tap on %s pressed nothing" % [number, dragged]).is_greater(0)
+			var target := Hand.tap_target(play, i)
+			var pressed := play.tap(_tap(g, target, t + 2000))
+			assert_int(pressed.size()).override_failure_message("page %d: tap on %s pressed nothing" % [number, target]).is_greater(0)
 			t += 5000
 			if play.steps.index != pages_before:
 				break

@@ -46,7 +46,7 @@ class FASTENER:
 	const captureRadius := 0.015
 	## CONTRACT.mateTolerance (tools/validate/lib/vocabulary.ts): two connectors this close are
 	## at one spot (a stud's hex at its end). Copied with captureRadius.
-	const mateTolerance := 0.001
+	const mateTolerance := 1e-6
 	const crankDeadzone := 12.0
 	const driveSeconds := 1.5
 	const ratchetRadians := PI / 4.0

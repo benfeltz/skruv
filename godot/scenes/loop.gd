@@ -1,16 +1,15 @@
 class_name Loop
 extends Node3D
-## The dowel loop in the room, with a mouse: the open page's loose parts on the floor; press one
-## and drag to carry it (and whatever is joined to it) on a plane `hoverLift` above where it was
-## picked, the wheel raising or lowering it; near its seat it turns to where it goes, a ghost
-## shows the seat on offer, and letting go seats it. A click taps a part: its seated dowels go
-## home, and a complete page turns the booklet. Pages the loop does not play are fastened on
-## arrival and listed on screen. When the manual ends, "done", and JOHNNY is handed to Jolt on
-## locked joints (the 2.0.4.2 shape) to stand.
+## JOHNNY built by hand in the room, with a mouse. Every rule is logic/'s: the router
+## (logic/router.gd) decides camera versus part and plays the build on Play; this node forwards
+## the mouse and Shift to it, turns poses into bodies, and draws the ghost, the labels and the
+## lift line. JOHNNY's parts, joints and pages come only from items/johnny.json; world.gd inserts
+## this node at runtime.
 ##
-## Every rule is logic/'s: Play (snap, seat, tap, pages, aim), Gesture (tap vs drag). This node
-## turns poses into bodies and the mouse into pointer records. JOHNNY's parts, joints and pages
-## come only from items/johnny.json; world.gd inserts this node at runtime.
+## Mouse: left drag on empty space orbits, right drag pans, middle drag or the wheel zooms toward
+## the cursor. Left drag on a part carries it; the wheel mid-drag lifts it; Shift + scroll lifts
+## the dragged or selected part on the elevation line, and it stays up while Shift is held.
+## Near its seat a ghost shows where it goes; letting go seats it. A click taps a part home.
 ##
 ## `autoplay` plays the manual itself with logic/hand.gd (the playthrough's hand), one move at a
 ## time, and with `shots` set saves a PNG mid-page-3 and one when done, then quits: the loop's
@@ -18,13 +17,13 @@ extends Node3D
 
 const CAMERA_POSITION := Vector3(0.0, 1.75, 2.75)
 const CAMERA_TARGET := Vector3(0.0, 0.1, 0.95)
-const RAY_LENGTH := 20.0
-## A wheel notch as px of the web's desktop lift (GESTURE.desktopLiftRate is metres per px).
+## A wheel notch as px (the browser's deltaY for one notch).
 const WHEEL_NOTCH_PX := 20.0
 const GHOST_COLOR := Color(0.35, 0.75, 1.0, Constants.SNAP.ghostOpacity)
 const LABEL_FONT_SIZE := 18
 const DONE_FONT_SIZE := 48
 const UI_MARGIN := 16.0
+const LINE_COLOR := Color(1, 1, 1, 0.8)
 ## Autoplay: frames to glide a part to where the hand lets go, frames between moves, and frames
 ## of physics after "done" before the last shot.
 const GLIDE_FRAMES := 6
@@ -36,7 +35,7 @@ const SHOT_PAGE_PRESSED := 3
 
 var data: ItemData
 var play: Play
-var router := Router.new()
+var router: Router
 var bodies: Dictionary[String, RigidBody3D] = {}
 var autoplay: bool
 ## Folder the autoplay saves its PNGs in ("" = none, and it never quits).
@@ -48,19 +47,15 @@ var _camera: CameraRig
 var _page_label: Label
 var _auto_label: Label
 var _done_label: Label
+var _line: Control
 var _ghost: Node3D
-var _proxies: Array[CollisionShape3D] = []
-var _drag_id := ""
-var _drag_pose: Transform3D
-var _drag_plane_y := 0.0
-var _drag_grab := Vector3.ZERO
-var _drag_lift := 0.0
-var _offer: Play.Offer = null
 # Autoplay
 var _auto_state := "choose"
 var _auto_frame := 0
+var _auto_id := ""
 var _auto_from: Transform3D
 var _auto_to: Transform3D
+var _auto_offer: Play.Offer = null
 var _auto_tap := ""
 var _shot_page_taken := false
 var _settled := 0
@@ -76,6 +71,7 @@ func _ready() -> void:
 	if data == null:
 		data = ItemData.load_file(ItemData.JOHNNY_PATH)
 	play = Play.new(data)
+	router = Router.new(play)
 	for inst: ItemData.Instance in data.instances:
 		var body := _make_body(inst)
 		bodies[inst.id] = body
@@ -94,104 +90,50 @@ func _unhandled_input(event: InputEvent) -> void:
 	if autoplay:
 		return
 	var t := Time.get_ticks_msec()
+	if event is InputEventKey:
+		var key := event as InputEventKey
+		if key.keycode == KEY_SHIFT:
+			router.set_shift(key.pressed)
+		return
+	if done and not (event is InputEventMouseMotion) and not _is_camera_button(event):
+		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			if mb.pressed:
 				var dy := -WHEEL_NOTCH_PX if mb.button_index == MOUSE_BUTTON_WHEEL_UP else WHEEL_NOTCH_PX
-				_handle(router.wheel(dy * maxf(mb.factor, 1.0), mb.position))
+				router.wheel(dy * maxf(mb.factor, 1.0), mb.position)
 			return
-		var button := 0 if mb.button_index == MOUSE_BUTTON_LEFT else 1 if mb.button_index == MOUSE_BUTTON_MIDDLE else 2
+		var button := Router.LEFT if mb.button_index == MOUSE_BUTTON_LEFT else Router.MIDDLE if mb.button_index == MOUSE_BUTTON_MIDDLE else Router.RIGHT
 		if mb.pressed:
-			_handle(router.press(button, mb.position, t))
+			router.press(button, mb.position, t)
 		else:
-			_handle(router.release(button, mb.position, t))
+			router.release(button, mb.position, t)
 	elif event is InputEventMouseMotion:
-		var mm := event as InputEventMouseMotion
-		_handle(router.motion(mm.position))
+		router.motion((event as InputEventMouseMotion).position)
+
+
+func _is_camera_button(event: InputEvent) -> bool:
+	return event is InputEventMouseButton and (event as InputEventMouseButton).button_index != MOUSE_BUTTON_LEFT
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT and play != null:
-		_handle(router.interrupted())
+	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT and router != null:
+		router.interrupted()
+		router.set_shift(false)
 
 
 func _process(delta: float) -> void:
+	router.camera.viewport = get_viewport().get_visible_rect().size
 	router.update(delta)
 	_camera.follow()
 	if autoplay:
 		_autoplay_step()
-	elif _drag_id != "" and not done:
-		_drag_pose = play.aim(_drag_id, _drag_pose, delta)
-		_offer = play.offer_for(_drag_id, _drag_pose)
 	_sync()
 
 
-## What the scene does with each gesture effect.
-func _handle(effect: Gesture.Effect) -> void:
-	if effect == null:
-		return
-	var id := String(effect.hit.get("id", ""))
-	match effect.type:
-		Gesture.DRAG_START:
-			if id != "" and play.can_drag(id):
-				_begin_drag(id, effect.hit["point"])
-		Gesture.DRAG_MOVE:
-			if _drag_id != "":
-				var at: Variant = _on_plane(Vector2(effect.x, effect.y), _drag_plane_y)
-				if at != null:
-					_drag_pose.origin = (at as Vector3) + _drag_grab
-		Gesture.LIFT:
-			if _drag_id != "":
-				var rise := effect.dy * Constants.GESTURE.desktopLiftRate
-				_drag_lift += rise
-				_drag_plane_y += rise
-				_drag_pose.origin.y += rise
-		Gesture.DRAG_END:
-			if _drag_id != "":
-				_end_drag()
-		Gesture.DRAG_CANCEL:
-			_drag_id = ""
-			_offer = null
-		Gesture.TAP:
-			if id != "":
-				var pressed := play.tap(id)
-				if not pressed.is_empty():
-					print("loop: tap %s pressed %d" % [id, pressed.size()])
-
-
-func _begin_drag(id: String, point: Vector3) -> void:
-	_drag_id = id
-	_drag_lift = Constants.GESTURE.hoverLift
-	_drag_plane_y = point.y + _drag_lift
-	_drag_pose = play.bonds.poses[id]
-	_drag_pose.origin.y += _drag_lift
-	_drag_grab = _drag_pose.origin - Vector3(point.x, _drag_plane_y, point.z)
-	_offer = null
-
-
-## Lets go: onto the seat on offer, or back down by the lift where the mouse left it.
-func _end_drag() -> void:
-	var id := _drag_id
-	_drag_id = ""
-	if _offer != null:
-		var seated := play.seat(id, _offer)
-		print("loop: seated %s, %d pairs" % [seated, _offer.pairs.size()])
-	else:
-		var down := _drag_pose
-		down.origin.y = maxf(down.origin.y - _drag_lift, play.bonds.poses[id].origin.y)
-		play.bonds.move_compound(id, down)
-	_offer = null
-	play.turn_pages()
-
-
-## Poses to bodies, the dragged compound carried, the ghost, the labels; "done" once.
+## Poses to bodies, the ghost, the labels; "done" once.
 func _sync() -> void:
-	var carried: Dictionary[String, bool] = {}
-	var carry := Transform3D.IDENTITY
-	if _drag_id != "":
-		carried = play.bonds.compound(_drag_id, false)
-		carry = _drag_pose * play.bonds.poses[_drag_id].affine_inverse()
 	if not done:
 		for id: String in bodies:
 			var body := bodies[id]
@@ -199,28 +141,52 @@ func _sync() -> void:
 			body.visible = posed
 			body.collision_layer = 1 if posed else 0
 			if posed:
-				var pose := play.bonds.poses[id]
-				body.global_transform = carry * pose if carried.has(id) else pose
-	_show_ghost(carried)
+				body.global_transform = _shown(id)
+	_show_ghost()
 	_update_labels()
+	_line.queue_redraw()
 	if play.steps.is_done() and not done:
 		_finish()
 
 
-func _show_ghost(carried: Dictionary[String, bool]) -> void:
+## Where a part is drawn: its pose, or carried by the autoplay's glide.
+func _shown(id: String) -> Transform3D:
+	var pose := play.bonds.poses[id]
+	if _auto_id != "" and play.bonds.compound(_auto_id, false).has(id):
+		return _auto_carry() * pose
+	return pose
+
+
+func _auto_carry() -> Transform3D:
+	var k := minf(1.0, float(_auto_frame) / GLIDE_FRAMES) if _auto_state == "glide" else 1.0
+	return _auto_from.interpolate_with(_auto_to, k) * play.bonds.poses[_auto_id].affine_inverse()
+
+
+func _show_ghost() -> void:
 	for child: Node in _ghost.get_children():
 		child.queue_free()
-	if _offer == null or _drag_id == "":
+	var offer: Play.Offer = null
+	var id := ""
+	var members: Dictionary[String, bool] = {}
+	if router.drag != null and router.drag.snapped != null:
+		offer = router.drag.snapped
+		id = router.drag.part
+		members = router.carried()
+	elif _auto_offer != null:
+		offer = _auto_offer
+		id = _auto_id
+		members = play.bonds.compound(id, false)
+	if offer == null:
 		return
-	var to_seat := _offer.pose * play.bonds.poses[_drag_id].affine_inverse()
-	for id: String in carried:
-		var mesh := Item.make_mesh(data.type_of(data.instance(id)))
+	var to_seat := offer.pose * _shown(id).affine_inverse()
+	for m: String in members:
+		var mesh := Item.make_mesh(data.type_of(data.instance(m)))
 		var material := StandardMaterial3D.new()
 		material.albedo_color = GHOST_COLOR
 		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		mesh.material_override = material
-		mesh.transform = to_seat * play.bonds.poses[id]
+		mesh.transform = to_seat * _shown(m)
 		_ghost.add_child(mesh)
 
 
@@ -229,7 +195,7 @@ func _update_labels() -> void:
 	if step == null:
 		_page_label.text = "Manual done: %d of %d pages" % [play.steps.page_count(), play.steps.page_count()]
 	else:
-		_page_label.text = "Page %d of %d: %d of %d dowels pressed\nDrag a part to its seat (wheel lifts it), click to tap it home." % [
+		_page_label.text = "Page %d of %d: %d of %d joints done\nDrag a part to its seat (wheel lifts it, Shift + scroll holds it up), click to tap it home.\nEmpty space: left drag orbits, right drag pans, wheel zooms." % [
 			step.number, play.steps.page_count(), play.steps.done_count(step, play.bonds), step.joints.size()]
 	var lines: PackedStringArray = ["Fastened by the loop (not played):"]
 	for line: String in play.auto_log:
@@ -237,16 +203,26 @@ func _update_labels() -> void:
 	_auto_label.text = "\n".join(lines) if not play.auto_log.is_empty() else ""
 
 
+## The elevation line, while it holds a part: a track at LIFT_LINE.x, the knob at the part's height.
+func _draw_line() -> void:
+	if not router.lift.is_holding():
+		return
+	var size := get_viewport().get_visible_rect().size
+	var x := size.x * Constants.LIFT_LINE.x
+	var top := size.y * Constants.LIFT_LINE.top
+	var bottom := size.y * Constants.LIFT_LINE.bottom
+	_line.draw_line(Vector2(x, top), Vector2(x, bottom), LINE_COLOR, Constants.LIFT_LINE.lineWidth)
+	var f := Lift.fraction_of(router.lift.height, router.lift.span)
+	_line.draw_circle(Vector2(x, bottom - f * (bottom - top)), Constants.LIFT_LINE.knobRadius, LINE_COLOR, false, Constants.LIFT_LINE.lineWidth)
+
+
 ## The manual has ended: every body handed to Jolt, each fastened pair on a locked joint, as
 ## 2.0.4.2 stands JOHNNY. Seated hardware collides with nothing; shelf pins stay solid.
 func _finish() -> void:
 	done = true
 	_done_label.visible = true
-	# JOHNNY stands 2 m tall at the origin: the room's own framing shows it whole.
-	_camera.look_at_from_position(Room.CAMERA_POSITION, Room.CAMERA_TARGET)
-	for proxy: CollisionShape3D in _proxies:
-		proxy.queue_free()
-	_proxies.clear()
+	router.camera.frame(Room.CAMERA_POSITION, Room.CAMERA_TARGET)
+	_camera.follow()
 	var embedded: Dictionary[String, bool] = {}
 	for joint: Bonds.Joint in play.bonds.joints:
 		if joint.kind != Item.SOLID_KIND:
@@ -258,7 +234,7 @@ func _finish() -> void:
 		if embedded.has(id):
 			body.collision_layer = 0
 			body.collision_mask = 0
-	for bond: Bonds.Bond in play.bonds.bonds():
+	for bond: Bonds.Bond in play.bonds.locks():
 		_lock(bond.a, bond.b)
 	var worst := play.worst_error()
 	print("loop: done; %d joints fastened, %d locked joints; built within %.4f mm and %.4f deg of assembled" % [
@@ -283,28 +259,8 @@ func _lock(a: String, b: String) -> void:
 	joints.append(joint)
 
 
-## The part under the mouse, as a gesture hit {kind, id, point}, or {} for empty space.
-func _pick(screen: Vector2) -> Dictionary:
-	var from := _camera.project_ray_origin(screen)
-	var to := from + _camera.project_ray_normal(screen) * RAY_LENGTH
-	var query := PhysicsRayQueryParameters3D.create(from, to, 1)
-	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	if hit.is_empty():
-		return {}
-	var collider: Object = hit["collider"]
-	if not (collider is RigidBody3D) or not (collider as Node).has_meta("part"):
-		return {}
-	return {"kind": "part", "id": String((collider as Node).get_meta("part")), "point": hit["position"]}
-
-
-## Where the mouse ray crosses the level plane at height `y`, or null.
-func _on_plane(screen: Vector2, y: float) -> Variant:
-	var plane := Plane(Vector3.UP, y)
-	return plane.intersects_ray(_camera.project_ray_origin(screen), _camera.project_ray_normal(screen))
-
-
-## A part's body: frozen (kinematic) while the build is played, the poses moving it; hardware gets
-## an invisible pick box never thinner than PICK.proxyMinSize.
+## A part's body: frozen (kinematic) while the build is played, the poses moving it. Picking is the
+## router's (the parts' boxes), so the body is only drawn and, at "done", simulated.
 func _make_body(inst: ItemData.Instance) -> RigidBody3D:
 	var part := data.type_of(inst)
 	var body := RigidBody3D.new()
@@ -317,22 +273,13 @@ func _make_body(inst: ItemData.Instance) -> RigidBody3D:
 	body.collision_layer = 0
 	body.add_child(Item.make_collider(part))
 	body.add_child(Item.make_mesh(part))
-	if part.size[part.size.max_axis_index()] < Constants.PICK.smallPartMax:
-		var shape := BoxShape3D.new()
-		shape.size = part.size.max(Vector3.ONE * Constants.PICK.proxyMinSize)
-		var proxy := CollisionShape3D.new()
-		proxy.name = "PickProxy"
-		proxy.shape = shape
-		body.add_child(proxy)
-		_proxies.append(proxy)
 	return body
 
 
-## The room camera, under the router's seam: orbit, pan and zoom with the mouse on empty space (or
-## any right or middle drag), framed first on the laid-out parts.
+## The room camera, under the router's seam, framed first on the laid-out parts.
 func _make_camera() -> void:
+	router.camera.viewport = get_viewport().get_visible_rect().size
 	router.camera.frame(CAMERA_POSITION, CAMERA_TARGET)
-	router.hit_test = _pick
 	_camera = CameraRig.new(router.camera)
 	add_child(_camera)
 
@@ -345,13 +292,19 @@ func _make_ui() -> void:
 	_page_label.position = Vector2(UI_MARGIN, UI_MARGIN)
 	layer.add_child(_page_label)
 	_auto_label = _label(LABEL_FONT_SIZE - 4)
-	_auto_label.position = Vector2(UI_MARGIN, UI_MARGIN + 3.0 * LABEL_FONT_SIZE)
+	_auto_label.position = Vector2(UI_MARGIN, UI_MARGIN + 4.0 * LABEL_FONT_SIZE)
 	layer.add_child(_auto_label)
 	_done_label = _label(DONE_FONT_SIZE)
 	_done_label.text = "Done: JOHNNY stands"
 	_done_label.position = Vector2(UI_MARGIN, get_viewport().get_visible_rect().size.y - UI_MARGIN - 1.5 * DONE_FONT_SIZE)
 	_done_label.visible = false
 	layer.add_child(_done_label)
+	_line = Control.new()
+	_line.name = "LiftLine"
+	_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_line.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_line.draw.connect(_draw_line)
+	layer.add_child(_line)
 
 
 func _label(size: int) -> Label:
@@ -360,6 +313,7 @@ func _label(size: int) -> Label:
 	label.add_theme_color_override("font_color", Color.WHITE)
 	label.add_theme_color_override("font_outline_color", Color.BLACK)
 	label.add_theme_constant_override("outline_size", 4)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return label
 
 
@@ -381,25 +335,25 @@ func _autoplay_step() -> void:
 				return
 			var id := Hand.carried(play, i)
 			var seat: Transform3D = play.goal(id, i)
-			_drag_id = id
+			_auto_id = id
 			_auto_from = play.bonds.poses[id]
 			_auto_to = Hand.hold(play, id, Hand.off_seat(seat))
-			_drag_pose = _auto_from
 			_auto_frame = 0
 			_auto_state = "glide"
 		"glide":
-			var k := minf(1.0, float(_auto_frame) / GLIDE_FRAMES)
-			_drag_pose = _auto_from.interpolate_with(_auto_to, k)
-			if k >= 1.0:
-				_offer = play.offer_for(_drag_id, _drag_pose)
+			if _auto_frame >= GLIDE_FRAMES:
+				_auto_offer = play.offer_for(_auto_id, _auto_to)
 				_auto_frame = 0
 				_auto_state = "offer"
 		"offer":
 			if _auto_frame >= PAUSE_FRAMES:
-				var id := _drag_id
-				_drag_id = ""
-				_auto_tap = play.seat(id, _offer) if _offer != null else ""
-				_offer = null
+				var id := _auto_id
+				_auto_id = ""
+				_auto_tap = ""
+				if _auto_offer != null:
+					play.seat(id, _auto_offer)
+					_auto_tap = Hand.tap_target(play, _auto_offer.pairs[0].spec)
+				_auto_offer = null
 				_auto_frame = 0
 				_auto_state = "tap"
 		"tap":

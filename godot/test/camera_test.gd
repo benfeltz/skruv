@@ -133,21 +133,22 @@ func test_disabled_the_orbit_ignores_input() -> void:
 
 
 func test_the_router_hands_empty_space_to_the_camera_and_a_part_press_takes_it() -> void:
-	var router := Router.new()
-	router.hit_test = func(at: Vector2) -> Dictionary: return {"kind": "part", "id": "p"} if at.x < 100 else {}
-	router.press(0, Vector2(500, 300), 0)
+	var play := Play.new(ItemData.load_file(ItemData.JOHNNY_PATH))
+	var router := Router.new(play)
+	var part := {"kind": "part", "id": "plinth-1", "point": Vector3.ZERO}
+	router.press(Router.LEFT, Vector2(500, 300), 0)
 	assert_bool(router.camera.enabled).is_true()
-	router.release(0, Vector2(500, 300), 50)
-	router.press(0, Vector2(50, 300), 100)
+	router.release(Router.LEFT, Vector2(500, 300), 50)
+	router.press(Router.LEFT, Vector2(50, 300), 100, part)
 	assert_bool(router.camera.enabled).is_false()
 	var eye := router.camera.free
 	router.motion(Vector2(300, 300))
 	router.update(1.0 / 60.0)
 	assert_vector(router.camera.free).is_equal_approx(eye, Vector3.ONE * EPS)
-	router.release(0, Vector2(300, 300), 2000)
+	router.release(Router.LEFT, Vector2(300, 300), 2000)
 	assert_bool(router.camera.enabled).is_true()
 	# A right press on a part is the camera's: the gesture machine never gives it to a part.
-	router.press(2, Vector2(50, 300), 3000)
+	router.press(Router.RIGHT, Vector2(50, 300), 3000, part)
 	assert_bool(router.camera.enabled).is_true()
 
 

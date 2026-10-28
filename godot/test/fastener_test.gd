@@ -39,18 +39,11 @@ func test_an_ignored_event_returns_the_same_record() -> void:
 	assert_object(Fastener.transition(pressed, Fastener.TAP)).is_same(pressed)
 
 
-func test_kinds_not_ported_ignore_every_event() -> void:
+func test_turned_kinds_ignore_a_tap_and_a_pull() -> void:
 	for kind: String in ["cam", "bolt"]:
 		var seated := Fastener.create(kind)
-		for event: String in [Fastener.TAP, Fastener.PULL, Fastener.CRANK]:
+		for event: String in [Fastener.TAP, Fastener.PULL]:
 			assert_object(Fastener.transition(seated, event)).is_same(seated)
-
-
-func test_auto_home_fastens_each_kind_and_says_so() -> void:
-	assert_str(Fastener.auto_home("cam").state).is_equal(Fastener.LOCKED)
-	assert_str(Fastener.auto_home("bolt").state).is_equal(Fastener.SCREWED)
-	assert_str(Fastener.auto_home("fitting").state).is_equal(Fastener.PRESSED)
-	assert_bool(Fastener.auto_home("pin").auto).is_true()
 
 
 ## The dowel at its hole's mouth: its assembled pose backed out by the sink depth.
@@ -79,9 +72,9 @@ func test_a_seated_pair_is_bonded_only_once_fastened_and_keeps_its_relative_pose
 	_dowel_at_mouth(bonds)
 	var spec := data.joints[INTO_PLINTH]
 	var joint := bonds.seat(spec.hardware, spec.hardware_connector, spec.host, spec.host_connector, spec.hardware, INTO_PLINTH)
-	assert_int(bonds.bonds().size()).is_equal(0)
+	assert_int(bonds.locks().size()).is_equal(0)
 	bonds.apply(joint, Fastener.TAP)
-	var list := bonds.bonds()
+	var list := bonds.locks()
 	assert_int(list.size()).is_equal(1)
 	var want := _assembled("plinth-1").affine_inverse() * _assembled("dowel-1")
 	assert_vector(list[0].frame.origin).is_equal_approx(want.origin, Vector3.ONE * EPS)
@@ -107,14 +100,14 @@ func test_a_panel_tapped_onto_its_dowel_comes_down_on_it() -> void:
 	var bonds := Bonds.new(data)
 	_dowel_at_mouth(bonds)
 	var into := data.joints[INTO_PLINTH]
-	var pairs: Array[Dictionary] = [{"hardware": into.hardware, "hardware_connector": into.hardware_connector, "host": into.host, "host_connector": into.host_connector, "mover": into.hardware, "spec": INTO_PLINTH}]
-	bonds.seat_home(pairs)
+	bonds.drive(bonds.seat(into.hardware, into.hardware_connector, into.host, into.host_connector, into.hardware, INTO_PLINTH))
 	var onto := data.joints[SIDE_ONTO]
 	assert_str(onto.mover).is_equal("sidePanel-1")
 	# The side panel at the mouth of its hole over the dowel's far end.
 	bonds.poses["sidePanel-1"] = _assembled("sidePanel-1").translated(-onto.axis * data.sink_depth["dowel"])
 	var joint := bonds.seat(onto.hardware, onto.hardware_connector, onto.host, onto.host_connector, onto.mover, SIDE_ONTO)
 	assert_float(bonds.depth(joint)).is_equal_approx(0.0, EPS)
+	# The panel is the mover: a tap on it pushes it down onto the dowel.
 	assert_int(bonds.tap("sidePanel-1").size()).is_equal(1)
 	assert_vector(bonds.poses["sidePanel-1"].origin).is_equal_approx(_assembled("sidePanel-1").origin, Vector3.ONE * EPS)
 	# The dowel and plinth stayed where they were.

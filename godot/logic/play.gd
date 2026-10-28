@@ -20,6 +20,8 @@ const LAY_X_MAX := 1.25
 const LAY_Z_START := 0.45
 const LAY_GAP := 0.06
 const LAY_HARDWARE_GAP := 0.03
+## How far a let-go part may already overlap what it rests on (m), and still rest on it.
+const SETTLE_EPSILON := 1e-4
 
 var data: ItemData
 var bonds: Bonds
@@ -255,7 +257,7 @@ func seat(id: String, offer: Offer) -> String:
 	if offer.stand_in != "":
 		# The picked dowel becomes the one the page names; the named one takes the picked one's
 		# spot on the floor.
-		bonds.swap(id, offer.stand_in)
+		bonds.swap_ids(id, offer.stand_in)
 		dragged = offer.stand_in
 	bonds.move_compound(dragged, offer.pose)
 	for p: Pair in offer.pairs:
@@ -265,18 +267,114 @@ func seat(id: String, offer: Offer) -> String:
 	return dragged
 
 
-## A tap on a part: every seated dowel touching it, or carried in by it, pushed home; then the
-## booklet turns through every page now complete (auto pages included). Returns the joints pressed.
+## A tap on a part: every seated tap-kind joint touching it pushed home, and, for a panel, those
+## its assembly was carried in on (the router's tap and pressCarried); then the booklet turns
+## through every page now complete. Returns the joints pressed.
 func tap(id: String) -> Array[Bonds.Joint]:
-	var pressed := bonds.tap(id)
+	var pressed := bonds.tap(id, behind)
+	pressed.append_array(press_carried(id))
 	turn_pages()
 	return pressed
+
+
+## A panel carried in on its hardware, or with its assembly, sits in seats it touches only through
+## them: a tap on it pushes those home too (pressCarried).
+func press_carried(id: String) -> Array[Bonds.Joint]:
+	var out: Array[Bonds.Joint] = []
+	if not is_panel(id):
+		return out
+	var members := bonds.compound_of(id)
+	for joint: Bonds.Joint in bonds.joints.duplicate():
+		if not members.has(joint.mover) or joint.hardware == id or joint.host == id or not Fastener.is_tap_kind(joint.kind):
+			continue
+		if members.has(joint.hardware) and members.has(joint.host):
+			continue
+		if bonds.apply(joint, Fastener.TAP, 0.0, "", behind(joint)):
+			out.append(joint)
+	return out
+
+
+## A back fitting pressed home lands in whichever part holds its tip once home, its sink depth
+## down the hole: the part behind it, or "" (behind).
+func behind(joint: Bonds.Joint) -> String:
+	if not Fastener.passes_through(joint.kind):
+		return ""
+	var hole := bonds.world_connector(joint.host, joint.host_connector)
+	var tip := hole.position - hole.axis * float(data.sink_depth.get(joint.kind, 0.0))
+	for id: String in bonds.poses:
+		if id == joint.host or not can_pass_into(id):
+			continue
+		var local := bonds.poses[id].affine_inverse() * tip
+		var half := data.type_of(data.instance(id)).size / 2.0
+		if absf(local.x) <= half.x + 1e-9 and absf(local.y) <= half.y + 1e-9 and absf(local.z) <= half.z + 1e-9:
+			return id
+	return ""
 
 
 ## Turns every complete page and opens the next.
 func turn_pages() -> void:
 	while not steps.is_done() and steps.advance(bonds):
 		open_page()
+
+
+## A part a whole fit seats: it has connectors, every one a hole (isPanelType).
+func is_panel(id: String) -> bool:
+	var connectors := data.type_of(data.instance(id)).connectors
+	return not connectors.is_empty() and can_pass_into(id)
+
+
+## A part a fastener's tip can pass into: no fastener end on it (canPassInto).
+func can_pass_into(id: String) -> bool:
+	for c: ItemData.Connector in data.type_of(data.instance(id)).connectors:
+		if data.compatible.has(c.type):
+			return false
+	return true
+
+
+## The world box of a part at its pose now: centre and half-extents.
+func box_of(id: String) -> AABB:
+	var half := DragMath.rotated_half_extents(data.type_of(data.instance(id)).size / 2.0, bonds.poses[id].basis)
+	return AABB(bonds.poses[id].origin - half, half * 2.0)
+
+
+## The world box `members` fill together.
+func box_of_set(members: Dictionary[String, bool]) -> AABB:
+	var box := AABB()
+	var first := true
+	for id: String in members:
+		if not bonds.poses.has(id):
+			continue
+		box = box_of(id) if first else box.merge(box_of(id))
+		first = false
+	return box
+
+
+## What a let-go part does with no physics to drop it: `members` come straight down until the
+## lowest of them rests on the floor or on the top of something under it (another part's box
+## overlapping it across). Never up.
+func settle(members: Dictionary[String, bool]) -> void:
+	var drop := INF
+	for id: String in members:
+		if not bonds.poses.has(id):
+			continue
+		var box := box_of(id)
+		var support := 0.0
+		for other: String in bonds.poses:
+			if members.has(other):
+				continue
+			var under := box_of(other)
+			var top := under.end.y
+			if top > box.position.y + SETTLE_EPSILON:
+				continue
+			var overlap_x := minf(box.end.x, under.end.x) - maxf(box.position.x, under.position.x)
+			var overlap_z := minf(box.end.z, under.end.z) - maxf(box.position.z, under.position.z)
+			if overlap_x > SETTLE_EPSILON and overlap_z > SETTLE_EPSILON:
+				support = maxf(support, top)
+		drop = minf(drop, box.position.y - support)
+	if drop > 0.0 and drop < INF:
+		for id: String in members:
+			if bonds.poses.has(id):
+				bonds.poses[id].origin.y -= drop
 
 
 ## How far the build is from the finished item: the worst offset (m) and turn (rad) of any
@@ -315,21 +413,33 @@ func _auto(step: ItemData.Step) -> void:
 		else:
 			var ref := _anchor()
 			bonds.poses[id] = bonds.poses[ref] * assembled(ref).affine_inverse() * assembled(id)
+	var seated: Array[Bonds.Joint] = []
 	for i: int in step.joints:
 		if bonds.joint_for_spec(i) != null:
 			continue
 		var spec := data.joints[i]
 		if not bonds.poses.has(spec.host):
 			lay(spec.host)
-		# The hardware at its home against its host, as the export has it.
-		bonds.poses[spec.hardware] = bonds.poses[spec.host] * assembled(spec.host).affine_inverse() * assembled(spec.hardware)
+		# The hardware at its seat's mouth against its host, as the export has it home, backed out
+		# by its sink: the machine drives it home.
+		var home := bonds.poses[spec.host] * assembled(spec.host).affine_inverse() * assembled(spec.hardware)
+		var axis := bonds.world_connector(spec.host, spec.host_connector).axis
+		var sink: float = data.sink_depth.get(spec.kind, 0.0)
+		bonds.poses[spec.hardware] = Transform3D(home.basis, home.origin + axis * sink)
 		var joint := bonds.seat(spec.hardware, spec.hardware_connector, spec.host, spec.host_connector, spec.mover, i)
-		joint.through = spec.through
-		joint.captured = spec.captured
-		joint.fastener = Fastener.auto_seated(spec.kind) if spec.kind == "cam" and not step.turns.has(i) else Fastener.auto_home(spec.kind)
+		joint.auto = true
+		seated.append(joint)
+	# Bolts before the cams that catch them (seatHome); a cam a later page turns stays seated.
+	for joint: Bonds.Joint in seated:
+		if joint.kind != Fastener.CAM:
+			bonds.drive(joint, "", behind(joint))
+	for joint: Bonds.Joint in seated:
+		if joint.kind == Fastener.CAM and step.turns.has(joint.spec):
+			bonds.drive(joint, data.joints[joint.spec].captured)
 	for i: int in step.turns:
 		var joint := bonds.joint_for_spec(i)
-		joint.fastener = Fastener.auto_home(joint.kind)
+		joint.auto = true
+		bonds.drive(joint, data.joints[i].captured)
 	auto_log.append(steps.auto_line(step))
 
 
