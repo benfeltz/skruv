@@ -18,7 +18,6 @@ extends Node3D
 
 const CAMERA_POSITION := Vector3(0.0, 1.75, 2.75)
 const CAMERA_TARGET := Vector3(0.0, 0.1, 0.95)
-const CAMERA_FOV := 60.0
 const RAY_LENGTH := 20.0
 ## A wheel notch as px of the web's desktop lift (GESTURE.desktopLiftRate is metres per px).
 const WHEEL_NOTCH_PX := 20.0
@@ -37,7 +36,7 @@ const SHOT_PAGE_PRESSED := 3
 
 var data: ItemData
 var play: Play
-var gesture := Gesture.new()
+var router := Router.new()
 var bodies: Dictionary[String, RigidBody3D] = {}
 var autoplay: bool
 ## Folder the autoplay saves its PNGs in ("" = none, and it never quits).
@@ -45,13 +44,12 @@ var shots: String
 var joints: Array[Generic6DOFJoint3D] = []
 var done := false
 
-var _camera: Camera3D
+var _camera: CameraRig
 var _page_label: Label
 var _auto_label: Label
 var _done_label: Label
 var _ghost: Node3D
 var _proxies: Array[CollisionShape3D] = []
-var _press_hit: Dictionary = {}
 var _drag_id := ""
 var _drag_pose: Transform3D
 var _drag_plane_y := 0.0
@@ -93,7 +91,7 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if autoplay or done:
+	if autoplay:
 		return
 	var t := Time.get_ticks_msec()
 	if event is InputEventMouseButton:
@@ -101,28 +99,29 @@ func _unhandled_input(event: InputEvent) -> void:
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			if mb.pressed:
 				var dy := -WHEEL_NOTCH_PX if mb.button_index == MOUSE_BUTTON_WHEEL_UP else WHEEL_NOTCH_PX
-				_handle(gesture.wheel(dy * maxf(mb.factor, 1.0)))
+				_handle(router.wheel(dy * maxf(mb.factor, 1.0), mb.position))
 			return
 		var button := 0 if mb.button_index == MOUSE_BUTTON_LEFT else 1 if mb.button_index == MOUSE_BUTTON_MIDDLE else 2
 		if mb.pressed:
-			_press_hit = _pick(mb.position)
-			_handle(gesture.down(0, mb.position.x, mb.position.y, t, _press_hit, button))
+			_handle(router.press(button, mb.position, t))
 		else:
-			_handle(gesture.up(0, mb.position.x, mb.position.y, t))
+			_handle(router.release(button, mb.position, t))
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
-		_handle(gesture.move(0, mm.position.x, mm.position.y))
+		_handle(router.motion(mm.position))
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT and play != null:
-		_handle(gesture.cancel_all())
+		_handle(router.interrupted())
 
 
 func _process(delta: float) -> void:
+	router.update(delta)
+	_camera.follow()
 	if autoplay:
 		_autoplay_step()
-	elif _drag_id != "":
+	elif _drag_id != "" and not done:
 		_drag_pose = play.aim(_drag_id, _drag_pose, delta)
 		_offer = play.offer_for(_drag_id, _drag_pose)
 	_sync()
@@ -329,13 +328,13 @@ func _make_body(inst: ItemData.Instance) -> RigidBody3D:
 	return body
 
 
+## The room camera, under the router's seam: orbit, pan and zoom with the mouse on empty space (or
+## any right or middle drag), framed first on the laid-out parts.
 func _make_camera() -> void:
-	_camera = Camera3D.new()
-	_camera.name = "LoopCamera"
-	_camera.fov = CAMERA_FOV
+	router.camera.frame(CAMERA_POSITION, CAMERA_TARGET)
+	router.hit_test = _pick
+	_camera = CameraRig.new(router.camera)
 	add_child(_camera)
-	_camera.look_at_from_position(CAMERA_POSITION, CAMERA_TARGET)
-	_camera.current = true
 
 
 func _make_ui() -> void:
