@@ -17,6 +17,9 @@ extends Node3D
 ##
 ## Tuning (step 7), one attempt a commit:
 ##   1. MIN_BODY_MASS: the web's PHYSICS.minBodyMass (0.2 kg) on every body.
+##   2. The web's body settings (world.ts register): continuous collision detection on every body
+##      ("hardware is millimetres thin"), PHYSICS.friction and restitution, linear and angular
+##      damping.
 
 ## No body simulates lighter than this (kg); 0 keeps the true masses (the 2.0.4.2 setting).
 const MIN_BODY_MASS := Constants.PHYSICS.minBodyMass
@@ -44,6 +47,13 @@ func _ready() -> void:
 		var body := RigidBody3D.new()
 		body.name = inst.id
 		body.mass = maxf(part.mass, MIN_BODY_MASS)
+		body.continuous_cd = true
+		body.linear_damp = Constants.PHYSICS.linearDamping
+		body.angular_damp = Constants.PHYSICS.angularDamping
+		var material := PhysicsMaterial.new()
+		material.friction = Constants.PHYSICS.friction
+		material.bounce = Constants.PHYSICS.restitution
+		body.physics_material_override = material
 		body.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 		body.freeze = true
 		body.visible = false
