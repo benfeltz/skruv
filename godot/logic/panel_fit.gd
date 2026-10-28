@@ -2,7 +2,7 @@ class_name PanelFit
 extends RefCounted
 ## Panel fit: where a carried panel seats by all its holes at once. The port of
 ## src/game/panelFit.ts findFits (the search; the web's "where it goes" ranking is replaced by
-## the caller's page filter, see the README). Pure: Snap.WorldConnector records, Transform3D
+## the caller's `allowed` pairs, see the README). Pure: Snap.WorldConnector records, Transform3D
 ## poses.
 ##
 ##   seed  a hole within the window of a free end that takes it: the hole's axis straightened
@@ -52,22 +52,26 @@ class Fit:
 
 
 ## Every whole-panel fit of `holes` (world space, with the panel at `pose`) onto `ends`. Fits
-## seating the same pairs are one, the nearer kept. Unranked.
-static func find_fits(holes: Array[Snap.WorldConnector], pose: Transform3D, ends: Array[Snap.WorldConnector], window: FitWindow, compatible: Dictionary[String, String]) -> Array[Fit]:
+## seating the same pairs are one, the nearer kept. Unranked. `allowed(hole, end) -> bool`, when
+## given, narrows which pairs may seed, spin or seat beyond type compatibility (the loop passes
+## the open page's pairs; the web passes nothing).
+static func find_fits(holes: Array[Snap.WorldConnector], pose: Transform3D, ends: Array[Snap.WorldConnector], window: FitWindow, compatible: Dictionary[String, String], allowed: Callable = Callable()) -> Array[Fit]:
 	var fits: Dictionary[String, Fit] = {}
 	var reach: Dictionary[String, float] = {}
 	for h: int in holes.size():
 		var hole := holes[h]
 		for e: int in ends.size():
 			var end := ends[e]
+			if allowed.is_valid() and not allowed.call(hole, end):
+				continue
 			var seed := Snap.find_snap([hole] as Array[Snap.WorldConnector], [end] as Array[Snap.WorldConnector], window.max_distance, window.max_angle, compatible)
 			if seed == null:
 				continue
-			var turns := _spins(seed.transform, hole, end, holes, ends, window, compatible)
+			var turns := _spins(seed.transform, hole, end, holes, ends, window, compatible, allowed)
 			if turns.is_empty():
 				turns.append(seed.transform)
 			for transform: Transform3D in turns:
-				var pairs := _pairs_of(transform, holes, ends, window, compatible)
+				var pairs := _pairs_of(transform, holes, ends, window, compatible, allowed)
 				var has_seed := false
 				for p: Vector2i in pairs:
 					if p.x == h and p.y == e:
@@ -120,7 +124,7 @@ static func _spun(transform: Transform3D, axis: Vector3, angle: float, centre: V
 
 
 ## The seed turned about the end's axis, once per second pair a turn within max_angle lands.
-static func _spins(seed: Transform3D, hole: Snap.WorldConnector, end: Snap.WorldConnector, holes: Array[Snap.WorldConnector], ends: Array[Snap.WorldConnector], window: FitWindow, compatible: Dictionary[String, String]) -> Array[Transform3D]:
+static func _spins(seed: Transform3D, hole: Snap.WorldConnector, end: Snap.WorldConnector, holes: Array[Snap.WorldConnector], ends: Array[Snap.WorldConnector], window: FitWindow, compatible: Dictionary[String, String], allowed: Callable) -> Array[Transform3D]:
 	var axis := end.axis
 	var out: Array[Transform3D] = []
 	for second: Snap.WorldConnector in holes:
@@ -132,6 +136,8 @@ static func _spins(seed: Transform3D, hole: Snap.WorldConnector, end: Snap.World
 			continue
 		for other: Snap.WorldConnector in ends:
 			if other == end or not Snap.are_compatible(second.type, other.type, compatible):
+				continue
+			if allowed.is_valid() and not allowed.call(second, other):
 				continue
 			var q := _across(other.position, end.position, axis)
 			if absf(p.length() - q.length()) > window.match_tolerance:
@@ -150,7 +156,7 @@ static func _across(point: Vector3, origin: Vector3, axis: Vector3) -> Vector3:
 ## The pairs `transform` seats, as (hole index, end index): each hole carried onto the nearest
 ## compatible end within match_tolerance across the end's axis and seat_slack along it, axis
 ## against axis within match_angle, one end per hole.
-static func _pairs_of(transform: Transform3D, holes: Array[Snap.WorldConnector], ends: Array[Snap.WorldConnector], window: FitWindow, compatible: Dictionary[String, String]) -> Array[Vector2i]:
+static func _pairs_of(transform: Transform3D, holes: Array[Snap.WorldConnector], ends: Array[Snap.WorldConnector], window: FitWindow, compatible: Dictionary[String, String], allowed: Callable) -> Array[Vector2i]:
 	var candidates: Array[Vector3] = []  # (hole, end, distance)
 	for i: int in holes.size():
 		var position := transform * holes[i].position
@@ -158,6 +164,8 @@ static func _pairs_of(transform: Transform3D, holes: Array[Snap.WorldConnector],
 		for j: int in ends.size():
 			var end := ends[j]
 			if not Snap.are_compatible(holes[i].type, end.type, compatible):
+				continue
+			if allowed.is_valid() and not allowed.call(holes[i], end):
 				continue
 			var offset := end.position - position
 			var slide := offset.dot(end.axis)
