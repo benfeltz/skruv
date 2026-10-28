@@ -103,9 +103,10 @@ stage_build() {
 # viewport has no pixels. A window shows for about 8 s. Always started through main.gd, because a
 # bare run with no main scene shows a native macOS alert that someone has to click.
 #
-# screenshot: the dowel loop plays the manual itself (scenes/loop.gd autoplay, logic/hand.gd) at
-# a fixed 20 fps and saves out/loop-page3.png (page 3, three dowels pressed) and out/loop-done.png
-# (JOHNNY handed to Jolt and settled 2 s), then quits. out/screenshot.png is the done one.
+# screenshot: the hand builds JOHNNY itself in Jolt (scenes/loop.gd autoplay, logic/hand.gd) at a
+# fixed 20 fps and saves out/loop-wrench.png and out/loop-cam.png (a tool mid-turn on its head, the
+# dial round it), out/loop-tip.png (the build tipped upright) and out/loop-done.png (2 s after
+# done), then quits. out/screenshot.png is the done one.
 stage_screenshot() {
   rm -f "$OUT"/loop-*.png "$OUT/screenshot.png"
   godot_run screenshot --path "$ROOT" -s res://main.gd --fixed-fps "$SHOT_FPS" -- --autoplay --shots="$OUT" \
@@ -113,9 +114,9 @@ stage_screenshot() {
   if grep -q 'SCRIPT ERROR' "$OUT/screenshot.log"; then fail screenshot; fi
   grep -q '^loop: done' "$OUT/screenshot.log" || fail screenshot
   local shot
-  for shot in loop-page3 loop-done; do [[ -f "$OUT/$shot.png" ]] || fail screenshot; done
+  for shot in loop-wrench loop-cam loop-tip loop-done; do [[ -f "$OUT/$shot.png" ]] || fail screenshot; done
   cp "$OUT/loop-done.png" "$OUT/screenshot.png"
-  echo "loop: screenshots loop-page3.png loop-done.png in $OUT"
+  echo "loop: screenshots loop-wrench.png loop-cam.png loop-tip.png loop-done.png in $OUT"
   grep -E '^loop: (done|settled)' "$OUT/screenshot.log" | sed 's/^/loop: windowed /'
 }
 

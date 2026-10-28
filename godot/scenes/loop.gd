@@ -17,8 +17,8 @@ extends Node3D
 ## space puts them away.
 ##
 ## `autoplay` plays the manual itself with logic/hand.gd (the playthrough's hand), one move at a
-## time, and with `shots` set saves a PNG mid-page-3 and one when done, then quits: the loop's
-## windowed screenshot stage.
+## time, and with `shots` set saves PNGs of the wrench and a cam mid-turn, the build tipped upright,
+## and done, then quits: the loop's windowed screenshot stage.
 
 const CAMERA_POSITION := Vector3(0.0, 1.75, 2.75)
 const CAMERA_TARGET := Vector3(0.0, 0.1, 0.95)
@@ -31,9 +31,10 @@ const UI_MARGIN := 16.0
 const LINE_COLOR := Color(1, 1, 1, 0.8)
 ## Autoplay: frames of physics after "done" before the last shot.
 const SETTLE_FRAMES := 40
-## Autoplay's mid-build shot: on this page, once this many of its joints are pressed.
-const SHOT_PAGE := 3
-const SHOT_PAGE_PRESSED := 3
+## Autoplay's shots: a tool on its head this far round its turn (the wrench's page, a cam's page),
+## and the page after the tip, the build framed whole.
+const SHOT_TURNED := 0.4
+const SHOT_AFTER_TIP_PAGE := 11
 
 var data: ItemData
 var play: Play
@@ -57,7 +58,7 @@ var _ghost: Node3D
 var _gizmo: MeshInstance3D
 # Autoplay
 var _hand: Hand
-var _shot_page_taken := false
+var _shots_taken: Dictionary[String, bool] = {}
 var _settled := 0
 
 
@@ -195,8 +196,19 @@ func _update_labels() -> void:
 	if step == null:
 		_page_label.text = "Manual done: %d of %d pages" % [play.steps.page_count(), play.steps.page_count()]
 	else:
-		_page_label.text = "Page %d of %d: %d of %d joints done\nDrag a part to its seat (wheel lifts it, Shift + scroll holds it up), click to tap it home, drag it out to pull.\nTools: let go on a head, circle its dial or hold it still to turn; click to take it off. Click a part for rings: sweep one to turn the build.\nEmpty space: left drag orbits, right drag pans, wheel zooms." % [
-			step.number, play.steps.page_count(), play.steps.done_count(step, play.bonds), step.joints.size()]
+		var done_n := play.steps.done_count(step, play.bonds)
+		var of_n := step.joints.size()
+		var what := "joints done"
+		if step.joints.is_empty() and not step.turns.is_empty():
+			done_n = 0
+			for i: int in step.turns:
+				var joint := play.bonds.joint_for_spec(i)
+				if joint != null and joint.fastener.state == Fastener.LOCKED:
+					done_n += 1
+			of_n = step.turns.size()
+			what = "cams locked"
+		_page_label.text = "Page %d of %d: %d of %d %s\nDrag a part to its seat (wheel lifts it, Shift + scroll holds it up), click to tap it home, drag it out to pull.\nTools: let go on a head, circle its dial or hold it still to turn; click to take it off. Click a part for rings: sweep one to turn the build.\nEmpty space: left drag orbits, right drag pans, wheel zooms." % [
+			step.number, play.steps.page_count(), done_n, of_n, what]
 	var lines: PackedStringArray = ["Fastened by the loop (not played):"]
 	for line: String in play.auto_log:
 		lines.append("  " + line)
@@ -320,14 +332,27 @@ func _autoplay_step(delta: float) -> void:
 	_maybe_shoot_page()
 
 
+## The film's shots as the hand gets to them: the wrench mid-turn on a bolt, the screwdriver
+## mid-turn on a cam (each with its dial), and the build stood upright after the tip.
 func _maybe_shoot_page() -> void:
-	var step := play.steps.current()
-	if shots == "" or _shot_page_taken or step == null or step.number != SHOT_PAGE:
+	if shots == "":
 		return
-	if play.steps.done_count(step, play.bonds) >= SHOT_PAGE_PRESSED:
-		_shot_page_taken = true
+	for turn: Bonds.Turn in play.bonds.turns():
+		if turn.joints.is_empty() or Crank.turn_progress(turn) < SHOT_TURNED:
+			continue
+		var file := "loop-wrench.png" if turn.joints[0].kind == Fastener.BOLT else "loop-cam.png"
+		if not _shots_taken.has(file):
+			_shots_taken[file] = true
+			_sync()
+			_save_shot(file)
+	var step := play.steps.current()
+	if step != null and step.number == SHOT_AFTER_TIP_PAGE and not _shots_taken.has("loop-tip.png"):
+		_shots_taken["loop-tip.png"] = true
+		var centre := play.box_of_set(play.bonds.compound(play._anchor(), false)).get_center()
+		router.camera.frame(centre + (Room.CAMERA_POSITION - Room.CAMERA_TARGET), centre)
+		_camera.follow()
 		_sync()
-		_save_shot("loop-page%d.png" % SHOT_PAGE)
+		_save_shot("loop-tip.png")
 
 
 func _save_shot(file: String) -> void:
