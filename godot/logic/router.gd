@@ -100,6 +100,13 @@ var tool_grips: Dictionary[String, Transform3D] = {}
 var press_on: Press = null
 ## Grip id → whether its turn was home last frame, and → ms of home flash left on its dial.
 var ring: Ring = null
+## Physics as you build (scenes/physics_bridge.gd): released parts are left to fall, not settled.
+var physics := false
+## Parts held where they seated until their first fastener engages and their joints hold them
+## (placed): each with what it carried in, held with it.
+var placed: Dictionary[String, Dictionary] = {}
+## The assembly a panel's fit on offer would seat on, held still under it (holdStill).
+var still: Dictionary[String, bool] = {}
 const RING_AXES: Dictionary[String, Vector3] = {"x": Vector3.RIGHT, "y": Vector3.UP, "z": Vector3.BACK}
 ## Points round a ring the hit test samples.
 const RING_SAMPLES := 64
@@ -201,6 +208,11 @@ func update(delta: float) -> void:
 		_assist(delta)
 	_follow_tools()
 	_flash_dials(delta)
+	if physics:
+		_release_placed()
+		_hold_still()
+		# A part let fall may land where a page wants it.
+		play.turn_pages()
 
 
 # --- what the scene and the hand read ---------------------------------------------------
@@ -764,7 +776,8 @@ func drawn(id: String) -> Transform3D:
 	return Bonds.orthonormal(twist * pose)
 
 
-## The world turn a part's crank joint has drawn on it: about its head's line, progress × span.
+## The world move a part's crank joint has drawn on it: sunk into its hole by its progress while it
+## turns unfastened (a bolt going in), and turned about its head's line by progress × span.
 func _twist_of(id: String) -> Transform3D:
 	for joint: Bonds.Joint in play.bonds.joints:
 		if joint.hardware != id or not Fastener.is_crank_kind(joint.kind):
@@ -775,7 +788,10 @@ func _twist_of(id: String) -> Transform3D:
 				var head := play.bonds.world_connector(id, i)
 				var angle := joint.fastener.progress * Fastener.span_of(joint.kind)
 				var turn := Basis(-head.axis, angle)
-				return Transform3D(turn, head.position - turn * head.position)
+				var sink := Vector3.ZERO
+				if Fastener.sinks_as_turned(joint.kind) and not Fastener.is_fastened(joint.fastener):
+					sink = -head.axis * float(play.data.sink_depth.get(joint.kind, 0.0)) * joint.fastener.progress
+				return Transform3D(turn, head.position - turn * head.position + sink)
 	return Transform3D.IDENTITY
 
 
@@ -843,6 +859,11 @@ func _end_drag() -> void:
 		if lifted:
 			lift.end()
 		_hold(offer.pose)
+		if physics:
+			var held: Dictionary = members.duplicate()
+			held.merge(still)
+			placed[id] = held
+			still.clear()
 		drag = null
 		for joint: Bonds.Joint in play.seat(offer, members):
 			if joint.kind == Fastener.TOOL:
@@ -864,9 +885,81 @@ func _cancel_drag() -> void:
 	_drop(members)
 
 
-## Let go of: down onto what is under it (no physics yet).
+## Let go of: down onto what is under it: the simulation's, else settled straight down.
 func _drop(members: Dictionary[String, bool]) -> void:
-	play.settle(members)
+	if not physics:
+		play.settle(members)
+
+
+# --- what the simulation must not move (the web's grab / placed / holdStill) ---
+
+
+## Every part held kinematic now: carried, held at a seat, held still under a fit, lifted on the
+## line, turning on a ring, or a tool on a head. Everything else is the simulation's.
+func kinematic() -> Dictionary[String, bool]:
+	var out: Dictionary[String, bool] = {}
+	if drag != null and (drag.mode == MOVE or drag.mode == COMPOUND):
+		out.merge(carried())
+	for id: String in placed:
+		out[id] = true
+		for m: String in placed[id]:
+			out[m] = true
+	out.merge(still)
+	if lift.is_holding():
+		out.merge(play.bonds.compound(lift.part, false))
+	if ring != null and ring.grabbed:
+		for id: String in ring.members:
+			out[id] = true
+	for tool: String in tool_grips:
+		out[tool] = true
+	return out
+
+
+## True when a physics joint holds `part` (isBonded).
+func is_bonded(part: String) -> bool:
+	for joint: Bonds.Joint in play.bonds.joints:
+		if Fastener.is_fastened(joint.fastener) and (joint.hardware == part or joint.host == part or joint.through == part or joint.captured == part):
+			return true
+	return false
+
+
+## A panel carried into seats not one of them yet pushed home (awaitsSeat).
+func _awaits_seat(part: String) -> bool:
+	var members := play.bonds.compound_of(part)
+	var joined := members.size() > 1
+	for joint: Bonds.Joint in play.bonds.joints:
+		if not members.has(joint.mover) or Fastener.is_fastened(joint.fastener):
+			continue
+		if members.has(joint.hardware) and members.has(joint.host):
+			continue
+		if joined or (joint.hardware != joint.mover and joint.host != joint.mover):
+			return true
+	return false
+
+
+## A placed part goes back to the simulation once its first fastener engages and the joints hold it;
+## seated hardware nothing holds and no seat waits on is held at its seat as before (reconcile).
+func _release_placed() -> void:
+	for id: String in placed.keys():
+		if not play.bonds.poses.has(id):
+			placed.erase(id)
+			continue
+		var seated := not play.bonds.joints_of(id).is_empty()
+		if not seated:
+			placed.erase(id)
+		elif is_bonded(id) and not _awaits_seat(id):
+			placed.erase(id)
+
+
+## While a panel's fit is on offer the assembly it would seat on is held still; after the seat, it
+## is held with the placed panel (holdStill, stillUnder).
+func _hold_still() -> void:
+	still.clear()
+	if drag == null or drag.snapped == null or not play.is_panel(drag.part):
+		return
+	for p: Play.Pair in drag.snapped.pairs:
+		if not drag.carry.has(p.b):
+			still.merge(play.bonds.compound(p.b, false))
 
 
 # --- the feel rules (update) --------------------------------------------------------------

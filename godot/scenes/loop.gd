@@ -39,11 +39,13 @@ var data: ItemData
 var play: Play
 var router: Router
 var bodies: Dictionary[String, RigidBody3D] = {}
+var bridge: PhysicsBridge
 var autoplay: bool
 ## Folder the autoplay saves its PNGs in ("" = none, and it never quits).
 var shots: String
-var joints: Array[Generic6DOFJoint3D] = []
 var done := false
+## The build's body poses when the manual ended, to measure what Jolt does after.
+var _at_done: Dictionary[String, Transform3D] = {}
 
 var _camera: CameraRig
 var _page_label: Label
@@ -70,10 +72,9 @@ func _ready() -> void:
 		data = ItemData.load_file(ItemData.JOHNNY_PATH)
 	play = Play.new(data)
 	router = Router.new(play)
-	for inst: ItemData.Instance in data.box():
-		var body := _make_body(inst)
-		bodies[inst.id] = body
-		add_child(body)
+	bridge = PhysicsBridge.new(router)
+	add_child(bridge)
+	bodies = bridge.bodies
 	_make_camera()
 	_make_ui()
 	_ghost = Node3D.new()
@@ -90,6 +91,7 @@ func _ready() -> void:
 	_gizmo.material_override = ring_material
 	add_child(_gizmo)
 	play.open_page()
+	bridge.sync()
 	_sync()
 	print("loop: %d parts, %d joints, %d pages" % [data.instances.size(), data.joints.size(), data.steps.size()])
 
@@ -141,16 +143,15 @@ func _process(delta: float) -> void:
 	_sync()
 
 
-## Poses to bodies, the ghost, the labels; "done" once.
+## The drawn turn on each body's mesh (the bridge moves the bodies), the ghost, the labels; "done"
+## once.
 func _sync() -> void:
-	if not done:
-		for id: String in bodies:
-			var body := bodies[id]
-			var posed := play.bonds.poses.has(id)
-			body.visible = posed
-			body.collision_layer = 1 if posed else 0
-			if posed:
-				body.global_transform = _shown(id)
+	for id: String in bodies:
+		var body := bodies[id]
+		if not play.bonds.poses.has(id):
+			continue
+		var mesh := body.get_child(1) as Node3D
+		mesh.transform = body.global_transform.affine_inverse() * router.drawn(id)
 	_show_ghost()
 	_update_labels()
 	_line.queue_redraw()
@@ -239,64 +240,18 @@ func _draw_line() -> void:
 	_line.draw_circle(Vector2(x, bottom - f * (bottom - top)), Constants.LIFT_LINE.knobRadius, LINE_COLOR, false, Constants.LIFT_LINE.lineWidth)
 
 
-## The manual has ended: every body handed to Jolt, each fastened pair on a locked joint, as
-## 2.0.4.2 stands JOHNNY. Seated hardware collides with nothing; shelf pins stay solid.
+## The manual has ended: JOHNNY has stood in Jolt as it was built; the camera frames it, and the
+## build's poses are kept to measure what Jolt does from here.
 func _finish() -> void:
 	done = true
 	_done_label.visible = true
-	router.camera.frame(Room.CAMERA_POSITION, Room.CAMERA_TARGET)
+	var centre := play.box_of_set(play.bonds.compound(play._anchor(), false)).get_center()
+	router.camera.frame(centre + (Room.CAMERA_POSITION - Room.CAMERA_TARGET), centre)
 	_camera.follow()
-	var embedded: Dictionary[String, bool] = {}
-	for joint: Bonds.Joint in play.bonds.joints:
-		if joint.kind != Item.SOLID_KIND:
-			embedded[joint.hardware] = true
-	for id: String in bodies:
-		var body := bodies[id]
-		body.global_transform = play.bonds.poses[id]
-		body.freeze = false
-		if embedded.has(id):
-			body.collision_layer = 0
-			body.collision_mask = 0
-	for bond: Bonds.Bond in play.bonds.locks():
-		_lock(bond.a, bond.b)
+	_at_done = bridge.snapshot()
 	var worst := play.worst_error()
-	print("loop: done; %d joints fastened, %d locked joints; built within %.4f mm and %.4f deg of assembled" % [
-		play.bonds.joints.size(), joints.size(), float(worst["offset"]) * 1000.0, rad_to_deg(float(worst["turn"]))])
-
-
-## A joint with every axis locked, anchored midway between the two parts (Item's shape).
-func _lock(a: String, b: String) -> void:
-	var joint := Generic6DOFJoint3D.new()
-	joint.name = "%s~%s" % [a, b]
-	joint.position = (play.bonds.poses[a].origin + play.bonds.poses[b].origin) / 2.0
-	for axis: String in ["x", "y", "z"]:
-		joint.set("linear_limit_%s/enabled" % axis, true)
-		joint.set("linear_limit_%s/upper_distance" % axis, 0.0)
-		joint.set("linear_limit_%s/lower_distance" % axis, 0.0)
-		joint.set("angular_limit_%s/enabled" % axis, true)
-		joint.set("angular_limit_%s/upper_angle" % axis, 0.0)
-		joint.set("angular_limit_%s/lower_angle" % axis, 0.0)
-	add_child(joint)
-	joint.node_a = joint.get_path_to(bodies[a])
-	joint.node_b = joint.get_path_to(bodies[b])
-	joints.append(joint)
-
-
-## A part's body: frozen (kinematic) while the build is played, the poses moving it. Picking is the
-## router's (the parts' boxes), so the body is only drawn and, at "done", simulated.
-func _make_body(inst: ItemData.Instance) -> RigidBody3D:
-	var part := data.type_of(inst)
-	var body := RigidBody3D.new()
-	body.name = inst.id
-	body.set_meta("part", inst.id)
-	body.mass = part.mass
-	body.freeze = true
-	body.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
-	body.visible = false
-	body.collision_layer = 0
-	body.add_child(Item.make_collider(part))
-	body.add_child(Item.make_mesh(part))
-	return body
+	print("loop: done; %d joints fastened, %d physics joints; built within %.4f mm and %.4f deg of the finished item" % [
+		play.bonds.joints.size(), bridge.joints.size(), float(worst["offset"]) * 1000.0, rad_to_deg(float(worst["turn"]))])
 
 
 ## The room camera, under the router's seam, framed first on the laid-out parts.
@@ -349,7 +304,8 @@ func _autoplay_step(delta: float) -> void:
 		router.update(delta)
 		_settled += 1
 		if shots != "" and _settled == SETTLE_FRAMES:
-			print("loop: settled %d frames after done; worst body %s" % [SETTLE_FRAMES, _worst_body()])
+			var moved := bridge.moved_since(_at_done)
+			print("loop: settled %d frames after done; worst body %s moved %.2f mm, %s turned %.3f deg" % [SETTLE_FRAMES, moved["offset_id"], float(moved["offset"]) * 1000.0, moved["turn_id"], rad_to_deg(float(moved["turn"]))])
 			await _save_shot("loop-done.png")
 			get_tree().quit()
 		return
@@ -379,15 +335,3 @@ func _save_shot(file: String) -> void:
 	var path := shots.path_join(file)
 	var err := get_viewport().get_texture().get_image().save_png(path)
 	print("loop: shot %s (%s)" % [path, error_string(err)])
-
-
-## The body farthest from its assembled pose after physics ran: what Jolt did to the build.
-func _worst_body() -> String:
-	var worst := 0.0
-	var worst_id := ""
-	for inst: ItemData.Instance in data.instances:
-		var d := bodies[inst.id].global_position.distance_to(inst.position)
-		if d > worst:
-			worst = d
-			worst_id = inst.id
-	return "%s %.1f mm" % [worst_id, worst * 1000.0]

@@ -12,8 +12,8 @@ extends RefCounted
 ## The hand knows the manual: which part goes where (Play.goal, the export's joints). Nothing it
 ## does reaches past the router: no pose is set, no seat is made but by letting go on an offer.
 
-## How far off its seat the hand lets go of the pointer: a few centimetres.
-const OFFSET := Vector3(0.02, 0.0, 0.015)
+## How far off its seat, out along the seat's axis, the hand holds a part for the assist (m).
+const BACK_OFF := 0.03
 ## Frames to glide the pointer from the pick-up to the drop, and the most to hold still there for
 ## a seat to be offered and taken.
 const GLIDE_FRAMES := 12
@@ -24,6 +24,10 @@ const SETTLED_RAD := 1e-4
 ## The camera the hand frames each move from: this far from what it looks at, from this direction.
 const VIEW_DISTANCE := 1.4
 const VIEW_DISTANCES: Array[float] = [1.4, 2.4, 3.4]
+## How far above both its pick-up and its seat the hand carries a part across (m).
+const CARRY_CLEAR := 0.05
+## The most frames the hand waits for something let go to come down.
+const SETTLE_FRAMES := 180
 ## How far above where a part goes the hand's eye must be, so the drag's plane stays below it (m).
 const EYE_ABOVE := 0.3
 ## The rise of the hand's lower views, per unit across (about 22° up).
@@ -194,6 +198,7 @@ func _plan_carry(id: String, i: int) -> void:
 		_fail("page %d: no goal for %s at joint %d" % [page, id, i])
 		return
 	var seat: Transform3D = goal
+	var back := _back_off(id, i)
 	var state := {"at": Vector2.ZERO, "from": Vector2.ZERO, "to": Vector2.ZERO, "frame": 0}
 	_queue.append(func() -> void:
 		var at := _look_at(id, play.bonds.poses[id].origin.lerp(seat.origin, 0.5), seat.origin, seat.origin.y + EYE_ABOVE)
@@ -209,12 +214,14 @@ func _plan_carry(id: String, i: int) -> void:
 			_fail("page %d: pressing %s began no carry (%s)" % [page, id, "none" if router.drag == null else router.drag.mode])
 			return
 		state["from"] = at
-		state["to"] = router.screen_for(seat.origin + OFFSET))
+		# Up clear of the floor's parts first, then across, then onto the seat's height.
+		router.wheel(-(maxf(seat.origin.y + back.y, router.drag.height) + CARRY_CLEAR - router.drag.height) / Constants.GESTURE.desktopLiftRate, at)
+		state["to"] = router.screen_for(seat.origin + back))
 	_glide(state)
-	# Over the seat, up (or down) to its height with the wheel; the lift keeps x and z.
+	# Over the seat, down (or up) to its height with the wheel; the lift keeps x and z.
 	_queue.append(func() -> void:
 		if router.drag != null:
-			router.wheel(-(seat.origin.y - router.drag.height) / Constants.GESTURE.desktopLiftRate, router.drag.pointer))
+			router.wheel(-(seat.origin.y + back.y - router.drag.height) / Constants.GESTURE.desktopLiftRate, router.drag.pointer))
 	_queue.append(func() -> void: _hold_for_seat(id, i, page, 0))
 
 
@@ -256,10 +263,27 @@ func _plan_place(id: String, place: Transform3D) -> void:
 			_fail("page %d: the drag of %s ended by itself" % [page, id])
 			return
 		router.release(Router.LEFT, router.drag.pointer, t)
-		if not play.is_placed(id):
-			_fail("page %d: %s let go at %s is not where it goes (%s)" % [page, id, play.bonds.poses[id].origin, place.origin])
-			return
-		lines.append("page %d: %s laid in" % [page, id]))
+		_queue.push_front(func() -> void: _wait_placed(id, place, page, 0)))
+
+
+## Waits while a panel let go comes down (the simulation drops it), then checks it lies where it goes.
+func _wait_placed(id: String, place: Transform3D, page: int, waited: int) -> void:
+	if not play.is_placed(id) and waited < SETTLE_FRAMES:
+		_queue.push_front(func() -> void: _wait_placed(id, place, page, waited + 1))
+		return
+	if not play.is_placed(id):
+		_fail("page %d: %s let go at %s is not where it goes (%s)" % [page, id, play.bonds.poses[id].origin, place.origin])
+		return
+	lines.append("page %d: %s laid in" % [page, id])
+
+
+## Where the hand leaves a part for joint `i`: backed off its seat along the seat's axis, out of the
+## wood (a held part pressed into another would shove it), the seat assist bringing it in.
+func _back_off(id: String, i: int) -> Vector3:
+	var spec := play.data.joints[i]
+	var carried_side := play.bonds.compound(id, false)
+	var fixed := play.bonds.world_connector(spec.host, spec.host_connector) if carried_side.has(spec.hardware) else play.bonds.world_connector(spec.hardware, spec.hardware_connector)
+	return fixed.axis * BACK_OFF
 
 
 ## Holds still until a seat is on offer and the part has glided into it, then lets go.
@@ -277,11 +301,19 @@ func _hold_for_seat(id: String, i: int, page: int, held: int) -> void:
 		router.release(Router.LEFT, router.drag.pointer, t)
 		return
 	var pairs := offer.pairs.size()
+	var before := play.bonds.joints.duplicate()
 	router.release(Router.LEFT, router.drag.pointer, t)
 	var joint := play.bonds.joint_for_spec(i)
 	if joint == null:
-		_fail("page %d: letting go of %s seated %d pairs, not joint %d" % [page, id, pairs, i])
-		return
+		# Seated somewhere the manual has another seat of its kind: fine, the booklet goes by type.
+		for j: Bonds.Joint in play.bonds.joints:
+			if not before.has(j):
+				joint = j
+				break
+		if joint == null:
+			_fail("page %d: letting go of %s seated nothing (offer of %d pairs)" % [page, id, pairs])
+			return
+		lines.append("page %d: %s seated where joint %d's kind goes, not joint %d" % [page, id, joint.spec, i])
 	seats += pairs
 	lines.append("page %d: %s seated, %d pairs" % [page, id, pairs])
 	if Fastener.is_tap_kind(joint.kind):
@@ -476,12 +508,19 @@ func _plan_turn(step: ItemData.Step) -> void:
 		return
 	var panel := play._anchor()
 	_queue_turns(panel, turns, page)
-	_queue.append(func() -> void:
-		if not Steps.stands_as(step.pose, play.build_basis()):
-			_fail("page %d: turned, the build does not stand %s" % [page, step.pose])
-			return
-		turnings += turns.size()
-		lines.append("page %d: the build turned %s, %d quarter turns" % [page, step.pose, turns.size()]))
+	_queue.append(func() -> void: _wait_stands(step, turns.size(), 0))
+
+
+## Waits while the turned build comes down, then checks it stands as the page has it.
+func _wait_stands(step: ItemData.Step, count: int, waited: int) -> void:
+	if not Steps.stands_as(step.pose, play.build_basis()) and waited < SETTLE_FRAMES:
+		_queue.push_front(func() -> void: _wait_stands(step, count, waited + 1))
+		return
+	if not Steps.stands_as(step.pose, play.build_basis()):
+		_fail("page %d: turned, the build does not stand %s" % [step.number, step.pose])
+		return
+	turnings += count
+	lines.append("page %d: the build turned %s, %d quarter turns" % [step.number, step.pose, count])
 
 
 ## Selects `panel` with a tap, then each quarter turn a sweep along its ring.

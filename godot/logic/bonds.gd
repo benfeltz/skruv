@@ -388,10 +388,11 @@ func depth(joint: Joint) -> float:
 	return (hole.position - end.position).dot(hole.axis)
 
 
-## How deep a joint's fastener sits in its hole by its machine (sinkOf); a cam turns in place, so
-## until it locks it sits at the mouth.
+## How deep a joint's fastener sits in its hole by its machine (sinkOf): its sink depth times its
+## progress once fastened. A turned kind partway in stays at the mouth: its sink is only drawn
+## (Router.drawn, the web's drawTurned), never put on its body, which would push into the wood.
 func sink_of(joint: Joint) -> float:
-	if joint.kind == Fastener.CAM and not Fastener.is_fastened(joint.fastener):
+	if Fastener.is_crank_kind(joint.kind) and not Fastener.is_fastened(joint.fastener):
 		return 0.0
 	return data.sink_depth.get(joint.kind, 0.0) * joint.fastener.progress
 

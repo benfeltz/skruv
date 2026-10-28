@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The agent loop for the Godot project: export check → fetch addons → import → compile check →
-# headless tests (the dowel-loop playthrough among them) → windowed dowel-loop screenshots →
-# windowed drop film of the finished item.
+# headless tests (the playthroughs among them) → the headless build in Jolt → windowed build
+# screenshots → windowed drop film of the finished item.
 # Exit 0 only when every stage passes. No stage opens the editor.
 #
 #   godot/scripts/loop.sh            # the whole loop
@@ -88,6 +88,17 @@ stage_test() {
   echo "loop: tests ok"
 }
 
+# build: physics as you build (test_physics/build_test.gd): the hand builds JOHNNY with every part a
+# Jolt body, then the 5 s stillness. Apart from test/ so it can run at --fixed-fps 60: one frame,
+# one physics tick, so the hand and the simulation keep step and the run takes seconds, not minutes.
+stage_build() {
+  godot_run build --headless --path "$ROOT" --fixed-fps 60 \
+    -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd --ignoreHeadlessMode -c -rd out/reports -a res://test_physics \
+    || { grep -E '^(build|stillness):' "$OUT/build.log" | grep -v 'seated, [0-9] pairs' | sed 's/^/loop: /'; fail build; }
+  grep -E '^(build: [0-9]+ frames|stillness: t=5s)' "$OUT/build.log" | sed 's/^/loop: /'
+  echo "loop: build ok"
+}
+
 # Windowed on purpose: `--headless --write-movie` crashes 4.7.2 with signal 11, and a headless
 # viewport has no pixels. A window shows for about 8 s. Always started through main.gd, because a
 # bare run with no main scene shows a native macOS alert that someone has to click.
@@ -140,6 +151,7 @@ stage_addons
 stage_import
 stage_check
 stage_test
+stage_build
 stage_screenshot
 stage_drop
 echo "loop: PASS"

@@ -25,7 +25,7 @@ extends RefCounted
 const LAY_X_MIN := -2.2
 const LAY_X_MAX := 2.2
 const LAY_Z_START := 0.45
-const LAY_GAP := 0.06
+const LAY_GAP := 0.12
 const LAY_HARDWARE_GAP := 0.03
 ## How far a let-go part may already overlap what it rests on (m), and still rest on it.
 const SETTLE_EPSILON := 1e-4
@@ -382,6 +382,19 @@ func name_seats(fresh: Array[Bonds.Joint], carried: Dictionary[String, bool] = {
 	var named := _name_all()
 	if _all_named(fresh):
 		return
+	# A loose piece of hardware in a hole the manual gives another of its type takes that one's name
+	# (a dowel is a dowel).
+	for joint: Bonds.Joint in fresh:
+		if joint.spec >= 0 or bonds.joints_of(joint.hardware).size() != 1:
+			continue
+		for i: int in data.joints.size():
+			var s := data.joints[i]
+			if s.host == joint.host and s.host_connector == joint.host_connector and bonds.joint_for_spec(i) == null and _loose_alike(s.hardware, joint.hardware):
+				bonds.swap_ids(joint.hardware, s.hardware)
+				break
+	named = _name_all()
+	if _all_named(fresh):
+		return
 	# Only what moved is relabeled: the build it seated on keeps its names.
 	var movers: Dictionary[String, bool] = {}
 	for joint: Bonds.Joint in fresh:
@@ -418,6 +431,11 @@ func name_seats(fresh: Array[Bonds.Joint], carried: Dictionary[String, bool] = {
 					return
 				_restore(saved)
 	_name_all()
+
+
+## True when `named` (the manual's) and `seated` are the same type and `named` is in no seat.
+func _loose_alike(named: String, seated: String) -> bool:
+	return named != seated and type_of(named) == type_of(seated) and bonds.joints_of(named).is_empty()
 
 
 ## Every joint named afresh by exact match; returns how many are named.
@@ -723,11 +741,14 @@ func settle(members: Dictionary[String, bool]) -> void:
 ## How far the build is from the finished item: the worst offset (m) and turn (rad) of any
 ## instance from its assembled pose, in the build's own frame (the room position and heading are
 ## the player's), and which. A piece of hardware's turn is its end axis's.
-func worst_error() -> Dictionary:
+func worst_error(built_only: bool = false) -> Dictionary:
 	var worst := {"offset": 0.0, "turn": 0.0, "offset_id": "", "turn_id": ""}
+	var built := bonds.compound(_anchor(), false)
 	# Measured in the build's own frame: where it stands in the room is the player's.
 	var frame := build_frame().affine_inverse()
 	for inst: ItemData.Instance in data.instances:
+		if built_only and not built.has(inst.id):
+			continue
 		if not bonds.poses.has(inst.id):
 			return {"offset": INF, "turn": INF, "offset_id": inst.id, "turn_id": inst.id}
 		var pose := Bonds.orthonormal(frame * bonds.poses[inst.id])
