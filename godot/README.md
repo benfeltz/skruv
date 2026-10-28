@@ -1,8 +1,9 @@
-# Skruv in Godot (spikes 2.0.4.1, 2.0.4.2)
+# Skruv in Godot (spikes 2.0.4.1, 2.0.4.2, 2.0.4.3)
 
 A Godot project an agent builds and checks from the CLI. 2.0.4.1 made the loop; 2.0.4.2 puts
-a bare room and a fully assembled, fully physical JOHNNY in it, read from the pack.
-Spike branch only. It stays off main.
+a bare room and a fully assembled, fully physical JOHNNY in it, read from the pack; 2.0.4.3
+ports the first slice of the design layer and plays JOHNNY's whole manual on it, the dowel the
+one fastener played by hand. Spike branch only. It stays off main.
 
 - **Godot:** 4.7.2.stable.official.ed1daf0bf, at `/opt/homebrew/bin/godot`. Pinned. Don't install another.
 - **Physics:** Jolt, set explicitly in `project.godot`.
@@ -15,6 +16,108 @@ Spike branch only. It stays off main.
   (`test/scene_test.gd` pins it). The scene scripts are `@tool`, so the editor builds the
   room and JOHNNY in its viewport too. Physics and the stillness log run only on Play. 2.0.4.1's one native alert ("no main scene defined")
   came from a bare `godot --path` run in a scratch project; the loop can't trigger it.
+
+## 2.0.4.3 results: the dowel loop
+
+Loose parts in the room; press one and drag it; near its mate it turns to where it goes, a ghost
+shows the seat, release seats it; click it and its dowels go home; a complete page turns the
+booklet; the manual ends and JOHNNY stands. Pages that are not dowels alone are fastened by the
+loop on arrival and listed on screen.
+
+| Question | Answer |
+|---|---|
+| Does the whole loop run? | **Yes.** `test/playthrough_test.gd` plays the whole manual headless through the same code the mouse loop calls: 3 dowel pages played (1, 3, 6), 19 snaps seating all 28 dowel joints, 9 pages auto-fastened, **60 of 60 joints fastened**, every one of the 55 parts within **0.0003 mm** and **0.000°** of its assembled pose (bar: 2 mm, 0.5°). |
+| Can the web build's rules be carried over by an agent? | **Mostly, and faithfully where ported.** Snap, panel fit, the press/pull machine, tap, seatHome, the pose maths, the gesture machine, self-aim and the constants carried over with the web specs' behaviours intact (the snapMath test ideas pass unchanged). What did not carry over is listed below, each with what was done instead. |
+| What did the rewrite cost? | About 20 minutes of agent time from claiming the note to a green playthrough, and 30 more for the mouse loop, its shots and its test. 1,500 lines of pure GDScript in `logic/` and 441 in `scenes/loop.gd`, plus 615 lines of new tests. The spec read: snapMath, panelFit, fasteners and bookletModel whole, the assembly graph's slice, gestureState, and the drag/tap flow of the 2,338-line router. |
+| Did the editor or a human get involved? | **No.** Zero editor interactions; nothing opened the editor. `scenes/world.tscn` is untouched and still holds one node; the loop is inserted at runtime. |
+
+### What carried over, file by file
+
+All pure: `logic/` imports no node class. Poses are `Transform3D` values, connectors plain records.
+
+| GDScript | Web spec | Notes |
+|---|---|---|
+| `logic/constants.gd` | `src/constants.ts` | `SNAP`, `GESTURE`, `FASTENER` copied verbatim under the same names (`Constants.SNAP.maxDistance`), plus `PANEL`, `AIM` and `PICK`, which the panel fit, aim and picking read. `FASTENER.sinkDepth` is the Flatpack contract's and comes through the export (`ItemData.sink_depth`); `captureRadius` is copied with that note. |
+| `logic/snap.gd` | `snapMath.ts` | `find_snap`, `apply_transform`, `rotation_between` (the same half-turn choice). Compatibility is the export's vocabulary, never a copy. |
+| `logic/panel_fit.gd` | `panelFit.ts` `findFits` | Seed, spin, fit, dedupe as the web has them, plus an optional `allowed(hole, end)` filter (below). |
+| `logic/fastener.gd` | `fasteners.ts` | The press/pull rows (dowel, pin, fitting): tap seated→pressed, pull pressed→seated, an ignored event returns the same record. |
+| `logic/bonds.gd` | `assembly.ts` | `seat`, `apply`, `tap` with the router's `pressCarried`, `seat_home`, `relative_pose`, `carry_pose`, `seated_pose`, `bonds`. It also holds every part's pose, which the web keeps on its physics bodies. |
+| `logic/steps.gd` | `bookletModel.ts` `createBuildSteps` | The pages come through the exporter, which calls `createBuildSteps` itself, so GDScript reimplements none of it. Here: open page, completion, turning, auto flagging. |
+| `logic/gesture.gd` | `gestureState.ts` | `createGestureState` whole: owners, tap vs drag at `tapMaxDistance`/`tapMaxMs`, the lift channel, wheel, cancel. |
+| `logic/play.gd` | `gestureRouter.ts` (drag/tap), `toolAim.ts` | The snap on offer for a part dragged to a pose (find_snap for lone hardware, panel fit otherwise), seat (`moverOf`), self-aim and panel magnetism (`aimWeight`, `aimStep`), tap, page turns, auto pages, floor layout. |
+| `logic/hand.gd` | — | A scripted player, shared by the playthrough test and the windowed autoplay so the film shows the moves the test proves. |
+
+### Web rules that did not carry over, and what was done instead
+
+1. **Correctness never enters the snap** (web: any type-compatible pair seats; the booklet only
+   advises). **Here the snap offers only the open page's own pairs**, matched by connector
+   identity, so the page knows when it is done. Loose hardware stands in for any loose piece of
+   its type (`Bonds.swap`): a dowel is a dowel, and the picked one takes the manual's name.
+2. **The booklet is reference only** on the web. **Here a page gates the build**: it completes
+   when its joints are seated and fastened, then it turns.
+3. **"Where it goes" ranking and hysteresis** (`rankFits`, `preferredPoses`, `heldOffer`) are
+   not ported. Instead `find_fits` takes the page pairs as an `allowed` filter at seed, spin and
+   seat, and the most pairs then the nearest fit wins. Without the filter, a two-dowel horizontal
+   seated 2.26° off: the spin paired a dowel with the neighbouring hole at the same radius, and
+   both real pairs still fell inside the 1 cm / 5° match window.
+4. **Self-aim turns hardware about its fastener end, clamped inside the room.** Here it turns
+   about the part's centre, with no room clamp (`SNAP.roomTolerance`, `GESTURE.wallMargin`,
+   `ceilingMargin` unused). Lone hardware turns only its end's axis, as on the web; anything else
+   turns whole toward where it goes (PANEL magnetism).
+5. **A goal measured through a dowel is wrong.** A dowel is round about its axis, and snap only
+   straightens the axis, so its spin is arbitrary. Goals and the turn check go through a panel on
+   each side (`Play._panel_of`), and a fastener's turn is its end axis's. This is not a web
+   divergence: the web never asks a dowel where its panel goes either. It was the playthrough's
+   first red (a one-dowel plinth carried 5° off).
+6. **Seat assist** (`SNAP.assistStrength`: the held part glides into the seat on offer) is not
+   ported. The ghost shows the seat, and release jumps to it.
+7. **Physics during the build.** On the web a seated part is held kinematic until a fastener
+   engages, then rides Rapier on its bonds. Here every part is a frozen kinematic body the whole
+   build, moved by the pure poses. At "done" every body goes to Jolt and every fastened pair
+   becomes a locked joint, the 2.0.4.2 shape.
+8. **Bonds.** The web embeds hardware in its first host and bridges the hosts (with angular play
+   while only dowels hold; `angularPlayDegrees` is 0). Here hardware is locked to each host (and
+   to a fitting's far panel and a cam's bolt), as 2.0.4.2 built it.
+9. **Pull and unseat.** The machine has `pull`, tested both ways, but the scene has no pull
+   gesture (`FASTENER.pullDistance`) and no unseating by dragging a part away.
+10. **Bolt, cam, stud, screw and slide machines** are not ported. Their events return the same
+    record, and their pages are fastened by `Fastener.auto_home`, marked `auto`, at the export's
+    poses: hardware at its home against its host, a page's panel against the build, the tip page
+    moving the build to its assembled, upright pose.
+11. **Input.** Touch, the second-finger lift, camera orbit/pan/zoom, gizmo rings, the lift line
+    and Shift-hold are not wired. The gesture machine is ported whole, but the scene feeds it one
+    mouse pointer and the wheel (`GESTURE.desktopLiftRate` per px, 20 px a notch). The camera is
+    fixed, and reframes on JOHNNY at "done".
+12. **Picking** is a ray against each body, with hardware given an invisible box no thinner than
+    `PICK.proxyMinSize`. The web's angular finger radius and preference rules (`pickMath.ts`) are
+    not ported.
+13. **Feedback.** No drop guide, target rings, hole glow, seat flash or haptics. The page label,
+    the ghost and the auto list are all there is.
+14. **Layout.** The web unpacks a box. Here each page's loose parts are laid in rows on the
+    floor, thinnest side down, when the page opens.
+
+### Screenshots (windowed, `loop.sh screenshot`)
+
+`out/loop-page3.png`, mid-page 3 with 3 of 7 dowels pressed: side panel 1 lies flat on the floor
+in front with side panel 2 behind it. A top/bottom panel stands on edge on side panel 1's far end,
+on its dowels; a fixed shelf and the other horizontal lie loose to the right. Dowels show as
+small tan specks at the panel ends. The label reads "Page 3 of 12: 3 of 7 dowels pressed", and
+the list shows page 2's bolts and side panels laid in by the loop.
+
+`out/loop-done.png`, 2 s after "done": the room's framing, JOHNNY upright mid-room, the brown back
+panel on, the fixed shelf and both adjustable shelves level on their pins, the plinth at the
+foot. "Done: JOHNNY stands" sits bottom-left, and the nine auto pages (2, 4, 5, 7, 8, 9, 10, 11,
+12) are listed top-left with what each fastened. Jolt moved the build: the worst body after 2 s
+is the back panel, 13.7 mm from its assembled pose (the 2.0.4.2 sag, not this task's to tune).
+
+### The stillness red, unchanged
+
+The jointed stillness test is still the one red, and its numbers are unchanged like for like: run
+alone, it measures 19.66 mm / 2.484° on this branch and on fce976a. In the full suite its numbers
+depend on which suites ran before it in the same process: 347.5 mm / 21.9° with 2.0.4.2's
+suites, 388.7 mm / 130.5° with this branch's. Finding 13 grows: **the test order changes the
+physics**, not only headless against windowed. The windowed drop film (`loop.sh drop`) still
+settles to 19.66 mm / 2.48°.
 
 ## 2.0.4.2 results
 
@@ -123,25 +226,28 @@ nothing the CLI loop lacks. It's worth revisiting only for a server that reads t
 ## The loop
 
 ```bash
-godot/scripts/loop.sh             # exit 0 = every stage passed
-godot/scripts/loop.sh screenshot  # one or more named stages alone (e.g. while a test is red)
+godot/scripts/loop.sh                  # exit 0 = every stage passed
+godot/scripts/loop.sh screenshot drop  # one or more named stages alone (e.g. while a test is red)
+godot --path godot -s res://main.gd    # play the dowel loop with the mouse (a window)
 ```
 
 Needs `npm ci` at the repo root once (the export stage runs the TS exporter).
 
 | Stage | What it runs | Fails when |
 |---|---|---|
-| export | `npx tsc -p godot/tsconfig.json`, then `npx tsx godot/tools/export-item.ts items/johnny godot/items/johnny.json --check` | the exporter doesn't typecheck, or the committed json differs from its output |
+| export | `npx tsc -p godot/tsconfig.json`, then `npx tsx godot/tools/export-item.ts items/johnny godot/items/johnny.json --check` | the exporter doesn't typecheck, or the committed json (format 2: vocabulary, connectors, joints with their connector indices and mover, the manual's steps) differs from its output |
 | version | `godot --version` | the binary isn't 4.7.2.stable |
 | addons | copies gdUnit4 v6.2.2 into `addons/` from its GitHub tarball, sha256-checked. Skipped once present. | the checksum doesn't match |
 | import | `godot --headless --path godot --import` | nonzero exit |
 | check | `godot --headless -s res://scripts/check.gd` | a script won't compile, including an untyped declaration; or the run has no `check: ok` line |
 | test | gdUnit4's `GdUnitCmdTool.gd --ignoreHeadlessMode -c -a res://test` (`-c`: keep going after a failure) | a failed test (gdUnit exit 100) |
-| screenshot | windowed `-s res://main.gd --write-movie out/frame.png --fixed-fps 20 --quit-after 61`; keeps `out/shot-0s.png`, `shot-1s.png`, `shot-3s.png` (and `screenshot.png`, the 3 s one) and prints the run's last `stillness:` line | nonzero exit, a `SCRIPT ERROR`, or a missing frame |
+| screenshot | windowed `-s res://main.gd --fixed-fps 20 -- --autoplay --shots=out`: the loop plays the manual itself (`logic/hand.gd`) and saves `out/loop-page3.png` and `out/loop-done.png` (also `screenshot.png`), then quits; prints its `loop: done` and `loop: settled` lines | nonzero exit, a `SCRIPT ERROR`, no `loop: done` line, or a missing PNG |
+| drop | windowed `-- --assembled` with `--write-movie out/frame.png --fixed-fps 20 --quit-after 61`: 2.0.4.2's film; keeps `out/shot-0s.png`, `shot-1s.png`, `shot-3s.png` and prints the run's last `stillness:` line | nonzero exit, a `SCRIPT ERROR`, or a missing frame |
 
 Every Godot call has a 180 s wall-clock cap. Logs are in `godot/out/<stage>.log`, and
 gdUnit's HTML/XML reports are in `godot/out/reports/`. The loop reaches the test stage's
-end in about 14 s on this Mac (the two 5 s stillness runs dominate); the film adds about 4 s. **It currently stops at
+end in about 15 s on this Mac (the two 5 s stillness runs dominate); the screenshots add about
+8 s and the film about 4 s. **It currently stops at
 the test stage**, because the jointed stillness test is red (above). The worker reads the
 PNGs with its file reader and says what it sees.
 
@@ -154,7 +260,8 @@ back to PASS when reverted.
 ```
 project.godot          written by hand; no main scene; untyped declarations are errors; Jolt and
                        its tuning; gdUnit4 and godot_mcp enabled by path; MCP port 6550
-main.gd                loop entry point (extends SceneTree): starts World
+main.gd                loop entry point (extends SceneTree): starts World; user args --assembled,
+                       --autoplay, --shots=<dir>
 scenes/world.tscn      main scene: one World node, nothing else; open it in the editor and Play
 tools/export-item.ts   the exporter (TS, through tools/validate/lib); tsconfig.json typechecks it
 items/johnny.json      the exporter's output, committed; the only item data Godot reads
@@ -162,7 +269,12 @@ scenes/item_data.gd    ItemData: typed reader for items/johnny.json
 scenes/room.gd         Room: static floor (top at y = 0), three walls, sun, ambient, camera
 scenes/item.gd         Item: a body per instance, a locked joint per joint, the 2 cm drop; or the compound control
 scenes/stillness.gd    Stillness: one measurement of offset, turn, speed, sleep, lowest point
-scenes/world.gd        World: room + item, a stillness: line each second
+scenes/world.gd        World: room + the dowel loop at runtime; start_assembled (and the editor):
+                       room + the standing item, a stillness: line each second
+scenes/loop.gd         Loop: the mouse loop (bodies follow Play's poses, picking, drag, ghost,
+                       tap, labels, the hand-off to Jolt at done, the autoplay and its shots)
+logic/                 pure, no nodes: constants, snap, panel_fit, fastener, bonds, steps,
+                       gesture, play (the build as played), hand (the scripted player)
 scenes/hello.gd        2.0.4.1's trivial scene, still tested
 scripts/check.gd       the compile gate
 scripts/loop.sh        the loop
@@ -170,7 +282,10 @@ scripts/editor.sh      start/stop/status the editor from the CLI, for the MCP se
 scripts/mcp.sh         call one MCP tool over HTTP
 scripts/bin/timeout    GNU timeout stand-in for the addon (macOS has none)
 addons/godot_mcp/      voidrot/godot-mcp @ 57715ac, a plain file copy, committed
-test/                  item_test (counts vs the pack, bodies), room_test, scene_test, stillness_test, hello_test
+test/                  item_test (counts and pages vs the pack), room_test, scene_test, stillness_test,
+                       hello_test; snap_test, fastener_test, steps_test, gesture_test (the web
+                       specs' ideas); playthrough_test (the acceptance test); loop_mouse_test
+                       (real mouse events through the scene, headless)
 *.gd.uid               Godot 4.4+ script ids, generated by import, committed
 ```
 
@@ -221,6 +336,35 @@ Added in 2.0.4.2:
 15. **gdUnit4 stops at the first failure** unless given `-c`, which hid a whole test.
 16. **Launching the editor rewrites `project.godot`**, and drops an enabled addon it hasn't
     indexed yet (see the editor verdict).
+
+Added in 2.0.4.3:
+
+17. **An inner class may not share a native class's name.** `class Window:` inside a script is a
+    parse error ("hides a native class"); panel_fit's window is `FitWindow`.
+18. **The test order changes the physics.** The same stillness test gives different numbers by
+    which suites ran before it in the gdUnit process (see "The stillness red, unchanged").
+19. **A windowed run can save its own frames.** `await RenderingServer.frame_post_draw` then
+    `get_viewport().get_texture().get_image().save_png()` writes the exact frame a script asks
+    for, with no movie writer, so the loop shoots at a page, not at a second.
+20. **Mouse input tests headless.** `get_viewport().push_input()` with `InputEventMouseButton`
+    and `InputEventMouseMotion` reaches `_unhandled_input`, and ray picking against bodies works
+    in the headless physics space once a physics frame has passed. The mouse path is tested
+    without a window.
+
+## Deviations from the 2.0.4.3 plan
+
+- New files the plan's table doesn't list: `logic/panel_fit.gd` (the panel half of the snap: a
+  panel seats on all its dowels at once), `logic/play.gd` (the build as played, shared by the
+  test and the scene), `logic/hand.gd` (the scripted player), `test/loop_mouse_test.gd`.
+- `bonds.gd` is the assembly-graph slice and holds every pose, so the playthrough needs no
+  physics. The scene's bodies follow it, and physics joins only at "done".
+- The export is format 2: besides `steps` and each joint's `kind` (already there), it carries
+  the vocabulary, each type's connectors and each joint's connector indices and mover, since
+  the snap needs them and GDScript must not keep a second copy.
+- `item.gd`'s mesh and collider helpers are static now, so the loop builds bodies the same way.
+- The screenshot stage films the loop by page (the autoplay saves its PNGs itself), and
+  2.0.4.2's drop film moved to its own `drop` stage, still in the full loop.
+- `steps_test` pins the dowel pages to 1, 3 and 6, so a pack edit that moves them is noticed.
 
 ## Deviations from the 2.0.4.2 plan
 

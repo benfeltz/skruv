@@ -5,12 +5,22 @@ extends RefCounted
 ## Typed accessors only: no item numbers live here, and nothing here derives a joint.
 ## Plain data, no nodes, so the headless tests read it directly.
 
-const FORMAT := 1
+const FORMAT := 2
 const JOHNNY_PATH := "res://items/johnny.json"
+
+
+class Connector:
+	var id: String
+	var type: String
+	## In the part's own frame.
+	var position: Vector3
+	var axis: Vector3
 
 
 class PartType:
 	var name: String
+	## In file order: joints name them by index.
+	var connectors: Array[Connector] = []
 	var size: Vector3
 	var color: Color
 	var mass: float
@@ -31,6 +41,10 @@ class JointSpec:
 	var host: String
 	var hardware: String
 	var kind: String
+	var host_connector: int
+	var hardware_connector: int
+	## The side the lib says moves to seat it: the hardware, or the panel pressed onto it.
+	var mover: String
 	## A fitting's or screw's far panel, or "" (the lib's `through`).
 	var through: String
 	## A cam's bolt, or "" (the lib's `captured`).
@@ -41,7 +55,27 @@ class JointSpec:
 	var axis: Vector3
 
 
+## One build page of the manual (bookletModel.ts createBuildSteps, through the exporter).
+class Step:
+	var number: int
+	## 'parts', 'lying', 'faceDown', 'upright', 'upsideDown'.
+	var pose: String
+	## Panels the page brings in.
+	var parts: Array[String] = []
+	## Indices into `joints` the page seats (and fastens).
+	var joints: Array[int] = []
+	## Indices of the cam joints the page locks.
+	var turns: Array[int] = []
+	## The page tips the carcass upright.
+	var tip: bool
+
+
 var product: String
+## The lib's vocabulary: fastener-end type → hole type, end type → kind, kind → sink depth (m).
+var compatible: Dictionary[String, String] = {}
+var kinds: Dictionary[String, String] = {}
+var sink_depth: Dictionary[String, float] = {}
+var steps: Array[Step] = []
 var source: String
 var types: Dictionary[String, PartType] = {}
 var instances: Array[Instance] = []
@@ -65,6 +99,16 @@ static func load_file(path: String) -> ItemData:
 	var item := ItemData.new()
 	item.product = d["product"]
 	item.source = d["source"]
+	var vocabulary: Dictionary = d["vocabulary"]
+	var raw_compatible: Dictionary = vocabulary["compatible"]
+	for end: String in raw_compatible:
+		item.compatible[end] = String(raw_compatible[end])
+	var raw_kinds: Dictionary = vocabulary["kinds"]
+	for end: String in raw_kinds:
+		item.kinds[end] = String(raw_kinds[end])
+	var raw_sinks: Dictionary = vocabulary["sinkDepth"]
+	for kind: String in raw_sinks:
+		item.sink_depth[kind] = float(raw_sinks[kind])
 	var raw_types: Dictionary = d["types"]
 	for type_name: String in raw_types:
 		var t: Dictionary = raw_types[type_name]
@@ -74,6 +118,13 @@ static func load_file(path: String) -> ItemData:
 		part.color = Color.html(t["color"])
 		part.mass = t["mass"]
 		part.hardware = t["hardware"]
+		for raw_c: Dictionary in t["connectors"]:
+			var c := Connector.new()
+			c.id = raw_c["id"]
+			c.type = raw_c["type"]
+			c.position = _vec3(raw_c["position"])
+			c.axis = _vec3(raw_c["axis"])
+			part.connectors.append(c)
 		item.types[type_name] = part
 	for raw: Dictionary in d["instances"]:
 		var inst := Instance.new()
@@ -89,11 +140,26 @@ static func load_file(path: String) -> ItemData:
 		joint.host = raw["host"]
 		joint.hardware = raw["hardware"]
 		joint.kind = raw["kind"]
+		joint.host_connector = int(raw["hostConnector"])
+		joint.hardware_connector = int(raw["hardwareConnector"])
+		joint.mover = raw["mover"]
 		joint.through = _id_or_empty(raw["through"])
 		joint.captured = _id_or_empty(raw["captured"])
 		joint.position = _vec3(raw["position"])
 		joint.axis = _vec3(raw["axis"])
 		item.joints.append(joint)
+	for raw: Dictionary in d["steps"]:
+		var step := Step.new()
+		step.number = int(raw["number"])
+		step.pose = raw["pose"]
+		for id: String in raw["parts"]:
+			step.parts.append(id)
+		for i: float in raw["joints"]:
+			step.joints.append(int(i))
+		for i: float in raw["turns"]:
+			step.turns.append(int(i))
+		step.tip = raw["tip"]
+		item.steps.append(step)
 	return item
 
 

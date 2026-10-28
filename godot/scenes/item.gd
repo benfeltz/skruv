@@ -74,10 +74,10 @@ func _build_compound(embedded: Dictionary[String, bool]) -> void:
 		var at := Transform3D(Basis(inst.rotation), inst.position)
 		mass += part.mass
 		if not embedded.has(inst.id):
-			var collider := _make_collider(part)
+			var collider := make_collider(part)
 			collider.transform = at
 			body.add_child(collider)
-		var mesh := _make_mesh(part)
+		var mesh := make_mesh(part)
 		mesh.transform = at
 		body.add_child(mesh)
 		bodies[inst.id] = body
@@ -126,12 +126,12 @@ func _make_body(inst: ItemData.Instance, part: ItemData.PartType) -> RigidBody3D
 	body.name = inst.id
 	body.transform = start_transform(inst)
 	body.mass = part.mass
-	body.add_child(_make_collider(part))
-	body.add_child(_make_mesh(part))
+	body.add_child(make_collider(part))
+	body.add_child(make_mesh(part))
 	return body
 
 
-func _make_collider(part: ItemData.PartType) -> CollisionShape3D:
+static func make_collider(part: ItemData.PartType) -> CollisionShape3D:
 	var shape := BoxShape3D.new()
 	shape.size = part.size
 	var collider := CollisionShape3D.new()
@@ -139,7 +139,7 @@ func _make_collider(part: ItemData.PartType) -> CollisionShape3D:
 	return collider
 
 
-func _make_mesh(part: ItemData.PartType) -> MeshInstance3D:
+static func make_mesh(part: ItemData.PartType) -> MeshInstance3D:
 	var box := BoxMesh.new()
 	box.size = part.size
 	var mesh := MeshInstance3D.new()
