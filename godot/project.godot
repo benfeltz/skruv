@@ -26,7 +26,8 @@ jolt_physics_3d/simulation/velocity_steps=100
 jolt_physics_3d/simulation/position_steps=20
 ; Tuning attempt 4 (step 5, beyond the plan): contact slop and speculative distance, from 20 mm.
 jolt_physics_3d/simulation/penetration_slop=0.001
-jolt_physics_3d/simulation/speculative_contact_distance=0.002
+; Tuning attempt 3 (2.0.4.4 step 7): back to Jolt's 20 mm, which 2.0.4.2 found catches a shelf on its pins.
+jolt_physics_3d/simulation/speculative_contact_distance=0.02
 
 [editor_plugins]
 
