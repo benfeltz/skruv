@@ -72,3 +72,12 @@ class AIM:
 	const toolZone := 0.3
 	const toolRate := 8.0
 	const settled := 0.001
+
+
+## src/constants.ts `PICK` (fat-finger picking, src/game/pickMath.ts): hardware is millimetres
+## across, so the mouse loop gives each small part an invisible pick box never thinner than
+## proxyMinSize.
+class PICK:
+	const smallPartMax := 0.25
+	const proxyMinSize := 0.04
+	const fingerRadius := 0.025

@@ -15,8 +15,8 @@ extends RefCounted
 
 ## Where loose parts are laid: rows across the front of the room, clear of JOHNNY's spot at the
 ## origin. Metres, in the room's frame (floor top at y = 0, room 5 m square).
-const LAY_X_MIN := -2.2
-const LAY_X_MAX := 2.2
+const LAY_X_MIN := -1.25
+const LAY_X_MAX := 1.25
 const LAY_Z_START := 0.45
 const LAY_GAP := 0.06
 const LAY_HARDWARE_GAP := 0.03

@@ -1,10 +1,9 @@
 extends GdUnitTestSuite
 ## The acceptance test: the whole manual played headless through code against the real export.
 ## For each dowel page, for each open seat: the part is pressed and dragged (Gesture), carried to
-## within a few centimetres and degrees of its seat (the "hand"), held there a second while
-## Play.aim turns it, offered a snap (Play.offer_for,
-## the mouse loop's own call), released onto it (Play.seat) and tapped home (Gesture tap,
-## Play.tap). Auto pages fasten themselves. At the end every joint is fastened and every part of
+## within a few centimetres and degrees of its seat and held there a second while Play.aim turns
+## it (logic/hand.gd, the hand), offered a snap (Play.offer_for, the mouse loop's own call),
+## released onto it (Play.seat) and tapped home (Gesture tap, Play.tap). Auto pages fasten themselves. At the end every joint is fastened and every part of
 ## JOHNNY is within MAX_OFFSET_M of its assembled pose.
 ##
 ## Prints a `playthrough:` line per page and a summary, so the run's log keeps its numbers.
@@ -13,15 +12,6 @@ extends GdUnitTestSuite
 const MAX_OFFSET_M := 0.002
 ## And turned no more than this from it (the stillness test's bar).
 const MAX_TURN_DEG := 0.5
-## How far off its seat the hand lets go of a part before the snap takes it: a few centimetres
-## along each axis and a few degrees about a tilted axis, inside SNAP and PANEL's windows.
-const HAND_OFFSET := Vector3(0.02, -0.015, 0.012)
-const HAND_TURN_DEG := 8.0
-const HAND_TURN_AXIS := Vector3(0.3, 1.0, 0.2)
-## The hand holds the part there this many frames over one second while self-aim and panel
-## magnetism (Play.aim, the web's AIM and PANEL rows) turn it toward where it goes, as the mouse
-## loop does each frame of a drag.
-const AIM_FRAMES := 60
 ## Pointer travel for a drag and the time a tap takes (px, ms), on either side of the thresholds.
 const DRAG_PX := 40.0
 const TAP_MS := 100
@@ -31,23 +21,6 @@ var data: ItemData
 
 func before() -> void:
 	data = ItemData.load_file(ItemData.JOHNNY_PATH)
-
-
-## Off its seat as a hand would leave it: shifted and turned about the part's own centre.
-func _by_hand(seat: Transform3D) -> Transform3D:
-	var turn := Basis(HAND_TURN_AXIS.normalized(), deg_to_rad(HAND_TURN_DEG))
-	return Transform3D(turn * seat.basis, seat.origin + HAND_OFFSET)
-
-
-## Which side of export joint `i` the hand carries: the smaller compound (a loose dowel to its
-## panel; a horizontal, dowels and all, onto the side panel), the lib's mover on a tie.
-func _carried(play: Play, i: int) -> String:
-	var spec := data.joints[i]
-	var hw := play.bonds.compound(spec.hardware, false).size()
-	var host := play.bonds.compound(spec.host, false).size()
-	if hw != host:
-		return spec.hardware if hw < host else spec.host
-	return spec.mover
 
 
 func _drag(g: Gesture, id: String, t: int) -> void:
@@ -79,14 +52,12 @@ func test_the_whole_manual_plays_headless_and_johnny_stands() -> void:
 		for i: int in step.joints:
 			if play.bonds.joint_for_spec(i) != null:
 				continue
-			var id := _carried(play, i)
+			var id := Hand.carried(play, i)
 			assert_bool(play.can_drag(id)).override_failure_message("cannot drag %s" % id).is_true()
 			var seat: Variant = play.goal(id, i)
 			assert_object(seat).override_failure_message("no goal for %s on joint %d" % [id, i]).is_not_null()
 			_drag(g, id, t)
-			var held := _by_hand(seat)
-			for frame: int in AIM_FRAMES:
-				held = play.aim(id, held, 1.0 / AIM_FRAMES)
+			var held := Hand.hold(play, id, Hand.off_seat(seat))
 			var offer := play.offer_for(id, held)
 			assert_object(offer).override_failure_message("page %d: no snap for %s at joint %d" % [number, id, i]).is_not_null()
 			if offer == null:
@@ -137,7 +108,7 @@ func test_any_loose_dowel_fills_any_dowel_hole() -> void:
 	var named_spot := play.bonds.poses["dowel-1"]
 	var seat: Variant = play.goal("dowel-14", i)
 	assert_object(seat).is_not_null()
-	var offer := play.offer_for("dowel-14", _by_hand(seat))
+	var offer := play.offer_for("dowel-14", Hand.off_seat(seat))
 	assert_object(offer).is_not_null()
 	assert_str(offer.stand_in).is_equal("dowel-1")
 	assert_str(play.seat("dowel-14", offer)).is_equal("dowel-1")

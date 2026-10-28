@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # The agent loop for the Godot project: export check → fetch addons → import → compile check →
-# headless tests → windowed screenshot to godot/out/screenshot.png.
+# headless tests (the dowel-loop playthrough among them) → windowed dowel-loop screenshots →
+# windowed drop film of the finished item.
 # Exit 0 only when every stage passes. No stage opens the editor.
 #
 #   godot/scripts/loop.sh            # the whole loop
-#   godot/scripts/loop.sh screenshot # named stages only, in the order given (e.g. while a test is red)
+#   godot/scripts/loop.sh screenshot drop # named stages only, in the order given (e.g. while a test is red)
 #   GODOT=/path/to/godot loop.sh     # another binary (default: /opt/homebrew/bin/godot, 4.7.2)
 #
 # Logs land in godot/out/<stage>.log.
@@ -87,28 +88,45 @@ stage_test() {
   echo "loop: tests ok"
 }
 
-# Windowed on purpose: `--headless --write-movie` crashes 4.7.2 with signal 11. A window
-# shows for about 4 s. Always started through main.gd, because a bare run with no main
-# scene shows a native macOS alert that someone has to click. Frames are the project's viewport
-# size (1152x648 by default); `--resolution` is ignored by the movie writer on 4.7.2.
-# Keeps out/shot-<s>s.png for each of SHOT_SECONDS; out/screenshot.png is the last of them.
+# Windowed on purpose: `--headless --write-movie` crashes 4.7.2 with signal 11, and a headless
+# viewport has no pixels. A window shows for about 8 s. Always started through main.gd, because a
+# bare run with no main scene shows a native macOS alert that someone has to click.
+#
+# screenshot: the dowel loop plays the manual itself (scenes/loop.gd autoplay, logic/hand.gd) at
+# a fixed 20 fps and saves out/loop-page3.png (page 3, three dowels pressed) and out/loop-done.png
+# (JOHNNY handed to Jolt and settled 2 s), then quits. out/screenshot.png is the done one.
 stage_screenshot() {
-  rm -f "$OUT"/frame*.png "$OUT"/shot-*.png "$OUT/screenshot.png"
-  local last_s="${SHOT_SECONDS[${#SHOT_SECONDS[@]}-1]}"
-  godot_run screenshot --path "$ROOT" -s res://main.gd \
-    --write-movie "$OUT/frame.png" \
-    --fixed-fps "$SHOT_FPS" --quit-after "$(( last_s * SHOT_FPS + 1 ))" || fail screenshot
+  rm -f "$OUT"/loop-*.png "$OUT/screenshot.png"
+  godot_run screenshot --path "$ROOT" -s res://main.gd --fixed-fps "$SHOT_FPS" -- --autoplay --shots="$OUT" \
+    || fail screenshot
   if grep -q 'SCRIPT ERROR' "$OUT/screenshot.log"; then fail screenshot; fi
+  grep -q '^loop: done' "$OUT/screenshot.log" || fail screenshot
+  local shot
+  for shot in loop-page3 loop-done; do [[ -f "$OUT/$shot.png" ]] || fail screenshot; done
+  cp "$OUT/loop-done.png" "$OUT/screenshot.png"
+  echo "loop: screenshots loop-page3.png loop-done.png in $OUT"
+  grep -E '^loop: (done|settled)' "$OUT/screenshot.log" | sed 's/^/loop: windowed /'
+}
+
+# drop: 2.0.4.2's film of the finished JOHNNY dropped 2 cm (`--assembled`). Frames are the
+# project's viewport size (1152x648); `--resolution` is ignored by the movie writer on 4.7.2.
+# Keeps out/shot-<s>s.png for each of SHOT_SECONDS.
+stage_drop() {
+  rm -f "$OUT"/frame*.png "$OUT"/shot-*.png
+  local last_s="${SHOT_SECONDS[${#SHOT_SECONDS[@]}-1]}"
+  godot_run drop --path "$ROOT" -s res://main.gd \
+    --write-movie "$OUT/frame.png" \
+    --fixed-fps "$SHOT_FPS" --quit-after "$(( last_s * SHOT_FPS + 1 ))" -- --assembled || fail drop
+  if grep -q 'SCRIPT ERROR' "$OUT/drop.log"; then fail drop; fi
   local sec frame
   for sec in "${SHOT_SECONDS[@]}"; do
     frame="$(printf '%s/frame%08d.png' "$OUT" "$(( sec * SHOT_FPS ))")"
-    [[ -f "$frame" ]] || fail screenshot
+    [[ -f "$frame" ]] || fail drop
     cp "$frame" "$OUT/shot-${sec}s.png"
   done
-  cp "$OUT/shot-${last_s}s.png" "$OUT/screenshot.png"
   rm -f "$OUT"/frame*.png "$OUT/frame.wav"
-  echo "loop: screenshots $(cd "$OUT" && ls shot-*.png | tr '\n' ' ')in $OUT"
-  grep '^stillness:' "$OUT/screenshot.log" | tail -1 | sed 's/^/loop: windowed /'
+  echo "loop: drop film $(cd "$OUT" && ls shot-*.png | tr '\n' ' ')in $OUT"
+  grep '^stillness:' "$OUT/drop.log" | tail -1 | sed 's/^/loop: windowed /'
 }
 
 if (( $# > 0 )); then
@@ -123,4 +141,5 @@ stage_import
 stage_check
 stage_test
 stage_screenshot
+stage_drop
 echo "loop: PASS"
