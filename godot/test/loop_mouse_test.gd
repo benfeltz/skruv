@@ -70,3 +70,36 @@ func test_a_dowel_dragged_with_the_mouse_seats_and_a_click_presses_it() -> void:
 	_button(at, false)
 	assert_str(joint.fastener.state).is_equal(Fastener.PRESSED)
 	assert_int(play.steps.done_count(play.steps.current(), play.bonds)).is_equal(1)
+
+
+func _distance() -> float:
+	var camera := loop.router.camera
+	return camera.free.distance_to(camera.target)
+
+
+## A Mac trackpad has no wheel: Godot sends its pinch as a magnify gesture and its two-finger
+## scroll as a pan gesture. Both zoom the camera over empty space, as the wheel does.
+func test_a_trackpad_pinch_and_two_finger_scroll_zoom_the_camera() -> void:
+	var at := Vector2(get_viewport().get_visible_rect().size.x * 0.5, 4.0)
+	var before := _distance()
+	var pinch := InputEventMagnifyGesture.new()
+	pinch.factor = 1.25
+	pinch.position = at
+	get_viewport().push_input(pinch)
+	for frame: int in 30:
+		await get_tree().process_frame
+	var pinched := _distance()
+	assert_float(pinched).override_failure_message("pinch out did not zoom in: %.3f -> %.3f" % [before, pinched]).is_less(before)
+	var swipe := InputEventPanGesture.new()
+	swipe.delta = Vector2(0.0, 3.0)
+	swipe.position = at
+	get_viewport().push_input(swipe)
+	for frame: int in 30:
+		await get_tree().process_frame
+	assert_float(_distance()).override_failure_message("two-finger scroll down did not zoom out").is_greater(pinched)
+
+
+func test_a_pinch_dollies_by_its_own_factor() -> void:
+	assert_float(OrbitCamera._zoom_scale(Loop.pinch_px(1.1))).is_equal_approx(1.0 / 1.1, 1e-6)
+	assert_float(Loop.pinch_px(1.0)).is_equal(0.0)
+	assert_float(Loop.pinch_px(0.9)).is_greater(0.0)

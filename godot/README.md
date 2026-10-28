@@ -358,7 +358,8 @@ godot --path godot -s res://main.gd -- --gating   # the same with 2.0.4.3's page
 ```
 
 In the window: on empty space, left drag orbits, right drag pans, the wheel or a middle drag zooms
-toward the cursor. On a part, left drag carries it; the wheel lifts it mid-drag; Shift + scroll
+toward the cursor. On a Mac trackpad, pinch zooms toward the cursor and a two-finger scroll is the
+wheel (zoom on empty space, lift mid-drag). On a part, left drag carries it; the wheel lifts it mid-drag; Shift + scroll
 lifts the dragged or clicked part on the elevation line and holds it up while Shift is down. Near
 its seat a ghost shows where it goes; let go to seat it. Click to press it home; drag something
 pressed home along its axis to pull it out. Let a tool go on a bolt head or cam slot: circle its

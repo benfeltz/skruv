@@ -24,6 +24,10 @@ const CAMERA_POSITION := Vector3(0.0, 1.75, 2.75)
 const CAMERA_TARGET := Vector3(0.0, 0.1, 0.95)
 ## A wheel notch as px (the browser's deltaY for one notch).
 const WHEEL_NOTCH_PX := 20.0
+## A trackpad's two-finger scroll arrives as InputEventPanGesture, its delta the OS's scroll in
+## points times 0.03 (Godot's macOS view scales precise deltas so); this undoes it, so the router
+## gets the browser's deltaY in px for the same swipe.
+const PAN_GESTURE_PX := 1.0 / 0.03
 const GHOST_COLOR := Color(0.35, 0.75, 1.0, Constants.SNAP.ghostOpacity)
 const LABEL_FONT_SIZE := 18
 const DONE_FONT_SIZE := 48
@@ -106,7 +110,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if key.keycode == KEY_SHIFT:
 			router.set_shift(key.pressed)
 		return
-	if done and not (event is InputEventMouseMotion) and not _is_camera_button(event):
+	if done and not (event is InputEventMouseMotion) and not _is_camera_button(event) and not (event is InputEventGesture):
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
@@ -122,6 +126,21 @@ func _unhandled_input(event: InputEvent) -> void:
 			router.release(button, mb.position, t)
 	elif event is InputEventMouseMotion:
 		router.motion((event as InputEventMouseMotion).position)
+	elif event is InputEventPanGesture:
+		# Two fingers on a trackpad: the wheel, as a browser reads it (zoom, or lift mid-drag).
+		var pan := event as InputEventPanGesture
+		router.wheel(pan.delta.y * PAN_GESTURE_PX, pan.position, pan.delta.x * PAN_GESTURE_PX)
+	elif event is InputEventMagnifyGesture:
+		var pinch := event as InputEventMagnifyGesture
+		router.wheel(pinch_px(pinch.factor), pinch.position)
+
+
+## A pinch's factor as the wheel delta that dollies the camera by that factor (OrbitCamera's zoom
+## scale is 0.95^(|dy| / 100)): fingers apart (factor > 1) zoom in.
+static func pinch_px(factor: float) -> float:
+	if factor <= 0.0:
+		return 0.0
+	return 100.0 * log(factor) / log(0.95) / OrbitCamera.ZOOM_SPEED
 
 
 func _is_camera_button(event: InputEvent) -> bool:
