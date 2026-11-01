@@ -33,11 +33,11 @@ jobs:
       - run: npx tsx tools/validate/index.ts items/overkall
       - run: npx tsx tools/validate/index.ts items/somnlos
       - run: npx vitest run
-      - run: npm run build
+      - run: npm run build:site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: web/dist
+          path: _site
 
   deploy:
     needs: build

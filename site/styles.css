@@ -1,0 +1,700 @@
+/* Skruv's marketing site: the game's own look — the dark room behind, white manual pages
+   on top, black ink, heavy wordmark. Plain CSS, no build step. */
+
+:root {
+  --room: #1b1d22;
+  --room-2: #26292f;
+  --paper: #ffffff;
+  --paper-2: #f4f2ee;
+  --ink: #1c1c1c;
+  --ink-soft: #55575c;
+  --rule: #1c1c1c;
+  --hair: #dcd9d3;
+  --wall: #7a6466;
+  --window: #c05a78;
+  --floor: #8b6a5a;
+  --radius: 10px;
+  --max-w: 960px;
+  --text-w: 680px;
+  --shadow: 0 12px 40px #0006;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+a {
+  color: var(--ink);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: var(--window);
+}
+
+.container {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.narrow {
+  max-width: var(--text-w);
+}
+
+/* ── Top bar ───────────────────────────────────────────── */
+.topbar {
+  background: var(--room);
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid #ffffff14;
+}
+
+.topbar .container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 56px;
+}
+
+.wordmark {
+  font-weight: 800;
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+  color: #fff;
+  text-decoration: none;
+}
+
+.wordmark:hover {
+  color: #fff;
+}
+
+.topnav {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: 0.92rem;
+}
+
+.topnav a {
+  color: #ffffffcc;
+  text-decoration: none;
+}
+
+.topnav a:hover {
+  color: #fff;
+}
+
+.topnav .btn {
+  color: var(--ink);
+}
+
+@media (max-width: 480px) {
+  .topnav .hide-sm {
+    display: none;
+  }
+}
+
+/* ── Buttons ───────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 22px;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  text-transform: uppercase;
+  border: 2px solid transparent;
+  transition: transform 0.12s, opacity 0.12s;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-ink {
+  background: var(--ink);
+  color: #fff;
+}
+
+.btn-ink:hover {
+  color: #fff;
+  opacity: 0.88;
+}
+
+.btn-paper {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.btn-paper:hover {
+  color: var(--ink);
+  opacity: 0.9;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: #fff;
+  border-color: #ffffff55;
+}
+
+.btn-ghost:hover {
+  color: #fff;
+  border-color: #fff;
+}
+
+.btn-sm {
+  min-height: 34px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  border-radius: 9px;
+}
+
+/* The game's "OWN IT NOW!" dot. */
+.btn .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ── Hero ──────────────────────────────────────────────── */
+.hero {
+  background:
+    radial-gradient(120% 80% at 80% 0%, #c05a7833 0%, transparent 55%),
+    linear-gradient(180deg, var(--room) 0%, var(--room-2) 100%);
+  color: #fff;
+  padding: 56px 0 72px;
+  overflow: hidden;
+}
+
+.hero .container {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 48px;
+  align-items: center;
+}
+
+.hero-card {
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 32px 32px 28px;
+  max-width: 460px;
+}
+
+.hero-card .big {
+  font-size: clamp(3.4rem, 11vw, 6.2rem);
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+}
+
+.hero-card .sub {
+  font-weight: 600;
+  font-size: 1.15rem;
+  margin: 6px 0 18px;
+}
+
+.hero-card .rule {
+  border: 0;
+  border-top: 3px solid var(--rule);
+  margin: 0 0 14px;
+}
+
+.tagline {
+  font-size: clamp(1.15rem, 2.6vw, 1.4rem);
+  font-weight: 700;
+  line-height: 1.3;
+  margin-bottom: 8px;
+}
+
+.hero-sub {
+  color: var(--ink-soft);
+  font-size: 1rem;
+  margin-bottom: 22px;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.hero-note {
+  margin-top: 14px;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.hero-shot {
+  justify-self: center;
+  width: min(300px, 100%);
+}
+
+@media (max-width: 760px) {
+  .hero {
+    padding: 32px 0 48px;
+  }
+  .hero .container {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+  .hero-card {
+    padding: 24px 22px 22px;
+    max-width: none;
+  }
+  .hero-shot {
+    width: min(260px, 80%);
+  }
+}
+
+/* A phone-shaped frame for screenshots and the embedded game. */
+.phone {
+  position: relative;
+  aspect-ratio: 390 / 844;
+  border-radius: 34px;
+  border: 8px solid #0b0c0e;
+  background: #0b0c0e;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.phone img,
+.phone iframe {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: 0;
+  border-radius: 26px;
+  display: block;
+}
+
+/* ── Sections ──────────────────────────────────────────── */
+section {
+  padding: 72px 0;
+}
+
+section + section {
+  border-top: 1px solid var(--hair);
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: clamp(1.5rem, 3.4vw, 2rem);
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.section-lede {
+  color: var(--ink-soft);
+  margin-bottom: 32px;
+  max-width: 560px;
+}
+
+/* A heading in the manual's style: a thick rule above, a thin one below. */
+.page-head {
+  border-top: 4px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: 8px 0 6px;
+  margin-bottom: 20px;
+}
+
+/* ── How it works: manual steps ───────────────────────── */
+.steps {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.step {
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  padding: 18px 18px 20px;
+  background: var(--paper);
+}
+
+.step-num {
+  display: block;
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.step strong {
+  display: block;
+  font-size: 1.05rem;
+  margin-bottom: 4px;
+}
+
+.step p {
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+.note {
+  margin-top: 20px;
+  background: var(--paper-2);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  font-size: 0.95rem;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 760px) {
+  .steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Catalog ───────────────────────────────────────────── */
+.catalog {
+  background: var(--paper-2);
+}
+
+.items {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.item {
+  background: var(--paper);
+  border-radius: var(--radius);
+  padding: 16px 16px 14px;
+  border-top: 4px solid var(--ink);
+  box-shadow: 0 1px 2px #0000000f;
+}
+
+.item .name {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.item .kind {
+  font-size: 0.95rem;
+  margin-bottom: 10px;
+}
+
+.item .article {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  border-top: 1px solid var(--hair);
+  padding-top: 8px;
+}
+
+@media (max-width: 760px) {
+  .items {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ── Screenshots: a scroll-snap row, no script ─────────── */
+.shots {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 8px 4px 20px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.shots figure {
+  flex: 0 0 min(240px, 70vw);
+  scroll-snap-align: center;
+}
+
+.shots .phone {
+  border-width: 6px;
+  border-radius: 28px;
+  box-shadow: 0 8px 24px #0003;
+}
+
+.shots .phone img {
+  border-radius: 22px;
+}
+
+.shots figcaption {
+  margin-top: 12px;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+/* ── Play here ─────────────────────────────────────────── */
+.play {
+  background: var(--room);
+  color: #fff;
+}
+
+.play .container {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 48px;
+  align-items: center;
+}
+
+.play h2 {
+  color: #fff;
+}
+
+.play p {
+  color: #ffffffb3;
+  margin-bottom: 14px;
+}
+
+.play-frame {
+  width: 360px;
+}
+
+.play-start {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #1b1d22d9;
+  border: 0;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 26px;
+}
+
+.play-start .btn {
+  pointer-events: none;
+}
+
+.play-start small {
+  font-size: 0.82rem;
+  color: #ffffffb3;
+}
+
+@media (max-width: 760px) {
+  .play .container {
+    grid-template-columns: 1fr;
+  }
+  /* On a phone the game wants the whole screen: the frame is a link to /play/ instead. */
+  .play-frame {
+    display: none;
+  }
+}
+
+/* ── Support / FAQ ─────────────────────────────────────── */
+details {
+  background: var(--paper);
+  border: 1px solid var(--hair);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+details[open] {
+  border-color: var(--ink);
+}
+
+summary {
+  cursor: pointer;
+  padding: 16px 18px;
+  font-weight: 600;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+summary::after {
+  content: "+";
+  flex-shrink: 0;
+  font-size: 1.4rem;
+  font-weight: 300;
+  line-height: 1;
+  transition: transform 0.2s;
+}
+
+details[open] summary::after {
+  transform: rotate(45deg);
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-body {
+  padding: 4px 18px 18px;
+  color: var(--ink-soft);
+  font-size: 0.97rem;
+}
+
+.faq-body p + p,
+.faq-body p + ul,
+.faq-body ul + p {
+  margin-top: 10px;
+}
+
+.faq-body ul {
+  padding-left: 20px;
+}
+
+.faq-body li + li {
+  margin-top: 6px;
+}
+
+.faq-body strong {
+  color: var(--ink);
+}
+
+.faq-group {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  margin: 32px 0 12px;
+}
+
+.faq-group:first-of-type {
+  margin-top: 0;
+}
+
+.contact {
+  margin-top: 36px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+}
+
+.contact h3 {
+  font-size: 1.1rem;
+  margin-bottom: 6px;
+}
+
+.contact p {
+  color: var(--ink-soft);
+}
+
+/* ── Legal pages ───────────────────────────────────────── */
+.doc h1 {
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  font-weight: 800;
+}
+
+.doc .meta {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  margin-bottom: 28px;
+}
+
+.doc h2 {
+  font-size: 1.1rem;
+  margin: 28px 0 6px;
+}
+
+.doc p,
+.doc li {
+  color: var(--ink-soft);
+}
+
+.doc ul {
+  padding-left: 20px;
+}
+
+.doc li + li {
+  margin-top: 6px;
+}
+
+.summary-box {
+  background: var(--paper-2);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  font-weight: 600;
+}
+
+/* ── Footer ────────────────────────────────────────────── */
+footer {
+  background: var(--room);
+  color: #ffffffb3;
+  padding: 36px 0;
+  font-size: 0.88rem;
+}
+
+footer .container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.footer-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+footer a {
+  color: #ffffffcc;
+  text-decoration: none;
+}
+
+footer a:hover {
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .btn,
+  summary::after {
+    transition: none;
+  }
+}

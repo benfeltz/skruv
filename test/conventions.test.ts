@@ -15,10 +15,11 @@ describe('GitHub Pages deploy', () => {
     expect(viteConfig.base).toBe('/');
   });
 
-  it('deploys dist on pushes to main', () => {
+  it('deploys the whole site (marketing pages + the game under /play/) on pushes to main', () => {
     const workflow = read('.github/workflows/deploy.yml');
     expect(workflow).toMatch(/branches:\s*\[main\]/);
-    expect(workflow).toMatch(/path:\s*web\/dist/);
+    expect(workflow).toMatch(/run: npm run build:site/);
+    expect(workflow).toMatch(/path:\s*_site/);
   });
 });
 

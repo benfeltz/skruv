@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite web",
     "build": "vite build web",
+    "build:site": "tsx tools/site/build.ts",
     "preview": "vite preview web",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",

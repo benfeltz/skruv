@@ -8,6 +8,7 @@ Mobile-first, browser-playable 3D flatpack-assembly game. Strict TypeScript, Thr
 |---------|---------|
 | Dev server | `npm run dev` |
 | Production build | `npm run build` |
+| Whole site (marketing at `/`, game at `/play/`) into `_site/` | `npm run build:site` |
 | Store build (no Metrics row) | `VITE_METRICS=off npm run build` |
 | Full test suite | `npx vitest run` (same as `npm test`) |
 | Single test file | `npx vitest run <path>` — e.g. `npx vitest run test/clamp.test.ts` |
@@ -16,7 +17,7 @@ Mobile-first, browser-playable 3D flatpack-assembly game. Strict TypeScript, Thr
 | Lint | `npm run lint` (ESLint: `@eslint/js` + `typescript-eslint` recommended); the pre-commit hook runs `eslint --fix` on staged `.ts` |
 | Shell, local phone loop | `cd app && npm ci && scripts/ios.sh build` (then `install`, `launch`, or `all` / `sim`; the script's header lists them) |
 
-CI: every PR runs the typecheck, lint, validator, tests and build (`.github/workflows/ci.yml`). Deploy: every merge to `main` typechecks, lints, validates, tests and publishes `web/dist` to GitHub Pages via `.github/workflows/deploy.yml`. A PR or merge touching only `app/`, `docs/` or Markdown skips both workflows (`paths-ignore`). The site is served at the domain root (custom domain skruv.site): `web/vite.config.ts` sets `base: '/'`; a non-root base 404s every asset.
+CI: every PR runs the typecheck, lint, validator, tests and build (`.github/workflows/ci.yml`). Deploy: every merge to `main` typechecks, lints, validates, tests and publishes `_site` (`npm run build:site`: the marketing pages from `site/` at the root, the game built with base `/play/`) to GitHub Pages via `.github/workflows/deploy.yml`. A PR or merge touching only `app/`, `docs/` or Markdown skips both workflows (`paths-ignore`). The marketing site is served at the domain root (custom domain skruv.site) and the game at `/play/`. `web/vite.config.ts` keeps `base: '/'` for `npm run build` and the Capacitor shell; only `tools/site/build.ts` overrides it to `/play/` and moves the manifest's `start_url`/`scope` there. Pages link the game as `/play/`.
 
 ## Layout
 
@@ -25,6 +26,8 @@ app/
   the Capacitor shell: capacitor.config.ts, package.json, scripts/ios.sh (local iPhone loop), ios/ and android/ native projects; builds web/dist
 web/
   index.html, public/, vite.config.ts  the teaser's own files; the build reads ../src (`vite build web`)
+site/
+  the marketing site: index.html (landing), support/, privacy/, styles.css, images/ — plain static files, no build
 items/
   johnny/flatpack.json  an item: parts, assembled poses, booklet pages, packing (Flatpack format 1)
   blank/flatpack.json   the second item: a side table of box legs and double-ended studs
@@ -33,6 +36,7 @@ items/
 tools/
   validate/      Flatpack schema + validator CLI (adds ajv); lib/ is the one pack implementation and owns the Flatpack types
   agent-bridge/  MCP bridge to a dev session
+  site/          build.ts assembles _site/ (site/ + the game under /play/); manifest.ts moves the game's manifest
 src/
   main.ts        bootstrap wiring only
   constants.ts   every tunable (sizes, colors, camera limits, DPR cap, timing)
